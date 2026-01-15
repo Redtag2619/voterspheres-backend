@@ -1,5 +1,10 @@
 const express = require("express");
+const cors = require("cors");
+
 const app = express();
+
+// ✅ ALLOW REQUESTS FROM YOUR WEBSITE
+app.use(cors());
 
 app.use(express.json());
 
@@ -8,7 +13,7 @@ app.get("/", (req, res) => {
   res.send("VoterSpheres API is running");
 });
 
-// 🔍 SEARCH ROUTE (THIS WAS MISSING)
+// Search route
 app.get("/search", (req, res) => {
   const query = (req.query.q || "").toLowerCase();
 
@@ -23,13 +28,10 @@ app.get("/search", (req, res) => {
     item.title.toLowerCase().includes(query)
   );
 
-  res.json({
-    query,
-    results
-  });
+  res.json({ query, results });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`VoterSpheres backend running on port ${PORT}`);
 });
