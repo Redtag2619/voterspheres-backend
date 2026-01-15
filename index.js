@@ -1,3 +1,4 @@
+const pool = require("./db");
 const express = require("express");
 const cors = require("cors");
 
@@ -55,6 +56,15 @@ app.get("/search", (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
+app.get("/db-test", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({ success: true, time: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database connection failed" });
+  }
+});
 app.listen(PORT, () => {
   console.log(`VoterSpheres backend running on port ${PORT}`);
 });
