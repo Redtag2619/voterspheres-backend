@@ -3,17 +3,33 @@ const cors = require("cors");
 
 const app = express();
 
-// ✅ ALLOW REQUESTS FROM YOUR WEBSITE
-app.use(cors());
+/**
+ * ✅ Explicit CORS configuration
+ */
+app.use(
+  cors({
+    origin: "https://voterspheres.org",
+    methods: ["GET"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
+/**
+ * ✅ Explicit cache control for browser safety
+ */
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 app.use(express.json());
 
-// Root check
+// Root health check
 app.get("/", (req, res) => {
   res.send("VoterSpheres API is running");
 });
 
-// Search route
+// Search endpoint
 app.get("/search", (req, res) => {
   const query = (req.query.q || "").toLowerCase();
 
@@ -28,7 +44,10 @@ app.get("/search", (req, res) => {
     item.title.toLowerCase().includes(query)
   );
 
-  res.json({ query, results });
+  res.json({
+    query,
+    results
+  });
 });
 
 const PORT = process.env.PORT || 10000;
