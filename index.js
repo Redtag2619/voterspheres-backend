@@ -8,11 +8,15 @@ const app = express();
  */
 app.use(
   cors({
-    origin: "https://voterspheres.org",
+    origin: [
+      "https://voterspheres.org",
+      "https://www.voterspheres.org"
+    ],
     methods: ["GET"],
     allowedHeaders: ["Content-Type"],
   })
 );
+
 
 /**
  * ✅ Explicit cache control for browser safety
