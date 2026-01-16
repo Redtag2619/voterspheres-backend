@@ -3,25 +3,30 @@ const cors = require("cors");
 const { Pool } = require("pg");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-/* =========================
-   Middleware
-========================= */
-app.use(cors());
-app.use(express.json());
-
-/* =========================
+/* =======================
    PostgreSQL Connection
-========================= */
+   ======================= */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false },
 });
 
-/* =========================
+/* =======================
+   Middleware
+   ======================= */
+app.use(cors({
+  origin: [
+    "https://voterspheres.org",
+    "https://www.voterspheres.org"
+  ],
+}));
+
+app.use(express.json());
+
+/* =======================
    Health Check
-========================= */
+   ======================= */
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -29,90 +34,82 @@ app.get("/", (req, res) => {
   });
 });
 
-/* =========================
+/* =======================
    SEARCH ENDPOINT
-========================= */
+   ======================= */
 app.get("/search", async (req, res) => {
-  const query = req.query.q;
+  const q = (req.query.q || "").toLowerCase();
 
-  if (!query) {
-    return res.json({ results: [] });
+  if (!q) {
+    return res.json({ query: q, results: [] });
   }
 
   try {
-    const electionsResult = await pool.query(
-      `
-      SELECT 
-        id,
-        election_year,
-        office,
-        state
-      FROM elections
-      WHERE
-        office ILIKE $1
-        OR state ILIKE $1
-        OR election_year::text ILIKE $1
-      ORDER BY election_year DESC
-      `,
-      [`%${query}%`]
+    const results = [];
+
+    // Elections
+    const elections = await pool.query(
+      `SELECT id, title, state
+       FROM elections
+       WHERE LOWER(title) LIKE $1
+          OR LOWER(state) LIKE $1`,
+      [`%${q}%`]
     );
 
-    const results = electionsResult.rows.map((election) => ({
-      type: "Election",
-      id: election.id,
-      title: `${election.election_year} ${election.state} ${election.office} Election`,
-    }));
-
-    res.json({ query, results });
-  } catch (err) {
-    console.error("Search error:", err);
-    res.status(500).json({ error: "Search failed" });
-  }
-});
-
-/* =========================
-   ELECTION DETAIL ENDPOINT
-========================= */
-app.get("/elections/:id", async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const electionResult = await pool.query(
-      `
-      SELECT *
-      FROM elections
-      WHERE id = $1
-      `,
-      [id]
-    );
-
-    if (electionResult.rows.length === 0) {
-      return res.status(404).json({ error: "Election not found" });
-    }
-
-    const candidatesResult = await pool.query(
-      `
-      SELECT *
-      FROM candidates
-      WHERE election_id = $1
-      ORDER BY full_name
-      `,
-      [id]
-    );
-
-    res.json({
-      election: electionResult.rows[0],
-      candidates: candidatesResult.rows,
+    elections.rows.forEach(row => {
+      results.push({
+        type: "Election",
+        title: row.title,
+        state: row.state,
+      });
     });
+
+    // Candidates
+    const candidates = await pool.query(
+      `SELECT name, office
+       FROM candidates
+       WHERE LOWER(name) LIKE $1
+          OR LOWER(office) LIKE $1`,
+      [`%${q}%`]
+    );
+
+    candidates.rows.forEach(row => {
+      results.push({
+        type: "Candidate",
+        title: `${row.name} — ${row.office}`,
+      });
+    });
+
+    // Ballot Measures
+    const measures = await pool.query(
+      `SELECT title
+       FROM ballot_measures
+       WHERE LOWER(title) LIKE $1`,
+      [`%${q}%`]
+    );
+
+    measures.rows.forEach(row => {
+      results.push({
+        type: "Ballot Measure",
+        title: row.title,
+      });
+    });
+
+    res.json({ query: q, results });
+
   } catch (err) {
-    console.error("Election detail error:", err);
-    res.status(500).json({ error: "Failed to load election" });
+    console.error("SEARCH ERROR:", err);
+    res.status(500).json({
+      error: "Search failed",
+      details: err.message,
+    });
   }
 });
 
-/* =========================
+/* =======================
    START SERVER
-========================= */
+   ======================= */
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
