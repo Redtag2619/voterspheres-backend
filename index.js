@@ -15,13 +15,7 @@ const pool = new Pool({
 /* =======================
    Middleware
    ======================= */
-app.use(cors({
-  origin: [
-    "https://voterspheres.org",
-    "https://www.voterspheres.org"
-  ],
-}));
-
+app.use(cors());
 app.use(express.json());
 
 /* =======================
@@ -30,12 +24,12 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    service: "VoterSpheres Backend v1 — PostgreSQL Search Enabled",
+    service: "VoterSpheres Backend v1 — Live",
   });
 });
 
 /* =======================
-   SEARCH ENDPOINT
+   SEARCH ENDPOINT (FIXED)
    ======================= */
 app.get("/search", async (req, res) => {
   const q = (req.query.q || "").toLowerCase();
@@ -47,44 +41,22 @@ app.get("/search", async (req, res) => {
   try {
     const results = [];
 
-    // Elections
-    const elections = await pool.query(
-      `SELECT id, title, state
-       FROM elections
-       WHERE LOWER(title) LIKE $1
-          OR LOWER(state) LIKE $1`,
-      [`%${q}%`]
-    );
-
-    elections.rows.forEach(row => {
-      results.push({
-        type: "Election",
-        title: row.title,
-        state: row.state,
-      });
-    });
-
-    // Candidates
-    const candidates = await pool.query(
-      `SELECT name, office
-       FROM candidates
-       WHERE LOWER(name) LIKE $1
-          OR LOWER(office) LIKE $1`,
-      [`%${q}%`]
-    );
-
-    candidates.rows.forEach(row => {
-      results.push({
-        type: "Candidate",
-        title: `${row.name} — ${row.office}`,
-      });
-    });
-
-    // Ballot Measures
+    /* ========= BALLOT MEASURES ========= */
     const measures = await pool.query(
-      `SELECT title
-       FROM ballot_measures
-       WHERE LOWER(title) LIKE $1`,
+      `
+      SELECT
+        title,
+        description,
+        state,
+        county,
+        election_date
+      FROM ballot_measures
+      WHERE
+        LOWER(title) LIKE $1
+        OR LOWER(description) LIKE $1
+        OR LOWER(state) LIKE $1
+        OR LOWER(county) LIKE $1
+      `,
       [`%${q}%`]
     );
 
@@ -92,16 +64,47 @@ app.get("/search", async (req, res) => {
       results.push({
         type: "Ballot Measure",
         title: row.title,
+        subtitle: row.state || row.county || "",
+        date: row.election_date,
       });
     });
 
-    res.json({ query: q, results });
+    /* ========= ELECTIONS ========= */
+    const elections = await pool.query(
+      `
+      SELECT
+        id,
+        title,
+        state,
+        election_date
+      FROM elections
+      WHERE
+        LOWER(title) LIKE $1
+        OR LOWER(state) LIKE $1
+      `,
+      [`%${q}%`]
+    );
+
+    elections.rows.forEach(row => {
+      results.push({
+        type: "Election",
+        title: row.title,
+        subtitle: row.state,
+        date: row.election_date,
+      });
+    });
+
+    res.json({
+      query: q,
+      results,
+      count: results.length,
+    });
 
   } catch (err) {
     console.error("SEARCH ERROR:", err);
     res.status(500).json({
       error: "Search failed",
-      details: err.message,
+      message: err.message,
     });
   }
 });
