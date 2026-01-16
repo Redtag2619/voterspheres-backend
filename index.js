@@ -1,5 +1,9 @@
 const pool = require("./db");
 const express = require("express");
+app.get("/__version", (req, res) => {
+  res.send("NEW BACKEND CODE — DATABASE SEARCH ACTIVE");
+});
+
 const cors = require("cors");
 
 const app = express();
