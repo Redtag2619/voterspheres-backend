@@ -36,66 +36,42 @@ app.get("/", (req, res) => {
 
 // Search endpoint
 app.get("/search", async (req, res) => {
-  const q = req.query.q;
+  const query = req.query.q;
 
-  if (!q) {
-    return res.json({ results: [] });
+  if (!query) {
+    return res.json({ query: "", results: [] });
   }
 
   try {
     const elections = await pool.query(
       `
-      SELECT
-        id,
-        'Election' AS type,
-        election_year,
-        office,
-        state
+      SELECT id, election_year, state, office
       FROM elections
-      WHERE
-        office ILIKE $1
-        OR state ILIKE $1
-        OR election_type ILIKE $1
+      WHERE state ILIKE $1 OR office ILIKE $1
       `,
-      [`%${q}%`]
+      [`%${query}%`]
     );
 
     const candidates = await pool.query(
       `
-      SELECT
-        id,
-        'Candidate' AS type,
-        full_name,
-        office,
-        state,
-        website
+      SELECT id, full_name, office, state
       FROM candidates
-      WHERE
-        full_name ILIKE $1
-        OR office ILIKE $1
-        OR state ILIKE $1
+      WHERE full_name ILIKE $1 OR state ILIKE $1
       `,
-      [`%${q}%`]
+      [`%${query}%`]
     );
 
     const ballotMeasures = await pool.query(
       `
-      SELECT
-        id,
-        'Ballot Measure' AS type,
-        title,
-        state,
-        ballot_number
+      SELECT id, ballot_number, title, state
       FROM ballot_measures
-      WHERE
-        title ILIKE $1
-        OR state ILIKE $1
+      WHERE title ILIKE $1 OR state ILIKE $1
       `,
-      [`%${q}%`]
+      [`%${query}%`]
     );
 
     res.json({
-      query: q,
+      query,
       results: {
         elections: elections.rows,
         candidates: candidates.rows,
