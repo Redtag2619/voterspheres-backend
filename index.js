@@ -1,68 +1,95 @@
-import express from "express";
-import cors from "cors";
-import pg from "pg";
+const express = require("express");
+const cors = require("cors");
+const pool = require("./db");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
-/* ---------- MIDDLEWARE ---------- */
-app.use(cors());
-app.use(express.json());
+/**
+ * CORS
+ */
+app.use(
+  cors({
+    origin: [
+      "https://voterspheres.org",
+      "https://www.voterspheres.org"
+    ],
+    methods: ["GET"],
+    allowedHeaders: ["Content-Type"]
+  })
+);
 
-/* ---------- DATABASE ---------- */
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+/**
+ * Cache control
+ */
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
 });
 
-/* ---------- HEALTH CHECK ---------- */
+app.use(express.json());
+
+/**
+ * Health check
+ */
 app.get("/", (req, res) => {
   res.send("VoterSpheres Backend v1 — PostgreSQL Search Enabled");
 });
 
-/* ---------- SEARCH ENDPOINT ---------- */
+/**
+ * SEARCH — elections + candidates + ballot measures
+ */
 app.get("/search", async (req, res) => {
-  const q = req.query.q;
-
-  if (!q) {
-    return res.json({ query: "", results: [] });
-  }
+  const q = `%${(req.query.q || "").toLowerCase()}%`;
 
   try {
-    const { rows } = await pool.query(
-      `
-      SELECT
-        id,
-        title,
-        state,
-        year
-      FROM elections
-      WHERE
-        title ILIKE $1
-        OR state ILIKE $1
-      ORDER BY year DESC
-      LIMIT 20
-      `,
-      [`%${q}%`]
+    const elections = await pool.query(
+      `SELECT 'Election' AS type, title
+       FROM elections
+       WHERE LOWER(title) LIKE $1`,
+      [q]
+    );
+
+    const candidates = await pool.query(
+      `SELECT 'Candidate' AS type, name AS title
+       FROM candidates
+       WHERE LOWER(name) LIKE $1`,
+      [q]
+    );
+
+    const ballots = await pool.query(
+      `SELECT 'Ballot Measure' AS type, title
+       FROM ballot_measures
+       WHERE LOWER(title) LIKE $1`,
+      [q]
     );
 
     res.json({
-      query: q,
-      results: rows.map(r => ({
-        type: "Election",
-        title: r.title,
-        state: r.state,
-        year: r.year
-      }))
+      query: req.query.q,
+      results: [
+        ...elections.rows,
+        ...candidates.rows,
+        ...ballots.rows
+      ]
     });
-
   } catch (err) {
-    console.error("SEARCH ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "Search failed" });
   }
 });
 
-/* ---------- START SERVER ---------- */
+/**
+ * DB test
+ */
+app.get("/db-test", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({ success: true, time: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`VoterSpheres backend running on port ${PORT}`);
 });
