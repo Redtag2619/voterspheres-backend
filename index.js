@@ -35,36 +35,75 @@ app.get("/", (req, res) => {
 });
 
 // Search endpoint
-app.get("/search", (req, res) => {
-  const query = (req.query.q || "").toLowerCase();
+app.get("/search", async (req, res) => {
+  const q = req.query.q;
 
-  const data = [
-    { type: "Election", title: "2026 Texas Governor Election" },
-    { type: "Election", title: "2026 California Senate Election" },
-    { type: "Candidate", title: "Jane Doe – U.S. Senate" },
-    { type: "Ballot Measure", title: "Proposition 1 – Education Funding" }
-  ];
+  if (!q) {
+    return res.json({ results: [] });
+  }
 
-  const results = data.filter(item =>
-    item.title.toLowerCase().includes(query)
-  );
-
-  res.json({
-    query,
-    results
-  });
-});
-
-const PORT = process.env.PORT || 10000;
-app.get("/db-test", async (req, res) => {
   try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({ success: true, time: result.rows[0] });
+    const elections = await pool.query(
+      `
+      SELECT
+        id,
+        'Election' AS type,
+        election_year,
+        office,
+        state
+      FROM elections
+      WHERE
+        office ILIKE $1
+        OR state ILIKE $1
+        OR election_type ILIKE $1
+      `,
+      [`%${q}%`]
+    );
+
+    const candidates = await pool.query(
+      `
+      SELECT
+        id,
+        'Candidate' AS type,
+        full_name,
+        office,
+        state,
+        website
+      FROM candidates
+      WHERE
+        full_name ILIKE $1
+        OR office ILIKE $1
+        OR state ILIKE $1
+      `,
+      [`%${q}%`]
+    );
+
+    const ballotMeasures = await pool.query(
+      `
+      SELECT
+        id,
+        'Ballot Measure' AS type,
+        title,
+        state,
+        ballot_number
+      FROM ballot_measures
+      WHERE
+        title ILIKE $1
+        OR state ILIKE $1
+      `,
+      [`%${q}%`]
+    );
+
+    res.json({
+      query: q,
+      results: {
+        elections: elections.rows,
+        candidates: candidates.rows,
+        ballot_measures: ballotMeasures.rows
+      }
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Database connection failed" });
+    res.status(500).json({ error: "Search failed" });
   }
-});
-app.listen(PORT, () => {
-  console.log(`VoterSpheres backend running on port ${PORT}`);
 });
