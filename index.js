@@ -3,24 +3,21 @@ const cors = require("cors");
 const { Pool } = require("pg");
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-/* =======================
-   PostgreSQL Connection
-   ======================= */
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-
-/* =======================
-   Middleware
-   ======================= */
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-/* =======================
-   Health Check
-   ======================= */
+// PostgreSQL pool (Render uses DATABASE_URL)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("localhost")
+    ? false
+    : { rejectUnauthorized: false },
+});
+
+// Health check
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -28,81 +25,67 @@ app.get("/", (req, res) => {
   });
 });
 
-/* =======================
-   SEARCH ENDPOINT (FIXED FOR REAL SCHEMA)
-   ======================= */
+/**
+ * 🔍 SEARCH ENDPOINT
+ * Example: /search?q=texas
+ */
 app.get("/search", async (req, res) => {
-  const q = (req.query.q || "").toLowerCase();
+  const q = req.query.q;
 
   if (!q) {
-    return res.json({ query: q, results: [], count: 0 });
+    return res.status(400).json({ error: "Missing search query" });
   }
 
   try {
-    const results = [];
-
-    /* ========= BALLOT MEASURES ========= */
-    const measures = await pool.query(
-      `
+    const sql = `
       SELECT
-        title,
-        description,
-        state,
-        county,
-        election_date
-      FROM public.ballot_measures
+        'Election' AS type,
+        e.id,
+        e.election_year,
+        e.office,
+        e.state
+      FROM elections e
       WHERE
-        LOWER(title) LIKE $1
-        OR LOWER(description) LIKE $1
-        OR LOWER(state) LIKE $1
-        OR LOWER(county) LIKE $1
-      `,
-      [`%${q}%`]
-    );
+        e.state ILIKE $1
+        OR e.office ILIKE $1
 
-    measures.rows.forEach(row => {
-      results.push({
-        type: "Ballot Measure",
-        title: row.title,
-        location: row.state || row.county || "",
-        date: row.election_date,
-      });
-    });
+      UNION ALL
 
-    /* ========= ELECTIONS ========= */
-    const elections = await pool.query(
-      `
       SELECT
-        election_year,
-        election_type,
-        office,
-        state,
-        primary_date,
-        general_date
-      FROM public.elections
+        'Candidate' AS type,
+        c.id,
+        NULL AS election_year,
+        c.office,
+        c.state
+      FROM candidates c
       WHERE
-        LOWER(office) LIKE $1
-        OR LOWER(state) LIKE $1
-        OR LOWER(election_type) LIKE $1
-      `,
-      [`%${q}%`]
-    );
+        c.full_name ILIKE $1
+        OR c.office ILIKE $1
+        OR c.state ILIKE $1
 
-    elections.rows.forEach(row => {
-      results.push({
-        type: "Election",
-        title: `${row.office} (${row.election_year})`,
-        location: row.state,
-        date: row.general_date || row.primary_date,
-      });
-    });
+      UNION ALL
+
+      SELECT
+        'BallotMeasure' AS type,
+        b.id,
+        NULL AS election_year,
+        b.title AS office,
+        b.state
+      FROM ballot_measures b
+      WHERE
+        b.title ILIKE $1
+        OR b.description ILIKE $1
+        OR b.state ILIKE $1
+
+      LIMIT 50;
+    `;
+
+    const result = await pool.query(sql, [`%${q}%`]);
 
     res.json({
       query: q,
-      count: results.length,
-      results,
+      results: result.rows,
     });
-
   } catch (err) {
     console.error("SEARCH ERROR:", err);
     res.status(500).json({
@@ -112,10 +95,33 @@ app.get("/search", async (req, res) => {
   }
 });
 
-/* =======================
-   START SERVER
-   ======================= */
-const PORT = process.env.PORT || 10000;
+/**
+ * 🧪 DATABASE DEBUG ENDPOINT (TEMPORARY)
+ * Visit: /__db_check
+ */
+app.get("/__db_check", async (req, res) => {
+  try {
+    const dbInfo = await pool.query(
+      "SELECT current_database(), current_user"
+    );
+
+    const tables = await pool.query(`
+      SELECT tablename
+      FROM pg_tables
+      WHERE schemaname = 'public'
+    `);
+
+    res.json({
+      database: dbInfo.rows[0],
+      tables: tables.rows.map(t => t.tablename),
+    });
+  } catch (err) {
+    console.error("DB CHECK ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
