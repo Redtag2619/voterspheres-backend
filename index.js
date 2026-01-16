@@ -24,18 +24,18 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    service: "VoterSpheres Backend v1 — Live",
+    service: "VoterSpheres Backend v1 — PostgreSQL Search Enabled",
   });
 });
 
 /* =======================
-   SEARCH ENDPOINT (FIXED)
+   SEARCH ENDPOINT (FIXED FOR REAL SCHEMA)
    ======================= */
 app.get("/search", async (req, res) => {
   const q = (req.query.q || "").toLowerCase();
 
   if (!q) {
-    return res.json({ query: q, results: [] });
+    return res.json({ query: q, results: [], count: 0 });
   }
 
   try {
@@ -50,7 +50,7 @@ app.get("/search", async (req, res) => {
         state,
         county,
         election_date
-      FROM ballot_measures
+      FROM public.ballot_measures
       WHERE
         LOWER(title) LIKE $1
         OR LOWER(description) LIKE $1
@@ -64,7 +64,7 @@ app.get("/search", async (req, res) => {
       results.push({
         type: "Ballot Measure",
         title: row.title,
-        subtitle: row.state || row.county || "",
+        location: row.state || row.county || "",
         date: row.election_date,
       });
     });
@@ -73,14 +73,17 @@ app.get("/search", async (req, res) => {
     const elections = await pool.query(
       `
       SELECT
-        id,
-        title,
+        election_year,
+        election_type,
+        office,
         state,
-        election_date
-      FROM elections
+        primary_date,
+        general_date
+      FROM public.elections
       WHERE
-        LOWER(title) LIKE $1
+        LOWER(office) LIKE $1
         OR LOWER(state) LIKE $1
+        OR LOWER(election_type) LIKE $1
       `,
       [`%${q}%`]
     );
@@ -88,16 +91,16 @@ app.get("/search", async (req, res) => {
     elections.rows.forEach(row => {
       results.push({
         type: "Election",
-        title: row.title,
-        subtitle: row.state,
-        date: row.election_date,
+        title: `${row.office} (${row.election_year})`,
+        location: row.state,
+        date: row.general_date || row.primary_date,
       });
     });
 
     res.json({
       query: q,
-      results,
       count: results.length,
+      results,
     });
 
   } catch (err) {
