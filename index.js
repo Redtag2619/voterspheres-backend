@@ -34,12 +34,12 @@ app.get("/", (req, res) => {
   res.send("VoterSpheres API is running");
 });
 
-// Search endpoint
+// Search endpoint (PostgreSQL-powered)
 app.get("/search", async (req, res) => {
   const query = req.query.q;
 
   if (!query) {
-    return res.json({ query: "", results: [] });
+    return res.json({ query: "", results: {} });
   }
 
   try {
@@ -79,7 +79,7 @@ app.get("/search", async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
+    console.error("Search error:", err);
     res.status(500).json({ error: "Search failed" });
   }
 });
