@@ -1,95 +1,118 @@
 const express = require("express");
 const cors = require("cors");
-const pool = require("./db");
+const { Pool } = require("pg");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-/**
- * CORS
- */
-app.use(
-  cors({
-    origin: [
-      "https://voterspheres.org",
-      "https://www.voterspheres.org"
-    ],
-    methods: ["GET"],
-    allowedHeaders: ["Content-Type"]
-  })
-);
-
-/**
- * Cache control
- */
-app.use((req, res, next) => {
-  res.setHeader("Cache-Control", "no-store");
-  next();
-});
-
+/* =========================
+   Middleware
+========================= */
+app.use(cors());
 app.use(express.json());
 
-/**
- * Health check
- */
-app.get("/", (req, res) => {
-  res.send("VoterSpheres Backend v1 — PostgreSQL Search Enabled");
+/* =========================
+   PostgreSQL Connection
+========================= */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
-/**
- * SEARCH — elections + candidates + ballot measures
- */
+/* =========================
+   Health Check
+========================= */
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "VoterSpheres Backend v1 — PostgreSQL Search Enabled",
+  });
+});
+
+/* =========================
+   SEARCH ENDPOINT
+========================= */
 app.get("/search", async (req, res) => {
-  const q = `%${(req.query.q || "").toLowerCase()}%`;
+  const query = req.query.q;
+
+  if (!query) {
+    return res.json({ results: [] });
+  }
 
   try {
-    const elections = await pool.query(
-      `SELECT 'Election' AS type, title
-       FROM elections
-       WHERE LOWER(title) LIKE $1`,
-      [q]
+    const electionsResult = await pool.query(
+      `
+      SELECT 
+        id,
+        election_year,
+        office,
+        state
+      FROM elections
+      WHERE
+        office ILIKE $1
+        OR state ILIKE $1
+        OR election_year::text ILIKE $1
+      ORDER BY election_year DESC
+      `,
+      [`%${query}%`]
     );
 
-    const candidates = await pool.query(
-      `SELECT 'Candidate' AS type, name AS title
-       FROM candidates
-       WHERE LOWER(name) LIKE $1`,
-      [q]
-    );
+    const results = electionsResult.rows.map((election) => ({
+      type: "Election",
+      id: election.id,
+      title: `${election.election_year} ${election.state} ${election.office} Election`,
+    }));
 
-    const ballots = await pool.query(
-      `SELECT 'Ballot Measure' AS type, title
-       FROM ballot_measures
-       WHERE LOWER(title) LIKE $1`,
-      [q]
-    );
-
-    res.json({
-      query: req.query.q,
-      results: [
-        ...elections.rows,
-        ...candidates.rows,
-        ...ballots.rows
-      ]
-    });
+    res.json({ query, results });
   } catch (err) {
-    console.error(err);
+    console.error("Search error:", err);
     res.status(500).json({ error: "Search failed" });
   }
 });
 
-/**
- * DB test
- */
-app.get("/db-test", async (req, res) => {
+/* =========================
+   ELECTION DETAIL ENDPOINT
+========================= */
+app.get("/elections/:id", async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({ success: true, time: result.rows[0] });
+    const electionResult = await pool.query(
+      `
+      SELECT *
+      FROM elections
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (electionResult.rows.length === 0) {
+      return res.status(404).json({ error: "Election not found" });
+    }
+
+    const candidatesResult = await pool.query(
+      `
+      SELECT *
+      FROM candidates
+      WHERE election_id = $1
+      ORDER BY full_name
+      `,
+      [id]
+    );
+
+    res.json({
+      election: electionResult.rows[0],
+      candidates: candidatesResult.rows,
+    });
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error("Election detail error:", err);
+    res.status(500).json({ error: "Failed to load election" });
   }
 });
 
-const PORT = process.env.PORT || 10000;
+/* =========================
+   START SERVER
+========================= */
 app.listen(PORT, () => {
-  console.log(`VoterSpheres backend running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
