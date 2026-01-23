@@ -1,16 +1,4 @@
-voterspheres-api/
-│
-├── src/
-│   ├── db/
-│   │   └── index.ts        # connection pool
-│   │
-│   ├── routes/
-│   │   └── rollback.ts     # calls rollback.execute_request()
-│   │
-│   ├── app.ts
-│   └── server.ts
-│
-├── package.json
-├── tsconfig.json
-├── .env.example
-└── README.md
+await pool.query(
+  'SELECT rollback.execute_request($1, $2, $3)',
+  [requestId, execute, forceOverride]
+);
