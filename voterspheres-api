@@ -14,3 +14,89 @@ voterspheres-api/
 ├── package.json
 ├── tsconfig.json
 └── README.md
+PORT=3000
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=voterspheres
+DB_USER=api_role
+DB_PASSWORD=secure_password
+DB_SSL=true
+import { Pool } from 'pg';
+
+export const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
+});
+import { Router, Request, Response } from 'express';
+import { pool } from '../db/pool';
+
+const router = Router();
+
+/**
+ * POST /rollback/execute
+ *
+ * Body:
+ * {
+ *   "requestId": number,
+ *   "execute": boolean,
+ *   "forceOverride": boolean
+ * }
+ */
+router.post('/execute', async (req: Request, res: Response) => {
+  const { requestId, execute = true, forceOverride = false } = req.body;
+
+  if (!requestId || typeof requestId !== 'number') {
+    return res.status(400).json({ error: 'requestId must be a number' });
+  }
+
+  try {
+    await pool.query(
+      'SELECT rollback.execute_request($1, $2, $3)',
+      [requestId, execute, forceOverride]
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      requestId
+    });
+
+  } catch (err: any) {
+    console.error('Rollback execution failed:', err.message);
+
+    return res.status(500).json({
+      status: 'error',
+      message: err.message
+    });
+  }
+});
+
+export default router;
+import express from 'express';
+import rollbackRoutes from './routes/rollback';
+
+const app = express();
+
+app.use(express.json());
+
+app.use('/rollback', rollbackRoutes);
+
+app.get('/health', (_, res) => {
+  res.json({ status: 'ok' });
+});
+
+export default app;
+import app from './app';
+
+const port = process.env.PORT || 3000;
+
+app.listen(port, () => {
+  console.log(`VoterSpheres API running on port ${port}`);
+});
