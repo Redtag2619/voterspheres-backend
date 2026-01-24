@@ -1,31 +1,16 @@
 {
-  "name": "voterspheres-api",
+  "name": "voterspheres-backend",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node-dev src/server.ts"
+    "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
     "pg": "^8.11.5"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.11.0",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  }
-}
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
   }
 }
