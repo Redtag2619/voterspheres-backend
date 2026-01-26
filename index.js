@@ -1,5 +1,8 @@
 import express from "express";
 import pkg from "pg";
+app.get("/", (req, res) => {
+  res.send("VoterSpheres backend running");
+});
 
 const { Pool } = pkg;
 const app = express();
