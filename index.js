@@ -1,59 +1,47 @@
-import dotenv from "dotenv";
-dotenv.config();
-
-import express from "express";
-import cors from "cors";
-import pkg from "pg";
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+const { Pool } = pkg;
 
+const app = express();
+const PORT = process.env.PORT || 10000;
 
-/* ============================
-   CORS (allow your frontend)
-============================ */
+/* =========================
+   Middleware
+========================= */
 
 app.use(cors({
-  origin: "*",   // you can lock to Vercel domain later
+  origin: "*",   // later you can restrict to frontend domain
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type"]
 }));
 
 app.use(express.json());
 
-/* ============================
-   PostgreSQL Connection
-============================ */
+/* =========================
+   PostgreSQL (Render-ready)
+========================= */
 
 const pool = new Pool({
-  host: process.env.DATABASE_HOST,
-  user: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
-  database: process.env.DATABASE_NAME,
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-/* ============================
-   Root Route (fixes Cannot GET /)
-============================ */
+/* =========================
+   Root route
+========================= */
 
 app.get("/", (req, res) => {
   res.json({
     status: "Backend running",
-    service: "VoterSpheres API",
-    time: new Date()
+    service: "VoterSpheres API"
   });
 });
 
-/* ============================
-   Health Check
-============================ */
+/* =========================
+   Health check
+========================= */
 
 app.get("/health", async (req, res) => {
   try {
@@ -68,9 +56,9 @@ app.get("/health", async (req, res) => {
   }
 });
 
-/* ============================
-   API: Get all voters
-============================ */
+/* =========================
+   Sample API routes
+========================= */
 
 app.get("/api/voters", async (req, res) => {
   try {
@@ -81,10 +69,6 @@ app.get("/api/voters", async (req, res) => {
   }
 });
 
-/* ============================
-   API: Get elections
-============================ */
-
 app.get("/api/elections", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM elections");
@@ -94,28 +78,9 @@ app.get("/api/elections", async (req, res) => {
   }
 });
 
-/* ============================
-   API: Create voter (example)
-============================ */
-
-app.post("/api/voters", async (req, res) => {
-  const { name, email } = req.body;
-
-  try {
-    const result = await pool.query(
-      "INSERT INTO voters(name, email) VALUES($1, $2) RETURNING *",
-      [name, email]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ============================
-   Start Server
-============================ */
+/* =========================
+   Start server
+========================= */
 
 app.listen(PORT, () => {
   console.log(`✅ Backend running on port ${PORT}`);
