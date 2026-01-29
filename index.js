@@ -8,10 +8,11 @@ import express from "express";
 import cors from "cors";
 import pkg from "pg";
 
-const { Pool } = pkg;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-const app = express();
-const PORT = process.env.PORT || 3000;
 
 /* ============================
    CORS (allow your frontend)
