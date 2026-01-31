@@ -3,6 +3,9 @@ import cors from "cors";
 import pkg from "pg";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const { Pool } = pkg;
 
@@ -14,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
    Middleware
 ========================= */
 
-app.use(cors({ origin: "*"}));
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 /* =========================
@@ -30,12 +33,12 @@ const pool = new Pool({
    Health
 ========================= */
 
-app.get("/health", async (req,res)=>{
-  try{
+app.get("/health", async (req, res) => {
+  try {
     await pool.query("SELECT 1");
-    res.json({status:"ok"});
-  }catch(err){
-    res.status(500).json({error:err.message});
+    res.json({ status: "ok" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -44,7 +47,7 @@ app.get("/health", async (req,res)=>{
 ========================= */
 
 // Register
-app.post("/auth/register", async (req,res)=>{
+app.post("/auth/register", async (req, res) => {
   const { email, password } = req.body;
 
   const hash = await bcrypt.hash(password, 10);
@@ -56,14 +59,13 @@ app.post("/auth/register", async (req,res)=>{
     );
 
     res.json({ user: result.rows[0] });
-
-  } catch(err){
+  } catch (err) {
     res.status(400).json({ error: "User already exists" });
   }
 });
 
 // Login
-app.post("/auth/login", async (req,res)=>{
+app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
   const result = await pool.query(
@@ -71,14 +73,14 @@ app.post("/auth/login", async (req,res)=>{
     [email]
   );
 
-  if(result.rows.length === 0){
+  if (result.rows.length === 0) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
   const user = result.rows[0];
   const match = await bcrypt.compare(password, user.password_hash);
 
-  if(!match){
+  if (!match) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
@@ -95,17 +97,17 @@ app.post("/auth/login", async (req,res)=>{
    Auth Middleware
 ========================= */
 
-function auth(req,res,next){
+function auth(req, res, next) {
   const header = req.headers.authorization;
-  if(!header) return res.status(401).json({error:"No token"});
+  if (!header) return res.status(401).json({ error: "No token" });
 
   const token = header.split(" ")[1];
 
-  try{
+  try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
-  }catch{
-    res.status(401).json({error:"Invalid token"});
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 
@@ -113,10 +115,10 @@ function auth(req,res,next){
    Protected Example
 ========================= */
 
-app.get("/api/secure-data", auth, (req,res)=>{
+app.get("/api/secure-data", auth, (req, res) => {
   res.json({
-    message:"Protected info",
-    user:req.user
+    message: "Protected info",
+    user: req.user
   });
 });
 
@@ -124,7 +126,7 @@ app.get("/api/secure-data", auth, (req,res)=>{
    Existing APIs
 ========================= */
 
-app.get("/api/voters", async (req,res)=>{
+app.get("/api/voters", async (req, res) => {
   const r = await pool.query("SELECT * FROM voters LIMIT 50");
   res.json(r.rows);
 });
@@ -133,9 +135,6 @@ app.get("/api/voters", async (req,res)=>{
    Start
 ========================= */
 
-app.listen(PORT, ()=>{
+app.listen(PORT, () => {
   console.log("Backend running on", PORT);
 });
-=======
-});
->>>>>>> 8a1931a4a939fffaceca09fbcf7a3b09b6ebb8ae
