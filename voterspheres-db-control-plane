@@ -1,0 +1,24 @@
+voterspheres-db-control-plane/
+│
+├── README.md
+├── CHANGELOG.md
+├── SECURITY.md
+│
+├── sql/
+│   ├── 001_schemas.sql
+│   ├── 002_roles.sql
+│   ├── 003_audit_tables.sql
+│   ├── 004_approval_functions.sql
+│   ├── 005_rollback_functions.sql
+│   ├── 006_grants.sql
+│   ├── 007_lockdown.sql
+│   └── 999_verify.sql
+│
+├── bundles/
+│   └── voterspheres_production_control_plane.sql
+│
+└── docs/
+    ├── ops-handoff.md
+    ├── production-signoff.pdf
+    ├── soc2-sox-mapping.md
+    └── rollback-playbook.md

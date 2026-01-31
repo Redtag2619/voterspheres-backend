@@ -136,3 +136,6 @@ app.get("/api/voters", async (req,res)=>{
 app.listen(PORT, ()=>{
   console.log("Backend running on", PORT);
 });
+=======
+});
+>>>>>>> 8a1931a4a939fffaceca09fbcf7a3b09b6ebb8ae
