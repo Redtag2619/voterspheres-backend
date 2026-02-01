@@ -135,8 +135,6 @@ app.get("/api/voters", async (req, res) => {
    Start
 ========================= */
 
-const PORT = process.env.PORT || 10000;
-
 app.listen(PORT, () => {
   console.log("Backend running on port", PORT);
 });
