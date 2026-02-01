@@ -138,17 +138,15 @@ app.get("/api/secure-data", auth, (req, res) => {
 
 app.get("/api/voters", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM voters LIMIT 100"
-    );
-
+    const result = await pool.query("SELECT * FROM voters LIMIT 10;");
+    console.log(result.rows); // DEBUG
     res.json(result.rows);
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to load voters" });
+    console.error("DB ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 /* =========================
    Start Server
