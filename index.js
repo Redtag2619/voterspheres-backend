@@ -6,8 +6,6 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 dotenv.config();
-console.log("DB PASSWORD TYPE:", typeof process.env.DB_PASSWORD);
-console.log("DB PASSWORD VALUE:", process.env.DB_PASSWORD);
 
 const { Pool } = pkg;
 
