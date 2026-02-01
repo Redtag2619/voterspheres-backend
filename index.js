@@ -1,7 +1,7 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
 import pkg from "pg";
+import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config();
 
@@ -11,43 +11,36 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ============================
-   DATABASE CONNECTION
-============================ */
-
+// ✅ PostgreSQL connection
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
   user: process.env.DB_USER,
-  password: String(process.env.DB_PASSWORD),
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: false
 });
 
-// Test DB connection on startup
+// ✅ Test DB connection on startup
 (async () => {
   try {
-    const client = await pool.connect();
+    await pool.query("SELECT 1");
     console.log("Connected to database");
-    client.release();
   } catch (err) {
-    console.error("DB ERROR:", err);
+    console.error("DB CONNECTION ERROR:", err);
   }
 })();
 
-/* ============================
-   ROUTES
-============================ */
+// ✅ Health check route
+app.get("/health", (req, res) => {
+  res.send("Backend OK");
+});
 
+// ✅ Voters API route
 app.get("/api/voters", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        id,
-        name,
-        city,
-        party
-      FROM voters
+      SELECT id, name, city, party
+      FROM public.voters
       LIMIT 100;
     `);
 
@@ -58,10 +51,7 @@ app.get("/api/voters", async (req, res) => {
   }
 });
 
-/* ============================
-   SERVER START
-============================ */
-
+// ✅ Server listen (IMPORTANT — correct port)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
