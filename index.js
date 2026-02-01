@@ -10,6 +10,11 @@ dotenv.config();
 const { Pool } = pkg;
 
 const app = express();
+
+/* =========================
+   Config
+========================= */
+
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
@@ -17,7 +22,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
    Middleware
 ========================= */
 
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
 
 /* =========================
@@ -26,11 +31,13 @@ app.use(express.json());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
 /* =========================
-   Health
+   Health Check
 ========================= */
 
 app.get("/health", async (req, res) => {
@@ -50,15 +57,19 @@ app.get("/health", async (req, res) => {
 app.post("/auth/register", async (req, res) => {
   const { email, password } = req.body;
 
-  const hash = await bcrypt.hash(password, 10);
+  if (!email || !password)
+    return res.status(400).json({ error: "Missing fields" });
 
   try {
+    const hash = await bcrypt.hash(password, 10);
+
     const result = await pool.query(
       "INSERT INTO users(email, password_hash) VALUES($1,$2) RETURNING id,email",
       [email, hash]
     );
 
     res.json({ user: result.rows[0] });
+
   } catch (err) {
     res.status(400).json({ error: "User already exists" });
   }
@@ -73,16 +84,15 @@ app.post("/auth/login", async (req, res) => {
     [email]
   );
 
-  if (result.rows.length === 0) {
+  if (result.rows.length === 0)
     return res.status(401).json({ error: "Invalid credentials" });
-  }
 
   const user = result.rows[0];
+
   const match = await bcrypt.compare(password, user.password_hash);
 
-  if (!match) {
+  if (!match)
     return res.status(401).json({ error: "Invalid credentials" });
-  }
 
   const token = jwt.sign(
     { id: user.id, email: user.email },
@@ -123,20 +133,27 @@ app.get("/api/secure-data", auth, (req, res) => {
 });
 
 /* =========================
-   Existing APIs
+   Voters API
 ========================= */
 
 app.get("/api/voters", async (req, res) => {
-  const r = await pool.query("SELECT * FROM voters LIMIT 50");
-  res.json(r.rows);
+  try {
+    const result = await pool.query(
+      "SELECT * FROM voters LIMIT 100"
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load voters" });
+  }
 });
 
 /* =========================
-   Start
+   Start Server
 ========================= */
 
 app.listen(PORT, () => {
   console.log("Backend running on port", PORT);
 });
-
-
