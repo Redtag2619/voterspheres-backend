@@ -77,7 +77,7 @@ app.get("/api/search/candidates", async (req, res) => {
 
     if (q) {
       params.push(`%${q}%`);
-      sql += ` AND name ILIKE $${params.length}`;
+      sql += ` AND full_name ILIKE $${params.length}`;
     }
 
     if (state) {
@@ -90,8 +90,6 @@ app.get("/api/search/candidates", async (req, res) => {
       sql += ` AND party = $${params.length}`;
     }
 
-    sql += " LIMIT 200";
-
     const result = await pool.query(sql, params);
     res.json(result.rows);
 
@@ -100,6 +98,7 @@ app.get("/api/search/candidates", async (req, res) => {
     res.status(500).json({ error: "Failed to search candidates" });
   }
 });
+
 
 /* ===========================
    CONSULTANTS SEARCH
@@ -130,15 +129,13 @@ app.get("/api/search/consultants", async (req, res) => {
 
     if (q) {
       params.push(`%${q}%`);
-      sql += ` AND name ILIKE $${params.length}`;
+      sql += ` AND full_name ILIKE $${params.length}`;
     }
 
     if (state) {
       params.push(state);
       sql += ` AND state = $${params.length}`;
     }
-
-    sql += " LIMIT 200";
 
     const result = await pool.query(sql, params);
     res.json(result.rows);
@@ -186,8 +183,6 @@ app.get("/api/search/vendors", async (req, res) => {
       params.push(state);
       sql += ` AND state = $${params.length}`;
     }
-
-    sql += " LIMIT 200";
 
     const result = await pool.query(sql, params);
     res.json(result.rows);
