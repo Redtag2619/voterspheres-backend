@@ -29,6 +29,9 @@ const pool = new Pool({
     console.error("DB CONNECTION ERROR:", err);
   }
 })();
+app.get("/test", (req, res) => {
+  res.json({ ok: true });
+});
 
 // ✅ API route
 app.get("/api/voters", async (req, res) => {
