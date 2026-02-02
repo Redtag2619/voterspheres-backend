@@ -1,3 +1,7 @@
+app.get("/api/test", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.get("/api/search/candidates", async (req, res) => {
   try {
     const {
