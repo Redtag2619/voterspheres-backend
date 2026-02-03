@@ -208,8 +208,9 @@ app.get("/api/dropdowns/counties", async (req, res) => {
    START SERVER
 ============================ */
 
-const PORT = 10000;
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log("Backend running on port", PORT);
 });
+
