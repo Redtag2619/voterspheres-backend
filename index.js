@@ -244,6 +244,69 @@ app.get("/api/search/vendors", async (req, res) => {
 =========================== */
 
 const PORT = 10000;
+app.get("/api/dropdowns/states", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, code, name
+      FROM states
+      ORDER BY name
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("STATES DROPDOWN ERROR:", err);
+    res.status(500).json({ error: "Failed to load states" });
+  }
+});
+app.get("/api/dropdowns/parties", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name, abbreviation
+      FROM parties
+      ORDER BY name
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("PARTIES DROPDOWN ERROR:", err);
+    res.status(500).json({ error: "Failed to load parties" });
+  }
+});
+app.get("/api/dropdowns/offices", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name
+      FROM offices
+      ORDER BY name
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("OFFICES DROPDOWN ERROR:", err);
+    res.status(500).json({ error: "Failed to load offices" });
+  }
+});
+app.get("/api/dropdowns/counties", async (req, res) => {
+  const { state } = req.query;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT c.id, c.name
+      FROM counties c
+      JOIN states s ON c.state_id = s.id
+      WHERE s.code = $1
+      ORDER BY c.name
+      `,
+      [state]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("COUNTIES DROPDOWN ERROR:", err);
+    res.status(500).json({ error: "Failed to load counties" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log("🚀 Backend running on port", PORT);
