@@ -37,6 +37,18 @@ const pool = new Pool({
 })();
 
 /* ===========================
+   Helpers
+=========================== */
+
+function getPagination(query) {
+  const page = Math.max(parseInt(query.page) || 1, 1);
+  const limit = Math.min(parseInt(query.limit) || 50, 200);
+  const offset = (page - 1) * limit;
+
+  return { page, limit, offset };
+}
+
+/* ===========================
    ROOT
 =========================== */
 
@@ -45,22 +57,33 @@ app.get("/", (req, res) => {
 });
 
 /* ===========================
-   CANDIDATE SEARCH
+   CANDIDATES (PAGINATED)
 =========================== */
-/*
-Tables used:
-candidates
-states
-parties
-offices
-counties
-*/
 
 app.get("/api/search/candidates", async (req, res) => {
   const { q, state, party } = req.query;
+  const { page, limit, offset } = getPagination(req.query);
 
   try {
-    const result = await pool.query(
+    // Total count
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*) 
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      WHERE
+        ($1::text IS NULL OR c.full_name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+        AND ($3::text IS NULL OR p.name = $3)
+      `,
+      [q || null, state || null, party || null]
+    );
+
+    const total = parseInt(countResult.rows[0].count);
+
+    // Data
+    const dataResult = await pool.query(
       `
       SELECT 
         c.id,
@@ -81,12 +104,19 @@ app.get("/api/search/candidates", async (req, res) => {
         ($1::text IS NULL OR c.full_name ILIKE '%' || $1 || '%')
         AND ($2::text IS NULL OR s.code = $2)
         AND ($3::text IS NULL OR p.name = $3)
-      LIMIT 200
+      ORDER BY c.full_name
+      LIMIT $4 OFFSET $5
       `,
-      [q || null, state || null, party || null]
+      [q || null, state || null, party || null, limit, offset]
     );
 
-    res.json(result.rows);
+    res.json({
+      data: dataResult.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
 
   } catch (err) {
     console.error("CANDIDATE SEARCH ERROR:", err);
@@ -95,14 +125,29 @@ app.get("/api/search/candidates", async (req, res) => {
 });
 
 /* ===========================
-   CONSULTANT SEARCH
+   CONSULTANTS (PAGINATED)
 =========================== */
 
 app.get("/api/search/consultants", async (req, res) => {
   const { q, state } = req.query;
+  const { page, limit, offset } = getPagination(req.query);
 
   try {
-    const result = await pool.query(
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*)
+      FROM consultants c
+      LEFT JOIN states s ON c.state_id = s.id
+      WHERE
+        ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+      `,
+      [q || null, state || null]
+    );
+
+    const total = parseInt(countResult.rows[0].count);
+
+    const dataResult = await pool.query(
       `
       SELECT 
         c.id,
@@ -116,12 +161,19 @@ app.get("/api/search/consultants", async (req, res) => {
       WHERE
         ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
         AND ($2::text IS NULL OR s.code = $2)
-      LIMIT 200
+      ORDER BY c.name
+      LIMIT $3 OFFSET $4
       `,
-      [q || null, state || null]
+      [q || null, state || null, limit, offset]
     );
 
-    res.json(result.rows);
+    res.json({
+      data: dataResult.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
 
   } catch (err) {
     console.error("CONSULTANT SEARCH ERROR:", err);
@@ -130,14 +182,29 @@ app.get("/api/search/consultants", async (req, res) => {
 });
 
 /* ===========================
-   VENDOR SEARCH
+   VENDORS (PAGINATED)
 =========================== */
 
 app.get("/api/search/vendors", async (req, res) => {
   const { q, state } = req.query;
+  const { page, limit, offset } = getPagination(req.query);
 
   try {
-    const result = await pool.query(
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*)
+      FROM vendors v
+      LEFT JOIN states s ON v.state_id = s.id
+      WHERE
+        ($1::text IS NULL OR v.name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+      `,
+      [q || null, state || null]
+    );
+
+    const total = parseInt(countResult.rows[0].count);
+
+    const dataResult = await pool.query(
       `
       SELECT 
         v.id,
@@ -152,32 +219,23 @@ app.get("/api/search/vendors", async (req, res) => {
       WHERE
         ($1::text IS NULL OR v.name ILIKE '%' || $1 || '%')
         AND ($2::text IS NULL OR s.code = $2)
-      LIMIT 200
+      ORDER BY v.name
+      LIMIT $3 OFFSET $4
       `,
-      [q || null, state || null]
+      [q || null, state || null, limit, offset]
     );
 
-    res.json(result.rows);
+    res.json({
+      data: dataResult.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
 
   } catch (err) {
     console.error("VENDOR SEARCH ERROR:", err);
     res.status(500).json({ error: "Vendor search failed" });
-  }
-});
-
-/* ===========================
-   SIMPLE VOTERS (your old)
-=========================== */
-
-app.get("/api/voters", async (req, res) => {
-  try {
-    const r = await pool.query(
-      "SELECT id, name, city, party FROM voters LIMIT 100"
-    );
-    res.json(r.rows);
-  } catch (err) {
-    console.error("FETCH ERROR:", err);
-    res.status(500).json({ error: "Failed to load voters" });
   }
 });
 
