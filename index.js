@@ -116,7 +116,6 @@ app.get("/api/search/candidates", async (req, res) => {
     sql += ` ORDER BY c.full_name LIMIT 100`;
 
     const result = await pool.query(sql, params);
-
     res.json(result.rows);
 
   } catch (err) {
@@ -124,6 +123,7 @@ app.get("/api/search/candidates", async (req, res) => {
     res.status(500).json({ error: "Candidate search failed" });
   }
 });
+
 
 
 /* ===========================
