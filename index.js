@@ -64,7 +64,9 @@ candidates(
 )
 */
 
-  const { q, state, party, office } = req.query;
+app.get("/api/search/candidates", ...)
+ 
+const { q, state, party, office } = req.query;
 
   try {
     let sql = `
