@@ -68,11 +68,8 @@ app.get("/api/search/candidates", async (req, res) => {
   const { q, state, party } = req.query;
 
   try {
-    let sql = `
-      SELECT *
-      FROM candidates
-      WHERE 1=1
-    `;
+    let sql += ` AND full_name ILIKE $${params.length}`;
+
     const params = [];
 
     if (q) {
