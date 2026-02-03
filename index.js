@@ -65,34 +65,63 @@ candidates(
 */
 
 app.get("/api/search/candidates", async (req, res) => {
-  const { q, state, party } = req.query;
+  const { q, state, party, office } = req.query;
 
   try {
-    let sql += ` AND full_name ILIKE $${params.length}`;
+    let sql = `
+      SELECT 
+        c.id,
+        c.full_name,
+        p.name AS party,
+        s.code AS state,
+        o.name AS office,
+        co.name AS county,
+        c.email,
+        c.phone,
+        c.website,
+        c.social_facebook,
+        c.social_twitter,
+        c.social_instagram,
+        c.address
+      FROM candidates c
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      WHERE 1=1
+    `;
 
     const params = [];
 
     if (q) {
       params.push(`%${q}%`);
-      sql += ` AND full_name ILIKE $${params.length}`;
+      sql += ` AND c.full_name ILIKE $${params.length}`;
     }
 
     if (state) {
       params.push(state);
-      sql += ` AND state = $${params.length}`;
+      sql += ` AND s.code = $${params.length}`;
     }
 
     if (party) {
       params.push(party);
-      sql += ` AND party = $${params.length}`;
+      sql += ` AND p.name ILIKE $${params.length}`;
     }
 
+    if (office) {
+      params.push(`%${office}%`);
+      sql += ` AND o.name ILIKE $${params.length}`;
+    }
+
+    sql += ` ORDER BY c.full_name LIMIT 100`;
+
     const result = await pool.query(sql, params);
+
     res.json(result.rows);
 
   } catch (err) {
     console.error("CANDIDATE SEARCH ERROR:", err);
-    res.status(500).json({ error: "Failed to search candidates" });
+    res.status(500).json({ error: "Candidate search failed" });
   }
 });
 
