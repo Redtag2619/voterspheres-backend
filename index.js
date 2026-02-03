@@ -18,11 +18,12 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-console.log("✅ Using DATABASE_URL");
+console.log("DATABASE_URL RAW:", process.env.DATABASE_URL);
 
 // Create pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: String(process.env.DATABASE_URL)
+});
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
