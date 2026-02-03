@@ -64,7 +64,6 @@ candidates(
 )
 */
 
-app.get("/api/search/candidates", async (req, res) => {
   const { q, state, party, office } = req.query;
 
   try {
