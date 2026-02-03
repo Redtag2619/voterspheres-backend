@@ -11,9 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ===========================
+/* ============================
    PostgreSQL Connection
-=========================== */
+============================ */
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -23,9 +23,9 @@ const pool = new Pool({
   database: process.env.DB_NAME || "postgres",
 });
 
-/* ===========================
-   Test DB
-=========================== */
+/* ============================
+   Test DB Connection
+============================ */
 
 (async () => {
   try {
@@ -36,214 +36,97 @@ const pool = new Pool({
   }
 })();
 
-/* ===========================
-   Helpers
-=========================== */
-
-function getPagination(query) {
-  const page = Math.max(parseInt(query.page) || 1, 1);
-  const limit = Math.min(parseInt(query.limit) || 50, 200);
-  const offset = (page - 1) * limit;
-
-  return { page, limit, offset };
-}
-
-/* ===========================
-   ROOT
-=========================== */
+/* ============================
+   Root
+============================ */
 
 app.get("/", (req, res) => {
-  res.send("Backend running");
+  res.send("Backend is running 🚀");
 });
 
-/* ===========================
-   CANDIDATES (PAGINATED)
-=========================== */
+/* ============================
+   CANDIDATE SEARCH + PAGINATION
+============================ */
 
-app.get("/api/search/candidates", async (req, res) => {
-  const { q, state, party } = req.query;
-  const { page, limit, offset } = getPagination(req.query);
+app.get("/api/candidates", async (req, res) => {
+  const {
+    q = "",
+    state,
+    party,
+    office,
+    page = 1,
+    limit = 25,
+  } = req.query;
+
+  const offset = (page - 1) * limit;
+
+  let filters = [];
+  let values = [];
+  let i = 1;
+
+  if (q) {
+    filters.push(`c.full_name ILIKE $${i++}`);
+    values.push(`%${q}%`);
+  }
+
+  if (state) {
+    filters.push(`s.code = $${i++}`);
+    values.push(state);
+  }
+
+  if (party) {
+    filters.push(`p.abbreviation = $${i++}`);
+    values.push(party);
+  }
+
+  if (office) {
+    filters.push(`o.name = $${i++}`);
+    values.push(office);
+  }
+
+  const whereClause = filters.length
+    ? "WHERE " + filters.join(" AND ")
+    : "";
 
   try {
-    // Total count
-    const countResult = await pool.query(
+    const result = await pool.query(
       `
-      SELECT COUNT(*) 
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id = s.id
-      LEFT JOIN parties p ON c.party_id = p.id
-      WHERE
-        ($1::text IS NULL OR c.full_name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-        AND ($3::text IS NULL OR p.name = $3)
-      `,
-      [q || null, state || null, party || null]
-    );
-
-    const total = parseInt(countResult.rows[0].count);
-
-    // Data
-    const dataResult = await pool.query(
-      `
-      SELECT 
+      SELECT
         c.id,
         c.full_name,
         s.code AS state,
+        co.name AS county,
         p.name AS party,
         o.name AS office,
-        co.name AS county,
         c.email,
         c.phone,
         c.website
       FROM candidates c
       LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN counties co ON c.county_id = co.id
       LEFT JOIN parties p ON c.party_id = p.id
       LEFT JOIN offices o ON c.office_id = o.id
-      LEFT JOIN counties co ON c.county_id = co.id
-      WHERE
-        ($1::text IS NULL OR c.full_name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-        AND ($3::text IS NULL OR p.name = $3)
+      ${whereClause}
       ORDER BY c.full_name
-      LIMIT $4 OFFSET $5
+      LIMIT $${i++} OFFSET $${i++}
       `,
-      [q || null, state || null, party || null, limit, offset]
+      [...values, limit, offset]
     );
 
-    res.json({
-      data: dataResult.rows,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    });
+    res.json(result.rows);
 
   } catch (err) {
-    console.error("CANDIDATE SEARCH ERROR:", err);
-    res.status(500).json({ error: "Candidate search failed" });
+    console.error("❌ CANDIDATE SEARCH ERROR:", err);
+    res.status(500).json({ error: "Failed to search candidates" });
   }
 });
 
-/* ===========================
-   CONSULTANTS (PAGINATED)
-=========================== */
+/* ============================
+   DROPDOWNS
+============================ */
 
-app.get("/api/search/consultants", async (req, res) => {
-  const { q, state } = req.query;
-  const { page, limit, offset } = getPagination(req.query);
+/* ---- STATES ---- */
 
-  try {
-    const countResult = await pool.query(
-      `
-      SELECT COUNT(*)
-      FROM consultants c
-      LEFT JOIN states s ON c.state_id = s.id
-      WHERE
-        ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-      `,
-      [q || null, state || null]
-    );
-
-    const total = parseInt(countResult.rows[0].count);
-
-    const dataResult = await pool.query(
-      `
-      SELECT 
-        c.id,
-        c.name,
-        s.code AS state,
-        c.email,
-        c.phone,
-        c.website
-      FROM consultants c
-      LEFT JOIN states s ON c.state_id = s.id
-      WHERE
-        ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-      ORDER BY c.name
-      LIMIT $3 OFFSET $4
-      `,
-      [q || null, state || null, limit, offset]
-    );
-
-    res.json({
-      data: dataResult.rows,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    });
-
-  } catch (err) {
-    console.error("CONSULTANT SEARCH ERROR:", err);
-    res.status(500).json({ error: "Consultant search failed" });
-  }
-});
-
-/* ===========================
-   VENDORS (PAGINATED)
-=========================== */
-
-app.get("/api/search/vendors", async (req, res) => {
-  const { q, state } = req.query;
-  const { page, limit, offset } = getPagination(req.query);
-
-  try {
-    const countResult = await pool.query(
-      `
-      SELECT COUNT(*)
-      FROM vendors v
-      LEFT JOIN states s ON v.state_id = s.id
-      WHERE
-        ($1::text IS NULL OR v.name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-      `,
-      [q || null, state || null]
-    );
-
-    const total = parseInt(countResult.rows[0].count);
-
-    const dataResult = await pool.query(
-      `
-      SELECT 
-        v.id,
-        v.name,
-        s.code AS state,
-        v.phone,
-        v.email,
-        v.website,
-        v.address
-      FROM vendors v
-      LEFT JOIN states s ON v.state_id = s.id
-      WHERE
-        ($1::text IS NULL OR v.name ILIKE '%' || $1 || '%')
-        AND ($2::text IS NULL OR s.code = $2)
-      ORDER BY v.name
-      LIMIT $3 OFFSET $4
-      `,
-      [q || null, state || null, limit, offset]
-    );
-
-    res.json({
-      data: dataResult.rows,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    });
-
-  } catch (err) {
-    console.error("VENDOR SEARCH ERROR:", err);
-    res.status(500).json({ error: "Vendor search failed" });
-  }
-});
-
-/* ===========================
-   START SERVER
-=========================== */
-
-const PORT = 10000;
 app.get("/api/dropdowns/states", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -254,10 +137,13 @@ app.get("/api/dropdowns/states", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("STATES DROPDOWN ERROR:", err);
+    console.error("❌ STATES ERROR:", err);
     res.status(500).json({ error: "Failed to load states" });
   }
 });
+
+/* ---- PARTIES ---- */
+
 app.get("/api/dropdowns/parties", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -268,10 +154,13 @@ app.get("/api/dropdowns/parties", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("PARTIES DROPDOWN ERROR:", err);
+    console.error("❌ PARTIES ERROR:", err);
     res.status(500).json({ error: "Failed to load parties" });
   }
 });
+
+/* ---- OFFICES ---- */
+
 app.get("/api/dropdowns/offices", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -282,12 +171,19 @@ app.get("/api/dropdowns/offices", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("OFFICES DROPDOWN ERROR:", err);
+    console.error("❌ OFFICES ERROR:", err);
     res.status(500).json({ error: "Failed to load offices" });
   }
 });
+
+/* ---- COUNTIES BY STATE ---- */
+
 app.get("/api/dropdowns/counties", async (req, res) => {
   const { state } = req.query;
+
+  if (!state) {
+    return res.json([]);
+  }
 
   try {
     const result = await pool.query(
@@ -303,11 +199,17 @@ app.get("/api/dropdowns/counties", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("COUNTIES DROPDOWN ERROR:", err);
+    console.error("❌ COUNTIES ERROR:", err);
     res.status(500).json({ error: "Failed to load counties" });
   }
 });
 
+/* ============================
+   START SERVER
+============================ */
+
+const PORT = 10000;
+
 app.listen(PORT, () => {
-  console.log("🚀 Backend running on port", PORT);
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
