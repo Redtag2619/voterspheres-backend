@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import pkg from "pg";
 
 dotenv.config();
-console.log("DB URL:", process.env.DATABASE_URL);
 
 const { Pool } = pkg;
 
@@ -12,15 +11,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================================
-   PostgreSQL (Render-ready)
-================================ */
+// ===== PostgreSQL (Render + local compatible) =====
 
+if (!process.env.DATABASE_URL) {
+  console.error("❌ DATABASE_URL missing in .env");
+  process.exit(1);
+}
+
+console.log("✅ Using DATABASE_URL");
+
+// Create pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
 // Test DB connection
@@ -33,297 +36,99 @@ const pool = new Pool({
   }
 })();
 
-/* ================================
-   Helpers
-================================ */
+// ================= ROUTES =================
 
-const buildPagination = (page = 1, limit = 20) => {
-  page = Number(page);
-  limit = Number(limit);
-  const offset = (page - 1) * limit;
-  return { limit, offset };
-};
-
-/* ================================
-   ROOT
-================================ */
-
+// Health check
 app.get("/", (req, res) => {
-  res.send("🚀 VoterSpheres API running");
+  res.send("Backend running ✅");
 });
 
-/* ================================
-   DROPDOWN ROUTES
-================================ */
-
-app.get("/api/states", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT id, name, code FROM states ORDER BY name"
-  );
-  res.json(rows);
-});
-
-app.get("/api/parties", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT id, name, abbreviation FROM parties ORDER BY name"
-  );
-  res.json(rows);
-});
-
-app.get("/api/offices", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT id, name FROM offices ORDER BY name"
-  );
-  res.json(rows);
-});
-
-app.get("/api/counties", async (req, res) => {
-  const { state_id } = req.query;
-
-  let query = "SELECT id, name FROM counties";
-  let params = [];
-
-  if (state_id) {
-    query += " WHERE state_id = $1";
-    params.push(state_id);
-  }
-
-  query += " ORDER BY name";
-
-  const { rows } = await pool.query(query, params);
-  res.json(rows);
-});
-
-/* ================================
-   CANDIDATES SEARCH + PAGINATION
-================================ */
-
+// ---- Candidates search + pagination ----
 app.get("/api/candidates", async (req, res) => {
   try {
     const {
-      q,
+      q = "",
       state_id,
       party_id,
-      office_id,
-      county_id,
       page = 1,
-      limit = 20,
+      limit = 20
     } = req.query;
 
-    const { offset } = buildPagination(page, limit);
+    const offset = (page - 1) * limit;
 
-    let where = [];
-    let params = [];
+    let filters = [];
+    let values = [];
+    let i = 1;
 
     if (q) {
-      params.push(`%${q}%`);
-      where.push(`c.full_name ILIKE $${params.length}`);
+      filters.push(`full_name ILIKE $${i++}`);
+      values.push(`%${q}%`);
     }
 
     if (state_id) {
-      params.push(state_id);
-      where.push(`c.state_id = $${params.length}`);
+      filters.push(`state_id = $${i++}`);
+      values.push(state_id);
     }
 
     if (party_id) {
-      params.push(party_id);
-      where.push(`c.party_id = $${params.length}`);
+      filters.push(`party_id = $${i++}`);
+      values.push(party_id);
     }
 
-    if (office_id) {
-      params.push(office_id);
-      where.push(`c.office_id = $${params.length}`);
-    }
-
-    if (county_id) {
-      params.push(county_id);
-      where.push(`c.county_id = $${params.length}`);
-    }
-
-    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    // Total count
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM candidates c ${whereSQL}`,
-      params
-    );
-
-    const total = Number(countResult.rows[0].count);
-
-    // Data
-    params.push(limit, offset);
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
     const dataQuery = `
-      SELECT 
-        c.id,
-        c.full_name,
-        c.email,
-        c.phone,
-        c.website,
-        c.address,
-        s.name AS state,
-        p.name AS party,
-        o.name AS office,
-        co.name AS county
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id = s.id
-      LEFT JOIN parties p ON c.party_id = p.id
-      LEFT JOIN offices o ON c.office_id = o.id
-      LEFT JOIN counties co ON c.county_id = co.id
-      ${whereSQL}
-      ORDER BY c.full_name
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
+      SELECT * FROM candidates
+      ${where}
+      ORDER BY full_name
+      LIMIT $${i++} OFFSET $${i}
     `;
 
-    const { rows } = await pool.query(dataQuery, params);
+    values.push(limit, offset);
+
+    const countQuery = `
+      SELECT COUNT(*) FROM candidates ${where}
+    `;
+
+    const [data, count] = await Promise.all([
+      pool.query(dataQuery, values),
+      pool.query(countQuery, values.slice(0, values.length - 2))
+    ]);
 
     res.json({
-      total,
+      results: data.rows,
+      total: Number(count.rows[0].count),
       page: Number(page),
-      limit: Number(limit),
-      pages: Math.ceil(total / limit),
-      results: rows,
+      pages: Math.ceil(count.rows[0].count / limit)
     });
+
   } catch (err) {
     console.error("CANDIDATE SEARCH ERROR:", err);
-    res.status(500).json({ error: "Candidate search failed" });
+    res.status(500).json({ error: "Failed to load candidates" });
   }
 });
 
-/* ================================
-   CONSULTANTS
-================================ */
+// ---- Dropdowns ----
 
-app.get("/api/consultants", async (req, res) => {
-  try {
-    const { q, state_id, page = 1, limit = 20 } = req.query;
-    const { offset } = buildPagination(page, limit);
-
-    let where = [];
-    let params = [];
-
-    if (q) {
-      params.push(`%${q}%`);
-      where.push(`name ILIKE $${params.length}`);
-    }
-
-    if (state_id) {
-      params.push(state_id);
-      where.push(`state_id = $${params.length}`);
-    }
-
-    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    const count = await pool.query(
-      `SELECT COUNT(*) FROM consultants ${whereSQL}`,
-      params
-    );
-
-    params.push(limit, offset);
-
-    const data = await pool.query(
-      `
-      SELECT 
-        c.id,
-        c.name,
-        c.email,
-        c.phone,
-        c.website,
-        s.name AS state
-      FROM consultants c
-      LEFT JOIN states s ON c.state_id = s.id
-      ${whereSQL}
-      ORDER BY c.name
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
-    `,
-      params
-    );
-
-    res.json({
-      total: Number(count.rows[0].count),
-      page: Number(page),
-      limit: Number(limit),
-      pages: Math.ceil(count.rows[0].count / limit),
-      results: data.rows,
-    });
-  } catch (err) {
-    console.error("CONSULTANT SEARCH ERROR:", err);
-    res.status(500).json({ error: "Consultant search failed" });
-  }
+app.get("/api/states", async (req, res) => {
+  const result = await pool.query("SELECT id, name FROM states ORDER BY name");
+  res.json(result.rows);
 });
 
-/* ================================
-   VENDORS
-================================ */
-
-app.get("/api/vendors", async (req, res) => {
-  try {
-    const { q, state_id, page = 1, limit = 20 } = req.query;
-    const { offset } = buildPagination(page, limit);
-
-    let where = [];
-    let params = [];
-
-    if (q) {
-      params.push(`%${q}%`);
-      where.push(`name ILIKE $${params.length}`);
-    }
-
-    if (state_id) {
-      params.push(state_id);
-      where.push(`state_id = $${params.length}`);
-    }
-
-    const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    const count = await pool.query(
-      `SELECT COUNT(*) FROM vendors ${whereSQL}`,
-      params
-    );
-
-    params.push(limit, offset);
-
-    const data = await pool.query(
-      `
-      SELECT 
-        v.id,
-        v.name,
-        v.phone,
-        v.email,
-        v.website,
-        v.address,
-        s.name AS state
-      FROM vendors v
-      LEFT JOIN states s ON v.state_id = s.id
-      ${whereSQL}
-      ORDER BY v.name
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
-    `,
-      params
-    );
-
-    res.json({
-      total: Number(count.rows[0].count),
-      page: Number(page),
-      limit: Number(limit),
-      pages: Math.ceil(count.rows[0].count / limit),
-      results: data.rows,
-    });
-  } catch (err) {
-    console.error("VENDOR SEARCH ERROR:", err);
-    res.status(500).json({ error: "Vendor search failed" });
-  }
+app.get("/api/parties", async (req, res) => {
+  const result = await pool.query("SELECT id, name FROM parties ORDER BY name");
+  res.json(result.rows);
 });
 
-/* ================================
-   SERVER
-================================ */
+app.get("/api/offices", async (req, res) => {
+  const result = await pool.query("SELECT id, name FROM offices ORDER BY name");
+  res.json(result.rows);
+});
+
+// ================= SERVER =================
 
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 Backend running on port", PORT);
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
