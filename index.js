@@ -6,8 +6,8 @@ import pkg from "pg";
 dotenv.config();
 
 const { Pool } = pkg;
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
@@ -24,7 +24,7 @@ const pool = new Pool({
 });
 
 /* ===========================
-   Test DB Connection
+   Test DB
 =========================== */
 
 (async () => {
@@ -37,86 +37,55 @@ const pool = new Pool({
 })();
 
 /* ===========================
-   Health Check
+   ROOT
 =========================== */
 
 app.get("/", (req, res) => {
-  res.send("Backend is running");
+  res.send("Backend running");
 });
 
 /* ===========================
-   CANDIDATES SEARCH
+   CANDIDATE SEARCH
 =========================== */
 /*
-Table example:
-candidates(
-  id,
-  name,
-  state,
-  county,
-  office,
-  party,
-  email,
-  phone,
-  website,
-  social_media,
-  address
-)
+Tables used:
+candidates
+states
+parties
+offices
+counties
 */
 
-app.get("/api/search/candidates", ...)
- 
-const { q, state, party, office } = req.query;
+app.get("/api/search/candidates", async (req, res) => {
+  const { q, state, party } = req.query;
 
   try {
-    let sql = `
+    const result = await pool.query(
+      `
       SELECT 
         c.id,
         c.full_name,
-        p.name AS party,
         s.code AS state,
+        p.name AS party,
         o.name AS office,
         co.name AS county,
         c.email,
         c.phone,
-        c.website,
-        c.social_facebook,
-        c.social_twitter,
-        c.social_instagram,
-        c.address
+        c.website
       FROM candidates c
-      LEFT JOIN parties p ON c.party_id = p.id
       LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
       LEFT JOIN offices o ON c.office_id = o.id
       LEFT JOIN counties co ON c.county_id = co.id
-      WHERE 1=1
-    `;
+      WHERE
+        ($1::text IS NULL OR c.full_name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+        AND ($3::text IS NULL OR p.name = $3)
+      LIMIT 200
+      `,
+      [q || null, state || null, party || null]
+    );
 
-    const params = [];
-
-    if (q) {
-      params.push(`%${q}%`);
-      sql += ` AND c.full_name ILIKE $${params.length}`;
-    }
-
-    if (state) {
-      params.push(state);
-      sql += ` AND s.code = $${params.length}`;
-    }
-
-    if (party) {
-      params.push(party);
-      sql += ` AND p.name ILIKE $${params.length}`;
-    }
-
-    if (office) {
-      params.push(`%${office}%`);
-      sql += ` AND o.name ILIKE $${params.length}`;
-    }
-
-    sql += ` ORDER BY c.full_name LIMIT 100`;
-
-    const result = await pool.query(sql, params);
     res.json(result.rows);
 
   } catch (err) {
@@ -125,98 +94,90 @@ const { q, state, party, office } = req.query;
   }
 });
 
-
-
 /* ===========================
-   CONSULTANTS SEARCH
+   CONSULTANT SEARCH
 =========================== */
-/*
-Table example:
-consultants(
-  id,
-  name,
-  state,
-  email,
-  phone,
-  website,
-  address
-)
-*/
 
 app.get("/api/search/consultants", async (req, res) => {
   const { q, state } = req.query;
 
   try {
-    let sql = `
-      SELECT *
-      FROM consultants
-      WHERE 1=1
-    `;
-    const params = [];
+    const result = await pool.query(
+      `
+      SELECT 
+        c.id,
+        c.name,
+        s.code AS state,
+        c.email,
+        c.phone,
+        c.website
+      FROM consultants c
+      LEFT JOIN states s ON c.state_id = s.id
+      WHERE
+        ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+      LIMIT 200
+      `,
+      [q || null, state || null]
+    );
 
-    if (q) {
-      params.push(`%${q}%`);
-      sql += ` AND full_name ILIKE $${params.length}`;
-    }
-
-    if (state) {
-      params.push(state);
-      sql += ` AND state = $${params.length}`;
-    }
-
-    const result = await pool.query(sql, params);
     res.json(result.rows);
 
   } catch (err) {
     console.error("CONSULTANT SEARCH ERROR:", err);
-    res.status(500).json({ error: "Failed to search consultants" });
+    res.status(500).json({ error: "Consultant search failed" });
   }
 });
 
 /* ===========================
-   VENDORS SEARCH
+   VENDOR SEARCH
 =========================== */
-/*
-Table example:
-vendors(
-  id,
-  name,
-  state,
-  phone,
-  email,
-  website,
-  address,
-  service_type
-)
-*/
 
 app.get("/api/search/vendors", async (req, res) => {
   const { q, state } = req.query;
 
   try {
-    let sql = `
-      SELECT *
-      FROM vendors
-      WHERE 1=1
-    `;
-    const params = [];
+    const result = await pool.query(
+      `
+      SELECT 
+        v.id,
+        v.name,
+        s.code AS state,
+        v.phone,
+        v.email,
+        v.website,
+        v.address
+      FROM vendors v
+      LEFT JOIN states s ON v.state_id = s.id
+      WHERE
+        ($1::text IS NULL OR v.name ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL OR s.code = $2)
+      LIMIT 200
+      `,
+      [q || null, state || null]
+    );
 
-    if (q) {
-      params.push(`%${q}%`);
-      sql += ` AND name ILIKE $${params.length}`;
-    }
-
-    if (state) {
-      params.push(state);
-      sql += ` AND state = $${params.length}`;
-    }
-
-    const result = await pool.query(sql, params);
     res.json(result.rows);
 
   } catch (err) {
     console.error("VENDOR SEARCH ERROR:", err);
-    res.status(500).json({ error: "Failed to search vendors" });
+    res.status(500).json({ error: "Vendor search failed" });
+  }
+});
+
+/* ===========================
+   SIMPLE VOTERS (your old)
+=========================== */
+
+app.get("/api/voters", async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT id, name, city, party FROM voters LIMIT 100"
+    );
+    res.json(r.rows);
+  } catch (err) {
+    console.error("FETCH ERROR:", err);
+    res.status(500).json({ error: "Failed to load voters" });
   }
 });
 
@@ -227,5 +188,5 @@ app.get("/api/search/vendors", async (req, res) => {
 const PORT = 10000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log("🚀 Backend running on port", PORT);
 });
