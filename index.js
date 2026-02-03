@@ -22,8 +22,10 @@ console.log("DATABASE_URL RAW:", process.env.DATABASE_URL);
 
 // Create pool
 const pool = new Pool({
-  connectionString: "postgresql://postgres:postgres@localhost:5433/postgres"
+  connectionString: process.env.DATABASE_URL,
+  ssl: false
 });
+
 
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
