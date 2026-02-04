@@ -1,7 +1,7 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
 import pkg from "pg";
+import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config();
 
@@ -11,133 +11,150 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ===== PostgreSQL (Render + local compatible) =====
+const PORT = process.env.PORT || 10000;
 
-if (!process.env.DATABASE_URL) {
-  console.error("❌ DATABASE_URL missing in .env");
-  process.exit(1);
-}
+/* ============================
+   DATABASE CONNECTION
+============================ */
 
-console.log("DATABASE_URL RAW:", process.env.DATABASE_URL);
-
-// Create pool
 const pool = new Pool({
-  host: "localhost",
-  port: 5433,
-  user: "postgres",
-  password: "postgres",
-  database: "postgres",
-  ssl: false
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-
-
-
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-});
-
-// Test DB connection
-(async () => {
+async function testDB() {
   try {
     await pool.query("SELECT 1");
     console.log("✅ Connected to database");
   } catch (err) {
     console.error("❌ DB CONNECTION ERROR:", err);
   }
-})();
+}
 
-// ================= ROUTES =================
+testDB();
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("Backend running ✅");
-});
+/* ============================
+   DROPDOWN ROUTES
+============================ */
 
-// ---- Candidates search + pagination ----
-app.get("/api/candidates", async (req, res) => {
+app.get("/api/dropdowns/candidates", async (req, res) => {
   try {
-    const {
-      q = "",
-      state_id,
-      party_id,
-      page = 1,
-      limit = 20
-    } = req.query;
-
-    const offset = (page - 1) * limit;
-
-    let filters = [];
-    let values = [];
-    let i = 1;
-
-    if (q) {
-      filters.push(`full_name ILIKE $${i++}`);
-      values.push(`%${q}%`);
-    }
-
-    if (state_id) {
-      filters.push(`state_id = $${i++}`);
-      values.push(state_id);
-    }
-
-    if (party_id) {
-      filters.push(`party_id = $${i++}`);
-      values.push(party_id);
-    }
-
-    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-
-    const dataQuery = `
-      SELECT * FROM candidates
-      ${where}
-      ORDER BY full_name
-      LIMIT $${i++} OFFSET $${i}
-    `;
-
-    values.push(limit, offset);
-
-    const countQuery = `
-      SELECT COUNT(*) FROM candidates ${where}
-    `;
-
-    const [data, count] = await Promise.all([
-      pool.query(dataQuery, values),
-      pool.query(countQuery, values.slice(0, values.length - 2))
-    ]);
-
-    res.json({
-      results: data.rows,
-      total: Number(count.rows[0].count),
-      page: Number(page),
-      pages: Math.ceil(count.rows[0].count / limit)
-    });
-
+    const { rows } = await pool.query(
+      "SELECT DISTINCT name FROM candidates ORDER BY name"
+    );
+    res.json(rows);
   } catch (err) {
-    console.error("CANDIDATE SEARCH ERROR:", err);
-    res.status(500).json({ error: "Failed to load candidates" });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ---- Dropdowns ----
-
-app.get("/api/states", async (req, res) => {
-  const result = await pool.query("SELECT id, name FROM states ORDER BY name");
-  res.json(result.rows);
+app.get("/api/dropdowns/consultants", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT DISTINCT name FROM consultants ORDER BY name"
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get("/api/parties", async (req, res) => {
-  const result = await pool.query("SELECT id, name FROM parties ORDER BY name");
-  res.json(result.rows);
+app.get("/api/dropdowns/vendors", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT DISTINCT name FROM vendors ORDER BY name"
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get("/api/offices", async (req, res) => {
-  const result = await pool.query("SELECT id, name FROM offices ORDER BY name");
-  res.json(result.rows);
+/* ============================
+   SEARCH + PAGINATION
+============================ */
+
+app.get("/api/search", async (req, res) => {
+  const {
+    candidate,
+    consultant,
+    vendor,
+    page = 1,
+    limit = 20
+  } = req.query;
+
+  const offset = (page - 1) * limit;
+
+  let filters = [];
+  let values = [];
+  let idx = 1;
+
+  if (candidate) {
+    filters.push(`candidates.name = $${idx++}`);
+    values.push(candidate);
+  }
+
+  if (consultant) {
+    filters.push(`consultants.name = $${idx++}`);
+    values.push(consultant);
+  }
+
+  if (vendor) {
+    filters.push(`vendors.name = $${idx++}`);
+    values.push(vendor);
+  }
+
+  const whereClause = filters.length
+    ? `WHERE ${filters.join(" AND ")}`
+    : "";
+
+  try {
+    const countQuery = `
+      SELECT COUNT(*) FROM relationships
+      JOIN candidates ON relationships.candidate_id = candidates.id
+      JOIN consultants ON relationships.consultant_id = consultants.id
+      JOIN vendors ON relationships.vendor_id = vendors.id
+      ${whereClause}
+    `;
+
+    const totalResult = await pool.query(countQuery, values);
+    const total = Number(totalResult.rows[0].count);
+
+    const dataQuery = `
+      SELECT
+        candidates.name AS candidate,
+        consultants.name AS consultant,
+        vendors.name AS vendor
+      FROM relationships
+      JOIN candidates ON relationships.candidate_id = candidates.id
+      JOIN consultants ON relationships.consultant_id = consultants.id
+      JOIN vendors ON relationships.vendor_id = vendors.id
+      ${whereClause}
+      ORDER BY candidates.name
+      LIMIT $${idx++} OFFSET $${idx}
+    `;
+
+    const dataValues = [...values, limit, offset];
+
+    const { rows } = await pool.query(dataQuery, dataValues);
+
+    res.json({
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / limit),
+      results: rows
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ================= SERVER =================
-
-const PORT = process.env.PORT || 10000;
+/* ============================
+   SERVER START
+============================ */
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
