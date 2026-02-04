@@ -22,13 +22,14 @@ console.log("DATABASE_URL RAW:", process.env.DATABASE_URL);
 
 // Create pool
 const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
-  port: Number(process.env.DB_PORT) || 5433,
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "postgres",
-  database: process.env.DB_NAME || "postgres",
+  host: "localhost",
+  port: 5433,
+  user: "postgres",
+  password: "postgres",
+  database: "postgres",
   ssl: false
 });
+
 
 
 
