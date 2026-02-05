@@ -6,18 +6,19 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 dotenv.config();
-const { Pool } = pkg;
 
+const { Pool } = pkg;
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
+const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 
-/* ============================
-   DATABASE CONNECTION
-============================ */
+/* ===========================
+   DATABASE
+=========================== */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -31,347 +32,169 @@ async function testDB(){
     await pool.query("SELECT 1");
     console.log("✅ Connected to database");
   }catch(err){
-    console.error("❌ DB CONNECTION ERROR:", err);
+    console.error("❌ DB ERROR:", err);
   }
 }
 
 testDB();
 
-/* ============================
+/* ===========================
    AUTH MIDDLEWARE
-============================ */
+=========================== */
 
-function authenticateToken(req,res,next){
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+function auth(req,res,next){
+  const header = req.headers.authorization;
+  if(!header) return res.status(401).json({error:"No token"});
 
-  if(!token) return res.sendStatus(401);
+  const token = header.split(" ")[1];
 
-  jwt.verify(token, JWT_SECRET, (err,user)=>{
-    if(err) return res.sendStatus(403);
-    req.user = user;
+  try{
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
-  });
+  }catch{
+    res.status(401).json({error:"Invalid token"});
+  }
 }
 
-/* ============================
+/* ===========================
    AUTH ROUTES
-============================ */
-
-/* REGISTER */
+=========================== */
 
 app.post("/api/auth/register", async (req,res)=>{
+  const { email, password } = req.body;
+
+  const hash = await bcrypt.hash(password,10);
+
   try{
-    const { email, password } = req.body;
-
-    if(!email || !password){
-      return res.status(400).json({ error:"Missing fields" });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
     await pool.query(
-      "INSERT INTO users (email,password) VALUES ($1,$2)",
-      [email, hashed]
+      "INSERT INTO users(email,password) VALUES($1,$2)",
+      [email,hash]
     );
-
-    res.json({ message:"User created" });
-
+    res.json({message:"User created"});
   }catch(err){
-    if(err.code === "23505"){
-      return res.status(400).json({ error:"Email already exists" });
-    }
-    res.status(500).json({ error: err.message });
+    res.status(400).json({error:"User exists"});
   }
 });
-
-/* LOGIN */
 
 app.post("/api/auth/login", async (req,res)=>{
-  try{
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    const result = await pool.query(
-      "SELECT * FROM users WHERE email=$1",
-      [email]
-    );
+  const { rows } = await pool.query(
+    "SELECT * FROM users WHERE email=$1",[email]
+  );
 
-    if(!result.rows.length){
-      return res.status(400).json({ error:"Invalid credentials" });
-    }
+  if(!rows.length)
+    return res.status(401).json({error:"Invalid login"});
 
-    const user = result.rows[0];
+  const user = rows[0];
 
-    const match = await bcrypt.compare(password, user.password);
+  const ok = await bcrypt.compare(password,user.password);
+  if(!ok)
+    return res.status(401).json({error:"Invalid login"});
 
-    if(!match){
-      return res.status(400).json({ error:"Invalid credentials" });
-    }
+  const token = jwt.sign(
+    { id:user.id, email:user.email },
+    JWT_SECRET,
+    { expiresIn:"8h" }
+  );
 
-    const token = jwt.sign(
-      { id:user.id, email:user.email },
-      JWT_SECRET,
-      { expiresIn:"24h" }
-    );
-
-    res.json({ token });
-
-  }catch(err){
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ token });
 });
 
-/* ============================
+app.get("/api/profile", auth, (req,res)=>{
+  res.json(req.user);
+});
+
+/* ===========================
    DROPDOWNS
-============================ */
+=========================== */
 
 app.get("/api/dropdowns/states", async (req,res)=>{
   const { rows } = await pool.query(
-    "SELECT id, name FROM states ORDER BY name"
+    "SELECT DISTINCT state FROM candidates ORDER BY state"
   );
   res.json(rows);
 });
 
 app.get("/api/dropdowns/counties", async (req,res)=>{
   const { state } = req.query;
-  if(!state) return res.json([]);
 
   const { rows } = await pool.query(
-    "SELECT id,name FROM counties WHERE state_id=$1 ORDER BY name",
+    "SELECT DISTINCT county FROM candidates WHERE state=$1 ORDER BY county",
     [state]
   );
-
   res.json(rows);
 });
 
-app.get("/api/dropdowns/offices", async (req,res)=>{
-  const { rows } = await pool.query(
-    "SELECT id,name FROM offices ORDER BY name"
-  );
-  res.json(rows);
-});
+/* ===========================
+   PROTECTED SEARCH API
+=========================== */
 
-app.get("/api/dropdowns/parties", async (req,res)=>{
-  const { rows } = await pool.query(
-    "SELECT id,name FROM parties ORDER BY name"
-  );
-  res.json(rows);
-});
+app.get("/api/search", auth, async (req,res)=>{
 
-app.get("/api/dropdowns/consultants", async (req,res)=>{
-  const { rows } = await pool.query(
-    "SELECT id,name FROM consultants ORDER BY name"
-  );
-  res.json(rows);
-});
+  const {
+    state,
+    county,
+    party,
+    office,
+    page = 1,
+    limit = 20
+  } = req.query;
 
-app.get("/api/dropdowns/vendors", async (req,res)=>{
-  const { rows } = await pool.query(
-    "SELECT id,name FROM vendors ORDER BY name"
-  );
-  res.json(rows);
-});
+  let where = [];
+  let values = [];
 
-/* ============================
-   PROTECTED EXAMPLE ROUTE
-============================ */
+  if(state){
+    values.push(state);
+    where.push(`state=$${values.length}`);
+  }
 
-app.get("/api/profile", authenticateToken, (req,res)=>{
+  if(county){
+    values.push(county);
+    where.push(`county=$${values.length}`);
+  }
+
+  if(party){
+    values.push(party);
+    where.push(`party=$${values.length}`);
+  }
+
+  if(office){
+    values.push(office);
+    where.push(`office=$${values.length}`);
+  }
+
+  const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+
+  const offset = (page-1)*limit;
+
+  const dataQuery = `
+    SELECT * FROM candidates
+    ${whereSQL}
+    LIMIT $${values.length+1}
+    OFFSET $${values.length+2}
+  `;
+
+  const countQuery = `
+    SELECT COUNT(*) FROM candidates ${whereSQL}
+  `;
+
+  const data = await pool.query(dataQuery, [...values, limit, offset]);
+  const count = await pool.query(countQuery, values);
+
   res.json({
-    message:"You are logged in",
-    user:req.user
+    rows: data.rows,
+    total: parseInt(count.rows[0].count),
+    page: parseInt(page),
+    pages: Math.ceil(count.rows[0].count/limit)
   });
 });
 
-/* ============================
-   CANDIDATES SEARCH
-============================ */
-
-app.get("/api/candidates", async (req,res)=>{
-  try{
-    const {
-      q="",
-      state="",
-      county="",
-      office="",
-      party="",
-      page=1,
-      limit=12
-    } = req.query;
-
-    const offset = (page-1)*limit;
-    let where=[];
-    let values=[];
-
-    if(q){
-      values.push(`%${q}%`);
-      where.push(`c.full_name ILIKE $${values.length}`);
-    }
-    if(state){
-      values.push(state);
-      where.push(`c.state_id=$${values.length}`);
-    }
-    if(county){
-      values.push(county);
-      where.push(`c.county_id=$${values.length}`);
-    }
-    if(office){
-      values.push(office);
-      where.push(`c.office_id=$${values.length}`);
-    }
-    if(party){
-      values.push(party);
-      where.push(`c.party_id=$${values.length}`);
-    }
-
-    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
-
-    const totalRes = await pool.query(
-      `SELECT COUNT(*) FROM candidates c ${whereSQL}`,
-      values
-    );
-
-    const total = Number(totalRes.rows[0].count);
-
-    values.push(limit, offset);
-
-    const dataRes = await pool.query(
-      `
-      SELECT c.*, 
-             s.name state_name,
-             co.name county_name,
-             o.name office_name,
-             p.name party_name
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id=s.id
-      LEFT JOIN counties co ON c.county_id=co.id
-      LEFT JOIN offices o ON c.office_id=o.id
-      LEFT JOIN parties p ON c.party_id=p.id
-      ${whereSQL}
-      ORDER BY c.full_name
-      LIMIT $${values.length-1}
-      OFFSET $${values.length}
-      `,
-      values
-    );
-
-    res.json({ total, results:dataRes.rows });
-
-  }catch(err){
-    res.status(500).json({ error:err.message });
-  }
-});
-
-/* ============================
-   CONSULTANTS
-============================ */
-
-app.get("/api/consultants", async (req,res)=>{
-  try{
-    const { q="", state="", page=1, limit=12 } = req.query;
-    const offset=(page-1)*limit;
-
-    let where=[];
-    let values=[];
-
-    if(q){
-      values.push(`%${q}%`);
-      where.push(`name ILIKE $${values.length}`);
-    }
-
-    if(state){
-      values.push(state);
-      where.push(`state_id=$${values.length}`);
-    }
-
-    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
-
-    const totalRes = await pool.query(
-      `SELECT COUNT(*) FROM consultants ${whereSQL}`,
-      values
-    );
-
-    const total = Number(totalRes.rows[0].count);
-
-    values.push(limit, offset);
-
-    const dataRes = await pool.query(
-      `
-      SELECT c.*, s.name state_name
-      FROM consultants c
-      LEFT JOIN states s ON c.state_id=s.id
-      ${whereSQL}
-      ORDER BY c.name
-      LIMIT $${values.length-1}
-      OFFSET $${values.length}
-      `,
-      values
-    );
-
-    res.json({ total, results:dataRes.rows });
-
-  }catch(err){
-    res.status(500).json({ error:err.message });
-  }
-});
-
-/* ============================
-   VENDORS
-============================ */
-
-app.get("/api/vendors", async (req,res)=>{
-  try{
-    const { q="", state="", page=1, limit=12 } = req.query;
-    const offset=(page-1)*limit;
-
-    let where=[];
-    let values=[];
-
-    if(q){
-      values.push(`%${q}%`);
-      where.push(`name ILIKE $${values.length}`);
-    }
-
-    if(state){
-      values.push(state);
-      where.push(`state_id=$${values.length}`);
-    }
-
-    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
-
-    const totalRes = await pool.query(
-      `SELECT COUNT(*) FROM vendors ${whereSQL}`,
-      values
-    );
-
-    const total = Number(totalRes.rows[0].count);
-
-    values.push(limit, offset);
-
-    const dataRes = await pool.query(
-      `
-      SELECT v.*, s.name state_name
-      FROM vendors v
-      LEFT JOIN states s ON v.state_id=s.id
-      ${whereSQL}
-      ORDER BY v.name
-      LIMIT $${values.length-1}
-      OFFSET $${values.length}
-      `,
-      values
-    );
-
-    res.json({ total, results:dataRes.rows });
-
-  }catch(err){
-    res.status(500).json({ error:err.message });
-  }
-});
-
-/* ============================
+/* ===========================
    SERVER
-============================ */
+=========================== */
 
 app.listen(PORT, ()=>{
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log("🚀 Backend running on port",PORT);
 });
