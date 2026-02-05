@@ -24,11 +24,11 @@ const pool = new Pool({
     : false
 });
 
-async function testDB() {
-  try {
+async function testDB(){
+  try{
     await pool.query("SELECT 1");
     console.log("✅ Connected to database");
-  } catch (err) {
+  }catch(err){
     console.error("❌ DB CONNECTION ERROR:", err);
   }
 }
@@ -39,115 +39,169 @@ testDB();
    DROPDOWN ROUTES
 ============================ */
 
-app.get("/api/dropdowns/candidates", async (req, res) => {
-  try {
+/* STATES */
+
+app.get("/api/dropdowns/states", async (req,res)=>{
+  try{
     const { rows } = await pool.query(
-      "SELECT DISTINCT name FROM candidates ORDER BY name"
+      "SELECT id, name FROM states ORDER BY name"
     );
     res.json(rows);
-  } catch (err) {
+  }catch(err){
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/dropdowns/consultants", async (req, res) => {
-  try {
+/* DYNAMIC COUNTIES BY STATE */
+
+app.get("/api/dropdowns/counties", async (req,res)=>{
+  try{
+    const { state } = req.query;
+
+    if(!state){
+      return res.json([]);
+    }
+
     const { rows } = await pool.query(
-      "SELECT DISTINCT name FROM consultants ORDER BY name"
+      `SELECT id, name 
+       FROM counties 
+       WHERE state_id = $1 
+       ORDER BY name`,
+      [state]
     );
+
     res.json(rows);
-  } catch (err) {
+
+  }catch(err){
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/dropdowns/vendors", async (req, res) => {
-  try {
+/* OFFICES */
+
+app.get("/api/dropdowns/offices", async (req,res)=>{
+  try{
     const { rows } = await pool.query(
-      "SELECT DISTINCT name FROM vendors ORDER BY name"
+      "SELECT id, name FROM offices ORDER BY name"
     );
     res.json(rows);
-  } catch (err) {
+  }catch(err){
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* PARTIES */
+
+app.get("/api/dropdowns/parties", async (req,res)=>{
+  try{
+    const { rows } = await pool.query(
+      "SELECT id, name FROM parties ORDER BY name"
+    );
+    res.json(rows);
+  }catch(err){
     res.status(500).json({ error: err.message });
   }
 });
 
 /* ============================
-   SEARCH + PAGINATION
+   CANDIDATE SEARCH + PAGINATION
 ============================ */
 
-app.get("/api/search", async (req, res) => {
-  const {
-    candidate,
-    consultant,
-    vendor,
-    page = 1,
-    limit = 20
-  } = req.query;
+app.get("/api/candidates", async (req,res)=>{
+  try{
 
-  const offset = (page - 1) * limit;
+    const {
+      q = "",
+      state = "",
+      county = "",
+      office = "",
+      party = "",
+      page = 1,
+      limit = 12
+    } = req.query;
 
-  let filters = [];
-  let values = [];
-  let idx = 1;
+    const offset = (page - 1) * limit;
 
-  if (candidate) {
-    filters.push(`candidates.name = $${idx++}`);
-    values.push(candidate);
-  }
+    let where = [];
+    let values = [];
 
-  if (consultant) {
-    filters.push(`consultants.name = $${idx++}`);
-    values.push(consultant);
-  }
+    if(q){
+      values.push(`%${q}%`);
+      where.push(`c.full_name ILIKE $${values.length}`);
+    }
 
-  if (vendor) {
-    filters.push(`vendors.name = $${idx++}`);
-    values.push(vendor);
-  }
+    if(state){
+      values.push(state);
+      where.push(`s.id = $${values.length}`);
+    }
 
-  const whereClause = filters.length
-    ? `WHERE ${filters.join(" AND ")}`
-    : "";
+    if(county){
+      values.push(county);
+      where.push(`co.id = $${values.length}`);
+    }
 
-  try {
+    if(office){
+      values.push(office);
+      where.push(`o.id = $${values.length}`);
+    }
+
+    if(party){
+      values.push(party);
+      where.push(`p.id = $${values.length}`);
+    }
+
+    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+
+    /* ===== TOTAL COUNT ===== */
+
     const countQuery = `
-      SELECT COUNT(*) FROM relationships
-      JOIN candidates ON relationships.candidate_id = candidates.id
-      JOIN consultants ON relationships.consultant_id = consultants.id
-      JOIN vendors ON relationships.vendor_id = vendors.id
-      ${whereClause}
+      SELECT COUNT(*) 
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      ${whereSQL}
     `;
 
     const totalResult = await pool.query(countQuery, values);
     const total = Number(totalResult.rows[0].count);
 
+    /* ===== PAGED RESULTS ===== */
+
+    values.push(limit);
+    values.push(offset);
+
     const dataQuery = `
-      SELECT
-        candidates.name AS candidate,
-        consultants.name AS consultant,
-        vendors.name AS vendor
-      FROM relationships
-      JOIN candidates ON relationships.candidate_id = candidates.id
-      JOIN consultants ON relationships.consultant_id = consultants.id
-      JOIN vendors ON relationships.vendor_id = vendors.id
-      ${whereClause}
-      ORDER BY candidates.name
-      LIMIT $${idx++} OFFSET $${idx}
+      SELECT 
+        c.id,
+        c.full_name,
+        c.email,
+        c.phone,
+        s.name AS state_name,
+        co.name AS county_name,
+        o.name AS office_name,
+        p.name AS party_name
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      ${whereSQL}
+      ORDER BY c.full_name
+      LIMIT $${values.length-1}
+      OFFSET $${values.length}
     `;
 
-    const dataValues = [...values, limit, offset];
-
-    const { rows } = await pool.query(dataQuery, dataValues);
+    const results = await pool.query(dataQuery, values);
 
     res.json({
       total,
-      page: Number(page),
-      pages: Math.ceil(total / limit),
-      results: rows
+      results: results.rows
     });
 
-  } catch (err) {
+  }catch(err){
+    console.error("CANDIDATE SEARCH ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -156,6 +210,6 @@ app.get("/api/search", async (req, res) => {
    SERVER START
 ============================ */
 
-app.listen(PORT, () => {
+app.listen(PORT, ()=>{
   console.log(`🚀 Backend running on port ${PORT}`);
 });
