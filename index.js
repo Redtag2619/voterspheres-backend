@@ -6,166 +6,253 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 dotenv.config();
-
 const { Pool } = pkg;
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 
-/* ================= DB ================= */
+/* ============================
+   DATABASE
+============================ */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV==="production"
-    ? { rejectUnauthorized:false }
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
     : false
 });
 
 await pool.query("SELECT 1");
+console.log("✅ Connected to database");
 
-/* ================= AUTH ================= */
+/* ============================
+   AUTH MIDDLEWARE
+============================ */
 
 function auth(req,res,next){
   const h=req.headers.authorization;
   if(!h) return res.sendStatus(401);
+
   try{
-    req.user=jwt.verify(h.split(" ")[1],JWT_SECRET);
+    const t=h.split(" ")[1];
+    req.user=jwt.verify(t,JWT_SECRET);
     next();
-  }catch{res.sendStatus(401);}
+  }catch{
+    res.sendStatus(401);
+  }
 }
+
+function admin(req,res,next){
+  if(req.user.role!=="admin") return res.sendStatus(403);
+  next();
+}
+
+/* ============================
+   AUTH ROUTES
+============================ */
 
 app.post("/api/auth/register", async(req,res)=>{
   const {email,password}=req.body;
+
   const hash=await bcrypt.hash(password,10);
+
   await pool.query(
     "INSERT INTO users(email,password) VALUES($1,$2)",
     [email,hash]
   );
-  res.json({ok:true});
+
+  res.json({created:true});
 });
 
 app.post("/api/auth/login", async(req,res)=>{
+
   const {email,password}=req.body;
-  const q=await pool.query("SELECT * FROM users WHERE email=$1",[email]);
-  if(!q.rows.length) return res.sendStatus(401);
+
+  const q=await pool.query(
+    "SELECT * FROM users WHERE email=$1",
+    [email]
+  );
+
+  if(!q.rows.length || !q.rows[0].active)
+    return res.sendStatus(401);
 
   const ok=await bcrypt.compare(password,q.rows[0].password);
   if(!ok) return res.sendStatus(401);
 
-  const token=jwt.sign(
-    {id:q.rows[0].id,email},
-    JWT_SECRET,
-    {expiresIn:"8h"}
-  );
+  const token=jwt.sign({
+    id:q.rows[0].id,
+    email,
+    role:q.rows[0].role
+  },JWT_SECRET,{expiresIn:"8h"});
+
   res.json({token});
 });
 
-/* ================= DROPDOWNS ================= */
+/* ============================
+   DROPDOWNS
+============================ */
 
 app.get("/api/dropdowns/states", async(req,res)=>{
-  const q=await pool.query(
-    "SELECT DISTINCT state FROM candidates ORDER BY state"
-  );
+  const q=await pool.query("SELECT id,name FROM states ORDER BY name");
   res.json(q.rows);
 });
 
 app.get("/api/dropdowns/counties", async(req,res)=>{
+  const {state}=req.query;
   const q=await pool.query(
-    "SELECT DISTINCT county FROM candidates WHERE state=$1 ORDER BY county",
-    [req.query.state]
+    "SELECT id,name FROM counties WHERE state_id=$1 ORDER BY name",
+    [state]
   );
   res.json(q.rows);
 });
 
-/* ================= SEARCH ================= */
+app.get("/api/dropdowns/parties", async(req,res)=>{
+  const q=await pool.query("SELECT id,name FROM parties ORDER BY name");
+  res.json(q.rows);
+});
 
-app.get("/api/search", auth, async(req,res)=>{
+app.get("/api/dropdowns/offices", async(req,res)=>{
+  const q=await pool.query("SELECT id,name FROM offices ORDER BY name");
+  res.json(q.rows);
+});
 
-  const {state,county,party,office,page=1}=req.query;
+app.get("/api/dropdowns/consultants", async(req,res)=>{
+  const q=await pool.query("SELECT id,name FROM consultants ORDER BY name");
+  res.json(q.rows);
+});
 
-  let w=[],v=[];
+app.get("/api/dropdowns/vendors", async(req,res)=>{
+  const q=await pool.query("SELECT id,name FROM vendors ORDER BY name");
+  res.json(q.rows);
+});
 
-  if(state){v.push(state);w.push(`state=$${v.length}`);}
-  if(county){v.push(county);w.push(`county=$${v.length}`);}
-  if(party){v.push(party);w.push(`party=$${v.length}`);}
-  if(office){v.push(office);w.push(`office=$${v.length}`);}
+/* ============================
+   CANDIDATE SEARCH + PAGINATION
+============================ */
 
-  const where=w.length?"WHERE "+w.join(" AND "):"";
-  const limit=20;
+app.get("/api/candidates", async(req,res)=>{
+
+  const {q,state,county,party,office,page=1,limit=20}=req.query;
+
+  let where=[];
+  let values=[];
+
+  if(q){
+    values.push(`%${q}%`);
+    where.push(`full_name ILIKE $${values.length}`);
+  }
+
+  if(state){
+    values.push(state);
+    where.push(`state_id=$${values.length}`);
+  }
+
+  if(county){
+    values.push(county);
+    where.push(`county_id=$${values.length}`);
+  }
+
+  if(party){
+    values.push(party);
+    where.push(`party_id=$${values.length}`);
+  }
+
+  if(office){
+    values.push(office);
+    where.push(`office_id=$${values.length}`);
+  }
+
+  const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
+
   const offset=(page-1)*limit;
 
   const data=await pool.query(
-    `SELECT * FROM candidates ${where} LIMIT $${v.length+1} OFFSET $${v.length+2}`,
-    [...v,limit,offset]
+    `SELECT * FROM candidates ${whereSQL} 
+     ORDER BY full_name 
+     LIMIT $${values.length+1} OFFSET $${values.length+2}`,
+     [...values,limit,offset]
   );
 
   const count=await pool.query(
-    `SELECT COUNT(*) FROM candidates ${where}`,v
+    `SELECT COUNT(*) FROM candidates ${whereSQL}`,
+    values
   );
 
   res.json({
-    rows:data.rows,
-    pages:Math.ceil(count.rows[0].count/limit),
-    total:parseInt(count.rows[0].count)
+    results:data.rows,
+    total:parseInt(count.rows[0].count),
+    page:parseInt(page)
   });
 });
 
-/* ================= FAVORITES ================= */
+/* ============================
+   CSV EXPORT
+============================ */
 
-app.post("/api/favorites/:id", auth, async(req,res)=>{
-  await pool.query(
-    "INSERT INTO favorites(user_id,candidate_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
-    [req.user.id, req.params.id]
-  );
-  res.json({saved:true});
-});
+app.get("/api/export", auth, async(req,res)=>{
 
-app.delete("/api/favorites/:id", auth, async(req,res)=>{
-  await pool.query(
-    "DELETE FROM favorites WHERE user_id=$1 AND candidate_id=$2",
-    [req.user.id, req.params.id]
-  );
-  res.json({removed:true});
-});
+  const {state,county,party,office}=req.query;
 
-app.get("/api/favorites", auth, async(req,res)=>{
-  const q=await pool.query(`
-    SELECT c.* FROM favorites f
-    JOIN candidates c ON c.id=f.candidate_id
-    WHERE f.user_id=$1
-  `,[req.user.id]);
+  let w=[],v=[];
 
-  res.json(q.rows);
-});
+  if(state){v.push(state);w.push(`state_id=$${v.length}`);}
+  if(county){v.push(county);w.push(`county_id=$${v.length}`);}
+  if(party){v.push(party);w.push(`party_id=$${v.length}`);}
+  if(office){v.push(office);w.push(`office_id=$${v.length}`);}
 
-/* ================= SAVED SEARCHES ================= */
+  const where=w.length?"WHERE "+w.join(" AND "):"";
 
-app.post("/api/saved-searches", auth, async(req,res)=>{
-  const {state,county,party,office}=req.body;
-
-  await pool.query(`
-    INSERT INTO saved_searches
-    (user_id,state,county,party,office)
-    VALUES($1,$2,$3,$4,$5)
-  `,[req.user.id,state,county,party,office]);
-
-  res.json({saved:true});
-});
-
-app.get("/api/saved-searches", auth, async(req,res)=>{
   const q=await pool.query(
-    "SELECT * FROM saved_searches WHERE user_id=$1 ORDER BY created_at DESC",
-    [req.user.id]
+    `SELECT full_name,email,website FROM candidates ${where}`,
+    v
+  );
+
+  let csv="name,email,website\n";
+
+  q.rows.forEach(r=>{
+    csv+=`${r.full_name},${r.email||""},${r.website||""}\n`;
+  });
+
+  res.setHeader("Content-Type","text/csv");
+  res.setHeader("Content-Disposition","attachment; filename=candidates.csv");
+  res.send(csv);
+});
+
+/* ============================
+   ADMIN ROUTES
+============================ */
+
+app.get("/api/admin/users", auth, admin, async(req,res)=>{
+  const q=await pool.query(
+    "SELECT id,email,role,active FROM users ORDER BY id"
   );
   res.json(q.rows);
 });
 
-/* ================= SERVER ================= */
+app.put("/api/admin/users/:id/disable", auth, admin, async(req,res)=>{
+  await pool.query(
+    "UPDATE users SET active=false WHERE id=$1",
+    [req.params.id]
+  );
+  res.json({disabled:true});
+});
+
+app.delete("/api/admin/users/:id", auth, admin, async(req,res)=>{
+  await pool.query(
+    "DELETE FROM users WHERE id=$1",
+    [req.params.id]
+  );
+  res.json({deleted:true});
+});
+
+/* ============================
+   START
+============================ */
 
 app.listen(PORT,()=>{
-  console.log("🚀 Backend running",PORT);
+  console.log("🚀 Backend running on port",PORT);
 });
