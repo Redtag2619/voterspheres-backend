@@ -2,6 +2,8 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -11,6 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 /* ============================
    DATABASE CONNECTION
@@ -35,6 +38,90 @@ async function testDB(){
 testDB();
 
 /* ============================
+   AUTH MIDDLEWARE
+============================ */
+
+function authenticateToken(req,res,next){
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if(!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err,user)=>{
+    if(err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+/* ============================
+   AUTH ROUTES
+============================ */
+
+/* REGISTER */
+
+app.post("/api/auth/register", async (req,res)=>{
+  try{
+    const { email, password } = req.body;
+
+    if(!email || !password){
+      return res.status(400).json({ error:"Missing fields" });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      "INSERT INTO users (email,password) VALUES ($1,$2)",
+      [email, hashed]
+    );
+
+    res.json({ message:"User created" });
+
+  }catch(err){
+    if(err.code === "23505"){
+      return res.status(400).json({ error:"Email already exists" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* LOGIN */
+
+app.post("/api/auth/login", async (req,res)=>{
+  try{
+    const { email, password } = req.body;
+
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email=$1",
+      [email]
+    );
+
+    if(!result.rows.length){
+      return res.status(400).json({ error:"Invalid credentials" });
+    }
+
+    const user = result.rows[0];
+
+    const match = await bcrypt.compare(password, user.password);
+
+    if(!match){
+      return res.status(400).json({ error:"Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id:user.id, email:user.email },
+      JWT_SECRET,
+      { expiresIn:"24h" }
+    );
+
+    res.json({ token });
+
+  }catch(err){
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================
    DROPDOWNS
 ============================ */
 
@@ -47,13 +134,10 @@ app.get("/api/dropdowns/states", async (req,res)=>{
 
 app.get("/api/dropdowns/counties", async (req,res)=>{
   const { state } = req.query;
-
   if(!state) return res.json([]);
 
   const { rows } = await pool.query(
-    `SELECT id, name FROM counties
-     WHERE state_id=$1
-     ORDER BY name`,
+    "SELECT id,name FROM counties WHERE state_id=$1 ORDER BY name",
     [state]
   );
 
@@ -62,34 +146,41 @@ app.get("/api/dropdowns/counties", async (req,res)=>{
 
 app.get("/api/dropdowns/offices", async (req,res)=>{
   const { rows } = await pool.query(
-    "SELECT id, name FROM offices ORDER BY name"
+    "SELECT id,name FROM offices ORDER BY name"
   );
   res.json(rows);
 });
 
 app.get("/api/dropdowns/parties", async (req,res)=>{
   const { rows } = await pool.query(
-    "SELECT id, name FROM parties ORDER BY name"
+    "SELECT id,name FROM parties ORDER BY name"
   );
   res.json(rows);
 });
-
-/* CONSULTANT DROPDOWN */
 
 app.get("/api/dropdowns/consultants", async (req,res)=>{
   const { rows } = await pool.query(
-    "SELECT id, name FROM consultants ORDER BY name"
+    "SELECT id,name FROM consultants ORDER BY name"
   );
   res.json(rows);
 });
 
-/* VENDOR DROPDOWN */
-
 app.get("/api/dropdowns/vendors", async (req,res)=>{
   const { rows } = await pool.query(
-    "SELECT id, name FROM vendors ORDER BY name"
+    "SELECT id,name FROM vendors ORDER BY name"
   );
   res.json(rows);
+});
+
+/* ============================
+   PROTECTED EXAMPLE ROUTE
+============================ */
+
+app.get("/api/profile", authenticateToken, (req,res)=>{
+  res.json({
+    message:"You are logged in",
+    user:req.user
+  });
 });
 
 /* ============================
@@ -98,7 +189,6 @@ app.get("/api/dropdowns/vendors", async (req,res)=>{
 
 app.get("/api/candidates", async (req,res)=>{
   try{
-
     const {
       q="",
       state="",
@@ -109,9 +199,9 @@ app.get("/api/candidates", async (req,res)=>{
       limit=12
     } = req.query;
 
-    const offset = (page - 1) * limit;
-    let where = [];
-    let values = [];
+    const offset = (page-1)*limit;
+    let where=[];
+    let values=[];
 
     if(q){
       values.push(`%${q}%`);
@@ -134,7 +224,7 @@ app.get("/api/candidates", async (req,res)=>{
       where.push(`c.party_id=$${values.length}`);
     }
 
-    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
 
     const totalRes = await pool.query(
       `SELECT COUNT(*) FROM candidates c ${whereSQL}`,
@@ -148,10 +238,10 @@ app.get("/api/candidates", async (req,res)=>{
     const dataRes = await pool.query(
       `
       SELECT c.*, 
-             s.name AS state_name,
-             co.name AS county_name,
-             o.name AS office_name,
-             p.name AS party_name
+             s.name state_name,
+             co.name county_name,
+             o.name office_name,
+             p.name party_name
       FROM candidates c
       LEFT JOIN states s ON c.state_id=s.id
       LEFT JOIN counties co ON c.county_id=co.id
@@ -165,26 +255,24 @@ app.get("/api/candidates", async (req,res)=>{
       values
     );
 
-    res.json({ total, results: dataRes.rows });
+    res.json({ total, results:dataRes.rows });
 
   }catch(err){
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error:err.message });
   }
 });
 
 /* ============================
-   CONSULTANTS API
+   CONSULTANTS
 ============================ */
 
 app.get("/api/consultants", async (req,res)=>{
   try{
-
     const { q="", state="", page=1, limit=12 } = req.query;
+    const offset=(page-1)*limit;
 
-    const offset = (page - 1) * limit;
-    let where = [];
-    let values = [];
+    let where=[];
+    let values=[];
 
     if(q){
       values.push(`%${q}%`);
@@ -196,7 +284,7 @@ app.get("/api/consultants", async (req,res)=>{
       where.push(`state_id=$${values.length}`);
     }
 
-    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
 
     const totalRes = await pool.query(
       `SELECT COUNT(*) FROM consultants ${whereSQL}`,
@@ -209,7 +297,7 @@ app.get("/api/consultants", async (req,res)=>{
 
     const dataRes = await pool.query(
       `
-      SELECT c.*, s.name AS state_name
+      SELECT c.*, s.name state_name
       FROM consultants c
       LEFT JOIN states s ON c.state_id=s.id
       ${whereSQL}
@@ -220,25 +308,24 @@ app.get("/api/consultants", async (req,res)=>{
       values
     );
 
-    res.json({ total, results: dataRes.rows });
+    res.json({ total, results:dataRes.rows });
 
   }catch(err){
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error:err.message });
   }
 });
 
 /* ============================
-   VENDORS API
+   VENDORS
 ============================ */
 
 app.get("/api/vendors", async (req,res)=>{
   try{
-
     const { q="", state="", page=1, limit=12 } = req.query;
+    const offset=(page-1)*limit;
 
-    const offset = (page - 1) * limit;
-    let where = [];
-    let values = [];
+    let where=[];
+    let values=[];
 
     if(q){
       values.push(`%${q}%`);
@@ -250,7 +337,7 @@ app.get("/api/vendors", async (req,res)=>{
       where.push(`state_id=$${values.length}`);
     }
 
-    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+    const whereSQL = where.length ? "WHERE "+where.join(" AND ") : "";
 
     const totalRes = await pool.query(
       `SELECT COUNT(*) FROM vendors ${whereSQL}`,
@@ -263,7 +350,7 @@ app.get("/api/vendors", async (req,res)=>{
 
     const dataRes = await pool.query(
       `
-      SELECT v.*, s.name AS state_name
+      SELECT v.*, s.name state_name
       FROM vendors v
       LEFT JOIN states s ON v.state_id=s.id
       ${whereSQL}
@@ -272,19 +359,3 @@ app.get("/api/vendors", async (req,res)=>{
       OFFSET $${values.length}
       `,
       values
-    );
-
-    res.json({ total, results: dataRes.rows });
-
-  }catch(err){
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ============================
-   SERVER
-============================ */
-
-app.listen(PORT, ()=>{
-  console.log(`🚀 Backend running on port ${PORT}`);
-});
