@@ -359,3 +359,19 @@ app.get("/api/vendors", async (req,res)=>{
       OFFSET $${values.length}
       `,
       values
+    );
+
+    res.json({ total, results:dataRes.rows });
+
+  }catch(err){
+    res.status(500).json({ error:err.message });
+  }
+});
+
+/* ============================
+   SERVER
+============================ */
+
+app.listen(PORT, ()=>{
+  console.log(`🚀 Backend running on port ${PORT}`);
+});
