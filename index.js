@@ -23,9 +23,10 @@ const PORT = process.env.PORT || 10000;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false
 });
 
 async function testDB() {
@@ -36,6 +37,7 @@ async function testDB() {
     console.error("❌ DB CONNECTION ERROR:", err);
   }
 }
+
 testDB();
 
 /* ============================
@@ -44,36 +46,34 @@ testDB();
 
 function adminOnly(req, res, next) {
 
-  const authHeader = req.headers.authorization;
+  const auth = req.headers.authorization;
 
-  if (!authHeader) {
-    return res.status(401).json({ error: "No token provided" });
-  }
+  if (!auth) return res.status(401).json({ error: "No token" });
 
-  const token = authHeader.split(" ")[1];
+  const token = auth.split(" ")[1];
 
   try {
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (!decoded || decoded.role !== "admin") {
+    if (user.role !== "admin") {
       return res.status(403).json({ error: "Admins only" });
     }
 
-    if (decoded.active === false) {
-      return res.status(403).json({ error: "User inactive" });
+    if (user.active === false) {
+      return res.status(403).json({ error: "Account inactive" });
     }
 
-    req.user = decoded;
+    req.user = user;
     next();
 
-  } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 
 /* ============================
-   LOGIN ROUTE
+   LOGIN
 ============================ */
 
 app.post("/api/login", async (req, res) => {
@@ -141,36 +141,22 @@ const storage = multer.diskStorage({
 
 });
 
-/* ===== BONUS SECURITY ===== */
-
 const upload = multer({
-
   storage,
-
-  limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB max
-  },
-
+  limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter(req, file, cb) {
-
     if (!file.mimetype.startsWith("image/")) {
-      cb(new Error("Only image files allowed"));
+      cb(new Error("Images only"));
       return;
     }
-
     cb(null, true);
   }
-
 });
-
-/* ============================
-   SERVE PHOTOS
-============================ */
 
 app.use("/uploads", express.static("uploads"));
 
 /* ============================
-   SECURE PHOTO UPLOAD
+   PHOTO UPLOAD (ADMIN)
 ============================ */
 
 app.post(
@@ -182,47 +168,165 @@ app.post(
     try {
 
       if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
+        return res.status(400).json({ error: "No file" });
       }
-
-      const filename = req.file.filename;
 
       await pool.query(
         "UPDATE candidates SET photo=$1 WHERE id=$2",
-        [filename, req.params.id]
+        [req.file.filename, req.params.id]
       );
 
-      res.json({
-        success: true,
-        photo: filename
-      });
+      res.json({ success: true });
 
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Upload failed" });
+      res.status(500).json({ error: err.message });
     }
   }
 );
 
 /* ============================
-   SAMPLE SEARCH (OPTIONAL)
+   DROPDOWNS
+============================ */
+
+/* States */
+
+app.get("/api/dropdowns/states", async (req, res) => {
+
+  try {
+
+    const { rows } = await pool.query(
+      "SELECT DISTINCT state FROM candidates ORDER BY state"
+    );
+
+    res.json(rows.map(r => r.state));
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* Parties */
+
+app.get("/api/dropdowns/parties", async (req, res) => {
+
+  try {
+
+    const { rows } = await pool.query(
+      "SELECT DISTINCT party FROM candidates ORDER BY party"
+    );
+
+    res.json(rows.map(r => r.party));
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* Offices (FIXED — no offices table) */
+
+app.get("/api/dropdowns/offices", async (req, res) => {
+
+  try {
+
+    const { rows } = await pool.query(
+      "SELECT DISTINCT office FROM candidates ORDER BY office"
+    );
+
+    res.json(rows.map(r => r.office));
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* Counties (dynamic by state) */
+
+app.get("/api/dropdowns/counties", async (req, res) => {
+
+  const { state } = req.query;
+
+  try {
+
+    let query = "SELECT DISTINCT county FROM candidates";
+    let params = [];
+
+    if (state) {
+      query += " WHERE state=$1";
+      params.push(state);
+    }
+
+    query += " ORDER BY county";
+
+    const { rows } = await pool.query(query, params);
+
+    res.json(rows.map(r => r.county));
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================
+   SEARCH + PAGINATION
 ============================ */
 
 app.get("/api/candidates", async (req, res) => {
 
-  const { page = 1, limit = 20 } = req.query;
+  const {
+    q,
+    state,
+    party,
+    county,
+    office,
+    page = 1,
+    limit = 20
+  } = req.query;
 
   const offset = (page - 1) * limit;
+
+  let where = [];
+  let params = [];
+  let i = 1;
+
+  if (q) {
+    where.push(`name ILIKE $${i++}`);
+    params.push(`%${q}%`);
+  }
+
+  if (state) {
+    where.push(`state=$${i++}`);
+    params.push(state);
+  }
+
+  if (party) {
+    where.push(`party=$${i++}`);
+    params.push(party);
+  }
+
+  if (county) {
+    where.push(`county=$${i++}`);
+    params.push(county);
+  }
+
+  if (office) {
+    where.push(`office=$${i++}`);
+    params.push(office);
+  }
+
+  const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
 
   try {
 
     const data = await pool.query(
-      "SELECT * FROM candidates ORDER BY id LIMIT $1 OFFSET $2",
-      [limit, offset]
+      `SELECT * FROM candidates ${whereSQL} 
+       ORDER BY name 
+       LIMIT $${i++} OFFSET $${i++}`,
+      [...params, limit, offset]
     );
 
     const total = await pool.query(
-      "SELECT COUNT(*) FROM candidates"
+      `SELECT COUNT(*) FROM candidates ${whereSQL}`,
+      params
     );
 
     res.json({
@@ -237,7 +341,7 @@ app.get("/api/candidates", async (req, res) => {
 });
 
 /* ============================
-   START SERVER
+   SERVER
 ============================ */
 
 app.listen(PORT, () => {
