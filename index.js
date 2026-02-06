@@ -2,46 +2,20 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 
 dotenv.config();
-const { Pool } = pkg;
 
+const { Pool } = pkg;
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-
-/* ============================
-   IMAGE FOLDER
-============================ */
-
-const uploadDir = "./uploads";
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-app.use("/uploads", express.static("uploads"));
-
-/* ============================
-   MULTER CONFIG
-============================ */
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, unique + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage });
 
 /* ============================
    DATABASE
@@ -59,79 +33,158 @@ async function testDB() {
     await pool.query("SELECT 1");
     console.log("✅ Connected to database");
   } catch (err) {
-    console.error("❌ DB ERROR:", err);
+    console.error("❌ DB CONNECTION ERROR:", err);
   }
 }
-
 testDB();
 
 /* ============================
-   SEARCH CANDIDATES
+   AUTH MIDDLEWARE
 ============================ */
 
-app.get("/api/candidates", async (req, res) => {
+function adminOnly(req, res, next) {
+
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
   try {
-    const { q = "", page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
 
-    const dataQuery = `
-      SELECT id, full_name, email, phone, website, photo
-      FROM candidates
-      WHERE full_name ILIKE $1
-      ORDER BY full_name
-      LIMIT $2 OFFSET $3
-    `;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const countQuery = `
-      SELECT COUNT(*) FROM candidates
-      WHERE full_name ILIKE $1
-    `;
+    if (!decoded || decoded.role !== "admin") {
+      return res.status(403).json({ error: "Admins only" });
+    }
 
-    const [data, count] = await Promise.all([
-      pool.query(dataQuery, [`%${q}%`, limit, offset]),
-      pool.query(countQuery, [`%${q}%`])
-    ]);
+    if (decoded.active === false) {
+      return res.status(403).json({ error: "User inactive" });
+    }
 
-    res.json({
-      results: data.rows,
-      total: Number(count.rows[0].count),
-      page: Number(page),
-      totalPages: Math.ceil(count.rows[0].count / limit)
-    });
+    req.user = decoded;
+    next();
 
   } catch (err) {
-    res.status(500).json({ error: "Search failed" });
+    return res.status(401).json({ error: "Invalid token" });
   }
-});
+}
 
 /* ============================
-   CANDIDATE PROFILE
+   LOGIN ROUTE
 ============================ */
 
-app.get("/api/candidates/:id", async (req, res) => {
+app.post("/api/login", async (req, res) => {
+
+  const { email, password } = req.body;
+
   try {
-    const { rows } = await pool.query(
-      "SELECT * FROM candidates WHERE id=$1",
-      [req.params.id]
+
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email=$1",
+      [email]
     );
 
-    if (!rows.length) return res.status(404).json({ error: "Not found" });
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid login" });
+    }
 
-    res.json(rows[0]);
+    const user = result.rows[0];
+
+    if (user.active === false) {
+      return res.status(403).json({ error: "Account inactive" });
+    }
+
+    if (password !== user.password) {
+      return res.status(401).json({ error: "Invalid login" });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role: user.role,
+        active: user.active
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    res.json({ token });
+
   } catch (err) {
-    res.status(500).json({ error: "Profile failed" });
+    res.status(500).json({ error: err.message });
   }
 });
 
 /* ============================
-   UPLOAD CANDIDATE PHOTO
+   FILE UPLOAD SETUP
+============================ */
+
+const uploadDir = "./uploads";
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, Date.now() + ext);
+  }
+
+});
+
+/* ===== BONUS SECURITY ===== */
+
+const upload = multer({
+
+  storage,
+
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB max
+  },
+
+  fileFilter(req, file, cb) {
+
+    if (!file.mimetype.startsWith("image/")) {
+      cb(new Error("Only image files allowed"));
+      return;
+    }
+
+    cb(null, true);
+  }
+
+});
+
+/* ============================
+   SERVE PHOTOS
+============================ */
+
+app.use("/uploads", express.static("uploads"));
+
+/* ============================
+   SECURE PHOTO UPLOAD
 ============================ */
 
 app.post(
   "/api/candidates/:id/photo",
+  adminOnly,
   upload.single("photo"),
   async (req, res) => {
+
     try {
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
       const filename = req.file.filename;
 
       await pool.query(
@@ -139,7 +192,10 @@ app.post(
         [filename, req.params.id]
       );
 
-      res.json({ success: true, photo: filename });
+      res.json({
+        success: true,
+        photo: filename
+      });
 
     } catch (err) {
       console.error(err);
@@ -149,7 +205,39 @@ app.post(
 );
 
 /* ============================
-   SERVER
+   SAMPLE SEARCH (OPTIONAL)
+============================ */
+
+app.get("/api/candidates", async (req, res) => {
+
+  const { page = 1, limit = 20 } = req.query;
+
+  const offset = (page - 1) * limit;
+
+  try {
+
+    const data = await pool.query(
+      "SELECT * FROM candidates ORDER BY id LIMIT $1 OFFSET $2",
+      [limit, offset]
+    );
+
+    const total = await pool.query(
+      "SELECT COUNT(*) FROM candidates"
+    );
+
+    res.json({
+      results: data.rows,
+      total: Number(total.rows[0].count),
+      page: Number(page)
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ============================
+   START SERVER
 ============================ */
 
 app.listen(PORT, () => {
