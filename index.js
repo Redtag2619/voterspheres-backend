@@ -2,6 +2,9 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -11,6 +14,34 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
+
+/* ============================
+   IMAGE FOLDER
+============================ */
+
+const uploadDir = "./uploads";
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+app.use("/uploads", express.static("uploads"));
+
+/* ============================
+   MULTER CONFIG
+============================ */
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, unique + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage });
 
 /* ============================
    DATABASE
@@ -35,64 +66,30 @@ async function testDB() {
 testDB();
 
 /* ============================
-   SEARCH CANDIDATES (LIST)
+   SEARCH CANDIDATES
 ============================ */
 
 app.get("/api/candidates", async (req, res) => {
   try {
-    const {
-      q = "",
-      state,
-      party,
-      county,
-      office,
-      page = 1,
-      limit = 20
-    } = req.query;
-
+    const { q = "", page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    let where = `WHERE full_name ILIKE $1`;
-    let values = [`%${q}%`];
-    let idx = 2;
-
-    if (state) {
-      where += ` AND state_id = $${idx++}`;
-      values.push(state);
-    }
-
-    if (party) {
-      where += ` AND party_id = $${idx++}`;
-      values.push(party);
-    }
-
-    if (county) {
-      where += ` AND county_id = $${idx++}`;
-      values.push(county);
-    }
-
-    if (office) {
-      where += ` AND office_id = $${idx++}`;
-      values.push(office);
-    }
-
     const dataQuery = `
-      SELECT id, full_name, email, phone, website
+      SELECT id, full_name, email, phone, website, photo
       FROM candidates
-      ${where}
+      WHERE full_name ILIKE $1
       ORDER BY full_name
-      LIMIT $${idx++} OFFSET $${idx++}
+      LIMIT $2 OFFSET $3
     `;
 
-    values.push(limit, offset);
-
     const countQuery = `
-      SELECT COUNT(*) FROM candidates ${where}
+      SELECT COUNT(*) FROM candidates
+      WHERE full_name ILIKE $1
     `;
 
     const [data, count] = await Promise.all([
-      pool.query(dataQuery, values),
-      pool.query(countQuery, values.slice(0, values.length - 2))
+      pool.query(dataQuery, [`%${q}%`, limit, offset]),
+      pool.query(countQuery, [`%${q}%`])
     ]);
 
     res.json({
@@ -103,47 +100,53 @@ app.get("/api/candidates", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("SEARCH ERROR:", err);
     res.status(500).json({ error: "Search failed" });
   }
 });
 
 /* ============================
-   CANDIDATE PROFILE ROUTE
+   CANDIDATE PROFILE
 ============================ */
 
 app.get("/api/candidates/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+    const { rows } = await pool.query(
+      "SELECT * FROM candidates WHERE id=$1",
+      [req.params.id]
+    );
 
-    const query = `
-      SELECT 
-        c.*,
-        s.name AS state_name,
-        co.name AS county_name,
-        o.name AS office_name,
-        p.name AS party_name
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id = s.id
-      LEFT JOIN counties co ON c.county_id = co.id
-      LEFT JOIN offices o ON c.office_id = o.id
-      LEFT JOIN parties p ON c.party_id = p.id
-      WHERE c.id = $1
-    `;
-
-    const { rows } = await pool.query(query, [id]);
-
-    if (!rows.length) {
-      return res.status(404).json({ error: "Candidate not found" });
-    }
+    if (!rows.length) return res.status(404).json({ error: "Not found" });
 
     res.json(rows[0]);
-
   } catch (err) {
-    console.error("PROFILE ERROR:", err);
-    res.status(500).json({ error: "Failed to load profile" });
+    res.status(500).json({ error: "Profile failed" });
   }
 });
+
+/* ============================
+   UPLOAD CANDIDATE PHOTO
+============================ */
+
+app.post(
+  "/api/candidates/:id/photo",
+  upload.single("photo"),
+  async (req, res) => {
+    try {
+      const filename = req.file.filename;
+
+      await pool.query(
+        "UPDATE candidates SET photo=$1 WHERE id=$2",
+        [filename, req.params.id]
+      );
+
+      res.json({ success: true, photo: filename });
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  }
+);
 
 /* ============================
    SERVER
