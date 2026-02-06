@@ -18,6 +18,43 @@ const pool = new Pool({
 });
 
 /* =====================
+   CANDIDATE PROFILE
+===================== */
+
+app.get("/api/candidate/:id", async (req,res)=>{
+
+  const { id } = req.params;
+
+  const result = await pool.query(`
+    SELECT 
+      c.id,
+      c.full_name,
+      c.email,
+      c.phone,
+      c.website,
+      c.address,
+      c.photo,
+      s.name AS state,
+      p.name AS party,
+      co.name AS county,
+      o.name AS office,
+      c.created_at
+    FROM candidate c
+    LEFT JOIN state s ON c.state_id=s.id
+    LEFT JOIN party p ON c.party_id=p.id
+    LEFT JOIN county co ON c.county_id=co.id
+    LEFT JOIN office o ON c.office_id=o.id
+    WHERE c.id=$1
+  `,[id]);
+
+  if(result.rows.length===0){
+    return res.status(404).json({error:"Candidate not found"});
+  }
+
+  res.json(result.rows[0]);
+});
+
+/* =====================
    DROPDOWNS
 ===================== */
 
