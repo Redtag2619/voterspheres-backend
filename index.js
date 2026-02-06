@@ -13,13 +13,17 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
+/* ======================
+   DATABASE
+====================== */
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: false
 });
 
 /* ======================
-   TEST DB
+   TEST CONNECTION
 ====================== */
 
 async function testDB() {
@@ -27,70 +31,184 @@ async function testDB() {
     await pool.query("SELECT 1");
     console.log("✅ Connected to database");
   } catch (err) {
-    console.error("❌ DB ERROR:", err.message);
+    console.error("❌ DB CONNECTION ERROR:", err.message);
   }
 }
 testDB();
 
 /* ======================
-   HOME
+   ROOT
 ====================== */
 
 app.get("/", (req, res) => {
-  res.json({ status: "Backend running" });
+  res.json({ status: "Backend running OK" });
 });
 
 /* ======================
-   SAFE CANDIDATES API
+   CANDIDATES (REAL SCHEMA)
 ====================== */
 
 app.get("/api/candidates", async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_name='candidates'
+    const { rows } = await pool.query(`
+      SELECT 
+        id,
+        full_name,
+        party_id,
+        office_id,
+        state_id,
+        county_id,
+        email,
+        phone,
+        website,
+        photo,
+        created_at
+      FROM candidates
+      ORDER BY full_name
+      LIMIT 100
     `);
 
-    if (result.rows.length === 0) {
-      return res.json({
-        warning: "candidates table does not exist yet",
-        data: []
-      });
-    }
-
-    const data = await pool.query(
-      "SELECT id, name, state, party, county, office FROM candidates ORDER BY name"
-    );
-
-    res.json(data.rows);
+    res.json(rows);
 
   } catch (err) {
-    console.error(err.message);
+    console.error("CANDIDATES ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 /* ======================
-   STATES DROPDOWN SAFE
+   DROPDOWNS (IDS)
 ====================== */
 
 app.get("/api/dropdowns/states", async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT DISTINCT state 
+    const { rows } = await pool.query(`
+      SELECT DISTINCT state_id
       FROM candidates
-      WHERE state IS NOT NULL
-      ORDER BY state
+      WHERE state_id IS NOT NULL
+      ORDER BY state_id
     `);
-    res.json(result.rows);
+    res.json(rows);
   } catch {
-    res.json([]); // safe empty
+    res.json([]);
+  }
+});
+
+app.get("/api/dropdowns/parties", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT party_id
+      FROM candidates
+      WHERE party_id IS NOT NULL
+      ORDER BY party_id
+    `);
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
+
+app.get("/api/dropdowns/counties", async (req, res) => {
+  const { state_id } = req.query;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT county_id
+      FROM candidates
+      WHERE state_id = $1
+      ORDER BY county_id
+    `, [state_id]);
+
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
+
+app.get("/api/dropdowns/offices", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT office_id
+      FROM candidates
+      WHERE office_id IS NOT NULL
+      ORDER BY office_id
+    `);
+
+    res.json(rows);
+  } catch {
+    res.json([]);
   }
 });
 
 /* ======================
-   START
+   SEARCH + FILTER
+====================== */
+
+app.get("/api/search", async (req, res) => {
+  const { q, state_id, party_id, county_id, office_id } = req.query;
+
+  let conditions = [];
+  let values = [];
+  let i = 1;
+
+  if (q) {
+    conditions.push(`full_name ILIKE $${i++}`);
+    values.push(`%${q}%`);
+  }
+
+  if (state_id) {
+    conditions.push(`state_id = $${i++}`);
+    values.push(state_id);
+  }
+
+  if (party_id) {
+    conditions.push(`party_id = $${i++}`);
+    values.push(party_id);
+  }
+
+  if (county_id) {
+    conditions.push(`county_id = $${i++}`);
+    values.push(county_id);
+  }
+
+  if (office_id) {
+    conditions.push(`office_id = $${i++}`);
+    values.push(office_id);
+  }
+
+  const where = conditions.length
+    ? "WHERE " + conditions.join(" AND ")
+    : "";
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        id,
+        full_name,
+        party_id,
+        office_id,
+        state_id,
+        county_id,
+        email,
+        phone,
+        website,
+        photo
+      FROM candidates
+      ${where}
+      ORDER BY full_name
+      LIMIT 100
+    `, values);
+
+    res.json(rows);
+
+  } catch (err) {
+    console.error("SEARCH ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ======================
+   START SERVER
 ====================== */
 
 app.listen(PORT, () => {
