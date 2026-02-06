@@ -2,6 +2,42 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const uploadDir="./uploads";
+if(!fs.existsSync(uploadDir)){
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination:(req,file,cb)=>cb(null,uploadDir),
+  filename:(req,file,cb)=>{
+    const ext=path.extname(file.originalname);
+    cb(null,`candidate_${req.params.id}_${Date.now()}${ext}`);
+  }
+});
+
+const fileFilter=(req,file,cb)=>{
+  if(!file.mimetype.startsWith("image/")){
+    return cb(new Error("Images only"),false);
+  }
+  cb(null,true);
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits:{ fileSize: 2 * 1024 * 1024 } // 2MB max
+});
+
+function adminOnly(req,res,next){
+  if(!req.user || req.user.role!=="admin"){
+    return res.status(403).json({error:"Admin only"});
+  }
+  next();
+}
 
 dotenv.config();
 const { Pool } = pkg;
@@ -9,6 +45,7 @@ const { Pool } = pkg;
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use("/uploads", express.static("uploads"));
 
 const PORT = process.env.PORT || 10000;
 
@@ -171,6 +208,26 @@ app.get("/api/search", async (req,res)=>{
 /* =====================
    START
 ===================== */
+app.post(
+  "/api/admin/candidate/:id/photo",
+  authMiddleware,
+  adminOnly,
+  upload.single("photo"),
+  async (req,res)=>{
+
+    const photoUrl=`/uploads/${req.file.filename}`;
+
+    await pool.query(
+      "UPDATE candidate SET photo=$1 WHERE id=$2",
+      [photoUrl, req.params.id]
+    );
+
+    res.json({
+      success:true,
+      photo:photoUrl
+    });
+  }
+);
 
 app.listen(PORT, ()=>{
   console.log("🚀 Backend running on",PORT);
