@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import cors from "cors";
 
 dotenv.config();
-
 const { Pool } = pkg;
 
 const app = express();
@@ -23,7 +22,7 @@ const pool = new Pool({
 });
 
 /* ======================
-   TEST CONNECTION
+   TEST DB
 ====================== */
 
 async function testDB() {
@@ -34,6 +33,7 @@ async function testDB() {
     console.error("❌ DB CONNECTION ERROR:", err.message);
   }
 }
+
 testDB();
 
 /* ======================
@@ -41,17 +41,17 @@ testDB();
 ====================== */
 
 app.get("/", (req, res) => {
-  res.json({ status: "Backend running OK" });
+  res.json({ status: "Backend OK" });
 });
 
 /* ======================
-   CANDIDATES WITH JOINS
+   CANDIDATES (JOIN NAMES)
 ====================== */
 
 app.get("/api/candidates", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT 
+      SELECT
         c.id,
         c.full_name,
         s.name AS state,
@@ -61,8 +61,7 @@ app.get("/api/candidates", async (req, res) => {
         c.email,
         c.phone,
         c.website,
-        c.photo,
-        c.created_at
+        c.photo
       FROM candidates c
       LEFT JOIN states s ON c.state_id = s.id
       LEFT JOIN parties p ON c.party_id = p.id
@@ -81,118 +80,52 @@ app.get("/api/candidates", async (req, res) => {
 });
 
 /* ======================
-   DROPDOWNS (READABLE)
-====================== */
-
-app.get("/api/dropdowns/states", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, name
-      FROM states
-      ORDER BY name
-    `);
-    res.json(rows);
-  } catch {
-    res.json([]);
-  }
-});
-
-app.get("/api/dropdowns/parties", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, name
-      FROM parties
-      ORDER BY name
-    `);
-    res.json(rows);
-  } catch {
-    res.json([]);
-  }
-});
-
-app.get("/api/dropdowns/offices", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, name
-      FROM offices
-      ORDER BY name
-    `);
-    res.json(rows);
-  } catch {
-    res.json([]);
-  }
-});
-
-app.get("/api/dropdowns/counties", async (req, res) => {
-  const { state_id } = req.query;
-
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, name
-      FROM counties
-      WHERE state_id = $1
-      ORDER BY name
-    `, [state_id]);
-
-    res.json(rows);
-  } catch {
-    res.json([]);
-  }
-});
-
-/* ======================
-   SEARCH + FILTER (WITH JOINS)
+   SEARCH
 ====================== */
 
 app.get("/api/search", async (req, res) => {
   const { q, state_id, party_id, county_id, office_id } = req.query;
 
-  let conditions = [];
+  let filters = [];
   let values = [];
   let i = 1;
 
   if (q) {
-    conditions.push(`c.full_name ILIKE $${i++}`);
+    filters.push(`c.full_name ILIKE $${i++}`);
     values.push(`%${q}%`);
   }
 
   if (state_id) {
-    conditions.push(`c.state_id = $${i++}`);
+    filters.push(`c.state_id = $${i++}`);
     values.push(state_id);
   }
 
   if (party_id) {
-    conditions.push(`c.party_id = $${i++}`);
+    filters.push(`c.party_id = $${i++}`);
     values.push(party_id);
   }
 
   if (county_id) {
-    conditions.push(`c.county_id = $${i++}`);
+    filters.push(`c.county_id = $${i++}`);
     values.push(county_id);
   }
 
   if (office_id) {
-    conditions.push(`c.office_id = $${i++}`);
+    filters.push(`c.office_id = $${i++}`);
     values.push(office_id);
   }
 
-  const where = conditions.length
-    ? "WHERE " + conditions.join(" AND ")
-    : "";
+  const where = filters.length ? "WHERE " + filters.join(" AND ") : "";
 
   try {
     const { rows } = await pool.query(`
-      SELECT 
+      SELECT
         c.id,
         c.full_name,
         s.name AS state,
         p.name AS party,
         co.name AS county,
-        o.name AS office,
-        c.email,
-        c.phone,
-        c.website,
-        c.photo
+        o.name AS office
       FROM candidates c
       LEFT JOIN states s ON c.state_id = s.id
       LEFT JOIN parties p ON c.party_id = p.id
@@ -212,7 +145,65 @@ app.get("/api/search", async (req, res) => {
 });
 
 /* ======================
-   START SERVER
+   DROPDOWNS
+====================== */
+
+app.get("/api/dropdowns/states", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, name FROM states ORDER BY name"
+  );
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/parties", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, name FROM parties ORDER BY name"
+  );
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/offices", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, name FROM offices ORDER BY name"
+  );
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/counties", async (req, res) => {
+  const { state_id } = req.query;
+
+  const { rows } = await pool.query(
+    "SELECT id, name FROM counties WHERE state_id=$1 ORDER BY name",
+    [state_id]
+  );
+
+  res.json(rows);
+});
+
+/* ======================
+   CONSULTANTS
+====================== */
+
+app.get("/api/consultants", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM consultants ORDER BY name"
+  );
+  res.json(rows);
+});
+
+/* ======================
+   VENDORS
+====================== */
+
+app.get("/api/vendors", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM vendors ORDER BY name"
+  );
+  res.json(rows);
+});
+
+/* ======================
+   START
 ====================== */
 
 app.listen(PORT, () => {
