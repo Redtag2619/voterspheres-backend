@@ -45,26 +45,30 @@ app.get("/", (req, res) => {
 });
 
 /* ======================
-   CANDIDATES (REAL SCHEMA)
+   CANDIDATES WITH JOINS
 ====================== */
 
 app.get("/api/candidates", async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT 
-        id,
-        full_name,
-        party_id,
-        office_id,
-        state_id,
-        county_id,
-        email,
-        phone,
-        website,
-        photo,
-        created_at
-      FROM candidates
-      ORDER BY full_name
+        c.id,
+        c.full_name,
+        s.name AS state,
+        p.name AS party,
+        co.name AS county,
+        o.name AS office,
+        c.email,
+        c.phone,
+        c.website,
+        c.photo,
+        c.created_at
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      ORDER BY c.full_name
       LIMIT 100
     `);
 
@@ -77,16 +81,15 @@ app.get("/api/candidates", async (req, res) => {
 });
 
 /* ======================
-   DROPDOWNS (IDS)
+   DROPDOWNS (READABLE)
 ====================== */
 
 app.get("/api/dropdowns/states", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT DISTINCT state_id
-      FROM candidates
-      WHERE state_id IS NOT NULL
-      ORDER BY state_id
+      SELECT id, name
+      FROM states
+      ORDER BY name
     `);
     res.json(rows);
   } catch {
@@ -97,10 +100,22 @@ app.get("/api/dropdowns/states", async (req, res) => {
 app.get("/api/dropdowns/parties", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT DISTINCT party_id
-      FROM candidates
-      WHERE party_id IS NOT NULL
-      ORDER BY party_id
+      SELECT id, name
+      FROM parties
+      ORDER BY name
+    `);
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
+
+app.get("/api/dropdowns/offices", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, name
+      FROM offices
+      ORDER BY name
     `);
     res.json(rows);
   } catch {
@@ -113,10 +128,10 @@ app.get("/api/dropdowns/counties", async (req, res) => {
 
   try {
     const { rows } = await pool.query(`
-      SELECT DISTINCT county_id
-      FROM candidates
+      SELECT id, name
+      FROM counties
       WHERE state_id = $1
-      ORDER BY county_id
+      ORDER BY name
     `, [state_id]);
 
     res.json(rows);
@@ -125,23 +140,8 @@ app.get("/api/dropdowns/counties", async (req, res) => {
   }
 });
 
-app.get("/api/dropdowns/offices", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT DISTINCT office_id
-      FROM candidates
-      WHERE office_id IS NOT NULL
-      ORDER BY office_id
-    `);
-
-    res.json(rows);
-  } catch {
-    res.json([]);
-  }
-});
-
 /* ======================
-   SEARCH + FILTER
+   SEARCH + FILTER (WITH JOINS)
 ====================== */
 
 app.get("/api/search", async (req, res) => {
@@ -152,27 +152,27 @@ app.get("/api/search", async (req, res) => {
   let i = 1;
 
   if (q) {
-    conditions.push(`full_name ILIKE $${i++}`);
+    conditions.push(`c.full_name ILIKE $${i++}`);
     values.push(`%${q}%`);
   }
 
   if (state_id) {
-    conditions.push(`state_id = $${i++}`);
+    conditions.push(`c.state_id = $${i++}`);
     values.push(state_id);
   }
 
   if (party_id) {
-    conditions.push(`party_id = $${i++}`);
+    conditions.push(`c.party_id = $${i++}`);
     values.push(party_id);
   }
 
   if (county_id) {
-    conditions.push(`county_id = $${i++}`);
+    conditions.push(`c.county_id = $${i++}`);
     values.push(county_id);
   }
 
   if (office_id) {
-    conditions.push(`office_id = $${i++}`);
+    conditions.push(`c.office_id = $${i++}`);
     values.push(office_id);
   }
 
@@ -183,19 +183,23 @@ app.get("/api/search", async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT 
-        id,
-        full_name,
-        party_id,
-        office_id,
-        state_id,
-        county_id,
-        email,
-        phone,
-        website,
-        photo
-      FROM candidates
+        c.id,
+        c.full_name,
+        s.name AS state,
+        p.name AS party,
+        co.name AS county,
+        o.name AS office,
+        c.email,
+        c.phone,
+        c.website,
+        c.photo
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      LEFT JOIN offices o ON c.office_id = o.id
       ${where}
-      ORDER BY full_name
+      ORDER BY c.full_name
       LIMIT 100
     `, values);
 
