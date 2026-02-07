@@ -18,6 +18,51 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* ============================
+   SEO CANDIDATE PROFILE ROUTE
+   /candidate/john-smith-123
+============================ */
+app.get("/api/candidate/seo/:slug", async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const id = slug.split("-").pop(); // last part = ID
+
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: "Invalid URL" });
+    }
+
+    const { rows } = await pool.query(`
+      SELECT
+        c.id,
+        c.full_name,
+        c.email,
+        c.phone,
+        c.website,
+        c.address,
+        c.photo,
+        s.name AS state,
+        p.name AS party,
+        o.name AS office,
+        co.name AS county
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      WHERE c.id = $1
+    `, [id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "Candidate not found" });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("SEO PROFILE ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ============================
    MIDDLEWARE
 ============================ */
 app.use(cors());
