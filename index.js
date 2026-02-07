@@ -85,6 +85,45 @@ const upload = multer({
 });
 
 /* ============================
+   CANDIDATE PROFILE (DETAIL)
+============================ */
+app.get("/api/candidates/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await pool.query(`
+      SELECT
+        c.id,
+        c.full_name,
+        c.email,
+        c.phone,
+        c.website,
+        c.address,
+        c.photo,
+        s.name AS state,
+        p.name AS party,
+        o.name AS office,
+        co.name AS county
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      WHERE c.id = $1
+    `, [id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "Candidate not found" });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ============================
    HEALTH CHECK
 ============================ */
 app.get("/health", (req, res) => {
