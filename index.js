@@ -2,18 +2,37 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
 
 dotenv.config();
 const { Pool } = pkg;
 
 const app = express();
+
+/* ============================
+   MIDDLEWARE
+============================ */
 app.use(cors());
 app.use(express.json());
+
+/* ============================
+   PORT (Render + Local)
+============================ */
+const PORT = process.env.PORT || 10000;
+
+/* ============================
+   DATABASE
+============================ */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false
+});
+
+/* ============================
+   HEALTH CHECK (CRITICAL)
+============================ */
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -22,144 +41,149 @@ app.get("/health", (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 10000;
-
-/* =========================
-   DATABASE
-========================= */
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: false
+/* ============================
+   BASIC API TEST
+============================ */
+app.get("/", (req, res) => {
+  res.json({ message: "VoterSpheres API running" });
 });
 
-(async () => {
+/* ============================
+   DROPDOWNS (MATCH YOUR TABLES)
+============================ */
+
+app.get("/api/dropdowns/states", async (req, res) => {
   try {
-    await pool.query("SELECT 1");
-    console.log("✅ Connected to database");
-  } catch (e) {
-    console.error("❌ DB ERROR", e);
-  }
-})();
-
-/* =========================
-   AUTH MIDDLEWARE
-========================= */
-function authMiddleware(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ error: "Missing token" });
-
-  try {
-    const token = header.split(" ")[1];
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
-}
-
-function adminOnly(req, res, next) {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
-  }
-  next();
-}
-
-/* =========================
-   LOGIN
-========================= */
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  const { rows } = await pool.query(
-    "SELECT * FROM users WHERE email=$1",
-    [email]
-  );
-
-  if (!rows.length) return res.status(401).json({ error: "Invalid login" });
-  if (!rows[0].active) return res.status(403).json({ error: "Account inactive" });
-
-  const valid = await bcrypt.compare(password, rows[0].password_hash);
-  if (!valid) return res.status(401).json({ error: "Invalid login" });
-
-  const token = jwt.sign(
-    { id: rows[0].id, role: rows[0].role },
-    process.env.JWT_SECRET,
-    { expiresIn: "8h" }
-  );
-
-  res.json({ token, role: rows[0].role });
-});
-
-/* =========================
-   FILE UPLOAD CONFIG
-========================= */
-const uploadDir = "./uploads";
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `candidate_${req.params.id}_${Date.now()}${ext}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Images only"));
-    }
-    cb(null, true);
-  }
-});
-
-/* =========================
-   SERVE UPLOADS
-========================= */
-app.use("/uploads", express.static("uploads"));
-
-/* =========================
-   ADMIN PHOTO UPLOAD
-========================= */
-app.post(
-  "/api/admin/candidate/:id/photo",
-  authMiddleware,
-  adminOnly,
-  upload.single("photo"),
-  async (req, res) => {
-    const photoPath = `/uploads/${req.file.filename}`;
-
-    await pool.query(
-      "UPDATE candidate SET photo=$1 WHERE id=$2",
-      [photoPath, req.params.id]
+    const { rows } = await pool.query(
+      `SELECT id, name FROM states ORDER BY name`
     );
-
-    res.json({ success: true, photo: photoPath });
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load states" });
   }
-);
-
-/* =========================
-   CANDIDATE LIST
-========================= */
-app.get("/api/candidates", async (req, res) => {
-  const { rows } = await pool.query(`
-    SELECT c.id, c.full_name, s.name AS state, p.name AS party,
-           co.name AS county, o.name AS office, c.photo
-    FROM candidate c
-    LEFT JOIN states s ON c.state_id=s.id
-    LEFT JOIN parties p ON c.party_id=p.id
-    LEFT JOIN counties co ON c.county_id=co.id
-    LEFT JOIN offices o ON c.office_id=o.id
-    ORDER BY c.full_name
-  `);
-  res.json(rows);
 });
 
-/* =========================
+app.get("/api/dropdowns/parties", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM parties ORDER BY name`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load parties" });
+  }
+});
+
+app.get("/api/dropdowns/offices", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM offices ORDER BY name`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load offices" });
+  }
+});
+
+app.get("/api/dropdowns/counties", async (req, res) => {
+  const { state_id } = req.query;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name
+       FROM counties
+       WHERE ($1::int IS NULL OR state_id = $1)
+       ORDER BY name`,
+      [state_id || null]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load counties" });
+  }
+});
+
+/* ============================
+   CANDIDATE SEARCH (SAFE)
+============================ */
+
+app.get("/api/candidates", async (req, res) => {
+  const {
+    state_id,
+    party_id,
+    county_id,
+    office_id,
+    page = 1,
+    limit = 20
+  } = req.query;
+
+  const offset = (page - 1) * limit;
+
+  try {
+    const dataQuery = `
+      SELECT
+        c.id,
+        c.full_name,
+        s.name AS state,
+        p.name AS party,
+        o.name AS office,
+        co.name AS county
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id = s.id
+      LEFT JOIN parties p ON c.party_id = p.id
+      LEFT JOIN offices o ON c.office_id = o.id
+      LEFT JOIN counties co ON c.county_id = co.id
+      WHERE
+        ($1::int IS NULL OR c.state_id = $1)
+        AND ($2::int IS NULL OR c.party_id = $2)
+        AND ($3::int IS NULL OR c.county_id = $3)
+        AND ($4::int IS NULL OR c.office_id = $4)
+      ORDER BY c.full_name
+      LIMIT $5 OFFSET $6
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) FROM candidates
+      WHERE
+        ($1::int IS NULL OR state_id = $1)
+        AND ($2::int IS NULL OR party_id = $2)
+        AND ($3::int IS NULL OR county_id = $3)
+        AND ($4::int IS NULL OR office_id = $4)
+    `;
+
+    const params = [
+      state_id || null,
+      party_id || null,
+      county_id || null,
+      office_id || null,
+      limit,
+      offset
+    ];
+
+    const [data, count] = await Promise.all([
+      pool.query(dataQuery, params),
+      pool.query(countQuery, params.slice(0, 4))
+    ]);
+
+    res.json({
+      total: Number(count.rows[0].count),
+      page: Number(page),
+      limit: Number(limit),
+      results: data.rows
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Candidate search failed" });
+  }
+});
+
+/* ============================
    START SERVER
-========================= */
+============================ */
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Backend running on port ${PORT}`);
 });
