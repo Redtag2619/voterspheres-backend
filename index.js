@@ -1,140 +1,290 @@
 import express from "express";
-import cors from "cors";
 import pkg from "pg";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config();
-
 const { Pool } = pkg;
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
-
-/* =========================
-   Middleware
-========================= */
-
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
 
-/* =========================
-   PostgreSQL
-========================= */
+const PORT = process.env.PORT || 10000;
+
+/* ============================
+   DATABASE CONNECTION
+============================ */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-/* =========================
-   Health
-========================= */
-
-app.get("/health", async (req, res) => {
-  try {
+async function testDB(){
+  try{
     await pool.query("SELECT 1");
-    res.json({ status: "ok" });
-  } catch (err) {
+    console.log("✅ Connected to database");
+  }catch(err){
+    console.error("❌ DB CONNECTION ERROR:", err);
+  }
+}
+
+testDB();
+
+/* ============================
+   DROPDOWNS
+============================ */
+
+app.get("/api/dropdowns/states", async (req,res)=>{
+  const { rows } = await pool.query(
+    "SELECT id, name FROM states ORDER BY name"
+  );
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/counties", async (req,res)=>{
+  const { state } = req.query;
+
+  if(!state) return res.json([]);
+
+  const { rows } = await pool.query(
+    `SELECT id, name FROM counties
+     WHERE state_id=$1
+     ORDER BY name`,
+    [state]
+  );
+
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/offices", async (req,res)=>{
+  const { rows } = await pool.query(
+    "SELECT id, name FROM offices ORDER BY name"
+  );
+  res.json(rows);
+});
+
+app.get("/api/dropdowns/parties", async (req,res)=>{
+  const { rows } = await pool.query(
+    "SELECT id, name FROM parties ORDER BY name"
+  );
+  res.json(rows);
+});
+
+/* CONSULTANT DROPDOWN */
+
+app.get("/api/dropdowns/consultants", async (req,res)=>{
+  const { rows } = await pool.query(
+    "SELECT id, name FROM consultants ORDER BY name"
+  );
+  res.json(rows);
+});
+
+/* VENDOR DROPDOWN */
+
+app.get("/api/dropdowns/vendors", async (req,res)=>{
+  const { rows } = await pool.query(
+    "SELECT id, name FROM vendors ORDER BY name"
+  );
+  res.json(rows);
+});
+
+/* ============================
+   CANDIDATES SEARCH
+============================ */
+
+app.get("/api/candidates", async (req,res)=>{
+  try{
+
+    const {
+      q="",
+      state="",
+      county="",
+      office="",
+      party="",
+      page=1,
+      limit=12
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+    let where = [];
+    let values = [];
+
+    if(q){
+      values.push(`%${q}%`);
+      where.push(`c.full_name ILIKE $${values.length}`);
+    }
+    if(state){
+      values.push(state);
+      where.push(`c.state_id=$${values.length}`);
+    }
+    if(county){
+      values.push(county);
+      where.push(`c.county_id=$${values.length}`);
+    }
+    if(office){
+      values.push(office);
+      where.push(`c.office_id=$${values.length}`);
+    }
+    if(party){
+      values.push(party);
+      where.push(`c.party_id=$${values.length}`);
+    }
+
+    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+
+    const totalRes = await pool.query(
+      `SELECT COUNT(*) FROM candidates c ${whereSQL}`,
+      values
+    );
+
+    const total = Number(totalRes.rows[0].count);
+
+    values.push(limit, offset);
+
+    const dataRes = await pool.query(
+      `
+      SELECT c.*, 
+             s.name AS state_name,
+             co.name AS county_name,
+             o.name AS office_name,
+             p.name AS party_name
+      FROM candidates c
+      LEFT JOIN states s ON c.state_id=s.id
+      LEFT JOIN counties co ON c.county_id=co.id
+      LEFT JOIN offices o ON c.office_id=o.id
+      LEFT JOIN parties p ON c.party_id=p.id
+      ${whereSQL}
+      ORDER BY c.full_name
+      LIMIT $${values.length-1}
+      OFFSET $${values.length}
+      `,
+      values
+    );
+
+    res.json({ total, results: dataRes.rows });
+
+  }catch(err){
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/* =========================
-   AUTH ROUTES
-========================= */
+/* ============================
+   CONSULTANTS API
+============================ */
 
-// Register
-app.post("/auth/register", async (req, res) => {
-  const { email, password } = req.body;
+app.get("/api/consultants", async (req,res)=>{
+  try{
 
-  const hash = await bcrypt.hash(password, 10);
+    const { q="", state="", page=1, limit=12 } = req.query;
 
-  try {
-    const result = await pool.query(
-      "INSERT INTO users(email, password_hash) VALUES($1,$2) RETURNING id,email",
-      [email, hash]
+    const offset = (page - 1) * limit;
+    let where = [];
+    let values = [];
+
+    if(q){
+      values.push(`%${q}%`);
+      where.push(`name ILIKE $${values.length}`);
+    }
+
+    if(state){
+      values.push(state);
+      where.push(`state_id=$${values.length}`);
+    }
+
+    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+
+    const totalRes = await pool.query(
+      `SELECT COUNT(*) FROM consultants ${whereSQL}`,
+      values
     );
 
-    res.json({ user: result.rows[0] });
-  } catch (err) {
-    res.status(400).json({ error: "User already exists" });
+    const total = Number(totalRes.rows[0].count);
+
+    values.push(limit, offset);
+
+    const dataRes = await pool.query(
+      `
+      SELECT c.*, s.name AS state_name
+      FROM consultants c
+      LEFT JOIN states s ON c.state_id=s.id
+      ${whereSQL}
+      ORDER BY c.name
+      LIMIT $${values.length-1}
+      OFFSET $${values.length}
+      `,
+      values
+    );
+
+    res.json({ total, results: dataRes.rows });
+
+  }catch(err){
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Login
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
+/* ============================
+   VENDORS API
+============================ */
 
-  const result = await pool.query(
-    "SELECT * FROM users WHERE email=$1",
-    [email]
-  );
+app.get("/api/vendors", async (req,res)=>{
+  try{
 
-  if (result.rows.length === 0) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    const { q="", state="", page=1, limit=12 } = req.query;
+
+    const offset = (page - 1) * limit;
+    let where = [];
+    let values = [];
+
+    if(q){
+      values.push(`%${q}%`);
+      where.push(`name ILIKE $${values.length}`);
+    }
+
+    if(state){
+      values.push(state);
+      where.push(`state_id=$${values.length}`);
+    }
+
+    const whereSQL = where.length ? "WHERE " + where.join(" AND ") : "";
+
+    const totalRes = await pool.query(
+      `SELECT COUNT(*) FROM vendors ${whereSQL}`,
+      values
+    );
+
+    const total = Number(totalRes.rows[0].count);
+
+    values.push(limit, offset);
+
+    const dataRes = await pool.query(
+      `
+      SELECT v.*, s.name AS state_name
+      FROM vendors v
+      LEFT JOIN states s ON v.state_id=s.id
+      ${whereSQL}
+      ORDER BY v.name
+      LIMIT $${values.length-1}
+      OFFSET $${values.length}
+      `,
+      values
+    );
+
+    res.json({ total, results: dataRes.rows });
+
+  }catch(err){
+    res.status(500).json({ error: err.message });
   }
-
-  const user = result.rows[0];
-  const match = await bcrypt.compare(password, user.password_hash);
-
-  if (!match) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  const token = jwt.sign(
-    { id: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: "1d" }
-  );
-
-  res.json({ token });
 });
 
-/* =========================
-   Auth Middleware
-========================= */
+/* ============================
+   SERVER
+============================ */
 
-function auth(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ error: "No token" });
-
-  const token = header.split(" ")[1];
-
-  try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
-}
-
-/* =========================
-   Protected Example
-========================= */
-
-app.get("/api/secure-data", auth, (req, res) => {
-  res.json({
-    message: "Protected info",
-    user: req.user
-  });
-});
-
-/* =========================
-   Existing APIs
-========================= */
-
-app.get("/api/voters", async (req, res) => {
-  const r = await pool.query("SELECT * FROM voters LIMIT 50");
-  res.json(r.rows);
-});
-
-/* =========================
-   Start
-========================= */
-
-app.listen(PORT, () => {
-  console.log("Backend running on", PORT);
+app.listen(PORT, ()=>{
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
