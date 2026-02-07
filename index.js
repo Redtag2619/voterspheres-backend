@@ -25,10 +25,7 @@ app.get("/api/candidate/seo/:slug", async (req, res) => {
   try {
     const slug = req.params.slug;
     const id = slug.split("-").pop(); // last part = ID
-    const slug = c.full_name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + c.id;
-
-`<a href="/candidate/${slug}">${c.full_name}</a>`;
-
+   
     if (!id || isNaN(id)) {
       return res.status(400).json({ error: "Invalid URL" });
     }
