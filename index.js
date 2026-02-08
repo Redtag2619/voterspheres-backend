@@ -1,231 +1,95 @@
 import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
-import cors from "cors";
 import path from "path";
-import multer from "multer";
-import fs from "fs";
 import { fileURLToPath } from "url";
+import cors from "cors";
 
 dotenv.config();
 const { Pool } = pkg;
-const app = express();
 
-/* ============================
-   PATH FIX (ESM)
-============================ */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ============================
-   SEO CANDIDATE PROFILE ROUTE
-   /candidate/john-smith-123
-============================ */
-app.get("/api/candidate/seo/:slug", async (req, res) => {
-  try {
-    const slug = req.params.slug;
-    const id = slug.split("-").pop(); // last part = ID
-   
-    if (!id || isNaN(id)) {
-      return res.status(400).json({ error: "Invalid URL" });
-    }
-
-    const { rows } = await pool.query(`
-      SELECT
-        c.id,
-        c.full_name,
-        c.email,
-        c.phone,
-        c.website,
-        c.address,
-        c.photo,
-        s.name AS state,
-        p.name AS party,
-        o.name AS office,
-        co.name AS county
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id = s.id
-      LEFT JOIN parties p ON c.party_id = p.id
-      LEFT JOIN offices o ON c.office_id = o.id
-      LEFT JOIN counties co ON c.county_id = co.id
-      WHERE c.id = $1
-    `, [id]);
-
-    if (!rows.length) {
-      return res.status(404).json({ error: "Candidate not found" });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("SEO PROFILE ERROR:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ============================
-   MIDDLEWARE
-============================ */
+const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
-/* ============================
-   STATIC FILES
-============================ */
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+const PORT = process.env.PORT || 10000;
 
 /* ============================
    DATABASE
 ============================ */
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-/* ============================
-   AUTH MIDDLEWARE (ADMIN ONLY)
-============================ */
-const adminOnly = async (req, res, next) => {
-  const userId = req.headers["x-user-id"];
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-  const { rows } = await pool.query(
-    "SELECT is_admin FROM users WHERE id = $1",
-    [userId]
-  );
-
-  if (!rows.length || !rows[0].is_admin) {
-    return res.status(403).json({ error: "Admin only" });
-  }
-
-  next();
-};
+await pool.query("SELECT 1");
+console.log("✅ Connected to database");
 
 /* ============================
-   MULTER CONFIG (SECURE)
+   API ROUTES
 ============================ */
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `candidate-${Date.now()}${ext}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Images only"));
-    }
-    cb(null, true);
-  }
-});
-
-/* ============================
-   CANDIDATE PROFILE (DETAIL)
-============================ */
-app.get("/api/candidates/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { rows } = await pool.query(`
-      SELECT
-        c.id,
-        c.full_name,
-        c.email,
-        c.phone,
-        c.website,
-        c.address,
-        c.photo,
-        s.name AS state,
-        p.name AS party,
-        o.name AS office,
-        co.name AS county
-      FROM candidates c
-      LEFT JOIN states s ON c.state_id = s.id
-      LEFT JOIN parties p ON c.party_id = p.id
-      LEFT JOIN offices o ON c.office_id = o.id
-      LEFT JOIN counties co ON c.county_id = co.id
-      WHERE c.id = $1
-    `, [id]);
-
-    if (!rows.length) {
-      return res.status(404).json({ error: "Candidate not found" });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ============================
-   HEALTH CHECK
-============================ */
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
-/* ============================
-   CANDIDATES LIST
-============================ */
 app.get("/api/candidates", async (req, res) => {
   const { rows } = await pool.query(`
     SELECT
       c.id,
       c.full_name,
-      s.name AS state,
       p.name AS party,
-      o.name AS office,
-      c.photo
+      s.name AS state,
+      o.name AS office
     FROM candidates c
-    LEFT JOIN states s ON c.state_id = s.id
-    LEFT JOIN parties p ON c.party_id = p.id
-    LEFT JOIN offices o ON c.office_id = o.id
+    LEFT JOIN parties p ON p.id = c.party_id
+    LEFT JOIN states s ON s.id = c.state_id
+    LEFT JOIN offices o ON o.id = c.office_id
     ORDER BY c.full_name
   `);
   res.json(rows);
 });
 
+app.get("/api/candidates/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const { rows } = await pool.query(`
+    SELECT
+      c.*,
+      p.name AS party,
+      s.name AS state,
+      o.name AS office
+    FROM candidates c
+    LEFT JOIN parties p ON p.id = c.party_id
+    LEFT JOIN states s ON s.id = c.state_id
+    LEFT JOIN offices o ON o.id = c.office_id
+    WHERE c.id = $1
+  `, [id]);
+
+  if (!rows.length) return res.sendStatus(404);
+  res.json(rows[0]);
+});
+
 /* ============================
-   ADMIN PHOTO UPLOAD
+   CLEAN URL ROUTE (SEO)
 ============================ */
-app.post(
-  "/api/admin/candidates/:id/photo",
-  adminOnly,
-  upload.single("photo"),
-  async (req, res) => {
-    const photoPath = `/uploads/${req.file.filename}`;
 
-    await pool.query(
-      "UPDATE candidates SET photo = $1 WHERE id = $2",
-      [photoPath, req.params.id]
-    );
-
-    res.json({ success: true, photo: photoPath });
-  }
-);
+// /candidate/john-smith-12
+app.get("/candidate/:slug", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "candidate.html"));
+});
 
 /* ============================
-   FRONTEND FALLBACK
+   FALLBACK
 ============================ */
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/* ============================
-   START SERVER
-============================ */
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () =>
+  console.log(`🚀 Backend running on port ${PORT}`)
+);
