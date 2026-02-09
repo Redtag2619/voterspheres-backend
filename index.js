@@ -4,30 +4,22 @@ import dotenv from "dotenv";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import multer from "multer";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import { fileURLToPath } from "url";
 
 dotenv.config();
-
 const { Pool } = pkg;
 const app = express();
-
-/* -------------------- REQUIRED FOR RENDER -------------------- */
 const PORT = process.env.PORT || 10000;
 
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
 app.use(express.json());
 
-/* -------------------- PATH FIXES -------------------- */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/* -------------------- UPLOADS -------------------- */
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR);
-}
-app.use("/uploads", express.static(UPLOAD_DIR));
 
 /* -------------------- DATABASE -------------------- */
 const pool = new Pool({
@@ -37,112 +29,96 @@ const pool = new Pool({
     : false,
 });
 
-/* -------------------- HEALTH CHECK -------------------- */
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
+/* -------------------- UPLOADS -------------------- */
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
+app.use("/uploads", express.static(UPLOAD_DIR));
 
-/* -------------------- ROBOTS.TXT -------------------- */
-app.get("/robots.txt", (req, res) => {
-  res.type("text/plain");
-  res.send(`User-agent: *
-Allow: /
+/* -------------------- AUTH -------------------- */
+function adminOnly(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return res.sendStatus(401);
 
-Sitemap: https://yourdomain.com/sitemap.xml`);
-});
-
-/* -------------------- SITEMAP.XML -------------------- */
-app.get("/sitemap.xml", async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT slug FROM public.candidate WHERE slug IS NOT NULL`
-    );
-
-    const urls = rows
-      .map(
-        (c) =>
-          `<url>
-  <loc>https://yourdomain.com/candidate/${c.slug}</loc>
-</url>`
-      )
-      .join("");
-
-    res.type("application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://yourdomain.com/</loc>
-  </url>
-  ${urls}
-</urlset>`);
-  } catch (err) {
-    console.error("SITEMAP ERROR:", err);
-    res.status(500).send("Sitemap error");
+    const token = auth.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded.is_admin) return res.sendStatus(403);
+    req.user = decoded;
+    next();
+  } catch {
+    res.sendStatus(401);
   }
+}
+
+/* -------------------- LOGIN -------------------- */
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  const result = await pool.query(
+    "SELECT id, password_hash, is_admin FROM public.users WHERE email=$1",
+    [email]
+  );
+
+  if (!result.rows.length) return res.sendStatus(401);
+
+  const user = result.rows[0];
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return res.sendStatus(401);
+
+  const token = jwt.sign(
+    { id: user.id, is_admin: user.is_admin },
+    process.env.JWT_SECRET,
+    { expiresIn: "8h" }
+  );
+
+  res.json({ token });
 });
 
-/* -------------------- CANDIDATE LIST (PAGINATED) -------------------- */
-app.get("/api/candidates", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 20;
-  const offset = (page - 1) * limit;
-
-  try {
-    const data = await pool.query(
-      `SELECT id, full_name, state, party, county, office, slug, photo
-       FROM public.candidate
-       ORDER BY full_name
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-
-    const total = await pool.query(
-      `SELECT COUNT(*) FROM public.candidate`
-    );
-
-    res.json({
-      results: data.rows,
-      total: parseInt(total.rows[0].count),
-      page,
-      pages: Math.ceil(total.rows[0].count / limit),
-    });
-  } catch (err) {
-    console.error("CANDIDATE LIST ERROR:", err);
-    res.status(500).json({ error: "Failed to load candidates" });
-  }
+/* -------------------- MULTER (SECURE) -------------------- */
+const storage = multer.diskStorage({
+  destination: UPLOAD_DIR,
+  filename: (req, file, cb) => {
+    const safeName =
+      Date.now() + "-" + file.originalname.replace(/[^a-zA-Z0-9.]/g, "");
+    cb(null, safeName);
+  },
 });
 
-/* -------------------- CANDIDATE PROFILE (SLUG URL) -------------------- */
-app.get("/api/candidate/:slug", async (req, res) => {
-  try {
-    const { slug } = req.params;
-
-    const { rows } = await pool.query(
-      `SELECT id, full_name, state, party, county, office, photo
-       FROM public.candidate
-       WHERE slug = $1
-       LIMIT 1`,
-      [slug]
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ error: "Candidate not found" });
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      cb(new Error("Images only"));
     }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("CANDIDATE PROFILE ERROR:", err);
-    res.status(500).json({ error: "Profile error" });
-  }
+    cb(null, true);
+  },
 });
 
-/* -------------------- SERVER START -------------------- */
-app.listen(PORT, "0.0.0.0", async () => {
-  try {
-    await pool.query("SELECT 1");
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log("✅ Connected to database");
-  } catch (err) {
-    console.error("❌ Database connection failed", err);
+/* -------------------- ADMIN PHOTO UPLOAD -------------------- */
+app.post(
+  "/api/admin/candidate/:id/photo",
+  adminOnly,
+  upload.single("photo"),
+  async (req, res) => {
+    try {
+      const photoPath = `/uploads/${req.file.filename}`;
+
+      await pool.query(
+        "UPDATE public.candidate SET photo=$1 WHERE id=$2",
+        [photoPath, req.params.id]
+      );
+
+      res.json({ success: true, photo: photoPath });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Upload failed" });
+    }
   }
+);
+
+/* -------------------- SERVER -------------------- */
+app.listen(PORT, "0.0.0.0", async () => {
+  await pool.query("SELECT 1");
+  console.log(`🚀 Backend running on ${PORT}`);
 });
