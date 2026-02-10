@@ -3,122 +3,97 @@ import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
 import path from "path";
-import fs from "fs";
-import multer from "multer";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
 import { fileURLToPath } from "url";
 
 dotenv.config();
+
 const { Pool } = pkg;
 const app = express();
-const PORT = process.env.PORT || 10000;
 
-/* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
 app.use(express.json());
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const PORT = process.env.PORT || 10000;
 
-/* -------------------- DATABASE -------------------- */
+/* =========================
+   DATABASE
+========================= */
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === "production"
     ? { rejectUnauthorized: false }
-    : false,
+    : false
 });
 
-/* -------------------- UPLOADS -------------------- */
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
-app.use("/uploads", express.static(UPLOAD_DIR));
-
-/* -------------------- AUTH -------------------- */
-function adminOnly(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) return res.sendStatus(401);
-
+async function testDB() {
   try {
-    const token = auth.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded.is_admin) return res.sendStatus(403);
-    req.user = decoded;
-    next();
-  } catch {
-    res.sendStatus(401);
+    await pool.query("SELECT 1");
+    console.log("✅ Connected to database");
+  } catch (err) {
+    console.error("❌ DB ERROR:", err.message);
   }
 }
+testDB();
 
-/* -------------------- LOGIN -------------------- */
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
+/* =========================
+   STATIC UPLOADS
+========================= */
 
-  const result = await pool.query(
-    "SELECT id, password_hash, is_admin FROM public.users WHERE email=$1",
-    [email]
-  );
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-  if (!result.rows.length) return res.sendStatus(401);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-  const user = result.rows[0];
-  const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) return res.sendStatus(401);
+/* =========================
+   HEALTH CHECK
+========================= */
 
-  const token = jwt.sign(
-    { id: user.id, is_admin: user.is_admin },
-    process.env.JWT_SECRET,
-    { expiresIn: "8h" }
-  );
-
-  res.json({ token });
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
-/* -------------------- MULTER (SECURE) -------------------- */
-const storage = multer.diskStorage({
-  destination: UPLOAD_DIR,
-  filename: (req, file, cb) => {
-    const safeName =
-      Date.now() + "-" + file.originalname.replace(/[^a-zA-Z0-9.]/g, "");
-    cb(null, safeName);
-  },
-});
+/* =========================
+   PUBLIC CANDIDATE PROFILE
+========================= */
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      cb(new Error("Images only"));
+app.get("/api/candidate/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const { rows } = await pool.query(
+      `
+      SELECT
+        id,
+        full_name,
+        slug,
+        state,
+        party,
+        county,
+        office,
+        photo
+      FROM candidate
+      WHERE slug = $1
+      LIMIT 1
+      `,
+      [slug]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Candidate not found" });
     }
-    cb(null, true);
-  },
-});
 
-/* -------------------- ADMIN PHOTO UPLOAD -------------------- */
-app.post(
-  "/api/admin/candidate/:id/photo",
-  adminOnly,
-  upload.single("photo"),
-  async (req, res) => {
-    try {
-      const photoPath = `/uploads/${req.file.filename}`;
-
-      await pool.query(
-        "UPDATE public.candidate SET photo=$1 WHERE id=$2",
-        [photoPath, req.params.id]
-      );
-
-      res.json({ success: true, photo: photoPath });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Upload failed" });
-    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-);
+});
 
-/* -------------------- SERVER -------------------- */
-app.listen(PORT, "0.0.0.0", async () => {
-  await pool.query("SELECT 1");
-  console.log(`🚀 Backend running on ${PORT}`);
+/* =========================
+   START SERVER
+========================= */
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
