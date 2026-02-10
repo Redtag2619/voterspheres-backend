@@ -83,6 +83,54 @@ app.get("/api/candidate/:slug", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send(`
+User-agent: *
+Allow: /
+
+Sitemap: ${req.protocol}://${req.get("host")}/sitemap.xml
+  `);
+});
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT slug, updated_at
+      FROM candidate
+      WHERE slug IS NOT NULL
+    `);
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+    const urls = rows
+      .map(
+        (c) => `
+  <url>
+    <loc>${baseUrl}/candidate/${c.slug}</loc>
+    <lastmod>${(c.updated_at || new Date()).toISOString()}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`
+      )
+      .join("");
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  ${urls}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating sitemap");
+  }
+});
 
 /* ===========================
    CLEAN URL REWRITE
