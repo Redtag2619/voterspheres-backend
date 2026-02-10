@@ -2,65 +2,43 @@ import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
-
 const { Pool } = pkg;
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
-/* =========================
+/* ===========================
    DATABASE
-========================= */
+=========================== */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false
+  ssl: false
 });
 
-async function testDB() {
+app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
-    console.log("✅ Connected to database");
+    res.json({ status: "ok" });
   } catch (err) {
-    console.error("❌ DB ERROR:", err.message);
+    res.status(500).json({ error: "db down" });
   }
-}
-testDB();
-
-/* =========================
-   STATIC UPLOADS
-========================= */
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-/* =========================
-   HEALTH CHECK
-========================= */
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
 });
 
-/* =========================
+/* ===========================
    PUBLIC CANDIDATE PROFILE
-========================= */
+   /api/candidate/:slug
+=========================== */
 
 app.get("/api/candidate/:slug", async (req, res) => {
-  try {
-    const { slug } = req.params;
+  const { slug } = req.params;
 
+  try {
     const { rows } = await pool.query(
       `
       SELECT
@@ -72,7 +50,7 @@ app.get("/api/candidate/:slug", async (req, res) => {
         county,
         office,
         photo
-      FROM candidate
+      FROM public.candidate
       WHERE slug = $1
       LIMIT 1
       `,
@@ -85,15 +63,15 @@ app.get("/api/candidate/:slug", async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    console.error(err);
+    console.error("CANDIDATE FETCH ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-/* =========================
+/* ===========================
    START SERVER
-========================= */
+=========================== */
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
 });
