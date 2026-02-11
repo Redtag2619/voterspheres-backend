@@ -1,19 +1,15 @@
 {
-  "name": "voterspheres-backend",
+  "name": "voterspheres-api",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-   "dependencies": {
-    "bcrypt": "^5.1.0",
+  "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
     "pg": "^8.11.5"
   }
 }
-
