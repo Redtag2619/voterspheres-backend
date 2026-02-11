@@ -65,6 +65,39 @@ app.get("/api/candidates", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+/* =============================
+   DYNAMIC SITEMAP
+============================= */
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT slug FROM candidate WHERE slug IS NOT NULL`
+    );
+
+    const urls = result.rows
+      .map(
+        row => `
+  <url>
+    <loc>https://voterspheres.org/${row.slug}</loc>
+  </url>`
+      )
+      .join("");
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://voterspheres.org/</loc>
+  </url>
+  ${urls}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating sitemap");
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
