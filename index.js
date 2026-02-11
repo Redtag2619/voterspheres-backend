@@ -1,107 +1,71 @@
 import express from "express";
-import pg from "pg";
-import path from "path";
-import { fileURLToPath } from "url";
+import pkg from "pg";
+import cors from "cors";
+import dotenv from "dotenv";
 
+dotenv.config();
+
+const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-const { Pool } = pg;
+app.use(cors());
+app.use(express.json());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }
 });
 
-// Needed for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/* =============================
+   HEALTH CHECK
+============================= */
+app.get("/", (req, res) => {
+  res.json({ status: "VoterSpheres API running" });
+});
 
-// ===== MIDDLEWARE =====
-app.use(express.json());
-
-// ===== SERVE FRONTEND =====
-// 🔥 THIS IS THE PART YOU WERE MISSING
-app.use(express.static(path.join(__dirname, "public")));
-
-// ===== API: Candidate by Slug =====
+/* =============================
+   GET CANDIDATE BY SLUG
+============================= */
 app.get("/api/candidate/:slug", async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const { rows } = await pool.query(
-      `SELECT id, full_name, state, party, county, office, photo
+    const result = await pool.query(
+      `SELECT id, full_name, slug, state, party, county, office, photo
        FROM candidate
        WHERE slug = $1
        LIMIT 1`,
       [slug]
     );
 
-    if (!rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Candidate not found" });
     }
 
-    res.json(rows[0]);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// ===== ROBOTS.TXT =====
-app.get("/robots.txt", (req, res) => {
-  res.type("text/plain");
-  res.send(`
-User-agent: *
-Allow: /
-
-Sitemap: ${req.protocol}://${req.get("host")}/sitemap.xml
-  `);
-});
-
-// ===== SITEMAP.XML =====
-app.get("/sitemap.xml", async (req, res) => {
+/* =============================
+   LIST ALL CANDIDATES (SEO)
+============================= */
+app.get("/api/candidates", async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT slug, updated_at FROM candidate WHERE slug IS NOT NULL`
+    const result = await pool.query(
+      `SELECT full_name, slug, state, party, office
+       FROM candidate
+       ORDER BY full_name`
     );
-
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-
-    const urls = rows
-      .map(
-        (c) => `
-  <url>
-    <loc>${baseUrl}/candidate/${c.slug}</loc>
-    <lastmod>${(c.updated_at || new Date()).toISOString()}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>`
-      )
-      .join("");
-
-    res.header("Content-Type", "application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>${baseUrl}/</loc>
-    <priority>1.0</priority>
-  </url>
-  ${urls}
-</urlset>`);
+    res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Sitemap error");
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// ===== SPA FALLBACK (CRITICAL) =====
-// 🔥 This fixes /candidate/john-smith showing "Cannot GET"
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ===== START SERVER =====
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`API running on port ${PORT}`);
 });
