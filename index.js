@@ -24,29 +24,89 @@ app.get("/", (req, res) => {
   res.json({ status: "VoterSpheres API running" });
 });
 
-/* =============================
-   GET CANDIDATE BY SLUG
-============================= */
-app.get("/api/candidate/:slug", async (req, res) => {
+/* ===============================
+   PUBLIC CANDIDATE PROFILE
+================================ */
+
+app.get("/:slug", async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const result = await pool.query(
-      `SELECT id, full_name, slug, state, party, county, office, photo
-       FROM candidate
-       WHERE slug = $1
-       LIMIT 1`,
+    const { rows } = await pool.query(
+      `
+      SELECT
+        id,
+        full_name,
+        slug,
+        state,
+        party,
+        county,
+        office,
+        photo
+      FROM candidate
+      WHERE slug = $1
+      LIMIT 1
+      `,
       [slug]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Candidate not found" });
+    if (rows.length === 0) {
+      return res.status(404).send("Candidate not found");
     }
 
-    res.json(result.rows[0]);
+    const candidate = rows[0];
+
+    const structuredData = {
+      "@context": "https://schema.org",
+      "@type": ["Person", "PoliticalCandidate"],
+      "name": candidate.full_name,
+      "image": candidate.photo
+        ? `https://voterspheres.org/uploads/${candidate.photo}`
+        : null,
+      "url": `https://voterspheres.org/${candidate.slug}`,
+      "jobTitle": candidate.office,
+      "affiliation": {
+        "@type": "PoliticalParty",
+        "name": candidate.party
+      },
+      "address": {
+        "@type": "PostalAddress",
+        "addressRegion": candidate.state,
+        "addressLocality": candidate.county || ""
+      }
+    };
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${candidate.full_name} | VoterSpheres</title>
+        <meta name="description" content="${candidate.full_name} running for ${candidate.office} in ${candidate.state}.">
+
+        <script type="application/ld+json">
+        ${JSON.stringify(structuredData, null, 2)}
+        </script>
+      </head>
+      <body>
+        <h1>${candidate.full_name}</h1>
+        <p><strong>Office:</strong> ${candidate.office}</p>
+        <p><strong>State:</strong> ${candidate.state}</p>
+        <p><strong>Party:</strong> ${candidate.party}</p>
+        <p><strong>County:</strong> ${candidate.county || ""}</p>
+
+        ${
+          candidate.photo
+            ? `<img src="/uploads/${candidate.photo}" width="200" />`
+            : ""
+        }
+
+        <p><a href="/">← Back</a></p>
+      </body>
+      </html>
+    `);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).send("Server error");
   }
 });
 
