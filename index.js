@@ -18,7 +18,6 @@ const pool = new Pool({
 });
 
 const BASE_URL = "https://voterspheres.org";
-const ELECTION_URL = `${BASE_URL}/elections/2026-general-election`;
 
 /* =====================================================
    HEALTH CHECK
@@ -26,23 +25,6 @@ const ELECTION_URL = `${BASE_URL}/elections/2026-general-election`;
 
 app.get("/", (req, res) => {
   res.json({ status: "VoterSpheres API running" });
-});
-
-/* =====================================================
-   API ROUTES
-===================================================== */
-
-app.get("/api/candidates", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT full_name, slug, state, party, office
-      FROM candidate
-      ORDER BY full_name
-    `);
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
 });
 
 /* =====================================================
@@ -54,12 +36,10 @@ app.get("/state/:stateSlug", async (req, res) => {
     const stateName = req.params.stateSlug.replace(/-/g, " ");
 
     const { rows } = await pool.query(
-      `
-      SELECT full_name, slug, party, office
-      FROM candidate
-      WHERE LOWER(state) = LOWER($1)
-      ORDER BY office, full_name
-      `,
+      `SELECT full_name, slug, party, office
+       FROM candidate
+       WHERE LOWER(state) = LOWER($1)
+       ORDER BY office, full_name`,
       [stateName]
     );
 
@@ -85,7 +65,7 @@ app.get("/state/:stateSlug", async (req, res) => {
       </html>
     `);
 
-  } catch (err) {
+  } catch {
     res.status(500).send("Server error");
   }
 });
@@ -99,12 +79,10 @@ app.get("/office/:officeSlug", async (req, res) => {
     const officeName = req.params.officeSlug.replace(/-/g, " ");
 
     const { rows } = await pool.query(
-      `
-      SELECT full_name, slug, state, party
-      FROM candidate
-      WHERE LOWER(office) = LOWER($1)
-      ORDER BY full_name
-      `,
+      `SELECT full_name, slug, state, party
+       FROM candidate
+       WHERE LOWER(office) = LOWER($1)
+       ORDER BY full_name`,
       [officeName]
     );
 
@@ -130,7 +108,7 @@ app.get("/office/:officeSlug", async (req, res) => {
       </html>
     `);
 
-  } catch (err) {
+  } catch {
     res.status(500).send("Server error");
   }
 });
@@ -145,7 +123,7 @@ app.get("/:slug", async (req, res, next) => {
     req.params.slug.startsWith("state") ||
     req.params.slug.startsWith("office") ||
     req.params.slug.startsWith("api") ||
-    req.params.slug === "sitemap.xml"
+    req.params.slug.startsWith("sitemap")
   ) return next();
 
   try {
@@ -171,58 +149,114 @@ app.get("/:slug", async (req, res, next) => {
       </html>
     `);
 
-  } catch (err) {
+  } catch {
     res.status(500).send("Server error");
   }
 });
 
 /* =====================================================
-   AUTO-GENERATED SITEMAP
+   SITEMAP INDEX (MAIN ENTRY)
 ===================================================== */
 
-app.get("/sitemap.xml", async (req, res) => {
+app.get("/sitemap.xml", (req, res) => {
+
+  const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-states.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-offices.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-candidates.xml</loc>
+  </sitemap>
+</sitemapindex>`;
+
+  res.header("Content-Type", "application/xml");
+  res.send(sitemapIndex);
+});
+
+/* =====================================================
+   STATES SITEMAP
+===================================================== */
+
+app.get("/sitemap-states.xml", async (req, res) => {
   try {
-
-    const candidates = await pool.query(
-      `SELECT slug FROM candidate WHERE slug IS NOT NULL`
-    );
-
-    const states = await pool.query(
+    const { rows } = await pool.query(
       `SELECT DISTINCT state FROM candidate WHERE state IS NOT NULL`
     );
 
-    const offices = await pool.query(
-      `SELECT DISTINCT office FROM candidate WHERE office IS NOT NULL`
-    );
-
-    const stateUrls = states.rows.map(row => {
-      const slug = row.state.toLowerCase().replace(/\s+/g, "-");
+    const urls = rows.map(r => {
+      const slug = r.state.toLowerCase().replace(/\s+/g, "-");
       return `<url><loc>${BASE_URL}/state/${slug}</loc></url>`;
     }).join("");
 
-    const officeUrls = offices.rows.map(row => {
-      const slug = row.office.toLowerCase().replace(/\s+/g, "-");
-      return `<url><loc>${BASE_URL}/office/${slug}</loc></url>`;
-    }).join("");
-
-    const candidateUrls = candidates.rows.map(row => `
-      <url><loc>${BASE_URL}/${row.slug}</loc></url>
-    `).join("");
-
-    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>${BASE_URL}</loc></url>
-  ${stateUrls}
-  ${officeUrls}
-  ${candidateUrls}
+${urls}
 </urlset>`;
 
     res.header("Content-Type", "application/xml");
-    res.send(sitemap);
+    res.send(xml);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Sitemap generation error");
+  } catch {
+    res.status(500).send("Error");
+  }
+});
+
+/* =====================================================
+   OFFICES SITEMAP
+===================================================== */
+
+app.get("/sitemap-offices.xml", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT office FROM candidate WHERE office IS NOT NULL`
+    );
+
+    const urls = rows.map(r => {
+      const slug = r.office.toLowerCase().replace(/\s+/g, "-");
+      return `<url><loc>${BASE_URL}/office/${slug}</loc></url>`;
+    }).join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
+
+  } catch {
+    res.status(500).send("Error");
+  }
+});
+
+/* =====================================================
+   CANDIDATES SITEMAP
+===================================================== */
+
+app.get("/sitemap-candidates.xml", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT slug FROM candidate WHERE slug IS NOT NULL`
+    );
+
+    const urls = rows.map(r => `
+      <url><loc>${BASE_URL}/${r.slug}</loc></url>
+    `).join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
+
+  } catch {
+    res.status(500).send("Error");
   }
 });
 
