@@ -24,9 +24,9 @@ app.get("/", (req, res) => {
   res.json({ status: "VoterSpheres API running" });
 });
 
-/* ======================================
-   PUBLIC CANDIDATE PROFILE (ENHANCED SCHEMA)
-====================================== */
+/* ==========================================
+   CANDIDATE PAGE WITH FULL ENTITY GRAPH
+========================================== */
 
 app.get("/:slug", async (req, res) => {
   try {
@@ -35,7 +35,6 @@ app.get("/:slug", async (req, res) => {
     const { rows } = await pool.query(
       `
       SELECT
-        id,
         full_name,
         slug,
         state,
@@ -56,10 +55,157 @@ app.get("/:slug", async (req, res) => {
 
     const c = rows[0];
 
-    const candidateUrl = `https://voterspheres.org/${c.slug}`;
+    const baseUrl = "https://voterspheres.org";
+    const candidateUrl = `${baseUrl}/${c.slug}`;
+    const electionUrl = `${baseUrl}/elections/2026-general-election`;
     const imageUrl = c.photo
-      ? `https://voterspheres.org/uploads/${c.photo}`
-      : "https://voterspheres.org/logo.png";
+      ? `${baseUrl}/uploads/${c.photo}`
+      : `${baseUrl}/logo.png`;
+
+    /* ===============================
+       UNIFIED STRUCTURED DATA GRAPH
+    ================================ */
+
+    const structuredGraph = {
+      "@context": "https://schema.org",
+      "@graph": [
+
+        /* ORGANIZATION */
+        {
+          "@type": "Organization",
+          "@id": `${baseUrl}#organization`,
+          "name": "VoterSpheres",
+          "url": baseUrl,
+          "logo": {
+            "@type": "ImageObject",
+            "url": `${baseUrl}/logo.png`
+          }
+        },
+
+        /* WEBSITE */
+        {
+          "@type": "WebSite",
+          "@id": `${baseUrl}#website`,
+          "url": baseUrl,
+          "name": "VoterSpheres",
+          "publisher": {
+            "@id": `${baseUrl}#organization`
+          }
+        },
+
+        /* ELECTION EVENT */
+        {
+          "@type": "ElectionEvent",
+          "@id": electionUrl,
+          "name": "2026 United States General Election",
+          "startDate": "2026-11-03",
+          "eventStatus": "https://schema.org/EventScheduled",
+          "location": {
+            "@type": "Place",
+            "name": "United States"
+          },
+          "organizer": {
+            "@id": `${baseUrl}#organization`
+          }
+        },
+
+        /* POLITICAL CANDIDATE */
+        {
+          "@type": ["Person", "PoliticalCandidate"],
+          "@id": candidateUrl,
+          "name": c.full_name,
+          "image": imageUrl,
+          "url": candidateUrl,
+          "jobTitle": c.office,
+          "affiliation": {
+            "@type": "PoliticalParty",
+            "name": c.party
+          },
+          "worksFor": {
+            "@type": "GovernmentOrganization",
+            "name": c.office
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "addressRegion": c.state,
+            "addressLocality": c.county || ""
+          },
+          "memberOf": {
+            "@id": electionUrl
+          },
+          "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": candidateUrl
+          }
+        },
+
+        /* BREADCRUMB */
+        {
+          "@type": "BreadcrumbList",
+          "@id": `${candidateUrl}#breadcrumb`,
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": baseUrl
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": c.full_name,
+              "item": candidateUrl
+            }
+          ]
+        }
+
+      ]
+    };
+
+    /* ===============================
+       HTML OUTPUT
+    ================================ */
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <title>${c.full_name} | VoterSpheres</title>
+        <meta name="description" content="${c.full_name} running for ${c.office} in ${c.state}. Political party: ${c.party}.">
+
+        <meta property="og:title" content="${c.full_name} | VoterSpheres" />
+        <meta property="og:description" content="${c.full_name} running for ${c.office} in ${c.state}." />
+        <meta property="og:url" content="${candidateUrl}" />
+        <meta property="og:type" content="profile" />
+        <meta property="og:image" content="${imageUrl}" />
+
+        <script type="application/ld+json">
+        ${JSON.stringify(structuredGraph, null, 2)}
+        </script>
+
+      </head>
+
+      <body style="font-family: Arial; margin: 40px;">
+        <h1>${c.full_name}</h1>
+
+        <p><strong>Office:</strong> ${c.office}</p>
+        <p><strong>State:</strong> ${c.state}</p>
+        <p><strong>Party:</strong> ${c.party}</p>
+        <p><strong>County:</strong> ${c.county || ""}</p>
+
+        ${c.photo ? `<img src="${imageUrl}" width="200" />` : ""}
+
+        <p><a href="/">← Back to Home</a></p>
+      </body>
+      </html>
+    `);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
 
     /* ================================
        ENHANCED STRUCTURED DATA
