@@ -20,6 +20,15 @@ const pool = new Pool({
 const BASE_URL = "https://voterspheres.org";
 
 /* =====================================================
+   HELPER: FORMAT DATE FOR SITEMAP
+===================================================== */
+
+function formatDate(date) {
+  if (!date) return new Date().toISOString();
+  return new Date(date).toISOString();
+}
+
+/* =====================================================
    HEALTH CHECK
 ===================================================== */
 
@@ -155,7 +164,7 @@ app.get("/:slug", async (req, res, next) => {
 });
 
 /* =====================================================
-   SITEMAP INDEX (MAIN ENTRY)
+   SITEMAP INDEX
 ===================================================== */
 
 app.get("/sitemap.xml", (req, res) => {
@@ -164,12 +173,15 @@ app.get("/sitemap.xml", (req, res) => {
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>${BASE_URL}/sitemap-states.xml</loc>
+    <lastmod>${formatDate()}</lastmod>
   </sitemap>
   <sitemap>
     <loc>${BASE_URL}/sitemap-offices.xml</loc>
+    <lastmod>${formatDate()}</lastmod>
   </sitemap>
   <sitemap>
     <loc>${BASE_URL}/sitemap-candidates.xml</loc>
+    <lastmod>${formatDate()}</lastmod>
   </sitemap>
 </sitemapindex>`;
 
@@ -184,21 +196,25 @@ app.get("/sitemap.xml", (req, res) => {
 app.get("/sitemap-states.xml", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT state FROM candidate WHERE state IS NOT NULL`
+      `SELECT DISTINCT state, MAX(updated_at) as updated_at
+       FROM candidate
+       GROUP BY state`
     );
 
     const urls = rows.map(r => {
       const slug = r.state.toLowerCase().replace(/\s+/g, "-");
-      return `<url><loc>${BASE_URL}/state/${slug}</loc></url>`;
+      return `
+      <url>
+        <loc>${BASE_URL}/state/${slug}</loc>
+        <lastmod>${formatDate(r.updated_at)}</lastmod>
+      </url>`;
     }).join("");
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    res.header("Content-Type", "application/xml");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
-</urlset>`;
-
-    res.header("Content-Type", "application/xml");
-    res.send(xml);
+</urlset>`);
 
   } catch {
     res.status(500).send("Error");
@@ -212,21 +228,25 @@ ${urls}
 app.get("/sitemap-offices.xml", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT office FROM candidate WHERE office IS NOT NULL`
+      `SELECT DISTINCT office, MAX(updated_at) as updated_at
+       FROM candidate
+       GROUP BY office`
     );
 
     const urls = rows.map(r => {
       const slug = r.office.toLowerCase().replace(/\s+/g, "-");
-      return `<url><loc>${BASE_URL}/office/${slug}</loc></url>`;
+      return `
+      <url>
+        <loc>${BASE_URL}/office/${slug}</loc>
+        <lastmod>${formatDate(r.updated_at)}</lastmod>
+      </url>`;
     }).join("");
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    res.header("Content-Type", "application/xml");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
-</urlset>`;
-
-    res.header("Content-Type", "application/xml");
-    res.send(xml);
+</urlset>`);
 
   } catch {
     res.status(500).send("Error");
@@ -240,20 +260,21 @@ ${urls}
 app.get("/sitemap-candidates.xml", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT slug FROM candidate WHERE slug IS NOT NULL`
+      `SELECT slug, updated_at FROM candidate`
     );
 
     const urls = rows.map(r => `
-      <url><loc>${BASE_URL}/${r.slug}</loc></url>
+      <url>
+        <loc>${BASE_URL}/${r.slug}</loc>
+        <lastmod>${formatDate(r.updated_at)}</lastmod>
+      </url>
     `).join("");
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    res.header("Content-Type", "application/xml");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
-</urlset>`;
-
-    res.header("Content-Type", "application/xml");
-    res.send(xml);
+</urlset>`);
 
   } catch {
     res.status(500).send("Error");
