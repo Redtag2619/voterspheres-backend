@@ -262,56 +262,7 @@ app.get("/:slug", async (req, res) => {
       ]
     };
 
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <title>${c.full_name} | VoterSpheres</title>
-        <meta name="description" content="${c.full_name} running for ${c.office} in ${c.state}. Political party: ${c.party}.">
-
-        <meta property="og:title" content="${c.full_name} | VoterSpheres" />
-        <meta property="og:description" content="${c.full_name} running for ${c.office} in ${c.state}." />
-        <meta property="og:url" content="${candidateUrl}" />
-        <meta property="og:type" content="profile" />
-        <meta property="og:image" content="${imageUrl}" />
-
-        <script type="application/ld+json">
-        ${JSON.stringify(structuredData, null, 2)}
-        </script>
-
-        <script type="application/ld+json">
-        ${JSON.stringify(breadcrumbSchema, null, 2)}
-        </script>
-
-      </head>
-      <body style="font-family: Arial; margin: 40px;">
-        <h1>${c.full_name}</h1>
-
-        <p><strong>Office:</strong> ${c.office}</p>
-        <p><strong>State:</strong> ${c.state}</p>
-        <p><strong>Party:</strong> ${c.party}</p>
-        <p><strong>County:</strong> ${c.county || ""}</p>
-
-        ${
-          c.photo
-            ? `<img src="${imageUrl}" width="200" />`
-            : ""
-        }
-
-        <p><a href="/">← Back to Home</a></p>
-
-      </body>
-      </html>
-    `);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
-});
-
-/* =============================
+  /* =============================
    LIST ALL CANDIDATES (SEO)
 ============================= */
 
