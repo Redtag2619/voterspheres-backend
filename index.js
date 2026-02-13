@@ -20,6 +20,7 @@ const pool = new Pool({
 /* =============================
    HEALTH CHECK
 ============================= */
+
 app.get("/", (req, res) => {
   res.json({ status: "VoterSpheres API running" });
 });
@@ -313,6 +314,7 @@ app.get("/:slug", async (req, res) => {
 /* =============================
    LIST ALL CANDIDATES (SEO)
 ============================= */
+
 app.get("/api/candidates", async (req, res) => {
   try {
     const result = await pool.query(
@@ -325,9 +327,11 @@ app.get("/api/candidates", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 /* =============================
    DYNAMIC SITEMAP
 ============================= */
+
 app.get("/sitemap.xml", async (req, res) => {
   try {
     const result = await pool.query(
