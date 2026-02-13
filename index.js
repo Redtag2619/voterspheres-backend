@@ -24,9 +24,9 @@ app.get("/", (req, res) => {
   res.json({ status: "VoterSpheres API running" });
 });
 
-/* ===============================
-   PUBLIC CANDIDATE PROFILE
-================================ */
+/* ======================================
+   PUBLIC CANDIDATE PROFILE (ENHANCED SCHEMA)
+====================================== */
 
 app.get("/:slug", async (req, res) => {
   try {
@@ -54,56 +54,110 @@ app.get("/:slug", async (req, res) => {
       return res.status(404).send("Candidate not found");
     }
 
-    const candidate = rows[0];
+    const c = rows[0];
+
+    const candidateUrl = `https://voterspheres.org/${c.slug}`;
+    const imageUrl = c.photo
+      ? `https://voterspheres.org/uploads/${c.photo}`
+      : "https://voterspheres.org/logo.png";
+
+    /* ================================
+       ENHANCED STRUCTURED DATA
+    ================================= */
 
     const structuredData = {
       "@context": "https://schema.org",
       "@type": ["Person", "PoliticalCandidate"],
-      "name": candidate.full_name,
-      "image": candidate.photo
-        ? `https://voterspheres.org/uploads/${candidate.photo}`
-        : null,
-      "url": `https://voterspheres.org/${candidate.slug}`,
-      "jobTitle": candidate.office,
+      "@id": candidateUrl,
+      "name": c.full_name,
+      "url": candidateUrl,
+      "image": imageUrl,
+      "jobTitle": c.office,
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": candidateUrl
+      },
       "affiliation": {
         "@type": "PoliticalParty",
-        "name": candidate.party
+        "name": c.party
+      },
+      "worksFor": {
+        "@type": "GovernmentOrganization",
+        "name": c.office
       },
       "address": {
         "@type": "PostalAddress",
-        "addressRegion": candidate.state,
-        "addressLocality": candidate.county || ""
+        "addressRegion": c.state,
+        "addressLocality": c.county || ""
+      },
+      "areaServed": {
+        "@type": "AdministrativeArea",
+        "name": `${c.county || ""}, ${c.state}`
       }
+    };
+
+    const breadcrumbSchema = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://voterspheres.org"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": c.full_name,
+          "item": candidateUrl
+        }
+      ]
     };
 
     res.send(`
       <!DOCTYPE html>
-      <html>
+      <html lang="en">
       <head>
-        <title>${candidate.full_name} | VoterSpheres</title>
-        <meta name="description" content="${candidate.full_name} running for ${candidate.office} in ${candidate.state}.">
+        <meta charset="UTF-8" />
+        <title>${c.full_name} | VoterSpheres</title>
+        <meta name="description" content="${c.full_name} running for ${c.office} in ${c.state}. Political party: ${c.party}.">
+
+        <meta property="og:title" content="${c.full_name} | VoterSpheres" />
+        <meta property="og:description" content="${c.full_name} running for ${c.office} in ${c.state}." />
+        <meta property="og:url" content="${candidateUrl}" />
+        <meta property="og:type" content="profile" />
+        <meta property="og:image" content="${imageUrl}" />
 
         <script type="application/ld+json">
         ${JSON.stringify(structuredData, null, 2)}
         </script>
+
+        <script type="application/ld+json">
+        ${JSON.stringify(breadcrumbSchema, null, 2)}
+        </script>
+
       </head>
-      <body>
-        <h1>${candidate.full_name}</h1>
-        <p><strong>Office:</strong> ${candidate.office}</p>
-        <p><strong>State:</strong> ${candidate.state}</p>
-        <p><strong>Party:</strong> ${candidate.party}</p>
-        <p><strong>County:</strong> ${candidate.county || ""}</p>
+      <body style="font-family: Arial; margin: 40px;">
+        <h1>${c.full_name}</h1>
+
+        <p><strong>Office:</strong> ${c.office}</p>
+        <p><strong>State:</strong> ${c.state}</p>
+        <p><strong>Party:</strong> ${c.party}</p>
+        <p><strong>County:</strong> ${c.county || ""}</p>
 
         ${
-          candidate.photo
-            ? `<img src="/uploads/${candidate.photo}" width="200" />`
+          c.photo
+            ? `<img src="${imageUrl}" width="200" />`
             : ""
         }
 
-        <p><a href="/">← Back</a></p>
+        <p><a href="/">← Back to Home</a></p>
+
       </body>
       </html>
     `);
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
