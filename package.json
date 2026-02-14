@@ -1,16 +1,34 @@
 {
   "name": "voterspheres-api",
   "version": "1.0.0",
-  "type": "module",
+  "description": "VoterSpheres production backend with PostgreSQL, Redis caching, and scalable candidate API",
   "main": "index.js",
+  "type": "module",
+  "private": true,
+
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "build": "echo Build complete",
+    "postinstall": "echo Dependencies installed"
   },
-{
-  "dependencies":
-  "cors": "^2.8.5",
-  "dotenv": "^17.0.0",
-  "express": "^4.18.2",
-  "pg": "^8.11.0",
-  "redis": "^4.6.13"
+
+  "engines": {
+    "node": ">=20.0.0"
+  },
+
+  "dependencies": {
+
+    "cors": "^2.8.5",
+
+    "dotenv": "^16.4.5",
+
+    "express": "^4.19.2",
+
+    "pg": "^8.12.0",
+
+    "redis": "^4.6.13"
+
+  }
+
 }
