@@ -3,6 +3,7 @@ import pkg from "pg";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "crypto";
+import os from "os";
 import { createClient } from "redis";
 
 dotenv.config();
@@ -13,9 +14,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ======================
-   CONFIG
-====================== */
+/* ================= CONFIG ================= */
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = "https://voterspheres.org";
@@ -23,12 +22,12 @@ const BASE_URL = "https://voterspheres.org";
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
 
-const PREGEN_BATCH = 500;
-const PREGEN_DELAY = 2000;
+const CPU_COUNT = os.cpus().length;
+const WORKERS = Math.max(2, Math.floor(CPU_COUNT / 2));
 
-/* ======================
-   DATABASE
-====================== */
+const PREGEN_BATCH = 1000;
+
+/* ================= DATABASE ================= */
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -37,9 +36,7 @@ const pool = new Pool({
     : { rejectUnauthorized: false },
 });
 
-/* ======================
-   REDIS
-====================== */
+/* ================= REDIS ================= */
 
 let redis;
 let redisEnabled = false;
@@ -48,7 +45,7 @@ if (REDIS_URL) {
   redis = createClient({
     url: REDIS_URL,
     socket: {
-      reconnectStrategy: retries => Math.min(retries * 50, 2000),
+      reconnectStrategy: r => Math.min(r * 50, 2000),
     },
   });
 
@@ -60,9 +57,7 @@ if (REDIS_URL) {
   console.log("✅ Redis connected");
 }
 
-/* ======================
-   MEMORY CACHE
-====================== */
+/* ================= MEMORY CACHE ================= */
 
 const memory = new Map();
 
@@ -85,9 +80,7 @@ function memGet(key) {
   return item.value;
 }
 
-/* ======================
-   CACHE HELPERS
-====================== */
+/* ================= CACHE ================= */
 
 async function cacheGet(key) {
   try {
@@ -108,9 +101,7 @@ async function cacheSet(key, value, ttl = 86400) {
   } catch {}
 }
 
-/* ======================
-   UTILS
-====================== */
+/* ================= UTILS ================= */
 
 function slugify(text) {
   return text
@@ -123,9 +114,7 @@ function hash(str) {
   return crypto.createHash("md5").update(str).digest("hex");
 }
 
-/* ======================
-   HTML GENERATOR
-====================== */
+/* ================= HTML ================= */
 
 function buildCandidateHTML(c) {
   const slug = slugify(c.full_name);
@@ -143,6 +132,19 @@ function buildCandidateHTML(c) {
 
 <meta name="robots" content="index, follow">
 
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "PoliticalCandidate",
+ "name": "${c.full_name}",
+ "affiliation": "${c.party || ""}",
+ "address": {
+   "@type": "PostalAddress",
+   "addressRegion": "${c.state}"
+ }
+}
+</script>
+
 </head>
 
 <body>
@@ -158,14 +160,12 @@ function buildCandidateHTML(c) {
 `;
 }
 
-/* ======================
-   PAGE ENGINE
-====================== */
+/* ================= PAGE ENGINE ================= */
 
 async function getCandidatePage(slug) {
-  const key = `page:candidate:${slug}`;
+  const key = `page:${slug}`;
 
-  let cached = await cacheGet(key);
+  const cached = await cacheGet(key);
   if (cached) return cached;
 
   const result = await pool.query(
@@ -187,14 +187,12 @@ async function getCandidatePage(slug) {
   return html;
 }
 
-/* ======================
-   BACKGROUND PRE-GENERATION
-====================== */
+/* ================= PREGEN WORKER ================= */
 
-async function pregenerate() {
-  console.log("🚀 Starting background pre-generation");
+async function worker(workerId) {
+  console.log(`⚙️ Worker ${workerId} started`);
 
-  let offset = 0;
+  let offset = workerId * PREGEN_BATCH;
 
   while (true) {
     try {
@@ -208,37 +206,43 @@ async function pregenerate() {
         [PREGEN_BATCH, offset]
       );
 
-      if (!result.rows.length) {
-        console.log("✅ Pre-generation complete");
-        break;
-      }
+      if (!result.rows.length) break;
 
       for (const c of result.rows) {
         const slug = slugify(c.full_name);
-        const key = `page:candidate:${slug}`;
+        const key = `page:${slug}`;
 
         const exists = await cacheGet(key);
+
         if (!exists) {
           const html = buildCandidateHTML(c);
           await cacheSet(key, html, 86400);
         }
       }
 
-      offset += PREGEN_BATCH;
+      offset += PREGEN_BATCH * WORKERS;
 
-      console.log("Generated:", offset);
-
-      await new Promise(r => setTimeout(r, PREGEN_DELAY));
+      console.log(`Worker ${workerId} processed ${offset}`);
     } catch (err) {
-      console.log("Pre-gen error:", err.message);
+      console.log("Worker error:", err.message);
       await new Promise(r => setTimeout(r, 5000));
     }
   }
+
+  console.log(`✅ Worker ${workerId} done`);
 }
 
-/* ======================
-   ROUTES
-====================== */
+/* ================= START WORKERS ================= */
+
+async function startWorkers() {
+  console.log("🚀 Starting parallel pre-generation");
+
+  for (let i = 0; i < WORKERS; i++) {
+    worker(i);
+  }
+}
+
+/* ================= ROUTES ================= */
 
 app.get("/candidate/:slug", async (req, res) => {
   try {
@@ -255,70 +259,88 @@ app.get("/candidate/:slug", async (req, res) => {
   }
 });
 
-app.get("/api/candidate", async (req, res) => {
-  try {
-    const { q = "", limit = 20 } = req.query;
+/* ================= STATE PAGES ================= */
 
-    const cacheKey = "search:" + hash(JSON.stringify(req.query));
+app.get("/state/:state", async (req, res) => {
+  const state = req.params.state.toUpperCase();
 
-    const cached = await cacheGet(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+  const result = await pool.query(
+    `
+    SELECT full_name, office
+    FROM public.candidate
+    WHERE state = $1
+    LIMIT 100
+    `,
+    [state]
+  );
 
-    const result = await pool.query(
-      `
-      SELECT full_name, office, state, party
-      FROM public.candidate
-      WHERE full_name ILIKE '%' || $1 || '%'
-      LIMIT $2
-      `,
-      [q, limit]
-    );
+  const list = result.rows
+    .map(c => {
+      const slug = slugify(c.full_name);
+      return `<li><a href="/candidate/${slug}">${c.full_name}</a></li>`;
+    })
+    .join("");
 
-    await cacheSet(cacheKey, JSON.stringify(result.rows), 600);
-
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
+  res.send(`
+<h1>Candidates in ${state}</h1>
+<ul>${list}</ul>
+`);
 });
 
-/* ======================
-   SITEMAP
-====================== */
+/* ================= SEARCH API ================= */
+
+app.get("/api/candidate", async (req, res) => {
+  const { q = "", limit = 20 } = req.query;
+
+  const cacheKey = "search:" + hash(JSON.stringify(req.query));
+
+  const cached = await cacheGet(cacheKey);
+  if (cached) return res.json(JSON.parse(cached));
+
+  const result = await pool.query(
+    `
+    SELECT full_name, office, state
+    FROM public.candidate
+    WHERE full_name ILIKE '%' || $1 || '%'
+    LIMIT $2
+    `,
+    [q, limit]
+  );
+
+  await cacheSet(cacheKey, JSON.stringify(result.rows), 600);
+
+  res.json(result.rows);
+});
+
+/* ================= SITEMAP ================= */
 
 app.get("/sitemap.xml", async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT full_name FROM public.candidate LIMIT 50000`
-    );
+  const result = await pool.query(
+    `SELECT full_name FROM public.candidate LIMIT 50000`
+  );
 
-    const urls = result.rows
-      .map(r => {
-        const slug = slugify(r.full_name);
+  const urls = result.rows
+    .map(r => {
+      const slug = slugify(r.full_name);
 
-        return `
+      return `
 <url>
 <loc>${BASE_URL}/candidate/${slug}</loc>
 <lastmod>${new Date().toISOString()}</lastmod>
 </url>`;
-      })
-      .join("");
+    })
+    .join("");
 
-    res.type("application/xml");
+  res.type("application/xml");
 
-    res.send(`
+  res.send(`
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
 </urlset>
 `);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
 });
 
-/* ======================
-   ROBOTS
-====================== */
+/* ================= ROBOTS ================= */
 
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
@@ -331,9 +353,7 @@ Sitemap: ${BASE_URL}/sitemap.xml
 `);
 });
 
-/* ======================
-   HEALTH
-====================== */
+/* ================= HEALTH ================= */
 
 app.get("/health", async (req, res) => {
   try {
@@ -348,20 +368,16 @@ app.get("/health", async (req, res) => {
   }
 });
 
-/* ======================
-   HOME
-====================== */
+/* ================= HOME ================= */
 
 app.get("/", (req, res) => {
-  res.send("<h1>VoterSpheres Backend Running</h1>");
+  res.send("<h1>VoterSpheres API Running</h1>");
 });
 
-/* ======================
-   START SERVER
-====================== */
+/* ================= START ================= */
 
-app.listen(PORT, async () => {
-  console.log("🚀 Server running on port", PORT);
+app.listen(PORT, () => {
+  console.log("🚀 Server running on", PORT);
 
-  pregenerate(); // background job
+  startWorkers();
 });
