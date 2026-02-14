@@ -1,7 +1,11 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
+import dotenv from "dotenv";
+import express from "express";
+import cors from "cors";
+import pkg from "pg";
+
+dotenv.config();
+
+const { Pool } = pkg;
 
 const app = express();
 app.use(cors());
@@ -110,30 +114,24 @@ function wrapSitemapIndex(sitemaps) {
 ================================= */
 app.get("/sitemap.xml", async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT COUNT(*) FROM candidates
-    `);
-
+    const result = await pool.query(`SELECT COUNT(*) FROM candidates`);
     const total = parseInt(result.rows[0].count);
     const chunks = Math.ceil(total / SITEMAP_LIMIT);
 
     let sitemapEntries = [];
 
-    // Static sitemap
     sitemapEntries.push(`
       <sitemap>
         <loc>${BASE_URL}/sitemap-static.xml</loc>
         <lastmod>${new Date().toISOString()}</lastmod>
       </sitemap>`);
 
-    // State sitemap
     sitemapEntries.push(`
       <sitemap>
         <loc>${BASE_URL}/sitemap-states.xml</loc>
         <lastmod>${new Date().toISOString()}</lastmod>
       </sitemap>`);
 
-    // Candidate chunks
     for (let i = 1; i <= chunks; i++) {
       sitemapEntries.push(`
         <sitemap>
@@ -144,6 +142,7 @@ app.get("/sitemap.xml", async (req, res) => {
 
     res.header("Content-Type", "application/xml");
     res.send(wrapSitemapIndex(sitemapEntries));
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Sitemap error");
@@ -151,7 +150,7 @@ app.get("/sitemap.xml", async (req, res) => {
 });
 
 /* ===============================
-   STATIC PAGES SITEMAP
+   STATIC SITEMAP
 ================================= */
 app.get("/sitemap-static.xml", (req, res) => {
   const now = new Date().toISOString();
@@ -171,8 +170,7 @@ app.get("/sitemap-static.xml", (req, res) => {
 app.get("/sitemap-states.xml", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT state FROM candidates
-      ORDER BY state
+      SELECT DISTINCT state FROM candidates ORDER BY state
     `);
 
     const urls = result.rows.map(row =>
@@ -184,6 +182,7 @@ app.get("/sitemap-states.xml", async (req, res) => {
 
     res.header("Content-Type", "application/xml");
     res.send(wrapUrlSet(urls));
+
   } catch (err) {
     console.error(err);
     res.status(500).send("State sitemap error");
@@ -191,7 +190,7 @@ app.get("/sitemap-states.xml", async (req, res) => {
 });
 
 /* ===============================
-   CANDIDATE SITEMAP (AUTO CHUNKED)
+   CANDIDATE SITEMAP
 ================================= */
 app.get("/sitemap-candidates-:page.xml", async (req, res) => {
   try {
@@ -216,6 +215,7 @@ app.get("/sitemap-candidates-:page.xml", async (req, res) => {
 
     res.header("Content-Type", "application/xml");
     res.send(wrapUrlSet(urls));
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Candidate sitemap error");
@@ -223,9 +223,10 @@ app.get("/sitemap-candidates-:page.xml", async (req, res) => {
 });
 
 /* ===============================
-   SERVER START
+   START SERVER
 ================================= */
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
