@@ -1,16 +1,21 @@
 {
-  "name": "voterspheres-api",
-  "version": "2.0.0",
+  "name": "candidate-pre-generator",
+  "version": "1.0.0",
+  "private": true,
   "type": "module",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "dev": "node server.js",
+    "worker": "node worker.js",
+    "pregen": "node pregen.js",
+    "start": "node server.js",
+    "ultra": "node pregen.js && node worker.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "axios": "^1.7.7",
+    "bullmq": "^5.10.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "pg": "^8.11.5",
-    "redis": "^4.7.0"
+    "ioredis": "^5.4.1",
+    "p-limit": "^6.1.0"
   }
 }
