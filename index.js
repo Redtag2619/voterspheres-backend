@@ -1,319 +1,231 @@
-import express from "express";
-import pkg from "pg";
-import cors from "cors";
-import dotenv from "dotenv";
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const { Pool } = require("pg");
 
-dotenv.config();
-
-const { Pool } = pkg;
 const app = express();
-const PORT = process.env.PORT || 10000;
-
 app.use(cors());
 app.use(express.json());
 
+/* ===============================
+   DATABASE
+================================= */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
 });
 
+/* ===============================
+   CONFIG
+================================= */
 const BASE_URL = "https://voterspheres.org";
-const MAX_URLS_PER_SITEMAP = 50000;
+const SITEMAP_LIMIT = 50000;
 
-/* =====================================================
-   HELPER: FORMAT DATE
-===================================================== */
-
-function formatDate(date) {
-  if (!date) return new Date().toISOString();
-  return new Date(date).toISOString();
-}
-
-/* =====================================================
+/* ===============================
    HEALTH CHECK
-===================================================== */
-
+================================= */
 app.get("/", (req, res) => {
-  res.json({ status: "VoterSpheres API running" });
+  res.send("VoterSpheres Backend Running");
 });
 
-/* =====================================================
-   STATE PAGE
-===================================================== */
+/* ===============================
+   API ROUTES
+================================= */
 
-app.get("/state/:stateSlug", async (req, res) => {
+// Get all candidates
+app.get("/api/candidates", async (req, res) => {
   try {
-    const stateName = req.params.stateSlug.replace(/-/g, " ");
-
-    const { rows } = await pool.query(
-      `SELECT full_name, slug, party, office
-       FROM candidate
-       WHERE LOWER(state) = LOWER($1)
-       ORDER BY office, full_name`,
-      [stateName]
-    );
-
-    if (!rows.length) return res.status(404).send("State not found");
-
-    res.send(`
-      <html>
-      <head>
-        <title>${stateName} Candidates | VoterSpheres</title>
-      </head>
-      <body>
-        <h1>${stateName} Candidates</h1>
-        <ul>
-          ${rows.map(c => `
-            <li>
-              <a href="/${c.slug}">
-                ${c.full_name} — ${c.office} (${c.party})
-              </a>
-            </li>
-          `).join("")}
-        </ul>
-      </body>
-      </html>
+    const result = await pool.query(`
+      SELECT id, full_name, slug, state, party, county, office, updated_at
+      FROM candidates
+      ORDER BY id DESC
     `);
-
-  } catch {
-    res.status(500).send("Server error");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-/* =====================================================
-   OFFICE PAGE
-===================================================== */
-
-app.get("/office/:officeSlug", async (req, res) => {
+// Get candidate by slug
+app.get("/api/candidates/:slug", async (req, res) => {
   try {
-    const officeName = req.params.officeSlug.replace(/-/g, " ");
-
-    const { rows } = await pool.query(
-      `SELECT full_name, slug, state, party
-       FROM candidate
-       WHERE LOWER(office) = LOWER($1)
-       ORDER BY full_name`,
-      [officeName]
-    );
-
-    if (!rows.length) return res.status(404).send("Office not found");
-
-    res.send(`
-      <html>
-      <head>
-        <title>${officeName} Candidates | VoterSpheres</title>
-      </head>
-      <body>
-        <h1>${officeName} Candidates</h1>
-        <ul>
-          ${rows.map(c => `
-            <li>
-              <a href="/${c.slug}">
-                ${c.full_name} — ${c.state} (${c.party})
-              </a>
-            </li>
-          `).join("")}
-        </ul>
-      </body>
-      </html>
-    `);
-
-  } catch {
-    res.status(500).send("Server error");
-  }
-});
-
-/* =====================================================
-   CANDIDATE PAGE
-===================================================== */
-
-app.get("/:slug", async (req, res, next) => {
-
-  if (
-    req.params.slug.startsWith("state") ||
-    req.params.slug.startsWith("office") ||
-    req.params.slug.startsWith("api") ||
-    req.params.slug.startsWith("sitemap")
-  ) return next();
-
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM candidate WHERE slug = $1 LIMIT 1`,
+    const result = await pool.query(
+      `SELECT * FROM candidates WHERE slug = $1`,
       [req.params.slug]
     );
 
-    if (!rows.length) return res.status(404).send("Not found");
-
-    const c = rows[0];
-
-    res.send(`
-      <html>
-      <head>
-        <title>${c.full_name} | VoterSpheres</title>
-      </head>
-      <body>
-        <h1>${c.full_name}</h1>
-        <p>${c.office} — ${c.state}</p>
-        <p>Party: ${c.party}</p>
-      </body>
-      </html>
-    `);
-
-  } catch {
-    res.status(500).send("Server error");
-  }
-});
-
-/* =====================================================
-   SITEMAP INDEX
-===================================================== */
-
-app.get("/sitemap.xml", async (req, res) => {
-  try {
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM candidate`
-    );
-
-    const totalCandidates = parseInt(countResult.rows[0].count);
-    const totalChunks = Math.ceil(totalCandidates / MAX_URLS_PER_SITEMAP);
-
-    let candidateSitemaps = "";
-
-    for (let i = 1; i <= totalChunks; i++) {
-      candidateSitemaps += `
-  <sitemap>
-    <loc>${BASE_URL}/sitemap-candidates-${i}.xml</loc>
-    <lastmod>${formatDate()}</lastmod>
-  </sitemap>`;
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Candidate not found" });
     }
 
-    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${BASE_URL}/sitemap-states.xml</loc>
-    <lastmod>${formatDate()}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${BASE_URL}/sitemap-offices.xml</loc>
-    <lastmod>${formatDate()}</lastmod>
-  </sitemap>
-  ${candidateSitemaps}
-</sitemapindex>`;
-
-    res.header("Content-Type", "application/xml");
-    res.send(sitemapIndex);
-
-  } catch {
-    res.status(500).send("Error generating sitemap index");
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
-/* =====================================================
-   STATES SITEMAP
-===================================================== */
+/* ===============================
+   ROBOTS.TXT
+================================= */
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send(`User-agent: *
+Allow: /
 
+Sitemap: ${BASE_URL}/sitemap.xml`);
+});
+
+/* ===============================
+   SITEMAP HELPERS
+================================= */
+
+function generateUrlXML(url, lastmod) {
+  return `
+  <url>
+    <loc>${url}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`;
+}
+
+function wrapUrlSet(urls) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    ${urls.join("")}
+  </urlset>`;
+}
+
+function wrapSitemapIndex(sitemaps) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+  <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    ${sitemaps.join("")}
+  </sitemapindex>`;
+}
+
+/* ===============================
+   MAIN SITEMAP INDEX
+================================= */
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) FROM candidates
+    `);
+
+    const total = parseInt(result.rows[0].count);
+    const chunks = Math.ceil(total / SITEMAP_LIMIT);
+
+    let sitemapEntries = [];
+
+    // Static sitemap
+    sitemapEntries.push(`
+      <sitemap>
+        <loc>${BASE_URL}/sitemap-static.xml</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+      </sitemap>`);
+
+    // State sitemap
+    sitemapEntries.push(`
+      <sitemap>
+        <loc>${BASE_URL}/sitemap-states.xml</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+      </sitemap>`);
+
+    // Candidate chunks
+    for (let i = 1; i <= chunks; i++) {
+      sitemapEntries.push(`
+        <sitemap>
+          <loc>${BASE_URL}/sitemap-candidates-${i}.xml</loc>
+          <lastmod>${new Date().toISOString()}</lastmod>
+        </sitemap>`);
+    }
+
+    res.header("Content-Type", "application/xml");
+    res.send(wrapSitemapIndex(sitemapEntries));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Sitemap error");
+  }
+});
+
+/* ===============================
+   STATIC PAGES SITEMAP
+================================= */
+app.get("/sitemap-static.xml", (req, res) => {
+  const now = new Date().toISOString();
+
+  const urls = [
+    generateUrlXML(`${BASE_URL}/`, now),
+    generateUrlXML(`${BASE_URL}/states`, now),
+  ];
+
+  res.header("Content-Type", "application/xml");
+  res.send(wrapUrlSet(urls));
+});
+
+/* ===============================
+   STATE SITEMAP
+================================= */
 app.get("/sitemap-states.xml", async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT DISTINCT state, MAX(updated_at) as updated_at
-       FROM candidate
-       GROUP BY state`
+    const result = await pool.query(`
+      SELECT DISTINCT state FROM candidates
+      ORDER BY state
+    `);
+
+    const urls = result.rows.map(row =>
+      generateUrlXML(
+        `${BASE_URL}/state/${row.state.toLowerCase()}`,
+        new Date().toISOString()
+      )
     );
 
-    const urls = rows.map(r => {
-      const slug = r.state.toLowerCase().replace(/\s+/g, "-");
-      return `
-  <url>
-    <loc>${BASE_URL}/state/${slug}</loc>
-    <lastmod>${formatDate(r.updated_at)}</lastmod>
-  </url>`;
-    }).join("");
-
     res.header("Content-Type", "application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`);
-
-  } catch {
-    res.status(500).send("Error");
+    res.send(wrapUrlSet(urls));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("State sitemap error");
   }
 });
 
-/* =====================================================
-   OFFICES SITEMAP
-===================================================== */
-
-app.get("/sitemap-offices.xml", async (req, res) => {
+/* ===============================
+   CANDIDATE SITEMAP (AUTO CHUNKED)
+================================= */
+app.get("/sitemap-candidates-:page.xml", async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT DISTINCT office, MAX(updated_at) as updated_at
-       FROM candidate
-       GROUP BY office`
+    const page = parseInt(req.params.page);
+    const offset = (page - 1) * SITEMAP_LIMIT;
+
+    const result = await pool.query(`
+      SELECT slug, updated_at
+      FROM candidates
+      ORDER BY id
+      LIMIT $1 OFFSET $2
+    `, [SITEMAP_LIMIT, offset]);
+
+    const urls = result.rows.map(candidate =>
+      generateUrlXML(
+        `${BASE_URL}/candidate/${candidate.slug}`,
+        candidate.updated_at
+          ? new Date(candidate.updated_at).toISOString()
+          : new Date().toISOString()
+      )
     );
 
-    const urls = rows.map(r => {
-      const slug = r.office.toLowerCase().replace(/\s+/g, "-");
-      return `
-  <url>
-    <loc>${BASE_URL}/office/${slug}</loc>
-    <lastmod>${formatDate(r.updated_at)}</lastmod>
-  </url>`;
-    }).join("");
-
     res.header("Content-Type", "application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`);
-
-  } catch {
-    res.status(500).send("Error");
+    res.send(wrapUrlSet(urls));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Candidate sitemap error");
   }
 });
 
-/* =====================================================
-   CANDIDATE SITEMAP CHUNKS
-===================================================== */
-
-app.get("/sitemap-candidates-:chunk.xml", async (req, res) => {
-  try {
-    const chunk = parseInt(req.params.chunk);
-    const offset = (chunk - 1) * MAX_URLS_PER_SITEMAP;
-
-    const { rows } = await pool.query(
-      `SELECT slug, updated_at
-       FROM candidate
-       ORDER BY id
-       LIMIT $1 OFFSET $2`,
-      [MAX_URLS_PER_SITEMAP, offset]
-    );
-
-    if (!rows.length) return res.status(404).send("No sitemap data");
-
-    const urls = rows.map(r => `
-  <url>
-    <loc>${BASE_URL}/${r.slug}</loc>
-    <lastmod>${formatDate(r.updated_at)}</lastmod>
-  </url>
-    `).join("");
-
-    res.header("Content-Type", "application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`);
-
-  } catch {
-    res.status(500).send("Error");
-  }
-});
-
-/* =====================================================
-   START SERVER
-===================================================== */
-
+/* ===============================
+   SERVER START
+================================= */
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log(`Server running on port ${PORT}`);
 });
