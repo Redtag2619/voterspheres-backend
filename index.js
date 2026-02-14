@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
+import { createClient } from "redis";
 
 dotenv.config();
 
@@ -16,131 +17,97 @@ app.use(express.json());
 ============================ */
 
 const BASE_URL = "https://voterspheres.org";
-const SITEMAP_LIMIT = 50000;
 const PORT = process.env.PORT || 5000;
+const SITEMAP_LIMIT = 50000;
 
 /* ============================
-   DATABASE POOL (PRODUCTION OPTIMIZED)
+   POSTGRES POOL
 ============================ */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-
-  max: 20, // connection pool size
+  max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 5000
 });
 
 /* ============================
-   HEALTH CHECK
+   REDIS CLIENT (PRODUCTION SAFE)
 ============================ */
 
-app.get("/", (req, res) => {
-  res.send("VoterSpheres Production Backend Running");
+const redis = createClient({
+  url: process.env.REDIS_URL
 });
+
+redis.on("error", (err) =>
+  console.error("Redis error:", err)
+);
+
+await redis.connect();
+
+console.log("Redis connected");
+
 
 /* ============================
-   API ROUTES
+   CACHE HELPERS
 ============================ */
 
-/* Get candidates paginated */
-app.get("/api/candidates", async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 1000);
-    const offset = parseInt(req.query.offset) || 0;
-
-    const result = await pool.query(`
-      SELECT id, full_name, slug, state, party, county, office, updated_at
-      FROM candidates
-      ORDER BY id DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
-
-    res.json(result.rows);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Database error" });
-  }
-});
-
-
-/* Get candidate by slug */
-app.get("/api/candidate/:slug", async (req, res) => {
+async function cacheGet(key) {
 
   try {
 
-    const result = await pool.query(`
-      SELECT *
-      FROM candidates
-      WHERE slug = $1
-      LIMIT 1
-    `, [req.params.slug]);
+    const data = await redis.get(key);
 
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Not found" });
+    if (!data) return null;
 
-    res.json(result.rows[0]);
+    return JSON.parse(data);
 
-  } catch (err) {
+  } catch {
 
-    console.error(err);
-    res.status(500).json({ error: "Database error" });
+    return null;
 
   }
 
-});
+}
+
+async function cacheSet(key, data, ttl = 3600) {
+
+  try {
+
+    await redis.setEx(
+      key,
+      ttl,
+      JSON.stringify(data)
+    );
+
+  } catch {}
+
+}
 
 
 /* ============================
-   ROBOTS.TXT
-============================ */
-
-app.get("/robots.txt", (req, res) => {
-
-  res.type("text/plain");
-
-  res.send(`User-agent: *
-Allow: /
-
-Sitemap: ${BASE_URL}/sitemap.xml`);
-
-});
-
-
-/* ============================
-   XML HELPERS (STREAM SAFE)
+   XML HELPERS
 ============================ */
 
 function writeXMLHeader(res) {
-
   res.write(`<?xml version="1.0" encoding="UTF-8"?>`);
-
 }
 
 function writeUrlSetOpen(res) {
-
   res.write(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-
 }
 
 function writeUrlSetClose(res) {
-
   res.write(`</urlset>`);
-
 }
 
 function writeSitemapIndexOpen(res) {
-
   res.write(`<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-
 }
 
 function writeSitemapIndexClose(res) {
-
   res.write(`</sitemapindex>`);
-
 }
 
 function writeURL(res, loc, lastmod) {
@@ -167,17 +134,150 @@ function writeSitemap(res, loc, lastmod) {
 
 
 /* ============================
-   SITEMAP INDEX (FAST)
+   HEALTH CHECK
+============================ */
+
+app.get("/", (req, res) => {
+
+  res.send("Production backend with Redis running");
+
+});
+
+
+/* ============================
+   CACHED CANDIDATE BY SLUG
+============================ */
+
+app.get("/api/candidate/:slug", async (req, res) => {
+
+  const slug = req.params.slug;
+
+  const cacheKey = `candidate:${slug}`;
+
+  const cached = await cacheGet(cacheKey);
+
+  if (cached) {
+
+    return res.json(cached);
+
+  }
+
+  try {
+
+    const result = await pool.query(`
+      SELECT *
+      FROM candidates
+      WHERE slug = $1
+      LIMIT 1
+    `, [slug]);
+
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Not found" });
+
+    const candidate = result.rows[0];
+
+    await cacheSet(cacheKey, candidate, 86400);
+
+    res.json(candidate);
+
+  }
+  catch (err) {
+
+    console.error(err);
+    res.status(500).json({ error: "Database error" });
+
+  }
+
+});
+
+
+/* ============================
+   CACHED CANDIDATE LIST
+============================ */
+
+app.get("/api/candidates", async (req, res) => {
+
+  const limit = Math.min(parseInt(req.query.limit) || 50, 1000);
+  const offset = parseInt(req.query.offset) || 0;
+
+  const cacheKey = `candidates:${limit}:${offset}`;
+
+  const cached = await cacheGet(cacheKey);
+
+  if (cached)
+    return res.json(cached);
+
+  try {
+
+    const result = await pool.query(`
+      SELECT id, full_name, slug, state, party, county, office, updated_at
+      FROM candidates
+      ORDER BY id DESC
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+
+    await cacheSet(cacheKey, result.rows, 3600);
+
+    res.json(result.rows);
+
+  }
+  catch {
+
+    res.status(500).json({ error: "Database error" });
+
+  }
+
+});
+
+
+/* ============================
+   ROBOTS.TXT (CACHED)
+============================ */
+
+app.get("/robots.txt", async (req, res) => {
+
+  const cacheKey = "robots";
+
+  const cached = await cacheGet(cacheKey);
+
+  if (cached) {
+
+    res.type("text/plain").send(cached);
+    return;
+
+  }
+
+  const robots = `User-agent: *
+Allow: /
+
+Sitemap: ${BASE_URL}/sitemap.xml`;
+
+  await cacheSet(cacheKey, robots, 86400);
+
+  res.type("text/plain").send(robots);
+
+});
+
+
+/* ============================
+   SITEMAP INDEX (CACHED)
 ============================ */
 
 app.get("/sitemap.xml", async (req, res) => {
 
-  try {
+  const cacheKey = "sitemap:index";
+
+  const cached = await cacheGet(cacheKey);
+
+  if (cached) {
 
     res.header("Content-Type", "application/xml");
+    res.send(cached);
+    return;
 
-    writeXMLHeader(res);
-    writeSitemapIndexOpen(res);
+  }
+
+  try {
 
     const result = await pool.query(`
       SELECT COUNT(*) FROM candidates
@@ -189,96 +289,41 @@ app.get("/sitemap.xml", async (req, res) => {
 
     const now = new Date().toISOString();
 
-    writeSitemap(res, `${BASE_URL}/sitemap-static.xml`, now);
-    writeSitemap(res, `${BASE_URL}/sitemap-states.xml`, now);
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>`;
+    xml += `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+    xml += `
+<sitemap>
+<loc>${BASE_URL}/sitemap-static.xml</loc>
+<lastmod>${now}</lastmod>
+</sitemap>`;
+
+    xml += `
+<sitemap>
+<loc>${BASE_URL}/sitemap-states.xml</loc>
+<lastmod>${now}</lastmod>
+</sitemap>`;
 
     for (let i = 1; i <= chunks; i++) {
 
-      writeSitemap(
-        res,
-        `${BASE_URL}/sitemap-candidates-${i}.xml`,
-        now
-      );
+      xml += `
+<sitemap>
+<loc>${BASE_URL}/sitemap-candidates-${i}.xml</loc>
+<lastmod>${now}</lastmod>
+</sitemap>`;
 
     }
 
-    writeSitemapIndexClose(res);
+    xml += `</sitemapindex>`;
 
-    res.end();
-
-  }
-  catch (err) {
-
-    console.error(err);
-    res.status(500).end();
-
-  }
-
-});
-
-
-/* ============================
-   STATIC SITEMAP
-============================ */
-
-app.get("/sitemap-static.xml", (req, res) => {
-
-  res.header("Content-Type", "application/xml");
-
-  writeXMLHeader(res);
-  writeUrlSetOpen(res);
-
-  const now = new Date().toISOString();
-
-  writeURL(res, `${BASE_URL}/`, now);
-  writeURL(res, `${BASE_URL}/states`, now);
-
-  writeUrlSetClose(res);
-
-  res.end();
-
-});
-
-
-/* ============================
-   STATE SITEMAP (STREAM SAFE)
-============================ */
-
-app.get("/sitemap-states.xml", async (req, res) => {
-
-  try {
+    await cacheSet(cacheKey, xml, 3600);
 
     res.header("Content-Type", "application/xml");
-
-    writeXMLHeader(res);
-    writeUrlSetOpen(res);
-
-    const result = await pool.query(`
-      SELECT DISTINCT state
-      FROM candidates
-      ORDER BY state
-    `);
-
-    const now = new Date().toISOString();
-
-    for (const row of result.rows) {
-
-      writeURL(
-        res,
-        `${BASE_URL}/state/${row.state.toLowerCase()}`,
-        now
-      );
-
-    }
-
-    writeUrlSetClose(res);
-
-    res.end();
+    res.send(xml);
 
   }
-  catch (err) {
+  catch {
 
-    console.error(err);
     res.status(500).end();
 
   }
@@ -287,24 +332,28 @@ app.get("/sitemap-states.xml", async (req, res) => {
 
 
 /* ============================
-   CANDIDATE SITEMAP (STREAMED)
+   CANDIDATE SITEMAP (CACHED)
 ============================ */
 
 app.get("/sitemap-candidates-:page.xml", async (req, res) => {
 
   const page = parseInt(req.params.page);
 
-  if (!page || page < 1)
-    return res.status(400).end();
+  const cacheKey = `sitemap:candidates:${page}`;
+
+  const cached = await cacheGet(cacheKey);
+
+  if (cached) {
+
+    res.header("Content-Type", "application/xml");
+    res.send(cached);
+    return;
+
+  }
 
   const offset = (page - 1) * SITEMAP_LIMIT;
 
   try {
-
-    res.header("Content-Type", "application/xml");
-
-    writeXMLHeader(res);
-    writeUrlSetOpen(res);
 
     const result = await pool.query(`
       SELECT slug, updated_at
@@ -313,55 +362,30 @@ app.get("/sitemap-candidates-:page.xml", async (req, res) => {
       LIMIT $1 OFFSET $2
     `, [SITEMAP_LIMIT, offset]);
 
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>`;
+    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
     for (const row of result.rows) {
 
-      writeURL(
-        res,
-        `${BASE_URL}/candidate/${row.slug}`,
-        row.updated_at
-          ? new Date(row.updated_at).toISOString()
-          : new Date().toISOString()
-      );
+      xml += `
+<url>
+<loc>${BASE_URL}/candidate/${row.slug}</loc>
+<lastmod>${new Date(row.updated_at).toISOString()}</lastmod>
+</url>`;
 
     }
 
-    writeUrlSetClose(res);
+    xml += `</urlset>`;
 
-    res.end();
+    await cacheSet(cacheKey, xml, 86400);
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
 
   }
-  catch (err) {
+  catch {
 
-    console.error(err);
     res.status(500).end();
-
-  }
-
-});
-
-
-/* ============================
-   PRODUCTION PERFORMANCE ENDPOINT
-============================ */
-
-app.get("/api/stats", async (req, res) => {
-
-  try {
-
-    const result = await pool.query(`
-      SELECT COUNT(*) AS total_candidates
-      FROM candidates
-    `);
-
-    res.json({
-      total_candidates: result.rows[0].total_candidates,
-      status: "healthy"
-    });
-
-  }
-  catch (err) {
-
-    res.status(500).json({ error: "Database error" });
 
   }
 
@@ -374,6 +398,6 @@ app.get("/api/stats", async (req, res) => {
 
 app.listen(PORT, () => {
 
-  console.log(`Production server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 
 });
