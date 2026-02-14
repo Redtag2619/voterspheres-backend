@@ -1,403 +1,432 @@
-import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
 import pkg from "pg";
 import { createClient } from "redis";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const { Pool } = pkg;
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-/* ============================
-   CONFIG
-============================ */
+/* ============================================
+   PATH SETUP
+============================================ */
 
-const BASE_URL = "https://voterspheres.org";
-const PORT = process.env.PORT || 5000;
-const SITEMAP_LIMIT = 50000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-/* ============================
-   POSTGRES POOL
-============================ */
+/* ============================================
+   DATABASE CONNECTION
+============================================ */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
-/* ============================
-   REDIS CLIENT (PRODUCTION SAFE)
-============================ */
+pool.connect()
+  .then(() => console.log("PostgreSQL connected"))
+  .catch(err => console.log("PostgreSQL error:", err.message));
 
-const redis = createClient({
-  url: process.env.REDIS_URL
-});
+/* ============================================
+   REDIS SETUP (SAFE + OPTIONAL)
+============================================ */
 
-redis.on("error", (err) =>
-  console.error("Redis error:", err)
-);
+let redis = null;
 
-await redis.connect();
+if (process.env.REDIS_URL) {
 
-console.log("Redis connected");
+  redis = createClient({
+    url: process.env.REDIS_URL,
+  });
 
+  redis.on("error", err =>
+    console.log("Redis error:", err.message)
+  );
 
-/* ============================
-   CACHE HELPERS
-============================ */
+  redis.connect()
+    .then(() => console.log("Redis connected"))
+    .catch(err =>
+      console.log("Redis failed:", err.message)
+    );
 
-async function cacheGet(key) {
+} else {
 
-  try {
+  console.log("Redis not configured, using memory cache");
 
-    const data = await redis.get(key);
+}
 
-    if (!data) return null;
+/* ============================================
+   MEMORY CACHE FALLBACK
+============================================ */
 
-    return JSON.parse(data);
+const memoryCache = new Map();
 
-  } catch {
+function setMemoryCache(key, value, ttlSeconds) {
 
+  memoryCache.set(key, {
+    value,
+    expire: Date.now() + ttlSeconds * 1000,
+  });
+
+}
+
+function getMemoryCache(key) {
+
+  const item = memoryCache.get(key);
+
+  if (!item) return null;
+
+  if (Date.now() > item.expire) {
+
+    memoryCache.delete(key);
     return null;
 
   }
 
+  return item.value;
+
 }
 
-async function cacheSet(key, data, ttl = 3600) {
+/* ============================================
+   CACHE HELPERS
+============================================ */
+
+async function getCache(key) {
 
   try {
 
-    await redis.setEx(
-      key,
-      ttl,
-      JSON.stringify(data)
-    );
+    if (redis) {
+
+      const data = await redis.get(key);
+
+      if (data) return JSON.parse(data);
+
+    }
 
   } catch {}
 
-}
-
-
-/* ============================
-   XML HELPERS
-============================ */
-
-function writeXMLHeader(res) {
-  res.write(`<?xml version="1.0" encoding="UTF-8"?>`);
-}
-
-function writeUrlSetOpen(res) {
-  res.write(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-}
-
-function writeUrlSetClose(res) {
-  res.write(`</urlset>`);
-}
-
-function writeSitemapIndexOpen(res) {
-  res.write(`<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`);
-}
-
-function writeSitemapIndexClose(res) {
-  res.write(`</sitemapindex>`);
-}
-
-function writeURL(res, loc, lastmod) {
-
-  res.write(`
-  <url>
-    <loc>${loc}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>`);
+  return getMemoryCache(key);
 
 }
 
-function writeSitemap(res, loc, lastmod) {
-
-  res.write(`
-  <sitemap>
-    <loc>${loc}</loc>
-    <lastmod>${lastmod}</lastmod>
-  </sitemap>`);
-
-}
-
-
-/* ============================
-   HEALTH CHECK
-============================ */
-
-app.get("/", (req, res) => {
-
-  res.send("Production backend with Redis running");
-
-});
-
-
-/* ============================
-   CACHED CANDIDATE BY SLUG
-============================ */
-
-app.get("/api/candidate/:slug", async (req, res) => {
-
-  const slug = req.params.slug;
-
-  const cacheKey = `candidate:${slug}`;
-
-  const cached = await cacheGet(cacheKey);
-
-  if (cached) {
-
-    return res.json(cached);
-
-  }
+async function setCache(key, data, ttl = 3600) {
 
   try {
 
-    const result = await pool.query(`
-      SELECT *
-      FROM candidates
-      WHERE slug = $1
-      LIMIT 1
-    `, [slug]);
+    if (redis) {
 
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Not found" });
+      await redis.setEx(
+        key,
+        ttl,
+        JSON.stringify(data)
+      );
 
-    const candidate = result.rows[0];
+    }
 
-    await cacheSet(cacheKey, candidate, 86400);
+  } catch {}
 
-    res.json(candidate);
+  setMemoryCache(key, data, ttl);
 
-  }
-  catch (err) {
+}
 
-    console.error(err);
-    res.status(500).json({ error: "Database error" });
+/* ============================================
+   HEALTH CHECK
+============================================ */
 
-  }
+app.get("/health", (req, res) => {
+
+  res.json({
+    status: "ok",
+    database: "connected",
+    redis: redis ? "enabled" : "memory",
+  });
 
 });
 
-
-/* ============================
-   CACHED CANDIDATE LIST
-============================ */
+/* ============================================
+   GET CANDIDATES LIST
+============================================ */
 
 app.get("/api/candidates", async (req, res) => {
 
-  const limit = Math.min(parseInt(req.query.limit) || 50, 1000);
-  const offset = parseInt(req.query.offset) || 0;
+  try {
 
-  const cacheKey = `candidates:${limit}:${offset}`;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
 
-  const cached = await cacheGet(cacheKey);
+    const offset = (page - 1) * limit;
 
-  if (cached)
-    return res.json(cached);
+    const cacheKey =
+      `candidates:${page}:${limit}`;
+
+    const cached = await getCache(cacheKey);
+
+    if (cached)
+      return res.json(cached);
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        full_name,
+        slug,
+        state,
+        party,
+        county,
+        office,
+        photo
+      FROM candidate
+      ORDER BY id
+      LIMIT $1 OFFSET $2
+      `,
+      [limit, offset]
+    );
+
+    const countResult =
+      await pool.query(
+        `SELECT COUNT(*) FROM candidate`
+      );
+
+    const response = {
+
+      page,
+      limit,
+
+      total: parseInt(
+        countResult.rows[0].count
+      ),
+
+      candidates: result.rows,
+
+    };
+
+    await setCache(cacheKey, response, 300);
+
+    res.json(response);
+
+  } catch (err) {
+
+    console.log(err);
+    res.status(500).json({
+      error: "Server error",
+    });
+
+  }
+
+});
+
+/* ============================================
+   GET SINGLE CANDIDATE BY SLUG
+============================================ */
+
+app.get("/api/candidate/:slug", async (req, res) => {
 
   try {
 
-    const result = await pool.query(`
-      SELECT id, full_name, slug, state, party, county, office, updated_at
-      FROM candidates
-      ORDER BY id DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+    const { slug } = req.params;
 
-    await cacheSet(cacheKey, result.rows, 3600);
+    const cacheKey =
+      `candidate:${slug}`;
 
-    res.json(result.rows);
+    const cached =
+      await getCache(cacheKey);
 
-  }
-  catch {
+    if (cached)
+      return res.json(cached);
 
-    res.status(500).json({ error: "Database error" });
+    const result =
+      await pool.query(
+        `
+        SELECT
+          id,
+          full_name,
+          slug,
+          state,
+          party,
+          county,
+          office,
+          photo
+        FROM candidate
+        WHERE slug = $1
+        LIMIT 1
+        `,
+        [slug]
+      );
+
+    if (!result.rows.length)
+      return res
+        .status(404)
+        .json({
+          error: "Not found",
+        });
+
+    const candidate =
+      result.rows[0];
+
+    await setCache(
+      cacheKey,
+      candidate,
+      3600
+    );
+
+    res.json(candidate);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error: "Server error",
+    });
 
   }
 
 });
 
-
-/* ============================
-   ROBOTS.TXT (CACHED)
-============================ */
-
-app.get("/robots.txt", async (req, res) => {
-
-  const cacheKey = "robots";
-
-  const cached = await cacheGet(cacheKey);
-
-  if (cached) {
-
-    res.type("text/plain").send(cached);
-    return;
-
-  }
-
-  const robots = `User-agent: *
-Allow: /
-
-Sitemap: ${BASE_URL}/sitemap.xml`;
-
-  await cacheSet(cacheKey, robots, 86400);
-
-  res.type("text/plain").send(robots);
-
-});
-
-
-/* ============================
-   SITEMAP INDEX (CACHED)
-============================ */
+/* ============================================
+   SITEMAP AUTO GENERATE
+============================================ */
 
 app.get("/sitemap.xml", async (req, res) => {
 
-  const cacheKey = "sitemap:index";
-
-  const cached = await cacheGet(cacheKey);
-
-  if (cached) {
-
-    res.header("Content-Type", "application/xml");
-    res.send(cached);
-    return;
-
-  }
-
   try {
 
-    const result = await pool.query(`
-      SELECT COUNT(*) FROM candidates
-    `);
+    const cacheKey = "sitemap";
 
-    const total = parseInt(result.rows[0].count);
+    const cached =
+      await getCache(cacheKey);
 
-    const chunks = Math.ceil(total / SITEMAP_LIMIT);
+    if (cached) {
 
-    const now = new Date().toISOString();
+      res.header(
+        "Content-Type",
+        "application/xml"
+      );
 
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>`;
-    xml += `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    xml += `
-<sitemap>
-<loc>${BASE_URL}/sitemap-static.xml</loc>
-<lastmod>${now}</lastmod>
-</sitemap>`;
-
-    xml += `
-<sitemap>
-<loc>${BASE_URL}/sitemap-states.xml</loc>
-<lastmod>${now}</lastmod>
-</sitemap>`;
-
-    for (let i = 1; i <= chunks; i++) {
-
-      xml += `
-<sitemap>
-<loc>${BASE_URL}/sitemap-candidates-${i}.xml</loc>
-<lastmod>${now}</lastmod>
-</sitemap>`;
+      return res.send(cached);
 
     }
 
-    xml += `</sitemapindex>`;
+    const result =
+      await pool.query(
+        `
+        SELECT slug, updated_at
+        FROM candidate
+        ORDER BY id
+        LIMIT 50000
+        `
+      );
 
-    await cacheSet(cacheKey, xml, 3600);
+    const urls =
+      result.rows
+        .map(row => {
 
-    res.header("Content-Type", "application/xml");
+          return `
+          <url>
+            <loc>
+              https://voterspheres.org/candidate/${row.slug}
+            </loc>
+            <lastmod>
+              ${row.updated_at?.toISOString() || ""}
+            </lastmod>
+          </url>
+          `;
+
+        })
+        .join("");
+
+    const xml = `
+    <?xml version="1.0" encoding="UTF-8"?>
+    <urlset
+      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      ${urls}
+    </urlset>
+    `;
+
+    await setCache(cacheKey, xml, 3600);
+
+    res.header(
+      "Content-Type",
+      "application/xml"
+    );
+
     res.send(xml);
 
-  }
-  catch {
+  } catch (err) {
 
-    res.status(500).end();
+    console.log(err);
+
+    res.status(500).send("");
 
   }
 
 });
 
+/* ============================================
+   ROBOTS.TXT
+============================================ */
 
-/* ============================
-   CANDIDATE SITEMAP (CACHED)
-============================ */
+app.get("/robots.txt", (req, res) => {
 
-app.get("/sitemap-candidates-:page.xml", async (req, res) => {
+  res.type("text/plain");
 
-  const page = parseInt(req.params.page);
+  res.send(`
+User-agent: *
+Allow: /
 
-  const cacheKey = `sitemap:candidates:${page}`;
-
-  const cached = await cacheGet(cacheKey);
-
-  if (cached) {
-
-    res.header("Content-Type", "application/xml");
-    res.send(cached);
-    return;
-
-  }
-
-  const offset = (page - 1) * SITEMAP_LIMIT;
-
-  try {
-
-    const result = await pool.query(`
-      SELECT slug, updated_at
-      FROM candidates
-      ORDER BY id
-      LIMIT $1 OFFSET $2
-    `, [SITEMAP_LIMIT, offset]);
-
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>`;
-    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    for (const row of result.rows) {
-
-      xml += `
-<url>
-<loc>${BASE_URL}/candidate/${row.slug}</loc>
-<lastmod>${new Date(row.updated_at).toISOString()}</lastmod>
-</url>`;
-
-    }
-
-    xml += `</urlset>`;
-
-    await cacheSet(cacheKey, xml, 86400);
-
-    res.header("Content-Type", "application/xml");
-    res.send(xml);
-
-  }
-  catch {
-
-    res.status(500).end();
-
-  }
+Sitemap: https://voterspheres.org/sitemap.xml
+`);
 
 });
 
+/* ============================================
+   SERVE FRONTEND
+============================================ */
 
-/* ============================
+app.use(
+  express.static(
+    path.join(__dirname, "public")
+  )
+);
+
+/* ============================================
+   FRONTEND ROUTING SUPPORT
+============================================ */
+
+app.get("*", (req, res) => {
+
+  res.sendFile(
+    path.join(
+      __dirname,
+      "public",
+      "index.html"
+    )
+  );
+
+});
+
+/* ============================================
    START SERVER
-============================ */
+============================================ */
+
+const PORT =
+  process.env.PORT || 10000;
 
 app.listen(PORT, () => {
 
-  console.log(`Server running on port ${PORT}`);
+  console.log(
+    `Server running on port ${PORT}`
+  );
 
 });
