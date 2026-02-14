@@ -18,9 +18,10 @@ const pool = new Pool({
 });
 
 const BASE_URL = "https://voterspheres.org";
+const MAX_URLS_PER_SITEMAP = 50000;
 
 /* =====================================================
-   HELPER: FORMAT DATE FOR SITEMAP
+   HELPER: FORMAT DATE
 ===================================================== */
 
 function formatDate(date) {
@@ -167,9 +168,27 @@ app.get("/:slug", async (req, res, next) => {
    SITEMAP INDEX
 ===================================================== */
 
-app.get("/sitemap.xml", (req, res) => {
+app.get("/sitemap.xml", async (req, res) => {
+  try {
 
-  const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM candidate`
+    );
+
+    const totalCandidates = parseInt(countResult.rows[0].count);
+    const totalChunks = Math.ceil(totalCandidates / MAX_URLS_PER_SITEMAP);
+
+    let candidateSitemaps = "";
+
+    for (let i = 1; i <= totalChunks; i++) {
+      candidateSitemaps += `
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-candidates-${i}.xml</loc>
+    <lastmod>${formatDate()}</lastmod>
+  </sitemap>`;
+    }
+
+    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>${BASE_URL}/sitemap-states.xml</loc>
@@ -179,14 +198,15 @@ app.get("/sitemap.xml", (req, res) => {
     <loc>${BASE_URL}/sitemap-offices.xml</loc>
     <lastmod>${formatDate()}</lastmod>
   </sitemap>
-  <sitemap>
-    <loc>${BASE_URL}/sitemap-candidates.xml</loc>
-    <lastmod>${formatDate()}</lastmod>
-  </sitemap>
+  ${candidateSitemaps}
 </sitemapindex>`;
 
-  res.header("Content-Type", "application/xml");
-  res.send(sitemapIndex);
+    res.header("Content-Type", "application/xml");
+    res.send(sitemapIndex);
+
+  } catch {
+    res.status(500).send("Error generating sitemap index");
+  }
 });
 
 /* =====================================================
@@ -204,10 +224,10 @@ app.get("/sitemap-states.xml", async (req, res) => {
     const urls = rows.map(r => {
       const slug = r.state.toLowerCase().replace(/\s+/g, "-");
       return `
-      <url>
-        <loc>${BASE_URL}/state/${slug}</loc>
-        <lastmod>${formatDate(r.updated_at)}</lastmod>
-      </url>`;
+  <url>
+    <loc>${BASE_URL}/state/${slug}</loc>
+    <lastmod>${formatDate(r.updated_at)}</lastmod>
+  </url>`;
     }).join("");
 
     res.header("Content-Type", "application/xml");
@@ -236,10 +256,10 @@ app.get("/sitemap-offices.xml", async (req, res) => {
     const urls = rows.map(r => {
       const slug = r.office.toLowerCase().replace(/\s+/g, "-");
       return `
-      <url>
-        <loc>${BASE_URL}/office/${slug}</loc>
-        <lastmod>${formatDate(r.updated_at)}</lastmod>
-      </url>`;
+  <url>
+    <loc>${BASE_URL}/office/${slug}</loc>
+    <lastmod>${formatDate(r.updated_at)}</lastmod>
+  </url>`;
     }).join("");
 
     res.header("Content-Type", "application/xml");
@@ -254,20 +274,29 @@ ${urls}
 });
 
 /* =====================================================
-   CANDIDATES SITEMAP
+   CANDIDATE SITEMAP CHUNKS
 ===================================================== */
 
-app.get("/sitemap-candidates.xml", async (req, res) => {
+app.get("/sitemap-candidates-:chunk.xml", async (req, res) => {
   try {
+    const chunk = parseInt(req.params.chunk);
+    const offset = (chunk - 1) * MAX_URLS_PER_SITEMAP;
+
     const { rows } = await pool.query(
-      `SELECT slug, updated_at FROM candidate`
+      `SELECT slug, updated_at
+       FROM candidate
+       ORDER BY id
+       LIMIT $1 OFFSET $2`,
+      [MAX_URLS_PER_SITEMAP, offset]
     );
 
+    if (!rows.length) return res.status(404).send("No sitemap data");
+
     const urls = rows.map(r => `
-      <url>
-        <loc>${BASE_URL}/${r.slug}</loc>
-        <lastmod>${formatDate(r.updated_at)}</lastmod>
-      </url>
+  <url>
+    <loc>${BASE_URL}/${r.slug}</loc>
+    <lastmod>${formatDate(r.updated_at)}</lastmod>
+  </url>
     `).join("");
 
     res.header("Content-Type", "application/xml");
