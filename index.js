@@ -13,9 +13,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* =========================
+/* ======================
    CONFIG
-========================= */
+====================== */
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = "https://voterspheres.org";
@@ -23,12 +23,12 @@ const BASE_URL = "https://voterspheres.org";
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
 
-const PREGEN_BATCH_SIZE = 500;
-const PREGEN_DELAY = 2000; // ms between batches
+const PREGEN_BATCH = 500;
+const PREGEN_DELAY = 2000;
 
-/* =========================
+/* ======================
    DATABASE
-========================= */
+====================== */
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -37,9 +37,9 @@ const pool = new Pool({
     : { rejectUnauthorized: false },
 });
 
-/* =========================
+/* ======================
    REDIS
-========================= */
+====================== */
 
 let redis;
 let redisEnabled = false;
@@ -60,41 +60,39 @@ if (REDIS_URL) {
   console.log("✅ Redis connected");
 }
 
-/* =========================
-   MEMORY FALLBACK
-========================= */
+/* ======================
+   MEMORY CACHE
+====================== */
 
-const memoryCache = new Map();
+const memory = new Map();
 
-function memorySet(key, value, ttl) {
-  memoryCache.set(key, {
+function memSet(key, value, ttl) {
+  memory.set(key, {
     value,
     expire: Date.now() + ttl * 1000,
   });
 }
 
-function memoryGet(key) {
-  const item = memoryCache.get(key);
+function memGet(key) {
+  const item = memory.get(key);
   if (!item) return null;
 
   if (Date.now() > item.expire) {
-    memoryCache.delete(key);
+    memory.delete(key);
     return null;
   }
 
   return item.value;
 }
 
-/* =========================
+/* ======================
    CACHE HELPERS
-========================= */
+====================== */
 
 async function cacheGet(key) {
   try {
-    if (redisEnabled) {
-      return await redis.get(key);
-    }
-    return memoryGet(key);
+    if (redisEnabled) return await redis.get(key);
+    return memGet(key);
   } catch {
     return null;
   }
@@ -105,17 +103,17 @@ async function cacheSet(key, value, ttl = 86400) {
     if (redisEnabled) {
       await redis.setEx(key, ttl, value);
     } else {
-      memorySet(key, value, ttl);
+      memSet(key, value, ttl);
     }
   } catch {}
 }
 
-/* =========================
+/* ======================
    UTILS
-========================= */
+====================== */
 
-function slugify(name) {
-  return name
+function slugify(text) {
+  return text
     .toLowerCase()
     .replace(/[^\w\s]/gi, "")
     .replace(/\s+/g, "-");
@@ -125,21 +123,21 @@ function hash(str) {
   return crypto.createHash("md5").update(str).digest("hex");
 }
 
-/* =========================
-   HTML GENERATORS
-========================= */
+/* ======================
+   HTML GENERATOR
+====================== */
 
-function generateCandidateHTML(c) {
-  const slug = slugify(c.name);
+function buildCandidateHTML(c) {
+  const slug = slugify(c.full_name);
 
   return `
 <!DOCTYPE html>
 <html>
 <head>
 
-<title>${c.name} | VoterSpheres</title>
+<title>${c.full_name} | VoterSpheres</title>
 
-<meta name="description" content="${c.name} running for ${c.office} in ${c.state}">
+<meta name="description" content="${c.full_name} running for ${c.office} in ${c.state}">
 
 <link rel="canonical" href="${BASE_URL}/candidate/${slug}" />
 
@@ -149,7 +147,7 @@ function generateCandidateHTML(c) {
 
 <body>
 
-<h1>${c.name}</h1>
+<h1>${c.full_name}</h1>
 
 <p><strong>Office:</strong> ${c.office}</p>
 <p><strong>State:</strong> ${c.state}</p>
@@ -160,21 +158,21 @@ function generateCandidateHTML(c) {
 `;
 }
 
-/* =========================
+/* ======================
    PAGE ENGINE
-========================= */
+====================== */
 
 async function getCandidatePage(slug) {
-  const cacheKey = `page:candidate:${slug}`;
+  const key = `page:candidate:${slug}`;
 
-  let html = await cacheGet(cacheKey);
-  if (html) return html;
+  let cached = await cacheGet(key);
+  if (cached) return cached;
 
   const result = await pool.query(
     `
     SELECT *
-    FROM candidates
-    WHERE LOWER(REPLACE(name,' ','-')) = $1
+    FROM public.candidate
+    WHERE LOWER(REPLACE(full_name,' ','-')) = $1
     LIMIT 1
     `,
     [slug]
@@ -182,21 +180,19 @@ async function getCandidatePage(slug) {
 
   if (!result.rows.length) return null;
 
-  const candidate = result.rows[0];
+  const html = buildCandidateHTML(result.rows[0]);
 
-  html = generateCandidateHTML(candidate);
-
-  await cacheSet(cacheKey, html, 86400);
+  await cacheSet(key, html, 86400);
 
   return html;
 }
 
-/* =========================
+/* ======================
    BACKGROUND PRE-GENERATION
-========================= */
+====================== */
 
-async function pregenerateCandidates() {
-  console.log("🚀 Starting background pre-generation...");
+async function pregenerate() {
+  console.log("🚀 Starting background pre-generation");
 
   let offset = 0;
 
@@ -204,12 +200,12 @@ async function pregenerateCandidates() {
     try {
       const result = await pool.query(
         `
-        SELECT name, office, state, party
-        FROM candidates
+        SELECT full_name, office, state, party
+        FROM public.candidate
         ORDER BY id
         LIMIT $1 OFFSET $2
         `,
-        [PREGEN_BATCH_SIZE, offset]
+        [PREGEN_BATCH, offset]
       );
 
       if (!result.rows.length) {
@@ -218,21 +214,19 @@ async function pregenerateCandidates() {
       }
 
       for (const c of result.rows) {
-        const slug = slugify(c.name);
-        const cacheKey = `page:candidate:${slug}`;
+        const slug = slugify(c.full_name);
+        const key = `page:candidate:${slug}`;
 
-        const exists = await cacheGet(cacheKey);
+        const exists = await cacheGet(key);
         if (!exists) {
-          const html = generateCandidateHTML(c);
-          await cacheSet(cacheKey, html, 86400);
+          const html = buildCandidateHTML(c);
+          await cacheSet(key, html, 86400);
         }
       }
 
-      offset += PREGEN_BATCH_SIZE;
+      offset += PREGEN_BATCH;
 
-      console.log(
-        `Generated batch — total processed: ${offset}`
-      );
+      console.log("Generated:", offset);
 
       await new Promise(r => setTimeout(r, PREGEN_DELAY));
     } catch (err) {
@@ -242,9 +236,9 @@ async function pregenerateCandidates() {
   }
 }
 
-/* =========================
+/* ======================
    ROUTES
-========================= */
+====================== */
 
 app.get("/candidate/:slug", async (req, res) => {
   try {
@@ -261,20 +255,20 @@ app.get("/candidate/:slug", async (req, res) => {
   }
 });
 
-app.get("/api/candidates", async (req, res) => {
+app.get("/api/candidate", async (req, res) => {
   try {
+    const { q = "", limit = 20 } = req.query;
+
     const cacheKey = "search:" + hash(JSON.stringify(req.query));
 
     const cached = await cacheGet(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
-    const { q = "", limit = 20 } = req.query;
-
     const result = await pool.query(
       `
-      SELECT name, office, state
-      FROM candidates
-      WHERE name ILIKE '%' || $1 || '%'
+      SELECT full_name, office, state, party
+      FROM public.candidate
+      WHERE full_name ILIKE '%' || $1 || '%'
       LIMIT $2
       `,
       [q, limit]
@@ -288,19 +282,19 @@ app.get("/api/candidates", async (req, res) => {
   }
 });
 
-/* =========================
+/* ======================
    SITEMAP
-========================= */
+====================== */
 
 app.get("/sitemap.xml", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT name FROM candidates LIMIT 50000`
+      `SELECT full_name FROM public.candidate LIMIT 50000`
     );
 
     const urls = result.rows
-      .map(row => {
-        const slug = slugify(row.name);
+      .map(r => {
+        const slug = slugify(r.full_name);
 
         return `
 <url>
@@ -310,25 +304,25 @@ app.get("/sitemap.xml", async (req, res) => {
       })
       .join("");
 
-    const xml = `
+    res.type("application/xml");
+
+    res.send(`
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
 </urlset>
-`;
-
-    res.type("application/xml");
-    res.send(xml);
+`);
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
 
-/* =========================
+/* ======================
    ROBOTS
-========================= */
+====================== */
 
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
+
   res.send(`
 User-agent: *
 Allow: /
@@ -337,9 +331,9 @@ Sitemap: ${BASE_URL}/sitemap.xml
 `);
 });
 
-/* =========================
+/* ======================
    HEALTH
-========================= */
+====================== */
 
 app.get("/health", async (req, res) => {
   try {
@@ -354,21 +348,20 @@ app.get("/health", async (req, res) => {
   }
 });
 
-/* =========================
+/* ======================
    HOME
-========================= */
+====================== */
 
 app.get("/", (req, res) => {
-  res.send("<h1>VoterSpheres API Running</h1>");
+  res.send("<h1>VoterSpheres Backend Running</h1>");
 });
 
-/* =========================
-   SERVER START
-========================= */
+/* ======================
+   START SERVER
+====================== */
 
 app.listen(PORT, async () => {
   console.log("🚀 Server running on port", PORT);
 
-  // Start background generator (non-blocking)
-  pregenerateCandidates();
+  pregenerate(); // background job
 });
