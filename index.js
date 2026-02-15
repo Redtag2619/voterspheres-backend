@@ -1,383 +1,287 @@
 import express from "express";
+import compression from "compression";
+import Redis from "ioredis";
 import pkg from "pg";
-import dotenv from "dotenv";
-import cors from "cors";
-import crypto from "crypto";
-import os from "os";
-import { createClient } from "redis";
-
-dotenv.config();
 
 const { Pool } = pkg;
 
 const app = express();
-app.use(cors());
+app.use(compression());
 app.use(express.json());
 
-/* ================= CONFIG ================= */
+/* =========================
+   ENV
+========================= */
 
 const PORT = process.env.PORT || 3000;
-const BASE_URL = "https://voterspheres.org";
-
+const BASE_URL = process.env.BASE_URL || "https://voterspheres.org";
 const DATABASE_URL = process.env.DATABASE_URL;
-const REDIS_URL = process.env.REDIS_URL;
 
-const CPU_COUNT = os.cpus().length;
-const WORKERS = Math.max(2, Math.floor(CPU_COUNT / 2));
-
-const PREGEN_BATCH = 1000;
-
-/* ================= DATABASE ================= */
+/* =========================
+   POSTGRES
+========================= */
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_URL?.includes("localhost")
-    ? false
-    : { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false },
 });
 
-/* ================= REDIS ================= */
+/* =========================
+   REDIS (SAFE CONNECTION)
+========================= */
 
 let redis;
-let redisEnabled = false;
 
-if (REDIS_URL) {
-  redis = createClient({
-    url: REDIS_URL,
-    socket: {
-      reconnectStrategy: r => Math.min(r * 50, 2000),
-    },
+if (process.env.REDIS_URL) {
+  console.log("✅ Using REDIS_URL");
+
+  redis = new Redis(process.env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    reconnectOnError: () => true,
+    lazyConnect: true,
   });
+} else {
+  console.log("⚠️ No REDIS_URL — using localhost");
 
-  redis.on("error", err => console.log("Redis:", err.message));
-
-  await redis.connect();
-  redisEnabled = true;
-
-  console.log("✅ Redis connected");
-}
-
-/* ================= MEMORY CACHE ================= */
-
-const memory = new Map();
-
-function memSet(key, value, ttl) {
-  memory.set(key, {
-    value,
-    expire: Date.now() + ttl * 1000,
+  redis = new Redis({
+    host: "127.0.0.1",
+    port: 6379,
   });
 }
 
-function memGet(key) {
-  const item = memory.get(key);
-  if (!item) return null;
+redis.on("connect", () => console.log("🚀 Redis Connected"));
+redis.on("error", (err) => console.error("Redis Error:", err));
 
-  if (Date.now() > item.expire) {
-    memory.delete(key);
-    return null;
-  }
-
-  return item.value;
-}
-
-/* ================= CACHE ================= */
+/* =========================
+   SAFE REDIS HELPERS
+========================= */
 
 async function cacheGet(key) {
   try {
-    if (redisEnabled) return await redis.get(key);
-    return memGet(key);
+    return await redis.get(key);
   } catch {
     return null;
   }
 }
 
-async function cacheSet(key, value, ttl = 86400) {
+async function cacheSet(key, value, ttl = 3600) {
   try {
-    if (redisEnabled) {
-      await redis.setEx(key, ttl, value);
-    } else {
-      memSet(key, value, ttl);
-    }
+    await redis.set(key, value, "EX", ttl);
   } catch {}
 }
 
-/* ================= UTILS ================= */
+/* =========================
+   HEALTH CHECK
+========================= */
 
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/gi, "")
-    .replace(/\s+/g, "-");
-}
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    redis: !!process.env.REDIS_URL,
+    db: !!DATABASE_URL,
+  });
+});
 
-function hash(str) {
-  return crypto.createHash("md5").update(str).digest("hex");
-}
+/* =========================
+   HOME PAGE
+========================= */
 
-/* ================= HTML ================= */
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <title>VoterSpheres</title>
+      </head>
+      <body>
+        <h1>VoterSpheres API Running</h1>
+        <p>System operational.</p>
+      </body>
+    </html>
+  `);
+});
 
-function buildCandidateHTML(c) {
-  const slug = slugify(c.full_name);
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-
-<title>${c.full_name} | VoterSpheres</title>
-
-<meta name="description" content="${c.full_name} running for ${c.office} in ${c.state}">
-
-<link rel="canonical" href="${BASE_URL}/candidate/${slug}" />
-
-<meta name="robots" content="index, follow">
-
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "PoliticalCandidate",
- "name": "${c.full_name}",
- "affiliation": "${c.party || ""}",
- "address": {
-   "@type": "PostalAddress",
-   "addressRegion": "${c.state}"
- }
-}
-</script>
-
-</head>
-
-<body>
-
-<h1>${c.full_name}</h1>
-
-<p><strong>Office:</strong> ${c.office}</p>
-<p><strong>State:</strong> ${c.state}</p>
-<p><strong>Party:</strong> ${c.party || "Unknown"}</p>
-
-</body>
-</html>
-`;
-}
-
-/* ================= PAGE ENGINE ================= */
-
-async function getCandidatePage(slug) {
-  const key = `page:${slug}`;
-
-  const cached = await cacheGet(key);
-  if (cached) return cached;
-
-  const result = await pool.query(
-    `
-    SELECT *
-    FROM public.candidate
-    WHERE LOWER(REPLACE(full_name,' ','-')) = $1
-    LIMIT 1
-    `,
-    [slug]
-  );
-
-  if (!result.rows.length) return null;
-
-  const html = buildCandidateHTML(result.rows[0]);
-
-  await cacheSet(key, html, 86400);
-
-  return html;
-}
-
-/* ================= PREGEN WORKER ================= */
-
-async function worker(workerId) {
-  console.log(`⚙️ Worker ${workerId} started`);
-
-  let offset = workerId * PREGEN_BATCH;
-
-  while (true) {
-    try {
-      const result = await pool.query(
-        `
-        SELECT full_name, office, state, party
-        FROM public.candidate
-        ORDER BY id
-        LIMIT $1 OFFSET $2
-        `,
-        [PREGEN_BATCH, offset]
-      );
-
-      if (!result.rows.length) break;
-
-      for (const c of result.rows) {
-        const slug = slugify(c.full_name);
-        const key = `page:${slug}`;
-
-        const exists = await cacheGet(key);
-
-        if (!exists) {
-          const html = buildCandidateHTML(c);
-          await cacheSet(key, html, 86400);
-        }
-      }
-
-      offset += PREGEN_BATCH * WORKERS;
-
-      console.log(`Worker ${workerId} processed ${offset}`);
-    } catch (err) {
-      console.log("Worker error:", err.message);
-      await new Promise(r => setTimeout(r, 5000));
-    }
-  }
-
-  console.log(`✅ Worker ${workerId} done`);
-}
-
-/* ================= START WORKERS ================= */
-
-async function startWorkers() {
-  console.log("🚀 Starting parallel pre-generation");
-
-  for (let i = 0; i < WORKERS; i++) {
-    worker(i);
-  }
-}
-
-/* ================= ROUTES ================= */
+/* =========================
+   CANDIDATE PAGE
+========================= */
 
 app.get("/candidate/:slug", async (req, res) => {
+  const slug = req.params.slug;
+  const cacheKey = `candidate:${slug}`;
+
   try {
-    const html = await getCandidatePage(req.params.slug);
+    const cached = await cacheGet(cacheKey);
 
-    if (!html) return res.status(404).send("Not found");
+    if (cached) {
+      return res.send(cached);
+    }
 
-    res.setHeader("Content-Type", "text/html");
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    const result = await pool.query(
+      `SELECT * FROM candidates WHERE slug = $1 LIMIT 1`,
+      [slug]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).send("Candidate not found");
+    }
+
+    const c = result.rows[0];
+
+    const html = `
+    <html>
+      <head>
+        <title>${c.name}</title>
+        <meta name="description" content="${c.office || ""}" />
+
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Person",
+          "name": "${c.name}",
+          "url": "${BASE_URL}/candidate/${slug}"
+        }
+        </script>
+
+      </head>
+      <body>
+        <h1>${c.name}</h1>
+        <p>${c.office || ""}</p>
+      </body>
+    </html>
+    `;
+
+    await cacheSet(cacheKey, html, 86400);
 
     res.send(html);
   } catch (err) {
-    res.status(500).send(err.message);
+    console.error(err);
+    res.status(500).send("Server error");
   }
 });
 
-/* ================= STATE PAGES ================= */
-
-app.get("/state/:state", async (req, res) => {
-  const state = req.params.state.toUpperCase();
-
-  const result = await pool.query(
-    `
-    SELECT full_name, office
-    FROM public.candidate
-    WHERE state = $1
-    LIMIT 100
-    `,
-    [state]
-  );
-
-  const list = result.rows
-    .map(c => {
-      const slug = slugify(c.full_name);
-      return `<li><a href="/candidate/${slug}">${c.full_name}</a></li>`;
-    })
-    .join("");
-
-  res.send(`
-<h1>Candidates in ${state}</h1>
-<ul>${list}</ul>
-`);
-});
-
-/* ================= SEARCH API ================= */
-
-app.get("/api/candidate", async (req, res) => {
-  const { q = "", limit = 20 } = req.query;
-
-  const cacheKey = "search:" + hash(JSON.stringify(req.query));
-
-  const cached = await cacheGet(cacheKey);
-  if (cached) return res.json(JSON.parse(cached));
-
-  const result = await pool.query(
-    `
-    SELECT full_name, office, state
-    FROM public.candidate
-    WHERE full_name ILIKE '%' || $1 || '%'
-    LIMIT $2
-    `,
-    [q, limit]
-  );
-
-  await cacheSet(cacheKey, JSON.stringify(result.rows), 600);
-
-  res.json(result.rows);
-});
-
-/* ================= SITEMAP ================= */
-
-app.get("/sitemap.xml", async (req, res) => {
-  const result = await pool.query(
-    `SELECT full_name FROM public.candidate LIMIT 50000`
-  );
-
-  const urls = result.rows
-    .map(r => {
-      const slug = slugify(r.full_name);
-
-      return `
-<url>
-<loc>${BASE_URL}/candidate/${slug}</loc>
-<lastmod>${new Date().toISOString()}</lastmod>
-</url>`;
-    })
-    .join("");
-
-  res.type("application/xml");
-
-  res.send(`
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>
-`);
-});
-
-/* ================= ROBOTS ================= */
+/* =========================
+   ROBOTS.TXT
+========================= */
 
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
-
   res.send(`
 User-agent: *
 Allow: /
 
 Sitemap: ${BASE_URL}/sitemap.xml
-`);
+  `);
 });
 
-/* ================= HEALTH ================= */
+/* =========================
+   SITEMAP INDEX
+========================= */
 
-app.get("/health", async (req, res) => {
+const SITEMAP_CHUNK = 50000;
+
+app.get("/sitemap.xml", async (req, res) => {
   try {
-    await pool.query("SELECT 1");
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM candidates`
+    );
 
-    res.json({
-      status: "ok",
-      redis: redisEnabled ? "connected" : "memory",
-    });
+    const total = parseInt(countResult.rows[0].count);
+    const chunks = Math.ceil(total / SITEMAP_CHUNK);
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+    for (let i = 0; i < chunks; i++) {
+      xml += `
+<sitemap>
+  <loc>${BASE_URL}/sitemap-${i}.xml</loc>
+  <lastmod>${new Date().toISOString()}</lastmod>
+</sitemap>`;
+    }
+
+    xml += `</sitemapindex>`;
+
+    res.type("application/xml");
+    res.send(xml);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).send("Sitemap error");
   }
 });
 
-/* ================= HOME ================= */
+/* =========================
+   SITEMAP CHUNKS
+========================= */
 
-app.get("/", (req, res) => {
-  res.send("<h1>VoterSpheres API Running</h1>");
+app.get("/sitemap-:index.xml", async (req, res) => {
+  const index = parseInt(req.params.index);
+
+  try {
+    const offset = index * SITEMAP_CHUNK;
+
+    const result = await pool.query(
+      `SELECT slug, updated_at
+       FROM candidates
+       ORDER BY id
+       LIMIT $1 OFFSET $2`,
+      [SITEMAP_CHUNK, offset]
+    );
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+    result.rows.forEach((row) => {
+      xml += `
+<url>
+  <loc>${BASE_URL}/candidate/${row.slug}</loc>
+  <lastmod>${row.updated_at?.toISOString() || new Date().toISOString()}</lastmod>
+</url>`;
+    });
+
+    xml += `</urlset>`;
+
+    res.type("application/xml");
+    res.send(xml);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Chunk error");
+  }
 });
 
-/* ================= START ================= */
+/* =========================
+   BACKGROUND CACHE WARMER
+========================= */
+
+async function warmCache() {
+  console.log("🔥 Starting cache warmer");
+
+  try {
+    const result = await pool.query(
+      `SELECT slug FROM candidates LIMIT 1000`
+    );
+
+    for (const row of result.rows) {
+      const key = `candidate:${row.slug}`;
+
+      const exists = await cacheGet(key);
+      if (exists) continue;
+
+      const html = `<html><body><h1>${row.slug}</h1></body></html>`;
+      await cacheSet(key, html, 86400);
+    }
+
+    console.log("✅ Cache warm complete");
+  } catch (err) {
+    console.error("Cache warm error", err);
+  }
+}
+
+setTimeout(warmCache, 10000);
+
+/* =========================
+   START SERVER
+========================= */
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
-
-  startWorkers();
+  console.log(`🚀 Server running on ${PORT}`);
 });
