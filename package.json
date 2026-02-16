@@ -1,7 +1,6 @@
 {
-  "name": "votersphere-backend",
+  "name": "voterspheres-backend",
   "version": "2.0.0",
-  "description": "VoterSphere Pro Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,9 +8,10 @@
   "dependencies": {
     "compression": "^1.7.4",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.2.3",
     "express": "^4.19.2",
     "helmet": "^7.0.0",
+    "ioredis": "^5.4.1",
     "pg": "^8.11.5"
   }
 }
