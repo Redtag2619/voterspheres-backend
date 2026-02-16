@@ -34,7 +34,7 @@ app.use(compression());
 app.use(express.json());
 
 /* ======================================================
-   MEMORY CACHE (FAST + FREE)
+   MEMORY CACHE
 ====================================================== */
 
 const cache = new Map();
@@ -61,7 +61,7 @@ app.get("/health", (req, res) => {
 ====================================================== */
 
 async function getCandidateBySlug(slug) {
-  const cached = cacheGet(slug);
+  const cached = cacheGet("cand_" + slug);
   if (cached) return cached;
 
   const result = await pool.query(
@@ -71,16 +71,32 @@ async function getCandidateBySlug(slug) {
 
   const candidate = result.rows[0] || null;
 
-  if (candidate) cacheSet(slug, candidate);
+  if (candidate) cacheSet("cand_" + slug, candidate);
 
   return candidate;
 }
 
+async function getCandidatesByState(state) {
+  const cached = cacheGet("state_" + state);
+  if (cached) return cached;
+
+  const result = await pool.query(
+    "SELECT * FROM candidates WHERE state = $1 ORDER BY name ASC LIMIT 500",
+    [state.toUpperCase()]
+  );
+
+  const candidates = result.rows || [];
+
+  cacheSet("state_" + state, candidates, 600);
+
+  return candidates;
+}
+
 /* ======================================================
-   SCHEMA GENERATOR
+   SCHEMA BUILDERS
 ====================================================== */
 
-function buildSchema(candidate) {
+function candidateSchema(candidate) {
   return {
     "@context": "https://schema.org",
     "@type": "PoliticalCandidate",
@@ -88,22 +104,26 @@ function buildSchema(candidate) {
     url: `${BASE_URL}/candidate/${candidate.slug}`,
     image: candidate.photo || "",
     party: candidate.party || "",
-    description: candidate.bio || "",
-    election: {
-      "@type": "Election",
-      name: candidate.election || "General Election",
-      electionDate: candidate.election_date || ""
-    },
-    worksFor: {
-      "@type": "Organization",
-      name: "VoterSphere",
-      url: BASE_URL
-    }
+    description: candidate.bio || ""
+  };
+}
+
+function stateSchema(state, candidates) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `Candidates in ${state}`,
+    url: `${BASE_URL}/state/${state}`,
+    about: candidates.slice(0, 10).map(c => ({
+      "@type": "PoliticalCandidate",
+      name: c.name,
+      url: `${BASE_URL}/candidate/${c.slug}`
+    }))
   };
 }
 
 /* ======================================================
-   CANDIDATE PAGE (SEO SSR)
+   CANDIDATE PAGE (SEO)
 ====================================================== */
 
 app.get("/candidate/:slug", async (req, res) => {
@@ -112,11 +132,9 @@ app.get("/candidate/:slug", async (req, res) => {
 
     const candidate = await getCandidateBySlug(slug);
 
-    if (!candidate) {
-      return res.status(404).send("Candidate not found");
-    }
+    if (!candidate) return res.status(404).send("Not found");
 
-    const schema = buildSchema(candidate);
+    const schema = candidateSchema(candidate);
 
     res.send(`
 <!DOCTYPE html>
@@ -125,7 +143,6 @@ app.get("/candidate/:slug", async (req, res) => {
 <title>${candidate.name} | VoterSphere</title>
 
 <meta name="description" content="${candidate.bio || ""}" />
-
 <link rel="canonical" href="${BASE_URL}/candidate/${slug}" />
 
 <script type="application/ld+json">
@@ -137,10 +154,13 @@ ${JSON.stringify(schema)}
 
 <h1>${candidate.name}</h1>
 <p>${candidate.bio || ""}</p>
+<p>Party: ${candidate.party || ""}</p>
+<p>State: ${candidate.state || ""}</p>
 
 </body>
 </html>
 `);
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -148,7 +168,58 @@ ${JSON.stringify(schema)}
 });
 
 /* ======================================================
-   API ROUTE
+   STATE PAGE (SEO)
+====================================================== */
+
+app.get("/state/:state", async (req, res) => {
+  try {
+    const state = req.params.state.toUpperCase();
+
+    const candidates = await getCandidatesByState(state);
+
+    const listHTML = candidates
+      .map(
+        c =>
+          `<li><a href="${BASE_URL}/candidate/${c.slug}">${c.name}</a> (${c.party || ""})</li>`
+      )
+      .join("");
+
+    const schema = stateSchema(state, candidates);
+
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>${state} Candidates | VoterSphere</title>
+
+<meta name="description" content="Browse political candidates in ${state}" />
+<link rel="canonical" href="${BASE_URL}/state/${state}" />
+
+<script type="application/ld+json">
+${JSON.stringify(schema)}
+</script>
+
+</head>
+<body>
+
+<h1>${state} Candidates</h1>
+
+<ul>
+${listHTML}
+</ul>
+
+</body>
+</html>
+`);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* ======================================================
+   API ROUTES
 ====================================================== */
 
 app.get("/api/candidate/:slug", async (req, res) => {
@@ -158,13 +229,25 @@ app.get("/api/candidate/:slug", async (req, res) => {
     if (!candidate) return res.status(404).json({ error: "Not found" });
 
     res.json(candidate);
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/state/:state", async (req, res) => {
+  try {
+    const data = await getCandidatesByState(req.params.state);
+
+    res.json(data);
+
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
 
 /* ======================================================
-   SITEMAP (AUTO)
+   SITEMAP
 ====================================================== */
 
 app.get("/sitemap.xml", async (req, res) => {
@@ -197,7 +280,15 @@ ${urls}
 });
 
 /* ======================================================
-   SERVER START
+   ROOT
+====================================================== */
+
+app.get("/", (req, res) => {
+  res.send("VoterSphere Backend Running");
+});
+
+/* ======================================================
+   START SERVER
 ====================================================== */
 
 app.listen(PORT, () => {
