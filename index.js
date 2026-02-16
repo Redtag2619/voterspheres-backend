@@ -1,292 +1,205 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import compression from "compression";
-import Redis from "ioredis";
-import pkg from "pg";
+require("dotenv").config();
 
-dotenv.config();
-
-const { Pool } = pkg;
+const express = require("express");
+const compression = require("compression");
+const helmet = require("helmet");
+const cors = require("cors");
+const { Pool } = require("pg");
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "2mb" }));
-app.use(compression());
 
 /* ======================================================
    CONFIG
 ====================================================== */
 
 const PORT = process.env.PORT || 10000;
-const BASE_URL =
-  process.env.BASE_URL || "https://voterspheres-backend-2pap.onrender.com";
-
-const REDIS_URL = process.env.REDIS_URL || null;
+const BASE_URL = process.env.BASE_URL || "https://www.votersphere.com";
 
 /* ======================================================
-   POSTGRES
+   DATABASE
 ====================================================== */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: { rejectUnauthorized: false }
 });
 
 /* ======================================================
-   REDIS (OPTIONAL SAFE MODE)
+   MIDDLEWARE
 ====================================================== */
 
-let redis = null;
+app.use(cors());
+app.use(helmet());
+app.use(compression());
+app.use(express.json());
 
-if (REDIS_URL) {
-  try {
-    redis = new Redis(REDIS_URL, {
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: false,
-      reconnectOnError: () => true,
-    });
+/* ======================================================
+   MEMORY CACHE (FAST + FREE)
+====================================================== */
 
-    redis.on("connect", () => console.log("✅ Redis Connected"));
-    redis.on("error", (err) =>
-      console.log("⚠️ Redis Error (non fatal):", err.message)
-    );
-  } catch (err) {
-    console.log("⚠️ Redis disabled:", err.message);
-    redis = null;
-  }
-} else {
-  console.log("⚠️ No Redis URL provided — running without cache");
+const cache = new Map();
+
+function cacheGet(key) {
+  return cache.get(key) || null;
+}
+
+function cacheSet(key, value, ttl = 300) {
+  cache.set(key, value);
+  setTimeout(() => cache.delete(key), ttl * 1000);
 }
 
 /* ======================================================
-   CACHE HELPERS
-====================================================== */
-
-async function cacheGet(key) {
-  if (!redis) return null;
-  try {
-    const data = await redis.get(key);
-    return data ? JSON.parse(data) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function cacheSet(key, value, ttl = 3600) {
-  if (!redis) return;
-  try {
-    await redis.set(key, JSON.stringify(value), "EX", ttl);
-  } catch {}
-}
-
-/* ======================================================
-   HEALTH
+   HEALTH CHECK
 ====================================================== */
 
 app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    redis: !!redis,
-    time: new Date(),
-  });
+  res.json({ status: "ok" });
 });
 
 /* ======================================================
-   CANDIDATE API
+   DATABASE HELPERS
 ====================================================== */
 
-app.get("/candidate/:id", async (req, res) => {
-  const { id } = req.params;
+async function getCandidateBySlug(slug) {
+  const cached = cacheGet(slug);
+  if (cached) return cached;
 
-  const cacheKey = `candidate:${id}`;
-  const cached = await cacheGet(cacheKey);
+  const result = await pool.query(
+    "SELECT * FROM candidates WHERE slug = $1 LIMIT 1",
+    [slug]
+  );
 
-  if (cached) return res.json(cached);
+  const candidate = result.rows[0] || null;
 
+  if (candidate) cacheSet(slug, candidate);
+
+  return candidate;
+}
+
+/* ======================================================
+   SCHEMA GENERATOR
+====================================================== */
+
+function buildSchema(candidate) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "PoliticalCandidate",
+    name: candidate.name,
+    url: `${BASE_URL}/candidate/${candidate.slug}`,
+    image: candidate.photo || "",
+    party: candidate.party || "",
+    description: candidate.bio || "",
+    election: {
+      "@type": "Election",
+      name: candidate.election || "General Election",
+      electionDate: candidate.election_date || ""
+    },
+    worksFor: {
+      "@type": "Organization",
+      name: "VoterSphere",
+      url: BASE_URL
+    }
+  };
+}
+
+/* ======================================================
+   CANDIDATE PAGE (SEO SSR)
+====================================================== */
+
+app.get("/candidate/:slug", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM candidates WHERE id = $1",
-      [id]
-    );
+    const slug = req.params.slug;
 
-    if (!result.rows.length) {
-      return res.status(404).json({ error: "Not found" });
+    const candidate = await getCandidateBySlug(slug);
+
+    if (!candidate) {
+      return res.status(404).send("Candidate not found");
     }
 
-    const candidate = result.rows[0];
+    const schema = buildSchema(candidate);
 
-    await cacheSet(cacheKey, candidate, 86400);
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<title>${candidate.name} | VoterSphere</title>
+
+<meta name="description" content="${candidate.bio || ""}" />
+
+<link rel="canonical" href="${BASE_URL}/candidate/${slug}" />
+
+<script type="application/ld+json">
+${JSON.stringify(schema)}
+</script>
+
+</head>
+<body>
+
+<h1>${candidate.name}</h1>
+<p>${candidate.bio || ""}</p>
+
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* ======================================================
+   API ROUTE
+====================================================== */
+
+app.get("/api/candidate/:slug", async (req, res) => {
+  try {
+    const candidate = await getCandidateBySlug(req.params.slug);
+
+    if (!candidate) return res.status(404).json({ error: "Not found" });
 
     res.json(candidate);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 /* ======================================================
-   SITEMAP CONFIG
-====================================================== */
-
-const SITEMAP_CHUNK_SIZE = 50000;
-
-/* ======================================================
-   SITEMAP INDEX
+   SITEMAP (AUTO)
 ====================================================== */
 
 app.get("/sitemap.xml", async (req, res) => {
   try {
-    const countResult = await pool.query(
-      "SELECT COUNT(*) FROM candidates"
+    const result = await pool.query(
+      "SELECT slug, updated_at FROM candidates LIMIT 50000"
     );
 
-    const total = parseInt(countResult.rows[0].count);
-    const chunks = Math.ceil(total / SITEMAP_CHUNK_SIZE);
-
-    res.setHeader("Content-Type", "application/xml");
-
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    for (let i = 0; i < chunks; i++) {
-      xml += `
-<sitemap>
-  <loc>${BASE_URL}/sitemap-${i}.xml</loc>
-  <lastmod>${new Date().toISOString()}</lastmod>
-</sitemap>`;
-    }
-
-    xml += `</sitemapindex>`;
-
-    res.send(xml);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error");
-  }
-});
-
-/* ======================================================
-   SITEMAP CHUNKS (STREAMING — 50M READY)
-====================================================== */
-
-app.get("/sitemap-:page.xml", async (req, res) => {
-  const page = parseInt(req.params.page) || 0;
-  const offset = page * SITEMAP_CHUNK_SIZE;
-
-  res.setHeader("Content-Type", "application/xml");
-
-  try {
-    const client = await pool.connect();
-
-    const query = `
-      SELECT id, updated_at
-      FROM candidates
-      ORDER BY id
-      LIMIT $1 OFFSET $2
-    `;
-
-    const result = await client.query(query, [
-      SITEMAP_CHUNK_SIZE,
-      offset,
-    ]);
-
-    client.release();
-
-    res.write(
-      `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`
-    );
-
-    for (const row of result.rows) {
-      const lastmod = row.updated_at
-        ? new Date(row.updated_at).toISOString()
-        : new Date().toISOString();
-
-      res.write(`
+    const urls = result.rows
+      .map(
+        c => `
 <url>
-  <loc>${BASE_URL}/candidate/${row.id}</loc>
-  <lastmod>${lastmod}</lastmod>
-</url>`);
-    }
+<loc>${BASE_URL}/candidate/${c.slug}</loc>
+<lastmod>${new Date(c.updated_at).toISOString()}</lastmod>
+</url>`
+      )
+      .join("");
 
-    res.write(`</urlset>`);
-    res.end();
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error");
+    res.status(500).send("Error generating sitemap");
   }
 });
 
 /* ======================================================
-   BACKGROUND PRE-GENERATION (OPTIONAL)
+   SERVER START
 ====================================================== */
 
-async function warmCache() {
-  if (!redis) return;
-
-  console.log("🔥 Starting cache warmup...");
-
-  const client = await pool.connect();
-
-  try {
-    const batchSize = 10000;
-    let offset = 0;
-
-    while (true) {
-      const result = await client.query(
-        `SELECT id FROM candidates
-         ORDER BY id
-         LIMIT $1 OFFSET $2`,
-        [batchSize, offset]
-      );
-
-      if (!result.rows.length) break;
-
-      for (const row of result.rows) {
-        const id = row.id;
-
-        const exists = await redis.exists(`candidate:${id}`);
-        if (exists) continue;
-
-        const data = await pool.query(
-          "SELECT * FROM candidates WHERE id = $1",
-          [id]
-        );
-
-        if (data.rows.length) {
-          await cacheSet(
-            `candidate:${id}`,
-            data.rows[0],
-            86400 * 30
-          );
-        }
-      }
-
-      offset += batchSize;
-      console.log(`Warm progress: ${offset}`);
-    }
-
-    console.log("✅ Cache warm complete");
-  } catch (err) {
-    console.error(err);
-  } finally {
-    client.release();
-  }
-}
-
-/* ======================================================
-   START SERVER
-====================================================== */
-
-app.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-
-  // optional warm start (non blocking)
-  if (process.env.ENABLE_WARM === "true") {
-    warmCache();
-  }
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
 });
