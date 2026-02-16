@@ -1,13 +1,3 @@
-async function testDB() {
-  try {
-    await pool.query("SELECT 1");
-    console.log("✅ Database connected");
-  } catch (err) {
-    console.error("❌ DB CONNECTION ERROR:", err);
-  }
-}
-
-testDB();
 require("dotenv").config();
 
 const express = require("express");
@@ -31,8 +21,25 @@ const BASE_URL = process.env.BASE_URL || "https://www.votersphere.com";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
+
+/* ======================================================
+   TEST DB CONNECTION
+====================================================== */
+
+async function testDB() {
+  try {
+    await pool.query("SELECT 1");
+    console.log("✅ Database connected");
+  } catch (err) {
+    console.error("❌ DB CONNECTION ERROR:", err);
+  }
+}
+
+testDB();
 
 /* ======================================================
    MIDDLEWARE
@@ -114,7 +121,7 @@ function candidateSchema(candidate) {
     url: `${BASE_URL}/candidate/${candidate.slug}`,
     image: candidate.photo || "",
     party: candidate.party || "",
-    description: candidate.bio || ""
+    description: candidate.bio || "",
   };
 }
 
@@ -124,11 +131,11 @@ function stateSchema(state, candidates) {
     "@type": "CollectionPage",
     name: `Candidates in ${state}`,
     url: `${BASE_URL}/state/${state}`,
-    about: candidates.slice(0, 10).map(c => ({
+    about: candidates.slice(0, 10).map((c) => ({
       "@type": "PoliticalCandidate",
       name: c.name,
-      url: `${BASE_URL}/candidate/${c.slug}`
-    }))
+      url: `${BASE_URL}/candidate/${c.slug}`,
+    })),
   };
 }
 
@@ -170,7 +177,6 @@ ${JSON.stringify(schema)}
 </body>
 </html>
 `);
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -189,7 +195,7 @@ app.get("/state/:state", async (req, res) => {
 
     const listHTML = candidates
       .map(
-        c =>
+        (c) =>
           `<li><a href="${BASE_URL}/candidate/${c.slug}">${c.name}</a> (${c.party || ""})</li>`
       )
       .join("");
@@ -221,7 +227,6 @@ ${listHTML}
 </body>
 </html>
 `);
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -239,7 +244,6 @@ app.get("/api/candidate/:slug", async (req, res) => {
     if (!candidate) return res.status(404).json({ error: "Not found" });
 
     res.json(candidate);
-
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -250,7 +254,6 @@ app.get("/api/state/:state", async (req, res) => {
     const data = await getCandidatesByState(req.params.state);
 
     res.json(data);
-
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -268,7 +271,7 @@ app.get("/sitemap.xml", async (req, res) => {
 
     const urls = result.rows
       .map(
-        c => `
+        (c) => `
 <url>
 <loc>${BASE_URL}/candidate/${c.slug}</loc>
 <lastmod>${new Date(c.updated_at).toISOString()}</lastmod>
@@ -283,7 +286,6 @@ ${urls}
 
     res.header("Content-Type", "application/xml");
     res.send(xml);
-
   } catch (err) {
     res.status(500).send("Error generating sitemap");
   }
