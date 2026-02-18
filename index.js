@@ -1,9 +1,10 @@
 import express from "express";
 import pkg from "pg";
 import dotenv from "dotenv";
-import path from "path";
-import fs from "fs";
 import slugify from "slugify";
+import axios from "axios";
+import fs from "fs";
+import path from "path";
 import csv from "csv-parser";
 
 dotenv.config();
@@ -16,7 +17,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 10000;
 
 /* ===============================
-   DATABASE CONNECTION
+   DATABASE
 ================================ */
 
 const pool = new Pool({
@@ -31,36 +32,64 @@ async function testDB() {
     await pool.query("SELECT 1");
     console.log("✅ Database connected");
   } catch (err) {
-    console.error("❌ DB CONNECTION ERROR:", err);
+    console.error("❌ DB ERROR:", err);
   }
 }
-
 testDB();
 
 /* ===============================
    HELPERS
 ================================ */
 
-function createSlug(name, state, office) {
+function slug(name, state, office) {
   return slugify(`${name}-${state}-${office}`, {
     lower: true,
     strict: true,
   });
 }
 
+async function insertCandidatesBatch(batch) {
+  if (!batch.length) return;
+
+  const values = [];
+  const placeholders = [];
+
+  batch.forEach((c, i) => {
+    const idx = i * 8;
+
+    placeholders.push(
+      `($${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4},
+        $${idx + 5}, $${idx + 6}, $${idx + 7}, $${idx + 8})`
+    );
+
+    values.push(
+      c.name,
+      c.office,
+      c.state,
+      c.district,
+      c.party,
+      c.election_year,
+      c.website,
+      c.slug
+    );
+  });
+
+  const query = `
+    INSERT INTO candidates
+    (name, office, state, district, party, election_year, website, slug)
+    VALUES ${placeholders.join(",")}
+    ON CONFLICT (slug) DO NOTHING
+  `;
+
+  await pool.query(query, values);
+}
+
 /* ===============================
-   HEALTH CHECK
+   HEALTH
 ================================ */
 
 app.get("/", (req, res) => {
-  res.send("🚀 VoterSpheres Backend Running");
-});
-
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    time: new Date(),
-  });
+  res.send("🚀 VoterSpheres Live Backend Running");
 });
 
 /* ===============================
@@ -76,14 +105,13 @@ app.get("/candidate/:slug", async (req, res) => {
       [slug]
     );
 
-    if (!result.rows.length) {
-      return res.status(404).send("Candidate not found");
-    }
+    if (!result.rows.length)
+      return res.status(404).send("Not found");
 
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server error");
+    res.status(500).send("Error");
   }
 });
 
@@ -103,130 +131,145 @@ app.get("/state/:state", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server error");
+    res.status(500).send("Error");
   }
 });
 
 /* ===============================
-   SITEMAP (BASIC)
+   SITEMAP
 ================================ */
 
 app.get("/sitemap.xml", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT slug, updated_at FROM candidates LIMIT 50000"
+      "SELECT slug FROM candidates LIMIT 50000"
     );
 
-    const baseUrl =
-      process.env.BASE_URL || "https://voterspheres.org";
+    const base = process.env.BASE_URL;
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-`;
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
     result.rows.forEach((row) => {
       xml += `
-  <url>
-    <loc>${baseUrl}/candidate/${row.slug}</loc>
-    <lastmod>${new Date().toISOString()}</lastmod>
-  </url>`;
+<url>
+  <loc>${base}/candidate/${row.slug}</loc>
+</url>`;
     });
 
-    xml += "\n</urlset>";
+    xml += "</urlset>";
 
     res.header("Content-Type", "application/xml");
     res.send(xml);
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Sitemap error");
+    res.status(500).send("Error");
   }
 });
 
 /* ===============================
-   NATIONWIDE IMPORTER
+   🇺🇸 LIVE FEC IMPORT
+   Federal Candidates
 ================================ */
 
-async function importNationwideCandidates(filePath) {
-  console.log("🇺🇸 Starting nationwide import...");
+async function importFEC() {
+  console.log("🇺🇸 Importing FEC candidates...");
 
-  const BATCH_SIZE = 1000;
-  let batch = [];
-  let total = 0;
+  const apiKey = process.env.FEC_API_KEY;
+  const batch = [];
 
-  async function insertBatch() {
-    if (batch.length === 0) return;
+  let page = 1;
+  let totalImported = 0;
 
-    const values = [];
-    const placeholders = [];
+  while (page <= 20) {
+    const url = `https://api.open.fec.gov/v1/candidates/?page=${page}&per_page=100&api_key=${apiKey}`;
 
-    batch.forEach((c, i) => {
-      const idx = i * 8;
+    const response = await axios.get(url);
 
-      placeholders.push(
-        `($${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4},
-          $${idx + 5}, $${idx + 6}, $${idx + 7}, $${idx + 8})`
+    const candidates = response.data.results;
+
+    for (const c of candidates) {
+      const candidate = {
+        name: c.name,
+        office: c.office_full || c.office,
+        state: c.state || "",
+        district: c.district || "",
+        party: c.party_full || "",
+        election_year: 2024,
+        website: "",
+      };
+
+      candidate.slug = slug(
+        candidate.name,
+        candidate.state,
+        candidate.office
       );
 
-      values.push(
-        c.name,
-        c.office,
-        c.state,
-        c.district,
-        c.party,
-        c.election_year,
-        c.website,
-        c.slug
-      );
-    });
+      batch.push(candidate);
 
-    const query = `
-      INSERT INTO candidates
-      (name, office, state, district, party, election_year, website, slug)
-      VALUES ${placeholders.join(",")}
-      ON CONFLICT (slug) DO NOTHING
-    `;
+      if (batch.length >= 500) {
+        await insertCandidatesBatch(batch);
+        totalImported += batch.length;
+        batch.length = 0;
+      }
+    }
 
-    await pool.query(query, values);
-
-    total += batch.length;
-    console.log(`✅ Imported: ${total}`);
-
-    batch = [];
+    console.log(`Page ${page} complete`);
+    page++;
   }
+
+  if (batch.length) {
+    await insertCandidatesBatch(batch);
+    totalImported += batch.length;
+  }
+
+  console.log(`✅ FEC Import Complete: ${totalImported}`);
+}
+
+/* ===============================
+   📊 CSV IMPORT (STATE / LOCAL)
+================================ */
+
+async function importCSV(filePath) {
+  console.log("📂 Importing CSV...");
+
+  const batch = [];
+  let total = 0;
 
   return new Promise((resolve, reject) => {
     fs.createReadStream(filePath)
       .pipe(csv())
-      .on("data", (row) => {
-        try {
-          const candidate = {
-            name: row.name || row.Name,
-            office: row.office || row.Office,
-            state: row.state || row.State,
-            district: row.district || "",
-            party: row.party || "",
-            election_year: parseInt(row.year || 2024),
-            website: row.website || "",
-          };
+      .on("data", async (row) => {
+        const candidate = {
+          name: row.name,
+          office: row.office,
+          state: row.state,
+          district: row.district || "",
+          party: row.party || "",
+          election_year: row.year || 2024,
+          website: row.website || "",
+        };
 
-          candidate.slug = createSlug(
-            candidate.name,
-            candidate.state,
-            candidate.office
-          );
+        candidate.slug = slug(
+          candidate.name,
+          candidate.state,
+          candidate.office
+        );
 
-          batch.push(candidate);
+        batch.push(candidate);
 
-          if (batch.length >= BATCH_SIZE) {
-            insertBatch().catch(console.error);
-          }
-        } catch (err) {
-          console.error("Row error:", err);
+        if (batch.length >= 500) {
+          await insertCandidatesBatch(batch);
+          total += batch.length;
+          batch.length = 0;
         }
       })
       .on("end", async () => {
-        await insertBatch();
-        console.log("🎉 Nationwide import complete:", total);
+        if (batch.length) {
+          await insertCandidatesBatch(batch);
+          total += batch.length;
+        }
+
+        console.log("✅ CSV Import:", total);
         resolve();
       })
       .on("error", reject);
@@ -234,10 +277,20 @@ async function importNationwideCandidates(filePath) {
 }
 
 /* ===============================
-   ADMIN IMPORT ROUTE
+   ADMIN ROUTES
 ================================ */
 
-app.get("/admin/import", async (req, res) => {
+app.get("/admin/sync/fec", async (req, res) => {
+  try {
+    await importFEC();
+    res.send("✅ FEC Sync Complete");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Sync failed");
+  }
+});
+
+app.get("/admin/sync/csv", async (req, res) => {
   try {
     const filePath = path.join(
       process.cwd(),
@@ -245,13 +298,9 @@ app.get("/admin/import", async (req, res) => {
       "candidates.csv"
     );
 
-    if (!fs.existsSync(filePath)) {
-      return res.status(400).send("CSV file not found");
-    }
+    await importCSV(filePath);
 
-    await importNationwideCandidates(filePath);
-
-    res.send("✅ Nationwide import complete");
+    res.send("✅ CSV Import Complete");
   } catch (err) {
     console.error(err);
     res.status(500).send("Import failed");
@@ -259,9 +308,25 @@ app.get("/admin/import", async (req, res) => {
 });
 
 /* ===============================
-   SERVER START
+   AUTO NIGHTLY SYNC
+================================ */
+
+async function nightlySync() {
+  try {
+    await importFEC();
+    console.log("🌙 Nightly sync complete");
+  } catch (err) {
+    console.error("Nightly sync error", err);
+  }
+}
+
+// every 24 hours
+setInterval(nightlySync, 24 * 60 * 60 * 1000);
+
+/* ===============================
+   SERVER
 ================================ */
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log(`🚀 Server running on ${PORT}`);
 });
