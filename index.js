@@ -22,26 +22,22 @@ const pool = new Pool({
    HEALTH
 ========================= */
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
 app.get("/", (req, res) => {
   res.send("VoterSpheres Backend Running");
 });
 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 /* =========================
-   TABLE INIT (RESET SAFE)
+   TABLE + INDEXES
 ========================= */
 
 async function ensureTable() {
 
-  // Drop old broken table if exists
-  await pool.query(`DROP TABLE IF EXISTS candidate;`);
-
-  // Create correct schema
   await pool.query(`
-    CREATE TABLE candidate (
+    CREATE TABLE IF NOT EXISTS candidate (
       id SERIAL PRIMARY KEY,
       name TEXT,
       office TEXT,
@@ -52,125 +48,111 @@ async function ensureTable() {
     );
   `);
 
-  console.log("✅ Candidate table ready");
+  // Performance indexes
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_name ON candidate(name);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_state ON candidate(state);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_office ON candidate(office);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_party ON candidate(party);`);
+
+  console.log("✅ Table + indexes ready");
 }
 
 /* =========================
-   DATA GENERATOR
+   SEARCH API
 ========================= */
 
-const firstNames = [
-  "James","Mary","John","Patricia","Robert","Jennifer",
-  "Michael","Linda","William","Elizabeth","David","Barbara"
-];
+app.get("/search", async (req, res) => {
 
-const lastNames = [
-  "Smith","Johnson","Williams","Brown","Jones",
-  "Garcia","Miller","Davis","Rodriguez","Martinez"
-];
+  try {
 
-const offices = [
-  "Mayor",
-  "City Council",
-  "Governor",
-  "State Senate",
-  "State House",
-  "Attorney General",
-  "County Commissioner"
-];
+    const {
+      q = "",
+      state,
+      office,
+      party,
+      page = 1,
+      limit = 50
+    } = req.query;
 
-const parties = ["Democrat", "Republican", "Independent"];
+    const offset = (page - 1) * limit;
 
-const states = [
-  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
-  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
-  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
-  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
-];
+    let conditions = [];
+    let values = [];
+    let index = 1;
 
-function random(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+    if (q) {
+      conditions.push(`name ILIKE $${index}`);
+      values.push(`%${q}%`);
+      index++;
+    }
 
-function generateCandidate() {
-  return {
-    name: `${random(firstNames)} ${random(lastNames)}`,
-    office: random(offices),
-    state: random(states),
-    party: random(parties),
-    source: "placeholder"
-  };
-}
+    if (state) {
+      conditions.push(`state = $${index}`);
+      values.push(state);
+      index++;
+    }
 
-/* =========================
-   FAST BULK INSERT
-========================= */
+    if (office) {
+      conditions.push(`office ILIKE $${index}`);
+      values.push(`%${office}%`);
+      index++;
+    }
 
-async function insertBatch(batchSize = 1000) {
+    if (party) {
+      conditions.push(`party = $${index}`);
+      values.push(party);
+      index++;
+    }
 
-  const values = [];
-  const params = [];
+    const whereClause =
+      conditions.length > 0
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
 
-  for (let i = 0; i < batchSize; i++) {
-    const c = generateCandidate();
+    const query = `
+      SELECT *
+      FROM candidate
+      ${whereClause}
+      ORDER BY id DESC
+      LIMIT $${index}
+      OFFSET $${index + 1}
+    `;
 
-    const index = i * 5;
+    values.push(limit, offset);
 
-    values.push(
-      `($${index+1},$${index+2},$${index+3},$${index+4},$${index+5})`
-    );
+    const { rows } = await pool.query(query, values);
 
-    params.push(
-      c.name,
-      c.office,
-      c.state,
-      c.party,
-      c.source
-    );
+    res.json({
+      page: Number(page),
+      limit: Number(limit),
+      results: rows.length,
+      data: rows
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Search failed" });
   }
-
-  const query = `
-    INSERT INTO candidate (name, office, state, party, source)
-    VALUES ${values.join(",")}
-  `;
-
-  await pool.query(query, params);
-}
-
-/* =========================
-   MASS IMPORT
-========================= */
-
-async function massiveImport(total = 500000) {
-
-  console.log(`🚀 Starting import: ${total}`);
-
-  const batchSize = 1000;
-  const loops = Math.ceil(total / batchSize);
-
-  for (let i = 0; i < loops; i++) {
-    await insertBatch(batchSize);
-    console.log(`Imported batch ${i + 1} / ${loops}`);
-  }
-
-  console.log("✅ Import complete");
-}
-
-/* =========================
-   ADMIN IMPORT ROUTE
-========================= */
-
-app.get("/admin/import", async (req, res) => {
-
-  res.json({ status: "Import started" });
-
-  massiveImport(2000000).catch(console.error);
-
 });
 
 /* =========================
-   GET CANDIDATES
+   QUICK STATE ENDPOINT
+========================= */
+
+app.get("/state/:state", async (req, res) => {
+
+  const state = req.params.state.toUpperCase();
+
+  const { rows } = await pool.query(
+    `SELECT * FROM candidate WHERE state = $1 LIMIT 100`,
+    [state]
+  );
+
+  res.json(rows);
+});
+
+/* =========================
+   BASIC LIST
 ========================= */
 
 app.get("/candidate", async (req, res) => {
