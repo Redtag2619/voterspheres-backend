@@ -9,40 +9,39 @@ const { Pool } = pkg;
 const app = express();
 app.use(express.json());
 
-/* ================================
+/* =========================
    DATABASE
-================================ */
+========================= */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: { rejectUnauthorized: false }
 });
 
-/* ================================
-   HEALTH CHECK
-================================ */
+/* =========================
+   HEALTH
+========================= */
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-/* ================================
-   ROOT
-================================ */
-
 app.get("/", (req, res) => {
   res.send("VoterSpheres Backend Running");
 });
 
-/* ================================
-   TABLE INIT (SAFE)
-================================ */
+/* =========================
+   TABLE INIT (RESET SAFE)
+========================= */
 
 async function ensureTable() {
+
+  // Drop old broken table if exists
+  await pool.query(`DROP TABLE IF EXISTS candidate;`);
+
+  // Create correct schema
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS candidates (
+    CREATE TABLE candidate (
       id SERIAL PRIMARY KEY,
       name TEXT,
       office TEXT,
@@ -52,11 +51,13 @@ async function ensureTable() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  console.log("✅ Candidate table ready");
 }
 
-/* ================================
-   PLACEHOLDER GENERATOR
-================================ */
+/* =========================
+   DATA GENERATOR
+========================= */
 
 const firstNames = [
   "James","Mary","John","Patricia","Robert","Jennifer",
@@ -102,42 +103,48 @@ function generateCandidate() {
   };
 }
 
-/* ================================
-   BULK INSERT FUNCTION
-================================ */
+/* =========================
+   FAST BULK INSERT
+========================= */
 
 async function insertBatch(batchSize = 1000) {
-  const client = await pool.connect();
 
-  try {
-    await client.query("BEGIN");
+  const values = [];
+  const params = [];
 
-    for (let i = 0; i < batchSize; i++) {
-      const c = generateCandidate();
+  for (let i = 0; i < batchSize; i++) {
+    const c = generateCandidate();
 
-      await client.query(
-        `INSERT INTO candidates (name, office, state, party, source)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [c.name, c.office, c.state, c.party, c.source]
-      );
-    }
+    const index = i * 5;
 
-    await client.query("COMMIT");
+    values.push(
+      `($${index+1},$${index+2},$${index+3},$${index+4},$${index+5})`
+    );
 
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-  } finally {
-    client.release();
+    params.push(
+      c.name,
+      c.office,
+      c.state,
+      c.party,
+      c.source
+    );
   }
+
+  const query = `
+    INSERT INTO candidate (name, office, state, party, source)
+    VALUES ${values.join(",")}
+  `;
+
+  await pool.query(query, params);
 }
 
-/* ================================
-   MASS IMPORT ENGINE
-================================ */
+/* =========================
+   MASS IMPORT
+========================= */
 
 async function massiveImport(total = 500000) {
-  console.log(`Starting import of ${total} candidates`);
+
+  console.log(`🚀 Starting import: ${total}`);
 
   const batchSize = 1000;
   const loops = Math.ceil(total / batchSize);
@@ -147,40 +154,42 @@ async function massiveImport(total = 500000) {
     console.log(`Imported batch ${i + 1} / ${loops}`);
   }
 
-  console.log("Import complete");
+  console.log("✅ Import complete");
 }
 
-/* ================================
+/* =========================
    ADMIN IMPORT ROUTE
-================================ */
+========================= */
 
 app.get("/admin/import", async (req, res) => {
+
   res.json({ status: "Import started" });
 
-  // Run async so request returns immediately
   massiveImport(2000000).catch(console.error);
+
 });
 
-/* ================================
-   LIST CANDIDATES
-================================ */
+/* =========================
+   GET CANDIDATES
+========================= */
 
-app.get("/candidates", async (req, res) => {
+app.get("/candidate", async (req, res) => {
+
   const { rows } = await pool.query(
-    "SELECT * FROM candidates ORDER BY id DESC LIMIT 100"
+    "SELECT * FROM candidate ORDER BY id DESC LIMIT 100"
   );
 
   res.json(rows);
 });
 
-/* ================================
-   SERVER START
-================================ */
+/* =========================
+   SERVER
+========================= */
 
 const PORT = process.env.PORT || 10000;
 
 ensureTable().then(() => {
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on ${PORT}`);
   });
 });
