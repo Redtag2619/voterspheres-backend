@@ -1,8 +1,6 @@
 import express from "express";
 import pkg from "pg";
-import axios from "axios";
 import dotenv from "dotenv";
-import slugify from "slugify";
 
 dotenv.config();
 
@@ -11,232 +9,178 @@ const { Pool } = pkg;
 const app = express();
 app.use(express.json());
 
-/* =========================
-   ENV
-========================= */
-
-const PORT = process.env.PORT || 10000;
-const DATABASE_URL = process.env.DATABASE_URL;
-const FEC_API_KEY = process.env.FEC_API_KEY;
-
-/* =========================
+/* ================================
    DATABASE
-========================= */
+================================ */
 
 const pool = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false,
   },
 });
 
-/* =========================
-   HELPERS
-========================= */
+/* ================================
+   HEALTH CHECK
+================================ */
 
-function createSlug(name, state, office, year) {
-  return slugify(`${name}-${state}-${office}-${year}`, {
-    lower: true,
-    strict: true,
-  });
-}
-
-/* =========================
-   DB INIT
-========================= */
-
-async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS candidates (
-        id BIGSERIAL PRIMARY KEY,
-        slug TEXT UNIQUE,
-        name TEXT,
-        party TEXT,
-        state TEXT,
-        office TEXT,
-        district TEXT,
-        election_year INT,
-        source TEXT,
-        source_id TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
-
-  console.log("✅ Database ready");
-}
-
-/* =========================
-   UPSERT CANDIDATE
-========================= */
-
-async function upsertCandidate(candidate) {
-  const query = `
-    INSERT INTO candidates (
-      slug, name, party, state, office,
-      district, election_year, source, source_id
-    )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-    ON CONFLICT (slug)
-    DO UPDATE SET
-      name = EXCLUDED.name,
-      party = EXCLUDED.party,
-      state = EXCLUDED.state,
-      office = EXCLUDED.office,
-      district = EXCLUDED.district,
-      election_year = EXCLUDED.election_year,
-      updated_at = NOW()
-  `;
-
-  await pool.query(query, [
-    candidate.slug,
-    candidate.name,
-    candidate.party,
-    candidate.state,
-    candidate.office,
-    candidate.district,
-    candidate.year,
-    candidate.source,
-    candidate.source_id,
-  ]);
-}
-
-/* =========================
-   FEC IMPORTER
-========================= */
-
-async function importFECCandidates(year = 2024) {
-  console.log("🚀 Starting FEC Import");
-
-  let page = 1;
-  let totalImported = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    console.log(`📦 Fetching page ${page}`);
-
-    const url = `https://api.open.fec.gov/v1/candidates/search/?api_key=${FEC_API_KEY}&page=${page}&per_page=100&election_year=${year}`;
-
-    const response = await axios.get(url);
-
-    const results = response.data.results;
-
-    if (!results || results.length === 0) {
-      hasMore = false;
-      break;
-    }
-
-    for (const c of results) {
-      const name = c.name || "Unknown";
-
-      const officeMap = {
-        H: "House",
-        S: "Senate",
-        P: "President",
-      };
-
-      const office = officeMap[c.office] || "Federal";
-
-      const slug = createSlug(
-        name,
-        c.state || "US",
-        office,
-        year
-      );
-
-      const candidate = {
-        slug,
-        name,
-        party: c.party_full || "",
-        state: c.state || "",
-        office,
-        district: c.district || "",
-        year,
-        source: "FEC",
-        source_id: c.candidate_id,
-      };
-
-      try {
-        await upsertCandidate(candidate);
-        totalImported++;
-      } catch (err) {
-        console.error("UPSERT ERROR", err.message);
-      }
-    }
-
-    page++;
-
-    if (page > response.data.pagination.pages) {
-      hasMore = false;
-    }
-  }
-
-  console.log(`✅ Import Complete: ${totalImported} candidates`);
-  return totalImported;
-}
-
-/* =========================
-   ADMIN IMPORT ROUTE
-========================= */
-
-app.get("/admin/import/fec", async (req, res) => {
-  try {
-    const year = req.query.year || 2024;
-
-    const count = await importFECCandidates(year);
-
-    res.json({
-      success: true,
-      imported: count,
-      year,
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      error: err.message,
-    });
-  }
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
-/* =========================
-   API ROUTES
-========================= */
+/* ================================
+   ROOT
+================================ */
 
 app.get("/", (req, res) => {
-  res.send("VoterSphere Backend Running");
+  res.send("VoterSpheres Backend Running");
 });
 
-app.get("/health", async (req, res) => {
+/* ================================
+   TABLE INIT (SAFE)
+================================ */
+
+async function ensureTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS candidates (
+      id SERIAL PRIMARY KEY,
+      name TEXT,
+      office TEXT,
+      state TEXT,
+      party TEXT,
+      source TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+}
+
+/* ================================
+   PLACEHOLDER GENERATOR
+================================ */
+
+const firstNames = [
+  "James","Mary","John","Patricia","Robert","Jennifer",
+  "Michael","Linda","William","Elizabeth","David","Barbara"
+];
+
+const lastNames = [
+  "Smith","Johnson","Williams","Brown","Jones",
+  "Garcia","Miller","Davis","Rodriguez","Martinez"
+];
+
+const offices = [
+  "Mayor",
+  "City Council",
+  "Governor",
+  "State Senate",
+  "State House",
+  "Attorney General",
+  "County Commissioner"
+];
+
+const parties = ["Democrat", "Republican", "Independent"];
+
+const states = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
+];
+
+function random(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateCandidate() {
+  return {
+    name: `${random(firstNames)} ${random(lastNames)}`,
+    office: random(offices),
+    state: random(states),
+    party: random(parties),
+    source: "placeholder"
+  };
+}
+
+/* ================================
+   BULK INSERT FUNCTION
+================================ */
+
+async function insertBatch(batchSize = 1000) {
+  const client = await pool.connect();
+
   try {
-    await pool.query("SELECT 1");
+    await client.query("BEGIN");
 
-    res.json({
-      status: "ok",
-      db: "connected",
-    });
+    for (let i = 0; i < batchSize; i++) {
+      const c = generateCandidate();
+
+      await client.query(
+        `INSERT INTO candidates (name, office, state, party, source)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [c.name, c.office, c.state, c.party, c.source]
+      );
+    }
+
+    await client.query("COMMIT");
+
   } catch (err) {
-    res.status(500).json({
-      status: "error",
-      error: err.message,
-    });
-  }
-});
-
-/* =========================
-   START SERVER
-========================= */
-
-async function start() {
-  try {
-    await initDB();
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Backend running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error("START ERROR", err);
+    await client.query("ROLLBACK");
+    console.error(err);
+  } finally {
+    client.release();
   }
 }
 
-start();
+/* ================================
+   MASS IMPORT ENGINE
+================================ */
+
+async function massiveImport(total = 500000) {
+  console.log(`Starting import of ${total} candidates`);
+
+  const batchSize = 1000;
+  const loops = Math.ceil(total / batchSize);
+
+  for (let i = 0; i < loops; i++) {
+    await insertBatch(batchSize);
+    console.log(`Imported batch ${i + 1} / ${loops}`);
+  }
+
+  console.log("Import complete");
+}
+
+/* ================================
+   ADMIN IMPORT ROUTE
+================================ */
+
+app.get("/admin/import", async (req, res) => {
+  res.json({ status: "Import started" });
+
+  // Run async so request returns immediately
+  massiveImport(2000000).catch(console.error);
+});
+
+/* ================================
+   LIST CANDIDATES
+================================ */
+
+app.get("/candidates", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM candidates ORDER BY id DESC LIMIT 100"
+  );
+
+  res.json(rows);
+});
+
+/* ================================
+   SERVER START
+================================ */
+
+const PORT = process.env.PORT || 10000;
+
+ensureTable().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+});
