@@ -1,5 +1,6 @@
 import express from "express";
 import pkg from "pg";
+import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -7,171 +8,99 @@ dotenv.config();
 const { Pool } = pkg;
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-/* =========================
-   DATABASE
-========================= */
+/* ================= DB ================= */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-/* =========================
-   HEALTH
-========================= */
+/* ================= HEALTH ================= */
 
 app.get("/", (req, res) => {
-  res.send("VoterSpheres Backend Running");
+  res.json({ status: "VoterSpheres Enterprise API Running" });
 });
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+/* ================= SEARCH ================= */
+
+app.get("/api/search", async (req, res) => {
+
+  const { q } = req.query;
+
+  const result = await pool.query(
+    `
+    SELECT * FROM candidate
+    WHERE name ILIKE $1
+    LIMIT 50
+    `,
+    [`%${q}%`]
+  );
+
+  res.json(result.rows);
 });
 
-/* =========================
-   TABLE + INDEXES
-========================= */
+/* ================= STATE PAGE ================= */
 
-async function ensureTable() {
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS candidate (
-      id SERIAL PRIMARY KEY,
-      name TEXT,
-      office TEXT,
-      state TEXT,
-      party TEXT,
-      source TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
-
-  // Performance indexes
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_name ON candidate(name);`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_state ON candidate(state);`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_office ON candidate(office);`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_candidate_party ON candidate(party);`);
-
-  console.log("✅ Table + indexes ready");
-}
-
-/* =========================
-   SEARCH API
-========================= */
-
-app.get("/search", async (req, res) => {
-
-  try {
-
-    const {
-      q = "",
-      state,
-      office,
-      party,
-      page = 1,
-      limit = 50
-    } = req.query;
-
-    const offset = (page - 1) * limit;
-
-    let conditions = [];
-    let values = [];
-    let index = 1;
-
-    if (q) {
-      conditions.push(`name ILIKE $${index}`);
-      values.push(`%${q}%`);
-      index++;
-    }
-
-    if (state) {
-      conditions.push(`state = $${index}`);
-      values.push(state);
-      index++;
-    }
-
-    if (office) {
-      conditions.push(`office ILIKE $${index}`);
-      values.push(`%${office}%`);
-      index++;
-    }
-
-    if (party) {
-      conditions.push(`party = $${index}`);
-      values.push(party);
-      index++;
-    }
-
-    const whereClause =
-      conditions.length > 0
-        ? `WHERE ${conditions.join(" AND ")}`
-        : "";
-
-    const query = `
-      SELECT *
-      FROM candidate
-      ${whereClause}
-      ORDER BY id DESC
-      LIMIT $${index}
-      OFFSET $${index + 1}
-    `;
-
-    values.push(limit, offset);
-
-    const { rows } = await pool.query(query, values);
-
-    res.json({
-      page: Number(page),
-      limit: Number(limit),
-      results: rows.length,
-      data: rows
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Search failed" });
-  }
-});
-
-/* =========================
-   QUICK STATE ENDPOINT
-========================= */
-
-app.get("/state/:state", async (req, res) => {
+app.get("/api/state/:state", async (req, res) => {
 
   const state = req.params.state.toUpperCase();
 
-  const { rows } = await pool.query(
-    `SELECT * FROM candidate WHERE state = $1 LIMIT 100`,
+  const result = await pool.query(
+    `
+    SELECT * FROM candidate
+    WHERE state = $1
+    LIMIT 200
+    `,
     [state]
   );
 
-  res.json(rows);
+  res.json(result.rows);
 });
 
-/* =========================
-   BASIC LIST
-========================= */
+/* ================= ADMIN IMPORT ================= */
 
-app.get("/candidate", async (req, res) => {
+app.post("/api/admin/import", async (req, res) => {
 
-  const { rows } = await pool.query(
-    "SELECT * FROM candidate ORDER BY id DESC LIMIT 100"
+  const { candidates } = req.body;
+
+  for (const c of candidates) {
+
+    await pool.query(
+      `
+      INSERT INTO candidate (name, office, state, party, source)
+      VALUES ($1,$2,$3,$4,$5)
+      `,
+      [c.name, c.office, c.state, c.party, c.source || "manual"]
+    );
+  }
+
+  res.json({ success: true });
+});
+
+/* ================= SAVE CANDIDATE ================= */
+
+app.post("/api/save", async (req, res) => {
+
+  const { user_id, candidate_id } = req.body;
+
+  await pool.query(
+    `
+    INSERT INTO saved_candidates (user_id, candidate_id)
+    VALUES ($1,$2)
+    `,
+    [user_id, candidate_id]
   );
 
-  res.json(rows);
+  res.json({ saved: true });
 });
 
-/* =========================
-   SERVER
-========================= */
+/* ================= START ================= */
 
 const PORT = process.env.PORT || 10000;
 
-ensureTable().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
-  });
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
