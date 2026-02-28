@@ -6,17 +6,12 @@ import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes.js";
 import votersRoutes from "./routes/voters.routes.js";
+import dropdownRoutes from "./routes/dropdowns.routes.js";
 import { authenticate } from "./middleware/auth.js";
 
 dotenv.config();
 
 const app = express();
-
-/*
-|--------------------------------------------------------------------------
-| Security Middleware
-|--------------------------------------------------------------------------
-*/
 
 app.use(helmet());
 app.use(express.json());
@@ -32,38 +27,16 @@ app.use(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| Rate Limiting
-|--------------------------------------------------------------------------
-*/
-
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false
+  max: 100
 });
 
 app.use(globalLimiter);
 
-/*
-|--------------------------------------------------------------------------
-| Health Routes
-|--------------------------------------------------------------------------
-*/
-
 app.get("/", (req, res) => {
   res.json({
-    status: "VoterSpheres API is live 🚀",
-    environment: process.env.NODE_ENV || "development"
+    status: "VoterSpheres API is live 🚀"
   });
 });
 
@@ -73,44 +46,24 @@ app.get("/health", (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| API Routes
+| Routes
 |--------------------------------------------------------------------------
 */
 
-app.use("/auth", authLimiter, authRoutes);
+app.use("/auth", authRoutes);
 app.use("/voters", votersRoutes);
+app.use("/dropdowns", dropdownRoutes);
 
 /*
 |--------------------------------------------------------------------------
-| Example Protected Route
-|--------------------------------------------------------------------------
-*/
-
-app.get("/protected", authenticate, (req, res) => {
-  res.json({
-    message: "Protected route access granted",
-    user: req.user
-  });
-});
-
-/*
-|--------------------------------------------------------------------------
-| Global Error Handler
+| Error Handler
 |--------------------------------------------------------------------------
 */
 
 app.use((err, req, res, next) => {
-  console.error("Global error:", err);
-  res.status(500).json({
-    message: "Internal Server Error"
-  });
+  console.error(err);
+  res.status(500).json({ message: "Internal Server Error" });
 });
-
-/*
-|--------------------------------------------------------------------------
-| Server Startup
-|--------------------------------------------------------------------------
-*/
 
 const PORT = process.env.PORT || 5000;
 
