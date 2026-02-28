@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
 
 import { authenticate } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -12,7 +13,7 @@ const app = express();
 
 /*
 |--------------------------------------------------------------------------
-| Middleware
+| Security Middleware
 |--------------------------------------------------------------------------
 */
 
@@ -33,6 +34,36 @@ app.use(
     credentials: true
   })
 );
+
+/*
+|--------------------------------------------------------------------------
+| Rate Limiting
+|--------------------------------------------------------------------------
+*/
+
+// Global rate limiter (all routes)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many requests. Please try again later."
+  }
+});
+
+// Strict limiter for auth routes (anti brute-force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, // only 10 login/register attempts per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many authentication attempts. Please try again later."
+  }
+});
+
+app.use(globalLimiter);
 
 /*
 |--------------------------------------------------------------------------
@@ -57,9 +88,10 @@ app.get("/health", (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-app.use("/auth", authRoutes);
+// Apply strict limiter only to auth
+app.use("/auth", authLimiter, authRoutes);
 
-// Example protected route (for testing JWT)
+// Example protected route
 app.get("/protected", authenticate, (req, res) => {
   res.json({
     message: "You have accessed a protected route",
