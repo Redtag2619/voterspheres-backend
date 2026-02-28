@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes.js";
-import candidatesRoutes from "./routes/voters.routes.js"; // this handles /candidates
+import candidatesRoutes from "./routes/voters.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
 
 dotenv.config();
@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 
 /* ==========================================================================
-   MIDDLEWARE
+   SECURITY + CORE MIDDLEWARE
 ========================================================================== */
 
 app.use(helmet());
@@ -21,24 +21,23 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: [
-      "https://voterspheres.org",
-      "https://www.voterspheres.org",
-      "https://voterspheres-frontend.vercel.app"
-    ],
-    credentials: true
+    origin: "*", // You can lock this down later
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: false
   })
 );
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 app.use(limiter);
 
 /* ==========================================================================
-   ROOT & HEALTH
+   HEALTH CHECK
 ========================================================================== */
 
 app.get("/", (req, res) => {
@@ -60,8 +59,7 @@ app.use("/candidates", candidatesRoutes);
 app.use("/dropdowns", dropdownRoutes);
 
 /* ==========================================================================
-   404 HANDLER (IMPORTANT)
-   Always return JSON — never HTML
+   JSON 404 HANDLER (CRITICAL)
 ========================================================================== */
 
 app.use((req, res) => {
@@ -76,6 +74,7 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error("Global error:", err);
+
   res.status(500).json({
     error: "Internal Server Error"
   });
