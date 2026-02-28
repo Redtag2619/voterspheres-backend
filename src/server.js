@@ -25,7 +25,7 @@ app.get("/health", (_, res) => {
 
 app.use("/api/auth", authRoutes);
 
-app.get("/api/protected", requireAuth, (req, res) => {
+app.get("/api/protected", authenticate, (req, res) => {
   res.json({ message: "You are authenticated" });
 });
 
