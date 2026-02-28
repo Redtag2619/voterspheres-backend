@@ -5,20 +5,29 @@ const router = express.Router();
 
 /*
 |--------------------------------------------------------------------------
+| Helper: Safe Array Response
+|--------------------------------------------------------------------------
+*/
+const safeQuery = async (res, query) => {
+  try {
+    const result = await pool.query(query);
+    return res.json(result.rows || []);
+  } catch (err) {
+    console.error("Dropdown error:", err);
+    return res.json([]); // Always return array to prevent frontend crash
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
 | States
 |--------------------------------------------------------------------------
 */
 router.get("/states", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT DISTINCT state FROM voters ORDER BY state ASC"
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("States dropdown error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+  await safeQuery(
+    res,
+    "SELECT DISTINCT state FROM voters WHERE state IS NOT NULL ORDER BY state ASC"
+  );
 });
 
 /*
@@ -27,16 +36,10 @@ router.get("/states", async (req, res) => {
 |--------------------------------------------------------------------------
 */
 router.get("/offices", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT DISTINCT office FROM voters ORDER BY office ASC"
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Offices dropdown error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+  await safeQuery(
+    res,
+    "SELECT DISTINCT office FROM voters WHERE office IS NOT NULL ORDER BY office ASC"
+  );
 });
 
 /*
@@ -45,16 +48,10 @@ router.get("/offices", async (req, res) => {
 |--------------------------------------------------------------------------
 */
 router.get("/parties", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT DISTINCT party FROM voters ORDER BY party ASC"
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Parties dropdown error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
+  await safeQuery(
+    res,
+    "SELECT DISTINCT party FROM voters WHERE party IS NOT NULL ORDER BY party ASC"
+  );
 });
 
 export default router;
