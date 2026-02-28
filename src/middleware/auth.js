@@ -1,38 +1,27 @@
 import jwt from "jsonwebtoken";
 import { config } from "../config.js";
-import { Request, Response, NextFunction } from "express";
 
-export interface AuthRequest extends Request {
-  user?: any;
-}
-
-export function requireAuth(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) {
-  const header = req.headers.authorization;
-
-  if (!header) return res.status(401).json({ error: "Unauthorized" });
-
-  const token = header.split(" ")[1];
-
+/**
+ * JWT Authentication Middleware
+ */
+export const authenticate = (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, config.jwtSecret);
-    req.user = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid token" });
-  }
-}
+    const authHeader = req.headers.authorization;
 
-export function requireActiveSubscription(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) {
-  if (req.user.subscriptionStatus !== "active") {
-    return res.status(403).json({ error: "Subscription required" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(token, config.jwtSecret);
+
+    // Attach user info to request
+    req.user = decoded;
+
+    next();
+  } catch (err) {
+    console.error("Auth middleware error:", err);
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
-  next();
-}
+};
