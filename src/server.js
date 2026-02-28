@@ -4,8 +4,9 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
-import { authenticate } from "./middleware/auth.js";
 import authRoutes from "./routes/auth.routes.js";
+import votersRoutes from "./routes/voters.routes.js";
+import { authenticate } from "./middleware/auth.js";
 
 dotenv.config();
 
@@ -17,13 +18,9 @@ const app = express();
 |--------------------------------------------------------------------------
 */
 
-// Security headers
 app.use(helmet());
-
-// JSON parsing
 app.use(express.json());
 
-// CORS Configuration
 app.use(
   cors({
     origin: [
@@ -41,33 +38,25 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-// Global rate limiter (all routes)
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    message: "Too many requests. Please try again later."
-  }
+  legacyHeaders: false
 });
 
-// Strict limiter for auth routes (anti brute-force)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // only 10 login/register attempts per 15 min
+  max: 10,
   standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    message: "Too many authentication attempts. Please try again later."
-  }
+  legacyHeaders: false
 });
 
 app.use(globalLimiter);
 
 /*
 |--------------------------------------------------------------------------
-| Health & Root Routes
+| Health Routes
 |--------------------------------------------------------------------------
 */
 
@@ -88,13 +77,18 @@ app.get("/health", (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-// Apply strict limiter only to auth
 app.use("/auth", authLimiter, authRoutes);
+app.use("/voters", votersRoutes);
 
-// Example protected route
+/*
+|--------------------------------------------------------------------------
+| Example Protected Route
+|--------------------------------------------------------------------------
+*/
+
 app.get("/protected", authenticate, (req, res) => {
   res.json({
-    message: "You have accessed a protected route",
+    message: "Protected route access granted",
     user: req.user
   });
 });
