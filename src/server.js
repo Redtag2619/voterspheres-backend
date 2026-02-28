@@ -4,7 +4,7 @@ import helmet from "helmet";
 import compression from "compression";
 import { config } from "./config.js";
 import authRoutes from "./routes/auth.routes.js";
-import { requireAuth } from "./middleware/auth.js";
+import { authenticate } from "./middleware/auth.js";
 
 const app = express();
 
