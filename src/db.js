@@ -1,10 +1,11 @@
-export interface User {
-  id: string;
-  email: string;
-  passwordHash: string;
-  role: "admin" | "user";
-  subscriptionStatus: "active" | "inactive";
-  tenantId: string;
-}
+import pkg from "pg";
+import { config } from "./config.js";
 
-export const users: User[] = [];
+const { Pool } = pkg;
+
+export const pool = new Pool({
+  connectionString: config.databaseUrl,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
