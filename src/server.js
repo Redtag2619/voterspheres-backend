@@ -5,13 +5,16 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes.js";
-import votersRoutes from "./routes/voters.routes.js";
+import candidatesRoutes from "./routes/voters.routes.js"; // this handles /candidates
 import dropdownRoutes from "./routes/dropdowns.routes.js";
-import { authenticate } from "./middleware/auth.js";
 
 dotenv.config();
 
 const app = express();
+
+/* ==========================================================================
+   MIDDLEWARE
+========================================================================== */
 
 app.use(helmet());
 app.use(express.json());
@@ -27,12 +30,16 @@ app.use(
   })
 );
 
-const globalLimiter = rateLimit({
+const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 200
 });
 
-app.use(globalLimiter);
+app.use(limiter);
+
+/* ==========================================================================
+   ROOT & HEALTH
+========================================================================== */
 
 app.get("/", (req, res) => {
   res.json({
@@ -44,26 +51,39 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
-/*
-|--------------------------------------------------------------------------
-| Routes
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   ROUTES
+========================================================================== */
 
 app.use("/auth", authRoutes);
-app.use("/voters", votersRoutes);
+app.use("/candidates", candidatesRoutes);
 app.use("/dropdowns", dropdownRoutes);
 
-/*
-|--------------------------------------------------------------------------
-| Error Handler
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   404 HANDLER (IMPORTANT)
+   Always return JSON — never HTML
+========================================================================== */
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found"
+  });
+});
+
+/* ==========================================================================
+   GLOBAL ERROR HANDLER
+========================================================================== */
 
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ message: "Internal Server Error" });
+  console.error("Global error:", err);
+  res.status(500).json({
+    error: "Internal Server Error"
+  });
 });
+
+/* ==========================================================================
+   START SERVER
+========================================================================== */
 
 const PORT = process.env.PORT || 5000;
 
