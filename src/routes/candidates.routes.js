@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const {
-      candidates = "",
+      q = "",
       state = "",
       county = "",
       office = "",
@@ -20,13 +20,16 @@ router.get("/", async (req, res) => {
       limit = 10,
     } = req.query;
 
-    const offset = (Number(page) - 1) * Number(limit);
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const offset = (pageNum - 1) * limitNum;
 
     const conditions = [];
     const values = [];
     let index = 1;
 
-    if (candidates) {
+    // 🔎 Search by name
+    if (q) {
       conditions.push(`full_name ILIKE $${index++}`);
       values.push(`%${q}%`);
     }
@@ -54,6 +57,7 @@ router.get("/", async (req, res) => {
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
+    // 📦 Data Query
     const dataQuery = `
       SELECT *
       FROM candidates
@@ -63,13 +67,14 @@ router.get("/", async (req, res) => {
       OFFSET $${index}
     `;
 
-    values.push(limit, offset);
+    values.push(limitNum, offset);
 
+    // 📊 Count Query
     const countQuery = `
-     const countQuery = `
-  SELECT COUNT(*) FROM candidates ${whereClause}
-`;
-
+      SELECT COUNT(*) AS total
+      FROM candidates
+      ${whereClause}
+    `;
 
     const dataResult = await pool.query(dataQuery, values);
     const countResult = await pool.query(
@@ -79,11 +84,14 @@ router.get("/", async (req, res) => {
 
     res.json({
       results: dataResult.rows,
-      total: Number(countResult.rows[0].count),
+      total: Number(countResult.rows[0].total),
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (err) {
-    console.error("Candidates error:", err);
+    console.error("Candidates route error:", err);
     res.status(500).json({
+      error: err.message,
       results: [],
       total: 0,
     });
