@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const {
-      q = "",
+      candidates = "",
       state = "",
       county = "",
       office = "",
@@ -26,7 +26,7 @@ router.get("/", async (req, res) => {
     const values = [];
     let index = 1;
 
-    if (q) {
+    if (candidates) {
       conditions.push(`full_name ILIKE $${index++}`);
       values.push(`%${q}%`);
     }
