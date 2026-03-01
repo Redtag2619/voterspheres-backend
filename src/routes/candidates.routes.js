@@ -66,8 +66,10 @@ router.get("/", async (req, res) => {
     values.push(limit, offset);
 
     const countQuery = `
-      SELECT COUNT(*) FROM voters ${whereClause}
-    `;
+     const countQuery = `
+  SELECT COUNT(*) FROM candidates ${whereClause}
+`;
+
 
     const dataResult = await pool.query(dataQuery, values);
     const countResult = await pool.query(
