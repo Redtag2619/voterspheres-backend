@@ -56,7 +56,7 @@ router.get("/", async (req, res) => {
 
     const dataQuery = `
       SELECT *
-      FROM voters
+      FROM candidates
       ${whereClause}
       ORDER BY full_name ASC
       LIMIT $${index++}
