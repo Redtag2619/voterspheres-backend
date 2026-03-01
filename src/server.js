@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes.js";
-import candidatesRoutes from "./routes/voters.routes.js";
+import candidatesRoutes from "./routes/candidates.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
 
 dotenv.config();
