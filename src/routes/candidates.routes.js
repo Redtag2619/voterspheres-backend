@@ -13,8 +13,6 @@ router.get("/", async (req, res) => {
     const {
       q = "",
       state = "",
-      county = "",
-      office = "",
       party = "",
       page = 1,
       limit = 10,
@@ -28,25 +26,15 @@ router.get("/", async (req, res) => {
     const values = [];
     let index = 1;
 
-    // 🔎 Search by name
+    // 🔎 Search by candidate name
     if (q) {
-      conditions.push(`full_name ILIKE $${index++}`);
+      conditions.push(`name ILIKE $${index++}`);
       values.push(`%${q}%`);
     }
 
     if (state) {
       conditions.push(`state = $${index++}`);
       values.push(state);
-    }
-
-    if (county) {
-      conditions.push(`county = $${index++}`);
-      values.push(county);
-    }
-
-    if (office) {
-      conditions.push(`office = $${index++}`);
-      values.push(office);
     }
 
     if (party) {
@@ -57,19 +45,17 @@ router.get("/", async (req, res) => {
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // 📦 Data Query
     const dataQuery = `
       SELECT *
       FROM candidates
       ${whereClause}
-      ORDER BY full_name ASC
+      ORDER BY name ASC
       LIMIT $${index++}
       OFFSET $${index}
     `;
 
     values.push(limitNum, offset);
 
-    // 📊 Count Query
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM candidates
