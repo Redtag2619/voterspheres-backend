@@ -26,58 +26,6 @@ router.get("/states", async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| GET /dropdowns/counties?state=TX
-|--------------------------------------------------------------------------
-*/
-router.get("/counties", async (req, res) => {
-  try {
-    const { state } = req.query;
-
-    if (!state) {
-      return res.json([]);
-    }
-
-    const result = await pool.query(
-      `
-      SELECT DISTINCT county
-      FROM candidates
-      WHERE state = $1
-      AND county IS NOT NULL AND county <> ''
-      ORDER BY county ASC
-      `,
-      [state]
-    );
-
-    res.json(result.rows.map(r => r.county));
-  } catch (err) {
-    console.error("Counties dropdown error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| GET /dropdowns/offices
-|--------------------------------------------------------------------------
-*/
-router.get("/offices", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT DISTINCT office
-      FROM candidates
-      WHERE office IS NOT NULL AND office <> ''
-      ORDER BY office ASC
-    `);
-
-    res.json(result.rows.map(r => r.office));
-  } catch (err) {
-    console.error("Offices dropdown error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
 | GET /dropdowns/parties
 |--------------------------------------------------------------------------
 */
