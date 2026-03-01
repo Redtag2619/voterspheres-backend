@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "VoterSpheres Multi-Tenant API",
   "type": "module",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
     "start": "node server.js"
   },
