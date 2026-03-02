@@ -13,6 +13,8 @@ router.get("/", async (req, res) => {
     const {
       q = "",
       state = "",
+      county = "",
+      office = "",
       party = "",
       page = 1,
       limit = 10,
@@ -26,7 +28,6 @@ router.get("/", async (req, res) => {
     const values = [];
     let index = 1;
 
-    // 🔎 Search by candidate name
     if (q) {
       conditions.push(`name ILIKE $${index++}`);
       values.push(`%${q}%`);
@@ -46,7 +47,19 @@ router.get("/", async (req, res) => {
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const dataQuery = `
-      SELECT *
+      SELECT
+        id,
+        name AS full_name,
+        election AS office_name,
+        '' AS county_name,
+        state AS state_name,
+        party AS party_name,
+        '' AS email,
+        '' AS phone,
+        bio,
+        photo,
+        election_date,
+        slug
       FROM candidates
       ${whereClause}
       ORDER BY name ASC
@@ -71,13 +84,10 @@ router.get("/", async (req, res) => {
     res.json({
       results: dataResult.rows,
       total: Number(countResult.rows[0].total),
-      page: pageNum,
-      limit: limitNum,
     });
   } catch (err) {
     console.error("Candidates route error:", err);
     res.status(500).json({
-      error: err.message,
       results: [],
       total: 0,
     });
