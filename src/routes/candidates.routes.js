@@ -1,4 +1,5 @@
 import express from "express";
+import authMiddleware from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -11,7 +12,8 @@ const router = express.Router();
  *   page   = page number
  *   limit  = results per page
  */
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
+
   try {
     const {
       q = "",
