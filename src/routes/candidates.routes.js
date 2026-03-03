@@ -1,4 +1,17 @@
-app.get("/candidates", async (req, res) => {
+import express from "express";
+
+const router = express.Router();
+
+/**
+ * GET /candidates
+ * Query params:
+ *   q      = search name
+ *   state  = state abbreviation (TX, CA, etc.)
+ *   party  = DEM, REP, etc.
+ *   page   = page number
+ *   limit  = results per page
+ */
+router.get("/", async (req, res) => {
   try {
     const {
       q = "",
@@ -11,7 +24,9 @@ app.get("/candidates", async (req, res) => {
     const apiKey = process.env.FEC_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Missing FEC API key" });
+      return res.status(500).json({
+        error: "FEC_API_KEY not configured in environment variables",
+      });
     }
 
     const fecUrl = new URL("https://api.open.fec.gov/v1/candidates/");
@@ -20,29 +35,49 @@ app.get("/candidates", async (req, res) => {
     fecUrl.searchParams.append("per_page", limit);
     fecUrl.searchParams.append("page", page);
 
-    if (state) fecUrl.searchParams.append("state", state);
-    if (party) fecUrl.searchParams.append("party", party);
-    if (q) fecUrl.searchParams.append("q", q);
+    if (state) {
+      fecUrl.searchParams.append("state", state);
+    }
+
+    if (party) {
+      fecUrl.searchParams.append("party", party);
+    }
+
+    if (q) {
+      fecUrl.searchParams.append("q", q);
+    }
 
     const response = await fetch(fecUrl.toString());
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("FEC API Error:", text);
+      return res.status(500).json({ error: "FEC API request failed" });
+    }
+
     const data = await response.json();
 
-    const formattedResults = (data.results || []).map((c) => ({
-      full_name: c.name,
-      office_name: c.office_full || c.office,
-      state_name: c.state,
-      party_name: c.party_full,
+    const formattedResults = (data.results || []).map((candidate) => ({
+      full_name: candidate.name || "",
+      office_name: candidate.office_full || candidate.office || "",
+      state_name: candidate.state || "",
+      party_name: candidate.party_full || candidate.party || "",
       county_name: "",
       email: "",
       phone: "",
     }));
 
-    res.json({
+    return res.json({
       results: formattedResults,
       total: data.pagination?.count || 0,
     });
+
   } catch (error) {
-    console.error("FEC fetch error:", error);
-    res.status(500).json({ error: "Failed to fetch FEC candidates" });
+    console.error("Candidates route error:", error);
+    return res.status(500).json({
+      error: "Internal server error fetching candidates",
+    });
   }
 });
+
+export default router;
