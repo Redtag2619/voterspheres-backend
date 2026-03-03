@@ -1,97 +1,48 @@
-import express from "express";
-import { pool } from "../db.js";
-
-const router = express.Router();
-
-/*
-|--------------------------------------------------------------------------
-| GET /candidates
-|--------------------------------------------------------------------------
-*/
-router.get("/", async (req, res) => {
+app.get("/candidates", async (req, res) => {
   try {
     const {
       q = "",
       state = "",
-      county = "",
-      office = "",
       party = "",
       page = 1,
       limit = 10,
     } = req.query;
 
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 10;
-    const offset = (pageNum - 1) * limitNum;
+    const apiKey = process.env.FEC_API_KEY;
 
-    const conditions = [];
-    const values = [];
-    let index = 1;
-
-    if (q) {
-      conditions.push(`name ILIKE $${index++}`);
-      values.push(`%${q}%`);
+    if (!apiKey) {
+      return res.status(500).json({ error: "Missing FEC API key" });
     }
 
-    if (state) {
-      conditions.push(`state = $${index++}`);
-      values.push(state);
-    }
+    const fecUrl = new URL("https://api.open.fec.gov/v1/candidates/");
 
-    if (party) {
-      conditions.push(`party = $${index++}`);
-      values.push(party);
-    }
+    fecUrl.searchParams.append("api_key", apiKey);
+    fecUrl.searchParams.append("per_page", limit);
+    fecUrl.searchParams.append("page", page);
 
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    if (state) fecUrl.searchParams.append("state", state);
+    if (party) fecUrl.searchParams.append("party", party);
+    if (q) fecUrl.searchParams.append("q", q);
 
-    const dataQuery = `
-      SELECT
-        id,
-        name AS full_name,
-        election AS office_name,
-        '' AS county_name,
-        state AS state_name,
-        party AS party_name,
-        '' AS email,
-        '' AS phone,
-        bio,
-        photo,
-        election_date,
-        slug
-      FROM candidates
-      ${whereClause}
-      ORDER BY name ASC
-      LIMIT $${index++}
-      OFFSET $${index}
-    `;
+    const response = await fetch(fecUrl.toString());
+    const data = await response.json();
 
-    values.push(limitNum, offset);
-
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM candidates
-      ${whereClause}
-    `;
-
-    const dataResult = await pool.query(dataQuery, values);
-    const countResult = await pool.query(
-      countQuery,
-      values.slice(0, values.length - 2)
-    );
+    const formattedResults = (data.results || []).map((c) => ({
+      full_name: c.name,
+      office_name: c.office_full || c.office,
+      state_name: c.state,
+      party_name: c.party_full,
+      county_name: "",
+      email: "",
+      phone: "",
+    }));
 
     res.json({
-      results: dataResult.rows,
-      total: Number(countResult.rows[0].total),
+      results: formattedResults,
+      total: data.pagination?.count || 0,
     });
-  } catch (err) {
-    console.error("Candidates route error:", err);
-    res.status(500).json({
-      results: [],
-      total: 0,
-    });
+  } catch (error) {
+    console.error("FEC fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch FEC candidates" });
   }
 });
-
-export default router;
