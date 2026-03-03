@@ -1,68 +1,105 @@
 import express from "express";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { pool } from "../db.js";
+import pool from "../db.js";
 
 const router = express.Router();
 
-/*
-|--------------------------------------------------------------------------
-| REGISTER
-|--------------------------------------------------------------------------
-*/
+const JWT_SECRET = process.env.JWT_SECRET;
+
+/**
+ * REGISTER
+ * Creates organization + owner user
+ */
 router.post("/register", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { organizationName, email, password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!organizationName || !email || !password) {
+      return res.status(400).json({ error: "All fields required" });
+    }
 
-    const result = await pool.query(
-      "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
-      [email, hashedPassword]
+    const password_hash = await bcrypt.hash(password, 10);
+
+    // Create organization
+    const orgResult = await pool.query(
+      `INSERT INTO organizations (name)
+       VALUES ($1)
+       RETURNING *`,
+      [organizationName]
     );
 
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Register error:", err);
+    const organization = orgResult.rows[0];
+
+    // Create owner user
+    const userResult = await pool.query(
+      `INSERT INTO users (organization_id, email, password_hash, role)
+       VALUES ($1, $2, $3, 'owner')
+       RETURNING id, email, role`,
+      [organization.id, email, password_hash]
+    );
+
+    const user = userResult.rows[0];
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        organizationId: organization.id,
+        role: user.role,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token });
+
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Registration failed" });
   }
 });
 
-/*
-|--------------------------------------------------------------------------
-| LOGIN
-|--------------------------------------------------------------------------
-*/
+/**
+ * LOGIN
+ */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
+      `SELECT * FROM users WHERE email = $1`,
       [email]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
     const user = result.rows[0];
 
-    const validPassword = await bcrypt.compare(password, user.password);
+    if (!user) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const validPassword = await bcrypt.compare(
+      password,
+      user.password_hash
+    );
 
     if (!validPassword) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(400).json({ error: "Invalid credentials" });
     }
 
     const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || "dev_secret",
-      { expiresIn: "1d" }
+      {
+        userId: user.id,
+        organizationId: user.organization_id,
+        role: user.role,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
     );
 
     res.json({ token });
-  } catch (err) {
-    console.error("Login error:", err);
+
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Login failed" });
   }
 });
