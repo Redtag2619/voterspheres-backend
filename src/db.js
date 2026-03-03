@@ -1,47 +1,24 @@
-import pkg from "pg";
+import pg from "pg";
+import dotenv from "dotenv";
 
-const { Pool } = pkg;
+dotenv.config();
 
-/*
-|--------------------------------------------------------------------------
-| Validate DATABASE_URL
-|--------------------------------------------------------------------------
-*/
-if (!process.env.DATABASE_URL) {
-  console.error("❌ DATABASE_URL is not set in environment variables.");
-  process.exit(1);
-}
+const { Pool } = pg;
 
-/*
-|--------------------------------------------------------------------------
-| Create PostgreSQL Pool
-|--------------------------------------------------------------------------
-*/
-export const pool = new Pool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-
-  // Required for Render Postgres
   ssl: {
-    rejectUnauthorized: false,
-  },
-
-  // Optional stability tuning
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+    rejectUnauthorized: false
+  }
 });
 
-/*
-|--------------------------------------------------------------------------
-| Test Connection On Startup
-|--------------------------------------------------------------------------
-*/
-pool.connect()
-  .then(client => {
-    console.log("✅ PostgreSQL connected successfully");
-    client.release();
-  })
-  .catch(err => {
-    console.error("❌ PostgreSQL connection error:", err);
-    process.exit(1);
-  });
+pool.on("connect", () => {
+  console.log("✅ Connected to PostgreSQL");
+});
+
+pool.on("error", (err) => {
+  console.error("❌ PostgreSQL Error:", err);
+  process.exit(1);
+});
+
+export default pool;
