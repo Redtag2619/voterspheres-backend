@@ -1,3 +1,5 @@
+import usageMiddleware from "../middleware/usage.middleware.js";
+import pool from "../db.js";
 import express from "express";
 import authMiddleware from "../middleware/auth.middleware.js";
 
@@ -12,7 +14,7 @@ const router = express.Router();
  *   page   = page number
  *   limit  = results per page
  */
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", authMiddleware, usageMiddleware, async (req, res) => {
 
   try {
     const {
@@ -68,6 +70,12 @@ router.get("/", authMiddleware, async (req, res) => {
       email: "",
       phone: "",
     }));
+
+    await pool.query(
+  `INSERT INTO usage_logs (organization_id, action_type)
+   VALUES ($1, 'candidate_search')`,
+  [req.user.organizationId]
+);
 
     return res.json({
       results: formattedResults,
