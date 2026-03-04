@@ -1,3 +1,4 @@
+import billingRoutes from "./routes/billing.routes.js";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -18,6 +19,8 @@ app.use(cors({
   credentials: true
 }));
 
+app.use("/billing/webhook", express.raw({ type: "application/json" }));
+app.use("/billing", billingRoutes);
 app.use(express.json());
 
 /* -----------------------------
