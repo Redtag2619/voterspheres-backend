@@ -1,11 +1,11 @@
 import express from "express";
-import pool from "../db.js"; // make sure this matches your db export
+import pool from "../db.js";
 
 const router = express.Router();
 
 /* ============================================================
    GET /candidates
-   Public Search Endpoint
+   Matches your actual table structure
 ============================================================ */
 
 router.get("/", async (req, res) => {
@@ -13,8 +13,6 @@ router.get("/", async (req, res) => {
     const {
       q,
       state,
-      county,
-      office,
       party,
       page = 1,
       limit = 10,
@@ -27,27 +25,17 @@ router.get("/", async (req, res) => {
 
     if (q) {
       values.push(`%${q}%`);
-      whereClauses.push(`full_name ILIKE $${values.length}`);
+      whereClauses.push(`name ILIKE $${values.length}`);
     }
 
     if (state) {
       values.push(state);
-      whereClauses.push(`state_name = $${values.length}`);
-    }
-
-    if (county) {
-      values.push(county);
-      whereClauses.push(`county_name = $${values.length}`);
-    }
-
-    if (office) {
-      values.push(office);
-      whereClauses.push(`office_name = $${values.length}`);
+      whereClauses.push(`state = $${values.length}`);
     }
 
     if (party) {
       values.push(party);
-      whereClauses.push(`party_name = $${values.length}`);
+      whereClauses.push(`party = $${values.length}`);
     }
 
     const whereSQL =
@@ -55,6 +43,7 @@ router.get("/", async (req, res) => {
         ? `WHERE ${whereClauses.join(" AND ")}`
         : "";
 
+    // Get total count
     const totalQuery = `
       SELECT COUNT(*)
       FROM candidates
@@ -64,6 +53,7 @@ router.get("/", async (req, res) => {
     const totalResult = await pool.query(totalQuery, values);
     const total = Number(totalResult.rows[0].count);
 
+    // Add pagination
     values.push(limit);
     values.push(offset);
 
@@ -71,7 +61,7 @@ router.get("/", async (req, res) => {
       SELECT *
       FROM candidates
       ${whereSQL}
-      ORDER BY full_name ASC
+      ORDER BY name ASC
       LIMIT $${values.length - 1}
       OFFSET $${values.length}
     `;
@@ -82,6 +72,7 @@ router.get("/", async (req, res) => {
       results: result.rows,
       total,
     });
+
   } catch (err) {
     console.error("Candidates fetch error:", err);
     res.status(500).json({ error: "Failed to load candidates" });
@@ -95,10 +86,10 @@ router.get("/", async (req, res) => {
 router.get("/states", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT state_name AS state
+      SELECT DISTINCT state
       FROM candidates
-      WHERE state_name IS NOT NULL
-      ORDER BY state_name ASC
+      WHERE state IS NOT NULL
+      ORDER BY state ASC
     `);
 
     res.json(result.rows);
@@ -109,36 +100,16 @@ router.get("/states", async (req, res) => {
 });
 
 /* ============================================================
-   GET /candidates/offices
-============================================================ */
-
-router.get("/offices", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT DISTINCT office_name AS office
-      FROM candidates
-      WHERE office_name IS NOT NULL
-      ORDER BY office_name ASC
-    `);
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Offices fetch error:", err);
-    res.status(500).json({ error: "Failed to load offices" });
-  }
-});
-
-/* ============================================================
    GET /candidates/parties
 ============================================================ */
 
 router.get("/parties", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT party_name AS party
+      SELECT DISTINCT party
       FROM candidates
-      WHERE party_name IS NOT NULL
-      ORDER BY party_name ASC
+      WHERE party IS NOT NULL
+      ORDER BY party ASC
     `);
 
     res.json(result.rows);
