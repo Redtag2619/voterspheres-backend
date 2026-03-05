@@ -4,8 +4,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 import candidatesRoutes from "./routes/candidates.routes.js";
-import authRoutes from "./routes/auth.routes.js";
 import dropdownRoutes from "./src/routes/dropdowns.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 dotenv.config();
 
