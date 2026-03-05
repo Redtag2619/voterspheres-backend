@@ -1,65 +1,82 @@
-import billingRoutes from "./routes/billing.routes.js";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-import candidatesRoutes from "./routes/candidates.routes.js";
+import candidatesRoutes from "./src/routes/candidates.routes.js";
 import dropdownRoutes from "./src/routes/dropdowns.routes.js";
-import authRoutes from "./routes/auth.routes.js";
 
 dotenv.config();
 
 const app = express();
 
-/* -----------------------------
-   CORE MIDDLEWARE
------------------------------- */
+/* ===============================
+   Middleware
+================================ */
 
 app.use(cors({
-  origin: true,
+  origin: [
+    "https://voterspheres.org",
+    "https://www.voterspheres.org",
+    "http://localhost:5173"
+  ],
   credentials: true
 }));
 
-app.use("/billing/webhook", express.raw({ type: "application/json" }));
-app.use("/billing", billingRoutes);
 app.use(express.json());
 
-/* -----------------------------
-   HEALTH CHECK
------------------------------- */
+
+/* ===============================
+   Health Check
+================================ */
 
 app.get("/", (req, res) => {
   res.json({
-    status: "VoterSpheres API Running",
-    environment: process.env.NODE_ENV || "development"
+    status: "VoterSpheres API running",
+    version: "1.0",
+    service: "Political Intelligence Platform"
   });
 });
 
-/* -----------------------------
-   ROUTES
------------------------------- */
 
-app.use("/auth", authRoutes);
+/* ===============================
+   API Routes
+================================ */
+
 app.use("/candidates", candidatesRoutes);
+
 app.use("/dropdowns", dropdownRoutes);
 
-/* -----------------------------
-   GLOBAL ERROR HANDLER
------------------------------- */
+
+/* ===============================
+   404 Handler
+================================ */
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found"
+  });
+});
+
+
+/* ===============================
+   Global Error Handler
+================================ */
 
 app.use((err, req, res, next) => {
-  console.error("Global Error:", err);
+  console.error("Server Error:", err);
+
   res.status(500).json({
     error: "Internal Server Error"
   });
 });
 
-/* -----------------------------
-   START SERVER
------------------------------- */
 
-const PORT = process.env.PORT || 10000;
+/* ===============================
+   Server
+================================ */
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 VoterSpheres API running on port ${PORT}`);
 });
