@@ -1,10 +1,11 @@
-const express = require("express");
+import express from "express";
+import pool from "../db.js"; // make sure this matches your db export
+
 const router = express.Router();
-const pool = require("../db"); // adjust if your db file path differs
 
 /* ============================================================
    GET /candidates
-   Public Search Endpoint (NO AUTH)
+   Public Search Endpoint
 ============================================================ */
 
 router.get("/", async (req, res) => {
@@ -54,9 +55,8 @@ router.get("/", async (req, res) => {
         ? `WHERE ${whereClauses.join(" AND ")}`
         : "";
 
-    // Total count query
     const totalQuery = `
-      SELECT COUNT(*) 
+      SELECT COUNT(*)
       FROM candidates
       ${whereSQL}
     `;
@@ -64,7 +64,6 @@ router.get("/", async (req, res) => {
     const totalResult = await pool.query(totalQuery, values);
     const total = Number(totalResult.rows[0].count);
 
-    // Data query
     values.push(limit);
     values.push(offset);
 
@@ -91,7 +90,6 @@ router.get("/", async (req, res) => {
 
 /* ============================================================
    GET /candidates/states
-   Public Dropdown
 ============================================================ */
 
 router.get("/states", async (req, res) => {
@@ -150,4 +148,4 @@ router.get("/parties", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
