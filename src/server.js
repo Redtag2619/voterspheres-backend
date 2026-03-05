@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 
 import candidatesRoutes from "./routes/candidates.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import dropdownRoutes from "./src/routes/dropdowns.routes.js";
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ app.get("/", (req, res) => {
 
 app.use("/auth", authRoutes);
 app.use("/candidates", candidatesRoutes);
+app.use("/dropdowns", dropdownRoutes);
 
 /* -----------------------------
    GLOBAL ERROR HANDLER
