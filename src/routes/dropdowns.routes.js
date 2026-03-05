@@ -1,69 +1,72 @@
 import express from "express";
-import { pool } from "../db.js";
+import pool from "../db.js";
 
 const router = express.Router();
 
-/*
-|--------------------------------------------------------------------------
-| GET /dropdowns/states
-|--------------------------------------------------------------------------
-*/
+/* ================================
+   STATES
+================================ */
+
 router.get("/states", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT state AS state
+      SELECT DISTINCT state
       FROM candidates
-      WHERE state IS NOT NULL AND state <> ''
-      ORDER BY state ASC
+      WHERE state IS NOT NULL
+      ORDER BY state
     `);
 
-    res.json(result.rows);
+    res.json(result.rows.map(r => r.state));
+
   } catch (err) {
     console.error("States dropdown error:", err);
-    res.status(500).json([]);
+    res.status(500).json({ error: "Failed to load states" });
   }
 });
 
-/*
-|--------------------------------------------------------------------------
-| GET /dropdowns/offices
-|--------------------------------------------------------------------------
-*/
-router.get("/offices", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT DISTINCT election AS office
-      FROM candidates
-      WHERE election IS NOT NULL AND election <> ''
-      ORDER BY election ASC
-    `);
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Offices dropdown error:", err);
-    res.status(500).json([]);
-  }
-});
+/* ================================
+   PARTIES
+================================ */
 
-/*
-|--------------------------------------------------------------------------
-| GET /dropdowns/parties
-|--------------------------------------------------------------------------
-*/
 router.get("/parties", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT party AS party
+      SELECT DISTINCT party
       FROM candidates
-      WHERE party IS NOT NULL AND party <> ''
-      ORDER BY party ASC
+      WHERE party IS NOT NULL
+      ORDER BY party
     `);
 
-    res.json(result.rows);
+    res.json(result.rows.map(r => r.party));
+
   } catch (err) {
     console.error("Parties dropdown error:", err);
-    res.status(500).json([]);
+    res.status(500).json({ error: "Failed to load parties" });
   }
 });
+
+
+/* ================================
+   OFFICES
+================================ */
+
+router.get("/offices", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT election
+      FROM candidates
+      WHERE election IS NOT NULL
+      ORDER BY election
+    `);
+
+    res.json(result.rows.map(r => r.election));
+
+  } catch (err) {
+    console.error("Offices dropdown error:", err);
+    res.status(500).json({ error: "Failed to load offices" });
+  }
+});
+
 
 export default router;
