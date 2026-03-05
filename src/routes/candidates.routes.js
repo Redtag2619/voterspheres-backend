@@ -1,93 +1,153 @@
-import usageMiddleware from "../middleware/usage.middleware.js";
-import pool from "../db.js";
-import express from "express";
-import authMiddleware from "../middleware/auth.middleware.js";
-
+const express = require("express");
 const router = express.Router();
+const pool = require("../db"); // adjust if your db file path differs
 
-/**
- * GET /candidates
- * Query params:
- *   q      = search name
- *   state  = state abbreviation (TX, CA, etc.)
- *   party  = DEM, REP, etc.
- *   page   = page number
- *   limit  = results per page
- */
-router.get("/", authMiddleware, usageMiddleware, async (req, res) => {
+/* ============================================================
+   GET /candidates
+   Public Search Endpoint (NO AUTH)
+============================================================ */
 
+router.get("/", async (req, res) => {
   try {
     const {
-      q = "",
-      state = "",
-      party = "",
+      q,
+      state,
+      county,
+      office,
+      party,
       page = 1,
       limit = 10,
     } = req.query;
 
-    const apiKey = process.env.FEC_API_KEY;
+    const offset = (Number(page) - 1) * Number(limit);
 
-    if (!apiKey) {
-      return res.status(500).json({
-        error: "FEC_API_KEY not configured in environment variables",
-      });
+    const values = [];
+    let whereClauses = [];
+
+    if (q) {
+      values.push(`%${q}%`);
+      whereClauses.push(`full_name ILIKE $${values.length}`);
     }
 
-    const fecUrl = new URL("https://api.open.fec.gov/v1/candidates/");
-
-    fecUrl.searchParams.append("api_key", apiKey);
-    fecUrl.searchParams.append("per_page", limit);
-    fecUrl.searchParams.append("page", page);
-
     if (state) {
-      fecUrl.searchParams.append("state", state);
+      values.push(state);
+      whereClauses.push(`state_name = $${values.length}`);
+    }
+
+    if (county) {
+      values.push(county);
+      whereClauses.push(`county_name = $${values.length}`);
+    }
+
+    if (office) {
+      values.push(office);
+      whereClauses.push(`office_name = $${values.length}`);
     }
 
     if (party) {
-      fecUrl.searchParams.append("party", party);
+      values.push(party);
+      whereClauses.push(`party_name = $${values.length}`);
     }
 
-    if (q) {
-      fecUrl.searchParams.append("q", q);
-    }
+    const whereSQL =
+      whereClauses.length > 0
+        ? `WHERE ${whereClauses.join(" AND ")}`
+        : "";
 
-    const response = await fetch(fecUrl.toString());
+    // Total count query
+    const totalQuery = `
+      SELECT COUNT(*) 
+      FROM candidates
+      ${whereSQL}
+    `;
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("FEC API Error:", text);
-      return res.status(500).json({ error: "FEC API request failed" });
-    }
+    const totalResult = await pool.query(totalQuery, values);
+    const total = Number(totalResult.rows[0].count);
 
-    const data = await response.json();
+    // Data query
+    values.push(limit);
+    values.push(offset);
 
-    const formattedResults = (data.results || []).map((candidate) => ({
-      full_name: candidate.name || "",
-      office_name: candidate.office_full || candidate.office || "",
-      state_name: candidate.state || "",
-      party_name: candidate.party_full || candidate.party || "",
-      county_name: "",
-      email: "",
-      phone: "",
-    }));
+    const dataQuery = `
+      SELECT *
+      FROM candidates
+      ${whereSQL}
+      ORDER BY full_name ASC
+      LIMIT $${values.length - 1}
+      OFFSET $${values.length}
+    `;
 
-    await pool.query(
-  `INSERT INTO usage_logs (organization_id, action_type)
-   VALUES ($1, 'candidate_search')`,
-  [req.user.organizationId]
-);
+    const result = await pool.query(dataQuery, values);
 
-    return res.json({
-      results: formattedResults,
-      total: data.pagination?.count || 0,
+    res.json({
+      results: result.rows,
+      total,
     });
-
-  } catch (error) {
-    console.error("Candidates route error:", error);
-    return res.status(500).json({
-      error: "Internal server error fetching candidates",
-    });
+  } catch (err) {
+    console.error("Candidates fetch error:", err);
+    res.status(500).json({ error: "Failed to load candidates" });
   }
 });
 
-export default router;
+/* ============================================================
+   GET /candidates/states
+   Public Dropdown
+============================================================ */
+
+router.get("/states", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT state_name AS state
+      FROM candidates
+      WHERE state_name IS NOT NULL
+      ORDER BY state_name ASC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("States fetch error:", err);
+    res.status(500).json({ error: "Failed to load states" });
+  }
+});
+
+/* ============================================================
+   GET /candidates/offices
+============================================================ */
+
+router.get("/offices", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT office_name AS office
+      FROM candidates
+      WHERE office_name IS NOT NULL
+      ORDER BY office_name ASC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Offices fetch error:", err);
+    res.status(500).json({ error: "Failed to load offices" });
+  }
+});
+
+/* ============================================================
+   GET /candidates/parties
+============================================================ */
+
+router.get("/parties", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT party_name AS party
+      FROM candidates
+      WHERE party_name IS NOT NULL
+      ORDER BY party_name ASC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Parties fetch error:", err);
+    res.status(500).json({ error: "Failed to load parties" });
+  }
+});
+
+module.exports = router;
