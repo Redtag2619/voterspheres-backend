@@ -3,10 +3,9 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-/* ============================================================
+/* =====================================================
    GET /candidates
-   Matches your actual table structure
-============================================================ */
+===================================================== */
 
 router.get("/", async (req, res) => {
   try {
@@ -15,52 +14,48 @@ router.get("/", async (req, res) => {
       state,
       party,
       page = 1,
-      limit = 10,
+      limit = 10
     } = req.query;
 
     const offset = (Number(page) - 1) * Number(limit);
 
     const values = [];
-    let whereClauses = [];
+    const filters = [];
 
     if (q) {
       values.push(`%${q}%`);
-      whereClauses.push(`name ILIKE $${values.length}`);
+      filters.push(`name ILIKE $${values.length}`);
     }
 
     if (state) {
       values.push(state);
-      whereClauses.push(`state = $${values.length}`);
+      filters.push(`state = $${values.length}`);
     }
 
     if (party) {
       values.push(party);
-      whereClauses.push(`party = $${values.length}`);
+      filters.push(`party = $${values.length}`);
     }
 
-    const whereSQL =
-      whereClauses.length > 0
-        ? `WHERE ${whereClauses.join(" AND ")}`
-        : "";
+    const whereClause =
+      filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
 
-    // Get total count
     const totalQuery = `
       SELECT COUNT(*)
       FROM candidates
-      ${whereSQL}
+      ${whereClause}
     `;
 
     const totalResult = await pool.query(totalQuery, values);
     const total = Number(totalResult.rows[0].count);
 
-    // Add pagination
     values.push(limit);
     values.push(offset);
 
     const dataQuery = `
       SELECT *
       FROM candidates
-      ${whereSQL}
+      ${whereClause}
       ORDER BY name ASC
       LIMIT $${values.length - 1}
       OFFSET $${values.length}
@@ -70,7 +65,7 @@ router.get("/", async (req, res) => {
 
     res.json({
       results: result.rows,
-      total,
+      total
     });
 
   } catch (err) {
@@ -79,11 +74,15 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* ============================================================
-   GET /candidates/states
-============================================================ */
 
-router.get("/states", async (req, res) => {
+/* =====================================================
+   DROPDOWN ROUTES
+   These match your frontend requests
+===================================================== */
+
+/* STATES */
+
+router.get("/dropdowns/states", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT DISTINCT state
@@ -92,18 +91,18 @@ router.get("/states", async (req, res) => {
       ORDER BY state ASC
     `);
 
-    res.json(result.rows);
+    res.json(result.rows.map(r => r.state));
+
   } catch (err) {
-    console.error("States fetch error:", err);
+    console.error("States dropdown error:", err);
     res.status(500).json({ error: "Failed to load states" });
   }
 });
 
-/* ============================================================
-   GET /candidates/parties
-============================================================ */
 
-router.get("/parties", async (req, res) => {
+/* PARTIES */
+
+router.get("/dropdowns/parties", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT DISTINCT party
@@ -112,11 +111,34 @@ router.get("/parties", async (req, res) => {
       ORDER BY party ASC
     `);
 
-    res.json(result.rows);
+    res.json(result.rows.map(r => r.party));
+
   } catch (err) {
-    console.error("Parties fetch error:", err);
+    console.error("Parties dropdown error:", err);
     res.status(500).json({ error: "Failed to load parties" });
   }
 });
+
+
+/* OFFICES (fallback if column missing) */
+
+router.get("/dropdowns/offices", async (req, res) => {
+  try {
+
+    const result = await pool.query(`
+      SELECT DISTINCT election
+      FROM candidates
+      WHERE election IS NOT NULL
+      ORDER BY election ASC
+    `);
+
+    res.json(result.rows.map(r => r.election));
+
+  } catch (err) {
+    console.error("Offices dropdown error:", err);
+    res.status(500).json({ error: "Failed to load offices" });
+  }
+});
+
 
 export default router;
