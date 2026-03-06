@@ -6,6 +6,7 @@ import candidatesRoutes from "./routes/candidates.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import opportunitiesRoutes from "./routes/opportunities.routes.js";
+import crmRoutes from "./routes/crm.routes.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use("/candidates", candidatesRoutes);
 app.use("/dropdowns", dropdownRoutes);
 app.use("/intelligence", intelligenceRoutes);
 app.use("/opportunities", opportunitiesRoutes);
+app.use("/crm", crmRoutes);
 
 /*
 ----------------------------------
