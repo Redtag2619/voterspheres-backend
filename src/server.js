@@ -1,42 +1,34 @@
-import express from "express"
-import cors from "cors"
-import dotenv from "dotenv"
+import express from "express";
+import cors from "cors";
 
-import candidatesRoutes from "./routes/candidates.routes.js"
-import electionsRoutes from "./routes/elections.routes.js"
-import issuesRoutes from "./routes/issues.routes.js"
-import messagesRoutes from "./routes/messages.routes.js"
-import persuasionRoutes from "./routes/persuasion.routes.js"
-import fundraisingRoutes from "./routes/fundraising.routes.js"
-import consultantsRoutes from "./routes/consultants.routes.js"
-import strategyRoutes from "./routes/strategy.routes.js"
+import candidatesRoutes from "./src/routes/candidates.routes.js";
+import dropdownRoutes from "./src/routes/dropdowns.routes.js";
+import marketplaceRoutes from "./src/routes/marketplace.routes.js";
+import riskRoutes from "./src/routes/risk.routes.js";
+import mapRoutes from "./src/routes/map.routes.js";
 
-dotenv.config()
+const app = express();
 
-const app = express()
+app.use(cors());
+app.use(express.json());
 
-app.use(cors())
-app.use(express.json())
+app.get("/", (req,res)=>{
+res.send("VoterSpheres Political Intelligence API Running");
+});
 
-app.get("/",(req,res)=>{
- res.json({
-  platform:"VoterSpheres",
-  engine:"Political Intelligence Platform",
-  version:"1.0"
- })
-})
+/* Core APIs */
 
-app.use("/candidates",candidatesRoutes)
-app.use("/elections",electionsRoutes)
-app.use("/issues",issuesRoutes)
-app.use("/messages",messagesRoutes)
-app.use("/persuasion",persuasionRoutes)
-app.use("/fundraising",fundraisingRoutes)
-app.use("/consultants",consultantsRoutes)
-app.use("/strategy",strategyRoutes)
+app.use("/candidates", candidatesRoutes);
+app.use("/dropdowns", dropdownRoutes);
 
-const PORT = process.env.PORT || 5000
+/* Intelligence APIs */
+
+app.use("/marketplace", marketplaceRoutes);
+app.use("/risk", riskRoutes);
+app.use("/map", mapRoutes);
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT,()=>{
- console.log(`VoterSpheres Intelligence API running on ${PORT}`)
-})
+console.log(`Server running on port ${PORT}`);
+});
