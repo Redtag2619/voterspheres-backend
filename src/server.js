@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 
 import candidatesRoutes from "./routes/candidates.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
+import intelligenceRoutes from "./routes/intelligence.routes.js";
 
 dotenv.config();
 
@@ -13,24 +14,32 @@ app.use(cors());
 app.use(express.json());
 
 /*
-ROUTES
+----------------------------------
+API ROUTES
+----------------------------------
 */
+
 app.use("/candidates", candidatesRoutes);
 app.use("/dropdowns", dropdownRoutes);
+app.use("/intelligence", intelligenceRoutes);
 
 /*
+----------------------------------
 HEALTH CHECK
+----------------------------------
 */
+
 app.get("/", (req, res) => {
-  res.json({
-    status: "VoterSpheres API running"
-  });
+  res.json({ message: "VoterSpheres API running" });
 });
 
 /*
-SERVER
+----------------------------------
+SERVER START
+----------------------------------
 */
-const PORT = process.env.PORT || 10000;
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
