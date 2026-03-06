@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import candidatesRoutes from "./routes/candidates.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
+import opportunitiesRoutes from "./routes/opportunities.routes.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ API ROUTES
 app.use("/candidates", candidatesRoutes);
 app.use("/dropdowns", dropdownRoutes);
 app.use("/intelligence", intelligenceRoutes);
+app.use("/opportunities", opportunitiesRoutes);
 
 /*
 ----------------------------------
