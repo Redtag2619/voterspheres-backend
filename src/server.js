@@ -3,6 +3,7 @@ import cors from "cors";
 
 import candidatesRoutes from "./routes/candidates.routes.js";
 import dropdownRoutes from "./routes/dropdowns.routes.js";
+
 import marketplaceRoutes from "./routes/marketplace.routes.js";
 import riskRoutes from "./routes/risk.routes.js";
 import mapRoutes from "./routes/map.routes.js";
@@ -11,13 +12,15 @@ import warroomRoutes from "./routes/warroom.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import influenceRoutes from "./routes/influence.routes.js";
 
+import autopilotRoutes from "./routes/autopilot.routes.js";
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("VoterSpheres Political Intelligence Platform Running");
+  res.send("VoterSpheres Political Intelligence Engine Running");
 });
 
 /* Core APIs */
@@ -31,11 +34,15 @@ app.use("/marketplace", marketplaceRoutes);
 app.use("/risk", riskRoutes);
 app.use("/map", mapRoutes);
 
-/* Advanced Intelligence APIs */
+/* Advanced Intelligence */
 
 app.use("/warroom", warroomRoutes);
 app.use("/donors", donorsRoutes);
 app.use("/influence", influenceRoutes);
+
+/* AI Campaign Autopilot */
+
+app.use("/autopilot", autopilotRoutes);
 
 const PORT = process.env.PORT || 5000;
 
