@@ -1,51 +1,25 @@
-import express from "express";
-import cors from "cors";
+import express from "express"
+import cors from "cors"
 
-import candidatesRoutes from "./routes/candidates.routes.js";
-import dropdownRoutes from "./routes/dropdowns.routes.js";
+import candidatesRoutes from "./routes/candidates.routes.js"
+import dropdownRoutes from "./routes/dropdowns.routes.js"
+import aiRoutes from "./routes/ai.routes.js"
 
-import marketplaceRoutes from "./routes/marketplace.routes.js";
-import riskRoutes from "./routes/risk.routes.js";
-import mapRoutes from "./routes/map.routes.js";
+const app = express()
 
-import warroomRoutes from "./routes/warroom.routes.js";
-import donorsRoutes from "./routes/donors.routes.js";
-import influenceRoutes from "./routes/influence.routes.js";
-
-import autopilotRoutes from "./routes/autopilot.routes.js";
-
-const app = express();
-
-app.use(cors());
-app.use(express.json());
+app.use(cors())
+app.use(express.json())
 
 app.get("/", (req, res) => {
-  res.send("VoterSpheres Political Intelligence Engine Running");
-});
+    res.json({ status: "VoterSpheres API running" })
+})
 
-/* Core APIs */
+app.use("/candidates", candidatesRoutes)
+app.use("/dropdowns", dropdownRoutes)
+app.use("/ai", aiRoutes)
 
-app.use("/candidates", candidatesRoutes);
-app.use("/dropdowns", dropdownRoutes);
-
-/* Intelligence APIs */
-
-app.use("/marketplace", marketplaceRoutes);
-app.use("/risk", riskRoutes);
-app.use("/map", mapRoutes);
-
-/* Advanced Intelligence */
-
-app.use("/warroom", warroomRoutes);
-app.use("/donors", donorsRoutes);
-app.use("/influence", influenceRoutes);
-
-/* AI Campaign Autopilot */
-
-app.use("/autopilot", autopilotRoutes);
-
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+    console.log(`Server running on port ${PORT}`)
+})
