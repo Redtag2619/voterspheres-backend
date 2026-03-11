@@ -10,7 +10,8 @@ import consultantsRoutes from "./routes/consultants.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import { notFound } from "./middleware/notFound.js";
-import { errorHandler } from "./middleware/errorHandler.js";
+import { errorHandler } from "./middleware/errorHandler.js"; 
+import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
 
 dotenv.config();
 
@@ -90,6 +91,7 @@ async function startServer() {
 
     const server = app.listen(PORT, HOST, () => {
       console.log(`🚀 Backend running on http://${HOST}:${PORT}`);
+      startFundraisingIngestionJob();
     });
 
     server.on("error", (err) => {
