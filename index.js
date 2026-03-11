@@ -10,7 +10,7 @@ import consultantsRoutes from "./routes/consultants.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import { notFound } from "./middleware/notFound.js";
-import { errorHandler } from "./middleware/errorHandler.js"; 
+import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
 
 dotenv.config();
@@ -46,20 +46,26 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+
       "/api/candidates",
       "/api/candidates/dropdowns/states",
       "/api/candidates/dropdowns/offices",
       "/api/candidates/dropdowns/parties",
       "/api/candidates/dropdowns/counties",
+
       "/api/consultants",
       "/api/consultants/dropdowns/states",
+
       "/api/vendors",
       "/api/vendors/dropdowns/states",
+
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
       "/api/intelligence/rankings",
-      "/api/intelligence/map"
+      "/api/intelligence/map",
+      "/api/intelligence/fundraising/live",
+      "/api/intelligence/fundraising/leaderboard"
     ]
   });
 });
@@ -91,7 +97,12 @@ async function startServer() {
 
     const server = app.listen(PORT, HOST, () => {
       console.log(`🚀 Backend running on http://${HOST}:${PORT}`);
-      startFundraisingIngestionJob();
+
+      try {
+        startFundraisingIngestionJob();
+      } catch (jobErr) {
+        console.error("Failed to start fundraising ingestion job:", jobErr);
+      }
     });
 
     server.on("error", (err) => {
