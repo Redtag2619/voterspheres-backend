@@ -15,7 +15,16 @@ import { errorHandler } from "./middleware/errorHandler.js";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = Number(process.env.PORT || 10000);
+const HOST = "0.0.0.0";
+
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
 
 app.use(helmet());
 app.use(cors());
@@ -36,19 +45,15 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
-
       "/api/candidates",
       "/api/candidates/dropdowns/states",
       "/api/candidates/dropdowns/offices",
       "/api/candidates/dropdowns/parties",
       "/api/candidates/dropdowns/counties",
-
       "/api/consultants",
       "/api/consultants/dropdowns/states",
-
       "/api/vendors",
       "/api/vendors/dropdowns/states",
-
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -78,6 +83,22 @@ app.use("/api/intelligence", intelligenceRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await pool.query("SELECT 1");
+    console.log("✅ Database connection verified");
+
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`🚀 Backend running on http://${HOST}:${PORT}`);
+    });
+
+    server.on("error", (err) => {
+      console.error("SERVER ERROR:", err);
+    });
+  } catch (err) {
+    console.error("FAILED TO START SERVER:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
