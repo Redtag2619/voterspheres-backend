@@ -36,15 +36,19 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+
       "/api/candidates",
       "/api/candidates/dropdowns/states",
       "/api/candidates/dropdowns/offices",
       "/api/candidates/dropdowns/parties",
       "/api/candidates/dropdowns/counties",
+
       "/api/consultants",
       "/api/consultants/dropdowns/states",
+
       "/api/vendors",
       "/api/vendors/dropdowns/states",
+
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
