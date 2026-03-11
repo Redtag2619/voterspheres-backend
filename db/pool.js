@@ -5,12 +5,16 @@ dotenv.config();
 
 const { Pool } = pkg;
 
+const isRender =
+  process.env.RENDER === "true" ||
+  process.env.NODE_ENV === "production" ||
+  (process.env.DATABASE_URL || "").includes("render.com");
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false
+  ssl: isRender
+    ? { rejectUnauthorized: false }
+    : false
 });
 
 pool.on("error", (err) => {
