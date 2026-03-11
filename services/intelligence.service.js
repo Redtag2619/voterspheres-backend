@@ -1,4 +1,8 @@
+import { pool } from "../db/pool.js";
 import { getIntelligenceInputs } from "../repositories/intelligence.repository.js";
+import { fetchLiveFundraisingSnapshot } from "../providers/fec.provider.js";
+import { buildForecastPackage } from "../analytics/forecast.engine.js";
+import { runFundraisingIngestion } from "../jobs/fundraisingIngestion.job.js";
 
 function groupCount(rows, key) {
   return rows.reduce((acc, row) => {
@@ -65,13 +69,72 @@ function getStateCoordinates(state) {
   return coords[state] || [39.8283, -98.5795];
 }
 
+async function getLatestFundraisingSnapshots() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fundraising_snapshots (
+      id SERIAL PRIMARY KEY,
+      candidate_id TEXT NOT NULL,
+      candidate_name TEXT,
+      state TEXT,
+      office TEXT,
+      party TEXT,
+      cycle INT,
+      receipts NUMERIC DEFAULT 0,
+      disbursements NUMERIC DEFAULT 0,
+      cash_on_hand NUMERIC DEFAULT 0,
+      debt NUMERIC DEFAULT 0,
+      coverage_start_date DATE,
+      coverage_end_date DATE,
+      fetched_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  const result = await pool.query(`
+    SELECT DISTINCT ON (candidate_id)
+      candidate_id,
+      candidate_name,
+      state,
+      office,
+      party,
+      cycle,
+      receipts,
+      disbursements,
+      cash_on_hand,
+      debt,
+      coverage_start_date,
+      coverage_end_date,
+      fetched_at
+    FROM fundraising_snapshots
+    ORDER BY candidate_id, fetched_at DESC
+  `);
+
+  return result.rows.map((row) => ({
+    candidate_id: row.candidate_id,
+    name: row.candidate_name,
+    state: row.state,
+    office: row.office,
+    party: row.party,
+    cycle: row.cycle,
+    totals: {
+      receipts: Number(row.receipts || 0),
+      disbursements: Number(row.disbursements || 0),
+      cash_on_hand_end_period: Number(row.cash_on_hand || 0),
+      debts_owed_by_committee: Number(row.debt || 0),
+      coverage_start_date: row.coverage_start_date,
+      coverage_end_date: row.coverage_end_date
+    },
+    fetched_at: row.fetched_at
+  }));
+}
+
 function buildPoliticalIntelligence({
   candidateRows = [],
   consultantRows = [],
   vendorRows = [],
   stateRows = [],
   officeRows = [],
-  partyRows = []
+  partyRows = [],
+  fundraisingRows = []
 }) {
   const candidateCount = candidateRows.length;
   const consultantCount = consultantRows.length;
@@ -81,8 +144,6 @@ function buildPoliticalIntelligence({
   const partyCount = partyRows.length;
 
   const candidatesByState = groupCount(candidateRows, "state_name");
-  const candidatesByOffice = groupCount(candidateRows, "office_name");
-
   const topStates = Object.entries(candidatesByState)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
@@ -93,22 +154,10 @@ function buildPoliticalIntelligence({
       momentum: `+${Math.max(1, Math.round(count / 2))}.${index}`
     }));
 
-  const forecastRaces = topStates.slice(0, 6).map((item, index) => ({
-    race: `${item.state} Control Outlook`,
-    winProb: Math.min(69, 50 + item.count + index),
-    change: `+${(1.2 + index * 0.4).toFixed(1)}`,
-    rating: item.count > 10 ? "Lean" : "Toss-up",
-    status: index < 2 ? "Momentum Up" : "Watch"
-  }));
-
-  const powerRankings = candidateRows.slice(0, 12).map((candidate, index) => ({
-    rank: index + 1,
-    name: candidate.full_name || candidate.name || `Candidate ${index + 1}`,
-    score: Math.max(72, 96 - index * 2),
-    movement: index < 4 ? `+${index + 1}` : `-${Math.max(1, index - 3)}`,
-    category: candidate.office_name || candidate.election || "Candidate",
-    signal: candidate.state_name || candidate.state || "National"
-  }));
+  const forecastPack = buildForecastPackage({
+    candidateRows,
+    fundraisingRows
+  });
 
   const mapBattlegrounds = topStates.slice(0, 6).map((item, index) => ({
     name: `${item.state} Battleground`,
@@ -122,6 +171,23 @@ function buildPoliticalIntelligence({
     note: `${item.state} is one of the highest-density political theaters in the platform.`
   }));
 
+  const fundraisingLeaderboard = [...fundraisingRows]
+    .sort(
+      (a, b) =>
+        Number(b?.totals?.receipts || 0) - Number(a?.totals?.receipts || 0)
+    )
+    .slice(0, 12)
+    .map((row, index) => ({
+      rank: index + 1,
+      candidate_id: row.candidate_id,
+      name: row.name,
+      state: row.state,
+      office: row.office,
+      party: row.party,
+      receipts: Number(row?.totals?.receipts || 0),
+      cash_on_hand: Number(row?.totals?.cash_on_hand_end_period || 0)
+    }));
+
   return {
     summary: {
       trackedCandidates: candidateCount,
@@ -129,59 +195,99 @@ function buildPoliticalIntelligence({
       vendorsIndexed: vendorCount,
       statesTracked: stateCount,
       officesTracked: officeCount,
-      partiesTracked: partyCount
+      partiesTracked: partyCount,
+      liveFundraisingCandidates: fundraisingRows.length
     },
     dashboard: {
       metrics: [
         { label: "Tracked Candidates", value: `${candidateCount}`, delta: `Across ${stateCount} states`, tone: "up" },
         { label: "Consultants Indexed", value: `${consultantCount}`, delta: "Marketplace live", tone: "up" },
         { label: "Vendors Indexed", value: `${vendorCount}`, delta: "Operations supply active", tone: "up" },
-        { label: "Offices Tracked", value: `${officeCount}`, delta: "Election surface mapped", tone: "neutral" }
+        {
+          label: "Live Fundraising Rows",
+          value: `${fundraisingRows.length}`,
+          delta: "FEC-backed",
+          tone: "up"
+        }
       ],
       alerts: [
         {
-          title: "Candidate density rising in top state clusters",
-          meta: `${topStates[0]?.state || "National"} is leading current platform concentration`,
+          title: "Live fundraising is influencing modeled race strength",
+          meta: `${forecastPack.summary.trackedRaces} races currently modeled with fundraising inputs`,
           severity: "High"
         }
       ],
-      raceMoves: topStates.slice(0, 8).map((item) => ({
-        race: `${item.state} Cluster`,
-        leader: item.state,
-        change: item.momentum,
-        status: item.count > 8 ? "Momentum Up" : "Watch"
+      raceMoves: forecastPack.leaderboard.slice(0, 8).map((row) => ({
+        race: `${row.state} ${row.office}`,
+        leader: row.leader,
+        change: `${row.winProbability}%`,
+        status: row.rating
       }))
     },
     forecast: {
       metrics: [
-        { label: "National Control Probability", value: `${Math.min(70, 52 + topStates.length)}%`, delta: "+3.1", tone: "up" },
-        { label: "Battleground Volatility", value: topStates.length > 5 ? "High" : "Medium", delta: "+7 signals", tone: "down" }
+        {
+          label: "Tracked Races",
+          value: `${forecastPack.summary.trackedRaces}`,
+          delta: "Fundraising-weighted",
+          tone: "up"
+        },
+        {
+          label: "High Confidence",
+          value: `${forecastPack.summary.highConfidenceRaces}`,
+          delta: "Modeled",
+          tone: "up"
+        },
+        {
+          label: "Toss-ups",
+          value: `${forecastPack.summary.tossups}`,
+          delta: "Competitive map",
+          tone: "down"
+        },
+        {
+          label: "Modeled Receipts",
+          value: `$${(forecastPack.summary.totalModeledReceipts / 1000000).toFixed(1)}M`,
+          delta: "Live FEC totals",
+          tone: "up"
+        }
       ],
-      races: forecastRaces
+      races: forecastPack.races
     },
     rankings: {
       metrics: [
-        { label: "Top Rated Campaign", value: powerRankings[0]?.name || "N/A", delta: powerRankings[0]?.movement || "+0", tone: "up" }
+        {
+          label: "Top Modeled Race",
+          value: forecastPack.leaderboard[0]?.leader || "N/A",
+          delta: forecastPack.leaderboard[0]?.rating || "N/A",
+          tone: "up"
+        }
       ],
-      campaigns: powerRankings
+      campaigns: forecastPack.leaderboard
     },
     map: {
       metrics: [
-        { label: "Battleground States", value: `${topStates.length}`, delta: "+2", tone: "up" }
+        { label: "Battleground States", value: `${topStates.length}`, delta: "Live map surface", tone: "up" }
       ],
       battlegrounds: mapBattlegrounds
     },
-    counts: {
-      candidatesByOffice,
-      candidatesByState
+    fundraising: {
+      leaderboard: fundraisingLeaderboard
     }
   };
 }
 
+async function getBuiltIntelligence() {
+  const inputs = await getIntelligenceInputs();
+  const fundraisingRows = await getLatestFundraisingSnapshots();
+  return buildPoliticalIntelligence({
+    ...inputs,
+    fundraisingRows
+  });
+}
+
 export async function getIntelligenceSummary(_req, res, next) {
   try {
-    const inputs = await getIntelligenceInputs();
-    const intelligence = buildPoliticalIntelligence(inputs);
+    const intelligence = await getBuiltIntelligence();
     res.json(intelligence.summary);
   } catch (err) {
     next(err);
@@ -190,8 +296,7 @@ export async function getIntelligenceSummary(_req, res, next) {
 
 export async function getIntelligenceDashboard(_req, res, next) {
   try {
-    const inputs = await getIntelligenceInputs();
-    const intelligence = buildPoliticalIntelligence(inputs);
+    const intelligence = await getBuiltIntelligence();
     res.json(intelligence.dashboard);
   } catch (err) {
     next(err);
@@ -200,8 +305,7 @@ export async function getIntelligenceDashboard(_req, res, next) {
 
 export async function getIntelligenceForecast(_req, res, next) {
   try {
-    const inputs = await getIntelligenceInputs();
-    const intelligence = buildPoliticalIntelligence(inputs);
+    const intelligence = await getBuiltIntelligence();
     res.json(intelligence.forecast);
   } catch (err) {
     next(err);
@@ -210,8 +314,7 @@ export async function getIntelligenceForecast(_req, res, next) {
 
 export async function getIntelligenceRankings(_req, res, next) {
   try {
-    const inputs = await getIntelligenceInputs();
-    const intelligence = buildPoliticalIntelligence(inputs);
+    const intelligence = await getBuiltIntelligence();
     res.json(intelligence.rankings);
   } catch (err) {
     next(err);
@@ -220,9 +323,65 @@ export async function getIntelligenceRankings(_req, res, next) {
 
 export async function getIntelligenceMap(_req, res, next) {
   try {
-    const inputs = await getIntelligenceInputs();
-    const intelligence = buildPoliticalIntelligence(inputs);
+    const intelligence = await getBuiltIntelligence();
     res.json(intelligence.map);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getLiveFundraising(req, res, next) {
+  try {
+    const cycle = Number(req.query.cycle || process.env.FEC_CYCLE || 2026);
+    const limit = Number(req.query.limit || 20);
+    const q = String(req.query.q || "");
+    const office = String(req.query.office || "");
+    const state = String(req.query.state || "");
+
+    const rows = await fetchLiveFundraisingSnapshot({
+      cycle,
+      limit,
+      q,
+      office,
+      state
+    });
+
+    res.json({
+      cycle,
+      count: rows.length,
+      results: rows
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getFundraisingLeaderboard(_req, res, next) {
+  try {
+    const intelligence = await getBuiltIntelligence();
+    res.json(intelligence.fundraising);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runManualFundraisingIngestion(req, res, next) {
+  try {
+    const cycle = Number(req.body?.cycle || process.env.FEC_CYCLE || 2026);
+    const limit = Number(req.body?.limit || process.env.FEC_INGEST_LIMIT || 25);
+    const office = String(req.body?.office || "");
+    const state = String(req.body?.state || "");
+    const q = String(req.body?.q || "");
+
+    const result = await runFundraisingIngestion({
+      cycle,
+      limit,
+      office,
+      state,
+      q
+    });
+
+    res.json(result);
   } catch (err) {
     next(err);
   }
