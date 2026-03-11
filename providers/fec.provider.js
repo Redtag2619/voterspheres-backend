@@ -4,8 +4,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const FEC_API_BASE_URL =
-  process.env.FEC_API_BASE_URL || "https://api.open.fec.gov/v1";
-const FEC_API_KEY = process.env.FEC_API_KEY || "";
+  (process.env.FEC_API_BASE_URL || "https://api.open.fec.gov/v1").trim();
+
+const FEC_API_KEY = (process.env.FEC_API_KEY || "").trim();
 
 function requireApiKey() {
   if (!FEC_API_KEY) {
@@ -16,15 +17,32 @@ function requireApiKey() {
 async function fecGet(path, params = {}) {
   requireApiKey();
 
-  const response = await axios.get(`${FEC_API_BASE_URL}${path}`, {
-    params: {
-      api_key: FEC_API_KEY,
-      ...params
-    },
-    timeout: 30000
-  });
+  try {
+    const response = await axios.get(`${FEC_API_BASE_URL}${path}`, {
+      params: {
+        api_key: FEC_API_KEY,
+        ...params
+      },
+      timeout: 30000
+    });
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    const status = error?.response?.status;
+    const body = error?.response?.data;
+
+    console.error("FEC API ERROR:", {
+      path,
+      status,
+      body
+    });
+
+    throw new Error(
+      body?.error ||
+        body?.message ||
+        `FEC request failed with status ${status || "unknown"}`
+    );
+  }
 }
 
 export async function fetchCandidateSearch({
@@ -74,7 +92,11 @@ export async function fetchCommitteeTotals(committeeId, cycle = 2026) {
   return data?.results?.[0] || null;
 }
 
-export async function fetchLatestCandidateFilings(candidateId, page = 1, perPage = 20) {
+export async function fetchLatestCandidateFilings(
+  candidateId,
+  page = 1,
+  perPage = 20
+) {
   const data = await fecGet("/schedules/schedule_a/", {
     candidate_id: candidateId,
     page,
