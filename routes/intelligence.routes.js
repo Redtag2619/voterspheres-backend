@@ -4,7 +4,10 @@ import {
   getIntelligenceDashboard,
   getIntelligenceForecast,
   getIntelligenceRankings,
-  getIntelligenceMap
+  getIntelligenceMap,
+  getLiveFundraising,
+  getFundraisingLeaderboard,
+  runManualFundraisingIngestion
 } from "../services/intelligence.service.js";
 
 const router = express.Router();
@@ -14,5 +17,9 @@ router.get("/dashboard", getIntelligenceDashboard);
 router.get("/forecast", getIntelligenceForecast);
 router.get("/rankings", getIntelligenceRankings);
 router.get("/map", getIntelligenceMap);
+
+router.get("/fundraising/live", getLiveFundraising);
+router.get("/fundraising/leaderboard", getFundraisingLeaderboard);
+router.post("/fundraising/ingest", runManualFundraisingIngestion);
 
 export default router;
