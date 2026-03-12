@@ -3,6 +3,11 @@ import { getIntelligenceInputs } from "../repositories/intelligence.repository.j
 import { fetchLiveFundraisingSnapshot } from "../providers/fec.provider.js";
 import { buildForecastPackage } from "../analytics/forecast.engine.js";
 import { runFundraisingIngestion } from "../jobs/fundraisingIngestion.job.js";
+import {
+  getLatestForecastRunId,
+  getForecastSnapshotsByRun,
+  getForecastOverlaysByRun
+} from "../repositories/forecast.repository.js";
 
 function groupCount(rows, key) {
   return rows.reduce((acc, row) => {
@@ -224,9 +229,24 @@ function buildPoliticalIntelligence({
     },
     dashboard: {
       metrics: [
-        { label: "Tracked Candidates", value: `${candidateCount}`, delta: `Across ${stateCount} states`, tone: "up" },
-        { label: "Consultants Indexed", value: `${consultantCount}`, delta: "Marketplace live", tone: "up" },
-        { label: "Vendors Indexed", value: `${vendorCount}`, delta: "Operations supply active", tone: "up" },
+        {
+          label: "Tracked Candidates",
+          value: `${candidateCount}`,
+          delta: `Across ${stateCount} states`,
+          tone: "up"
+        },
+        {
+          label: "Consultants Indexed",
+          value: `${consultantCount}`,
+          delta: "Marketplace live",
+          tone: "up"
+        },
+        {
+          label: "Vendors Indexed",
+          value: `${vendorCount}`,
+          delta: "Operations supply active",
+          tone: "up"
+        },
         {
           label: "Critical Overlays",
           value: `${forecastPack.summary.criticalOverlays}`,
@@ -290,8 +310,18 @@ function buildPoliticalIntelligence({
     },
     map: {
       metrics: [
-        { label: "Battleground States", value: `${mapBattlegrounds.length}`, delta: "Live overlay surface", tone: "up" },
-        { label: "Critical Zones", value: `${mapBattlegrounds.filter((b) => b.overlayTier === "critical").length}`, delta: "Highest urgency", tone: "up" }
+        {
+          label: "Battleground States",
+          value: `${mapBattlegrounds.length}`,
+          delta: "Live overlay surface",
+          tone: "up"
+        },
+        {
+          label: "Critical Zones",
+          value: `${mapBattlegrounds.filter((b) => b.overlayTier === "critical").length}`,
+          delta: "Highest urgency",
+          tone: "up"
+        }
       ],
       battlegrounds: mapBattlegrounds
     },
@@ -304,6 +334,7 @@ function buildPoliticalIntelligence({
 async function getBuiltIntelligence() {
   const inputs = await getIntelligenceInputs();
   const fundraisingRows = await getLatestFundraisingSnapshots();
+
   return buildPoliticalIntelligence({
     ...inputs,
     fundraisingRows
@@ -330,6 +361,65 @@ export async function getIntelligenceDashboard(_req, res, next) {
 
 export async function getIntelligenceForecast(_req, res, next) {
   try {
+    const runId = await getLatestForecastRunId();
+
+    if (runId) {
+      const races = await getForecastSnapshotsByRun(runId);
+
+      return res.json({
+        snapshot_run_id: runId,
+        metrics: [
+          {
+            label: "Tracked Races",
+            value: `${races.length}`,
+            delta: "Published snapshot",
+            tone: "up"
+          },
+          {
+            label: "High Confidence",
+            value: `${races.filter((r) => Number(r.confidence || 0) >= 70).length}`,
+            delta: "Published model",
+            tone: "up"
+          },
+          {
+            label: "Toss-ups",
+            value: `${races.filter((r) => r.rating === "Toss-up").length}`,
+            delta: "Competitive races",
+            tone: "down"
+          },
+          {
+            label: "Published Snapshot",
+            value: "Live",
+            delta: runId,
+            tone: "up"
+          }
+        ],
+        races: races.map((race) => ({
+          raceKey: race.race_key,
+          state: race.state,
+          office: race.office,
+          candidateCount: race.candidate_count,
+          leader: race.leader,
+          runnerUp: race.runner_up,
+          totalReceipts: Number(race.total_receipts || 0),
+          totalCash: Number(race.total_cash || 0),
+          receiptsGap: Number(race.receipts_gap || 0),
+          cashGap: Number(race.cash_gap || 0),
+          winProbability: Number(race.win_probability || 50),
+          confidence: Number(race.confidence || 50),
+          rating: race.rating,
+          volatility: Number(race.volatility || 50),
+          competitionWeight: Number(race.competition_weight || 0),
+          financeWeight: Number(race.finance_weight || 0),
+          overlayScore: Number(race.overlay_score || 0),
+          overlayTier: race.overlay_tier,
+          fill: race.fill,
+          stroke: race.stroke,
+          urgency: race.urgency
+        }))
+      });
+    }
+
     const intelligence = await getBuiltIntelligence();
     res.json(intelligence.forecast);
   } catch (err) {
@@ -348,6 +438,48 @@ export async function getIntelligenceRankings(_req, res, next) {
 
 export async function getIntelligenceMap(_req, res, next) {
   try {
+    const runId = await getLatestForecastRunId();
+
+    if (runId) {
+      const overlays = await getForecastOverlaysByRun(runId);
+
+      return res.json({
+        snapshot_run_id: runId,
+        metrics: [
+          {
+            label: "Battleground States",
+            value: `${overlays.length}`,
+            delta: "Published overlays",
+            tone: "up"
+          },
+          {
+            label: "Critical Zones",
+            value: `${overlays.filter((o) => o.overlay_tier === "critical").length}`,
+            delta: "Highest urgency",
+            tone: "up"
+          }
+        ],
+        battlegrounds: overlays.map((row) => ({
+          name: `${row.state} Battleground`,
+          state: row.state,
+          center: row.center,
+          raceRating: row.overlay_tier,
+          overlayTier: row.overlay_tier,
+          overlayScore: Number(row.overlay_score || 0),
+          fill: row.fill,
+          stroke: row.stroke,
+          risk: row.urgency,
+          urgency: row.urgency,
+          financeWeight: Number(row.finance_weight || 0),
+          competitionWeight: Number(row.competition_weight || 0),
+          winProb: Number(row.win_probability || 50),
+          confidence: Number(row.confidence || 50),
+          funds: `$${(Number(row.total_receipts || 0) / 1000000).toFixed(1)}M`,
+          note: row.note
+        }))
+      });
+    }
+
     const intelligence = await getBuiltIntelligence();
     res.json(intelligence.map);
   } catch (err) {
