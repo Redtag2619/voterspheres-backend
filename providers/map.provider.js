@@ -35,6 +35,7 @@ export function normalizeFeatureCollection(featureCollection, regionType = "stat
   return features
     .map((feature) => {
       const regionName = readFeatureName(feature);
+
       if (!regionName) return null;
 
       return {
