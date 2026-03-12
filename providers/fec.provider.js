@@ -38,10 +38,10 @@ async function fecGet(path, params = {}) {
     });
 
     throw new Error(
-      body?.error ||
-        body?.message ||
-        `FEC request failed with status ${status || "unknown"}`
-    );
+  body?.error?.message ||
+    body?.message ||
+    `FEC request failed with status ${status || "unknown"}`
+);
   }
 }
 
