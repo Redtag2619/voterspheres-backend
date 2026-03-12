@@ -39,6 +39,53 @@ function buildMetrics(races = []) {
   ];
 }
 
+function mapSnapshotRace(row) {
+  return {
+    raceKey: row.race_key,
+    state: row.state,
+    office: row.office,
+    candidateCount: Number(row.candidate_count || 0),
+    leader: row.leader || {},
+    runnerUp: row.runner_up || {},
+    totalReceipts: Number(row.total_receipts || 0),
+    totalCash: Number(row.total_cash || 0),
+    receiptsGap: Number(row.receipts_gap || 0),
+    cashGap: Number(row.cash_gap || 0),
+    winProbability: Number(row.win_probability || 50),
+    confidence: Number(row.confidence || 50),
+    rating: row.rating,
+    volatility: Number(row.volatility || 50),
+    competitionWeight: Number(row.competition_weight || 0),
+    financeWeight: Number(row.finance_weight || 0),
+    overlayScore: Number(row.overlay_score || 0),
+    overlayTier: row.overlay_tier,
+    fill: row.fill,
+    stroke: row.stroke,
+    urgency: row.urgency
+  };
+}
+
+function mapOverlayRow(row) {
+  return {
+    name: `${row.state} Battleground`,
+    state: row.state,
+    center: row.center || [],
+    raceRating: row.overlay_tier,
+    overlayTier: row.overlay_tier,
+    overlayScore: Number(row.overlay_score || 0),
+    fill: row.fill,
+    stroke: row.stroke,
+    risk: row.urgency,
+    urgency: row.urgency,
+    financeWeight: Number(row.finance_weight || 0),
+    competitionWeight: Number(row.competition_weight || 0),
+    winProb: Number(row.win_probability || 50),
+    confidence: Number(row.confidence || 50),
+    funds: `$${(Number(row.total_receipts || 0) / 1000000).toFixed(1)}M`,
+    note: row.note
+  };
+}
+
 export async function triggerForecastRebuild(_req, res, next) {
   try {
     const result = await rebuildForecastSnapshots();
@@ -54,9 +101,9 @@ export async function getPublishedForecast(_req, res, next) {
 
     if (!runId) {
       return res.json({
+        snapshot_run_id: null,
         metrics: [],
-        races: [],
-        snapshot_run_id: null
+        races: []
       });
     }
 
@@ -65,29 +112,7 @@ export async function getPublishedForecast(_req, res, next) {
     res.json({
       snapshot_run_id: runId,
       metrics: buildMetrics(races),
-      races: races.map((race) => ({
-        raceKey: race.race_key,
-        state: race.state,
-        office: race.office,
-        candidateCount: race.candidate_count,
-        leader: race.leader,
-        runnerUp: race.runner_up,
-        totalReceipts: Number(race.total_receipts || 0),
-        totalCash: Number(race.total_cash || 0),
-        receiptsGap: Number(race.receipts_gap || 0),
-        cashGap: Number(race.cash_gap || 0),
-        winProbability: Number(race.win_probability || 50),
-        confidence: Number(race.confidence || 50),
-        rating: race.rating,
-        volatility: Number(race.volatility || 50),
-        competitionWeight: Number(race.competition_weight || 0),
-        financeWeight: Number(race.finance_weight || 0),
-        overlayScore: Number(race.overlay_score || 0),
-        overlayTier: race.overlay_tier,
-        fill: race.fill,
-        stroke: race.stroke,
-        urgency: race.urgency
-      }))
+      races: races.map(mapSnapshotRace)
     });
   } catch (err) {
     next(err);
@@ -101,8 +126,8 @@ export async function getPublishedOverlays(_req, res, next) {
     if (!runId) {
       return res.json({
         snapshot_run_id: null,
-        battlegrounds: [],
-        metrics: []
+        metrics: [],
+        battlegrounds: []
       });
     }
 
@@ -124,24 +149,7 @@ export async function getPublishedOverlays(_req, res, next) {
           tone: "up"
         }
       ],
-      battlegrounds: overlays.map((row) => ({
-        name: `${row.state} Battleground`,
-        state: row.state,
-        center: row.center,
-        raceRating: row.overlay_tier,
-        overlayTier: row.overlay_tier,
-        overlayScore: Number(row.overlay_score || 0),
-        fill: row.fill,
-        stroke: row.stroke,
-        risk: row.urgency,
-        urgency: row.urgency,
-        financeWeight: Number(row.finance_weight || 0),
-        competitionWeight: Number(row.competition_weight || 0),
-        winProb: Number(row.win_probability || 50),
-        confidence: Number(row.confidence || 50),
-        funds: `$${(Number(row.total_receipts || 0) / 1000000).toFixed(1)}M`,
-        note: row.note
-      }))
+      battlegrounds: overlays.map(mapOverlayRow)
     });
   } catch (err) {
     next(err);
