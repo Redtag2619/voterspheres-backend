@@ -38,10 +38,17 @@ async function fecGet(path, params = {}) {
     });
 
     throw new Error(
+<<<<<<< HEAD
   body?.error?.message ||
     body?.message ||
     `FEC request failed with status ${status || "unknown"}`
 );
+=======
+      body?.error ||
+        body?.message ||
+        `FEC request failed with status ${status || "unknown"}`
+    );
+>>>>>>> 57b70dc (Add live map geojson backend layer)
   }
 }
 
