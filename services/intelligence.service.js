@@ -146,7 +146,7 @@ function buildPoliticalIntelligence({
   const candidatesByState = groupCount(candidateRows, "state_name");
   const topStates = Object.entries(candidatesByState)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
+    .slice(0, 12)
     .map(([state, count], index) => ({
       rank: index + 1,
       state,
@@ -159,17 +159,40 @@ function buildPoliticalIntelligence({
     fundraisingRows
   });
 
-  const mapBattlegrounds = topStates.slice(0, 6).map((item, index) => ({
-    name: `${item.state} Battleground`,
-    state: item.state,
-    center: getStateCoordinates(item.state),
-    raceRating: index < 2 ? "Lean" : "Toss-up",
-    winProb: Math.min(68, 50 + item.count + index),
-    momentum: `+${(1.4 + index * 0.5).toFixed(1)}`,
-    funds: `$${(item.count * 0.9 + 5).toFixed(1)}M`,
-    risk: index < 2 ? "Medium" : "High",
-    note: `${item.state} is one of the highest-density political theaters in the platform.`
-  }));
+  const overlayByState = forecastPack.overlays.reduce((acc, row) => {
+    const current = acc[row.state];
+    if (!current || row.overlayScore > current.overlayScore) {
+      acc[row.state] = row;
+    }
+    return acc;
+  }, {});
+
+  const mapBattlegrounds = topStates.map((item, index) => {
+    const overlay = overlayByState[item.state];
+
+    return {
+      name: `${item.state} Battleground`,
+      state: item.state,
+      center: getStateCoordinates(item.state),
+      raceRating: overlay?.overlayTier || (index < 2 ? "high" : "watch"),
+      winProb: overlay?.winProbability || Math.min(68, 50 + item.count + index),
+      momentum: item.momentum,
+      funds: overlay
+        ? `$${(Number(overlay.totalReceipts || 0) / 1000000).toFixed(1)}M`
+        : `$${(item.count * 0.9 + 5).toFixed(1)}M`,
+      risk: overlay?.urgency || (index < 2 ? "High" : "Monitor"),
+      note: overlay
+        ? `${item.state} overlay score ${overlay.overlayScore} driven by competition and finance.`
+        : `${item.state} is one of the highest-density political theaters in the platform.`,
+      overlayScore: overlay?.overlayScore || 20,
+      overlayTier: overlay?.overlayTier || "watch",
+      fill: overlay?.fill || "#334155",
+      stroke: overlay?.stroke || "#94a3b8",
+      financeWeight: overlay?.financeWeight || 0,
+      competitionWeight: overlay?.competitionWeight || 0,
+      confidence: overlay?.confidence || 0
+    };
+  });
 
   const fundraisingLeaderboard = [...fundraisingRows]
     .sort(
@@ -196,7 +219,8 @@ function buildPoliticalIntelligence({
       statesTracked: stateCount,
       officesTracked: officeCount,
       partiesTracked: partyCount,
-      liveFundraisingCandidates: fundraisingRows.length
+      liveFundraisingCandidates: fundraisingRows.length,
+      criticalOverlays: forecastPack.summary.criticalOverlays
     },
     dashboard: {
       metrics: [
@@ -204,24 +228,24 @@ function buildPoliticalIntelligence({
         { label: "Consultants Indexed", value: `${consultantCount}`, delta: "Marketplace live", tone: "up" },
         { label: "Vendors Indexed", value: `${vendorCount}`, delta: "Operations supply active", tone: "up" },
         {
-          label: "Live Fundraising Rows",
-          value: `${fundraisingRows.length}`,
-          delta: "FEC-backed",
+          label: "Critical Overlays",
+          value: `${forecastPack.summary.criticalOverlays}`,
+          delta: "Map urgency zones",
           tone: "up"
         }
       ],
       alerts: [
         {
-          title: "Live fundraising is influencing modeled race strength",
-          meta: `${forecastPack.summary.trackedRaces} races currently modeled with fundraising inputs`,
+          title: "Fundraising-weighted battleground overlays are active",
+          meta: `${forecastPack.summary.trackedRaces} races currently contributing to state overlay scoring`,
           severity: "High"
         }
       ],
       raceMoves: forecastPack.leaderboard.slice(0, 8).map((row) => ({
         race: `${row.state} ${row.office}`,
         leader: row.leader,
-        change: `${row.winProbability}%`,
-        status: row.rating
+        change: `${row.overlayScore}`,
+        status: row.overlayTier
       }))
     },
     forecast: {
@@ -258,7 +282,7 @@ function buildPoliticalIntelligence({
         {
           label: "Top Modeled Race",
           value: forecastPack.leaderboard[0]?.leader || "N/A",
-          delta: forecastPack.leaderboard[0]?.rating || "N/A",
+          delta: forecastPack.leaderboard[0]?.overlayTier || "N/A",
           tone: "up"
         }
       ],
@@ -266,7 +290,8 @@ function buildPoliticalIntelligence({
     },
     map: {
       metrics: [
-        { label: "Battleground States", value: `${topStates.length}`, delta: "Live map surface", tone: "up" }
+        { label: "Battleground States", value: `${mapBattlegrounds.length}`, delta: "Live overlay surface", tone: "up" },
+        { label: "Critical Zones", value: `${mapBattlegrounds.filter((b) => b.overlayTier === "critical").length}`, delta: "Highest urgency", tone: "up" }
       ],
       battlegrounds: mapBattlegrounds
     },
