@@ -33,6 +33,34 @@ function buildRaceKey(row) {
   return `${row.state || "Unknown"}::${row.office || "Unknown"}`;
 }
 
+function overlayTierFromScore(score) {
+  if (score >= 80) return "critical";
+  if (score >= 65) return "high";
+  if (score >= 45) return "elevated";
+  return "watch";
+}
+
+function fillFromTier(tier) {
+  if (tier === "critical") return "#ef4444";
+  if (tier === "high") return "#f59e0b";
+  if (tier === "elevated") return "#0ea5e9";
+  return "#334155";
+}
+
+function strokeFromTier(tier) {
+  if (tier === "critical") return "#fecaca";
+  if (tier === "high") return "#fde68a";
+  if (tier === "elevated") return "#bae6fd";
+  return "#94a3b8";
+}
+
+function urgencyFromScore(score) {
+  if (score >= 80) return "Immediate";
+  if (score >= 65) return "High";
+  if (score >= 45) return "Elevated";
+  return "Monitor";
+}
+
 function buildRaceForecasts({ candidateRows = [], fundraisingRows = [] }) {
   const fundraising = normalizeFundraisingRows(fundraisingRows);
   const candidatesByState = groupCount(candidateRows, "state_name");
@@ -66,15 +94,14 @@ function buildRaceForecasts({ candidateRows = [], fundraisingRows = [] }) {
       const leader = sorted[0] || null;
       const runnerUp = sorted[1] || null;
 
-      const receiptsGap = leader && runnerUp ? leader.receipts - runnerUp.receipts : 0;
-      const cashGap = leader && runnerUp ? leader.cash_on_hand - runnerUp.cash_on_hand : 0;
+      const receiptsGap =
+        leader && runnerUp ? leader.receipts - runnerUp.receipts : 0;
+      const cashGap =
+        leader && runnerUp ? leader.cash_on_hand - runnerUp.cash_on_hand : 0;
       const stateIntensity = safeNumber(candidatesByState[race.state], 0);
 
       const fundraisingScore = clamp(
-        50 +
-          receiptsGap / 50000 +
-          cashGap / 75000 +
-          stateIntensity * 1.5,
+        50 + receiptsGap / 50000 + cashGap / 75000 + stateIntensity * 1.5,
         5,
         95
       );
@@ -88,8 +115,36 @@ function buildRaceForecasts({ candidateRows = [], fundraisingRows = [] }) {
 
       const volatility =
         leader && runnerUp
-          ? clamp(100 - Math.abs(leader.receipts - runnerUp.receipts) / 10000, 10, 95)
+          ? clamp(
+              100 - Math.abs(leader.receipts - runnerUp.receipts) / 10000,
+              10,
+              95
+            )
           : 70;
+
+      const competitionWeight = clamp(
+        Math.round(100 - Math.abs(winProbability - 50) * 2),
+        5,
+        100
+      );
+
+      const financeWeight = clamp(
+        Math.round(
+          race.totalReceipts / 100000 +
+            race.totalCash / 150000 +
+            stateIntensity * 4
+        ),
+        5,
+        100
+      );
+
+      const overlayScore = clamp(
+        Math.round(competitionWeight * 0.55 + financeWeight * 0.45),
+        5,
+        100
+      );
+
+      const overlayTier = overlayTierFromScore(overlayScore);
 
       return {
         raceKey: race.raceKey,
@@ -119,12 +174,23 @@ function buildRaceForecasts({ candidateRows = [], fundraisingRows = [] }) {
         receiptsGap,
         cashGap,
         winProbability,
-        confidence: clamp(Math.round((100 - volatility + stateIntensity) / 1.3), 20, 95),
+        confidence: clamp(
+          Math.round((100 - volatility + stateIntensity) / 1.3),
+          20,
+          95
+        ),
         rating,
-        volatility: Math.round(volatility)
+        volatility: Math.round(volatility),
+        competitionWeight,
+        financeWeight,
+        overlayScore,
+        overlayTier,
+        fill: fillFromTier(overlayTier),
+        stroke: strokeFromTier(overlayTier),
+        urgency: urgencyFromScore(overlayScore)
       };
     })
-    .sort((a, b) => b.totalReceipts - a.totalReceipts);
+    .sort((a, b) => b.overlayScore - a.overlayScore);
 }
 
 export function buildForecastPackage({
@@ -137,7 +203,8 @@ export function buildForecastPackage({
     trackedRaces: races.length,
     highConfidenceRaces: races.filter((r) => r.confidence >= 70).length,
     tossups: races.filter((r) => r.rating === "Toss-up").length,
-    totalModeledReceipts: races.reduce((sum, race) => sum + race.totalReceipts, 0)
+    totalModeledReceipts: races.reduce((sum, race) => sum + race.totalReceipts, 0),
+    criticalOverlays: races.filter((r) => r.overlayTier === "critical").length
   };
 
   const leaderboard = races.slice(0, 12).map((race, index) => ({
@@ -149,12 +216,31 @@ export function buildForecastPackage({
     winProbability: race.winProbability,
     confidence: race.confidence,
     rating: race.rating,
+    totalReceipts: race.totalReceipts,
+    overlayScore: race.overlayScore,
+    overlayTier: race.overlayTier
+  }));
+
+  const overlays = races.map((race) => ({
+    raceKey: race.raceKey,
+    state: race.state,
+    office: race.office,
+    overlayScore: race.overlayScore,
+    overlayTier: race.overlayTier,
+    fill: race.fill,
+    stroke: race.stroke,
+    urgency: race.urgency,
+    financeWeight: race.financeWeight,
+    competitionWeight: race.competitionWeight,
+    winProbability: race.winProbability,
+    confidence: race.confidence,
     totalReceipts: race.totalReceipts
   }));
 
   return {
     summary,
     races,
-    leaderboard
+    leaderboard,
+    overlays
   };
 }
