@@ -14,6 +14,25 @@ export async function ensureMapRegionsTable() {
   `);
 }
 
+export async function ensureMapRegionsConstraints() {
+  await ensureMapRegionsTable();
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'map_regions_region_type_region_name_key'
+      ) THEN
+        ALTER TABLE map_regions
+        ADD CONSTRAINT map_regions_region_type_region_name_key
+        UNIQUE (region_type, region_name);
+      END IF;
+    END$$;
+  `);
+}
+
 export async function upsertMapRegion({
   regionType,
   regionCode = null,
@@ -21,7 +40,7 @@ export async function upsertMapRegion({
   geojson,
   metadata = {}
 }) {
-  await ensureMapRegionsTable();
+  await ensureMapRegionsConstraints();
 
   const result = await pool.query(
     `
@@ -54,31 +73,19 @@ export async function upsertMapRegion({
   return result.rows[0];
 }
 
-export async function ensureMapRegionsConstraints() {
-  await ensureMapRegionsTable();
-
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'map_regions_region_type_region_name_key'
-      ) THEN
-        ALTER TABLE map_regions
-        ADD CONSTRAINT map_regions_region_type_region_name_key
-        UNIQUE (region_type, region_name);
-      END IF;
-    END$$;
-  `);
-}
-
 export async function getMapRegionsByType(regionType) {
   await ensureMapRegionsTable();
 
   const result = await pool.query(
     `
-    SELECT id, region_type, region_code, region_name, geojson, metadata, updated_at
+    SELECT
+      id,
+      region_type,
+      region_code,
+      region_name,
+      geojson,
+      metadata,
+      updated_at
     FROM map_regions
     WHERE region_type = $1
     ORDER BY region_name
@@ -94,9 +101,17 @@ export async function getMapRegionByName(regionType, regionName) {
 
   const result = await pool.query(
     `
-    SELECT id, region_type, region_code, region_name, geojson, metadata, updated_at
+    SELECT
+      id,
+      region_type,
+      region_code,
+      region_name,
+      geojson,
+      metadata,
+      updated_at
     FROM map_regions
-    WHERE region_type = $1 AND region_name = $2
+    WHERE region_type = $1
+      AND region_name = $2
     LIMIT 1
     `,
     [regionType, regionName]
