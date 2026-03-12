@@ -11,10 +11,11 @@ import vendorsRoutes from "./routes/vendors.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import mapRoutes from "./routes/map.routes.js";
 import fecRoutes from "./routes/fec.routes.js";
+import forecastRoutes from "./routes/forecast.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
-import { startFecScheduler } from "./jobs/fecScheduler.job.js";
+import { startForecastScheduler } from "./jobs/forecastScheduler.job.js";
 
 dotenv.config();
 
@@ -49,9 +50,19 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+
       "/api/candidates",
+      "/api/candidates/dropdowns/states",
+      "/api/candidates/dropdowns/offices",
+      "/api/candidates/dropdowns/parties",
+      "/api/candidates/dropdowns/counties",
+
       "/api/consultants",
+      "/api/consultants/dropdowns/states",
+
       "/api/vendors",
+      "/api/vendors/dropdowns/states",
+
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -59,11 +70,19 @@ app.get("/", (_req, res) => {
       "/api/intelligence/map",
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
+      "/api/intelligence/fundraising/ingest",
+
       "/api/map/geojson/states",
+      "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
+
       "/api/fec/ingest",
       "/api/fec/candidates",
-      "/api/fec/fundraising"
+      "/api/fec/fundraising",
+
+      "/api/forecast/rebuild",
+      "/api/forecast/published",
+      "/api/forecast/overlays"
     ]
   });
 });
@@ -86,6 +105,7 @@ app.use("/api/vendors", vendorsRoutes);
 app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/map", mapRoutes);
 app.use("/api/fec", fecRoutes);
+app.use("/api/forecast", forecastRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -105,9 +125,9 @@ async function startServer() {
       }
 
       try {
-        startFecScheduler();
+        startForecastScheduler();
       } catch (jobErr) {
-        console.error("Failed to start FEC candidate scheduler:", jobErr);
+        console.error("Failed to start forecast scheduler:", jobErr);
       }
     });
 
