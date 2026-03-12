@@ -39,7 +39,12 @@ export async function getStateGeoJson(req, res, next) {
 
 export async function runManualMapIngestion(req, res, next) {
   try {
-    const filePath = String(req.body?.filePath || process.env.MAP_STATES_GEOJSON_PATH || "./data/us-states.geojson");
+    const filePath = String(
+      req.body?.filePath ||
+        process.env.MAP_STATES_GEOJSON_PATH ||
+        "./data/us-states.geojson"
+    );
+
     const result = await runMapIngestion({
       filePath,
       regionType: "state"
