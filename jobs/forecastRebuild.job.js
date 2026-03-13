@@ -69,6 +69,96 @@ function getStateCoordinates(state) {
   return coords[state] || [39.8283, -98.5795];
 }
 
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeOverlayTier(value) {
+  if (!value) return "watch";
+  const text = String(value).toLowerCase();
+
+  if (["critical", "high", "elevated", "watch"].includes(text)) {
+    return text;
+  }
+
+  if (text === "likely") return "high";
+  if (text === "lean") return "elevated";
+  if (text === "toss-up" || text === "tossup") return "critical";
+  if (text === "tilt") return "elevated";
+
+  return "watch";
+}
+
+function fillFromTier(tier) {
+  if (tier === "critical") return "#ef4444";
+  if (tier === "high") return "#f59e0b";
+  if (tier === "elevated") return "#0ea5e9";
+  return "#334155";
+}
+
+function strokeFromTier(tier) {
+  if (tier === "critical") return "#fecaca";
+  if (tier === "high") return "#fde68a";
+  if (tier === "elevated") return "#bae6fd";
+  return "#94a3b8";
+}
+
+function urgencyFromTier(tier) {
+  if (tier === "critical") return "Immediate";
+  if (tier === "high") return "High";
+  if (tier === "elevated") return "Elevated";
+  return "Monitor";
+}
+
+function deriveOverlayScoreFromRace(race) {
+  if (race.overlayScore !== undefined && race.overlayScore !== null) {
+    return safeNumber(race.overlayScore, 0);
+  }
+
+  const winProbability = safeNumber(race.winProbability, 50);
+  const financeWeight = safeNumber(race.financeWeight, 0);
+  const competitionWeight = safeNumber(race.competitionWeight, 0);
+
+  const blended = Math.round(
+    competitionWeight > 0 || financeWeight > 0
+      ? competitionWeight * 0.55 + financeWeight * 0.45
+      : 100 - Math.abs(winProbability - 50) * 2
+  );
+
+  return Math.max(0, Math.min(100, blended));
+}
+
+function deriveOverlayTierFromScore(score) {
+  if (score >= 80) return "critical";
+  if (score >= 65) return "high";
+  if (score >= 45) return "elevated";
+  return "watch";
+}
+
+function buildFallbackOverlaysFromRaces(races = []) {
+  return races.map((race) => {
+    const overlayScore = deriveOverlayScoreFromRace(race);
+    const overlayTier = normalizeOverlayTier(
+      race.overlayTier || deriveOverlayTierFromScore(overlayScore)
+    );
+
+    return {
+      state: race.state,
+      overlayScore,
+      overlayTier,
+      fill: race.fill || fillFromTier(overlayTier),
+      stroke: race.stroke || strokeFromTier(overlayTier),
+      urgency: race.urgency || urgencyFromTier(overlayTier),
+      financeWeight: safeNumber(race.financeWeight, 0),
+      competitionWeight: safeNumber(race.competitionWeight, 0),
+      winProbability: safeNumber(race.winProbability, 50),
+      confidence: safeNumber(race.confidence, 50),
+      totalReceipts: safeNumber(race.totalReceipts, 0)
+    };
+  });
+}
+
 async function getLatestFundraisingSnapshots() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS fundraising_snapshots (
@@ -116,10 +206,10 @@ async function getLatestFundraisingSnapshots() {
     party: row.party,
     cycle: row.cycle,
     totals: {
-      receipts: Number(row.receipts || 0),
-      disbursements: Number(row.disbursements || 0),
-      cash_on_hand_end_period: Number(row.cash_on_hand || 0),
-      debts_owed_by_committee: Number(row.debt || 0),
+      receipts: safeNumber(row.receipts, 0),
+      disbursements: safeNumber(row.disbursements, 0),
+      cash_on_hand_end_period: safeNumber(row.cash_on_hand, 0),
+      debts_owed_by_committee: safeNumber(row.debt, 0),
       coverage_start_date: row.coverage_start_date,
       coverage_end_date: row.coverage_end_date
     }
@@ -138,9 +228,19 @@ export async function rebuildForecastSnapshots() {
     fundraisingRows
   });
 
+  const races = Array.isArray(forecastPack?.races) ? forecastPack.races : [];
+  const overlays = Array.isArray(forecastPack?.overlays)
+    ? forecastPack.overlays
+    : buildFallbackOverlaysFromRaces(races);
+
   await clearForecastRun(snapshotRunId);
 
-  for (const race of forecastPack.races) {
+  for (const race of races) {
+    const overlayScore = deriveOverlayScoreFromRace(race);
+    const overlayTier = normalizeOverlayTier(
+      race.overlayTier || deriveOverlayTierFromScore(overlayScore)
+    );
+
     await insertForecastSnapshot({
       snapshot_run_id: snapshotRunId,
       race_key: race.raceKey,
@@ -149,48 +249,61 @@ export async function rebuildForecastSnapshots() {
       candidate_count: race.candidateCount,
       leader: race.leader,
       runner_up: race.runnerUp,
-      total_receipts: race.totalReceipts,
-      total_cash: race.totalCash,
-      receipts_gap: race.receiptsGap,
-      cash_gap: race.cashGap,
-      win_probability: race.winProbability,
-      confidence: race.confidence,
+      total_receipts: safeNumber(race.totalReceipts, 0),
+      total_cash: safeNumber(race.totalCash, 0),
+      receipts_gap: safeNumber(race.receiptsGap, 0),
+      cash_gap: safeNumber(race.cashGap, 0),
+      win_probability: safeNumber(race.winProbability, 50),
+      confidence: safeNumber(race.confidence, 50),
       rating: race.rating,
-      volatility: race.volatility,
-      competition_weight: race.competitionWeight,
-      finance_weight: race.financeWeight,
-      overlay_score: race.overlayScore,
-      overlay_tier: race.overlayTier,
-      fill: race.fill,
-      stroke: race.stroke,
-      urgency: race.urgency
+      volatility: safeNumber(race.volatility, 50),
+      competition_weight: safeNumber(race.competitionWeight, 0),
+      finance_weight: safeNumber(race.financeWeight, 0),
+      overlay_score: overlayScore,
+      overlay_tier: overlayTier,
+      fill: race.fill || fillFromTier(overlayTier),
+      stroke: race.stroke || strokeFromTier(overlayTier),
+      urgency: race.urgency || urgencyFromTier(overlayTier)
     });
   }
 
   const bestOverlayByState = {};
-  for (const overlay of forecastPack.overlays) {
+  for (const overlay of overlays) {
+    if (!overlay?.state) continue;
+
     const current = bestOverlayByState[overlay.state];
-    if (!current || overlay.overlayScore > current.overlayScore) {
+    const score = safeNumber(overlay.overlayScore, 0);
+
+    if (!current || score > safeNumber(current.overlayScore, 0)) {
       bestOverlayByState[overlay.state] = overlay;
     }
   }
 
   for (const state of Object.keys(bestOverlayByState)) {
     const overlay = bestOverlayByState[state];
+    const overlayTier = normalizeOverlayTier(
+      overlay.overlayTier || deriveOverlayTierFromScore(safeNumber(overlay.overlayScore, 0))
+    );
+
     await insertForecastOverlay({
       snapshot_run_id: snapshotRunId,
       state,
-      overlay_score: overlay.overlayScore,
-      overlay_tier: overlay.overlayTier,
-      fill: overlay.fill,
-      stroke: overlay.stroke,
-      urgency: overlay.urgency,
-      finance_weight: overlay.financeWeight,
-      competition_weight: overlay.competitionWeight,
-      win_probability: overlay.winProbability,
-      confidence: overlay.confidence,
-      total_receipts: overlay.totalReceipts,
-      note: `${state} overlay score ${overlay.overlayScore} from latest published forecast snapshot.`,
+      overlay_score: safeNumber(overlay.overlayScore, 0),
+      overlay_tier: overlayTier,
+      fill: overlay.fill || fillFromTier(overlayTier),
+      stroke: overlay.stroke || strokeFromTier(overlayTier),
+      urgency: overlay.urgency || urgencyFromTier(overlayTier),
+      finance_weight: safeNumber(overlay.financeWeight, 0),
+      competition_weight: safeNumber(overlay.competitionWeight, 0),
+      win_probability: safeNumber(overlay.winProbability, 50),
+      confidence: safeNumber(overlay.confidence, 50),
+      total_receipts: safeNumber(overlay.totalReceipts, 0),
+      note:
+        overlay.note ||
+        `${state} overlay score ${safeNumber(
+          overlay.overlayScore,
+          0
+        )} from latest published forecast snapshot.`,
       center: getStateCoordinates(state)
     });
   }
@@ -198,7 +311,7 @@ export async function rebuildForecastSnapshots() {
   return {
     ok: true,
     snapshot_run_id: snapshotRunId,
-    races: forecastPack.races.length,
+    races: races.length,
     overlays: Object.keys(bestOverlayByState).length
   };
 }
