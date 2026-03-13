@@ -12,6 +12,7 @@ import intelligenceRoutes from "./routes/intelligence.routes.js";
 import mapRoutes from "./routes/map.routes.js";
 import fecRoutes from "./routes/fec.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
+import crmRoutes from "./routes/crm.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
@@ -82,7 +83,17 @@ app.get("/", (_req, res) => {
 
       "/api/forecast/rebuild",
       "/api/forecast/published",
-      "/api/forecast/overlays"
+      "/api/forecast/overlays",
+
+      "/api/crm/init",
+      "/api/crm/firms",
+      "/api/crm/users",
+      "/api/crm/campaigns",
+      "/api/crm/campaigns/:id",
+      "/api/crm/campaigns/:id/contacts",
+      "/api/crm/campaigns/:id/vendors",
+      "/api/crm/campaigns/:id/tasks",
+      "/api/crm/campaigns/:id/documents"
     ]
   });
 });
@@ -106,6 +117,7 @@ app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/map", mapRoutes);
 app.use("/api/fec", fecRoutes);
 app.use("/api/forecast", forecastRoutes);
+app.use("/api/crm", crmRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
