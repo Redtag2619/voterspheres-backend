@@ -13,6 +13,7 @@ import mapRoutes from "./routes/map.routes.js";
 import fecRoutes from "./routes/fec.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
 import crmRoutes from "./routes/crm.routes.js";
+import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
@@ -51,19 +52,9 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
-
       "/api/candidates",
-      "/api/candidates/dropdowns/states",
-      "/api/candidates/dropdowns/offices",
-      "/api/candidates/dropdowns/parties",
-      "/api/candidates/dropdowns/counties",
-
       "/api/consultants",
-      "/api/consultants/dropdowns/states",
-
       "/api/vendors",
-      "/api/vendors/dropdowns/states",
-
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -72,19 +63,15 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
-
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
-
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
-
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
-
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -93,7 +80,8 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/contacts",
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
-      "/api/crm/campaigns/:id/documents"
+      "/api/crm/campaigns/:id/documents",
+      "/api/crm-dashboard/summary"
     ]
   });
 });
@@ -118,6 +106,7 @@ app.use("/api/map", mapRoutes);
 app.use("/api/fec", fecRoutes);
 app.use("/api/forecast", forecastRoutes);
 app.use("/api/crm", crmRoutes);
+app.use("/api/crm-dashboard", crmDashboardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
