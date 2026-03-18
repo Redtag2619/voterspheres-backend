@@ -1,12 +1,14 @@
 import express from "express";
 import {
-  getVendors,
-  getVendorStates
-} from "../services/vendors.service.js";
+  listVendorCategoryDropdown,
+  listVendorDirectory,
+  listVendorStatusDropdown
+} from "../services/vendorDirectory.service.js";
 
 const router = express.Router();
 
-router.get("/", getVendors);
-router.get("/dropdowns/states", getVendorStates);
+router.get("/", listVendorDirectory);
+router.get("/dropdowns/categories", listVendorCategoryDropdown);
+router.get("/dropdowns/statuses", listVendorStatusDropdown);
 
 export default router;
