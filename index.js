@@ -17,7 +17,8 @@ import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
-import { startForecastScheduler } from "./jobs/forecastScheduler.job.js";
+import { startForecastScheduler } from "./jobs/forecastScheduler.job.js"; 
+import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
 
 dotenv.config();
 
@@ -81,7 +82,8 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
-      "/api/crm-dashboard/summary"
+      "/api/crm-dashboard/summary" 
+      "/api/firms/:id/workspace",
     ]
   });
 });
@@ -106,7 +108,8 @@ app.use("/api/map", mapRoutes);
 app.use("/api/fec", fecRoutes);
 app.use("/api/forecast", forecastRoutes);
 app.use("/api/crm", crmRoutes);
-app.use("/api/crm-dashboard", crmDashboardRoutes);
+app.use("/api/crm-dashboard", crmDashboardRoutes); 
+app.use("/api/firms", firmWorkspaceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
