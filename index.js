@@ -5,6 +5,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 import { pool } from "./db/pool.js";
+
 import candidatesRoutes from "./routes/candidates.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
@@ -16,8 +17,10 @@ import crmRoutes from "./routes/crm.routes.js";
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
 import mailRoutes from "./routes/mail.routes.js";
+
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
 import { startForecastScheduler } from "./jobs/forecastScheduler.job.js";
 
@@ -37,7 +40,8 @@ process.on("unhandledRejection", (reason) => {
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 app.use(
   rateLimit({
@@ -54,11 +58,20 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+
       "/api/candidates",
+      "/api/candidates/dropdowns/states",
+      "/api/candidates/dropdowns/offices",
+      "/api/candidates/dropdowns/parties",
+      "/api/candidates/dropdowns/counties",
+
       "/api/consultants",
+      "/api/consultants/dropdowns/states",
+
       "/api/vendors",
       "/api/vendors/dropdowns/categories",
       "/api/vendors/dropdowns/statuses",
+
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -67,15 +80,19 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
+
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
+
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
+
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
+
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -85,19 +102,19 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
+
       "/api/crm-dashboard/summary",
+
       "/api/firms/:id/workspace",
+
       "/api/mail/init",
       "/api/mail/dashboard",
       "/api/mail/programs",
-      "/api/mail/programs/:id",
-      "/api/mail/programs/:id/events", 
       "/api/mail/drops",
       "/api/mail/tracking-events",
       "/api/mail/timeline",
       "/api/mail/campaigns/:campaignId/timeline",
-      "/api/mail/drops/:id/timeline",
-      "/api/mail/campaigns/:campaignId"
+      "/api/mail/drops/:id/timeline"
     ]
   });
 });
