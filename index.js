@@ -91,7 +91,12 @@ app.get("/", (_req, res) => {
       "/api/mail/dashboard",
       "/api/mail/programs",
       "/api/mail/programs/:id",
-      "/api/mail/programs/:id/events",
+      "/api/mail/programs/:id/events", 
+      "/api/mail/drops",
+      "/api/mail/tracking-events",
+      "/api/mail/timeline",
+      "/api/mail/campaigns/:campaignId/timeline",
+      "/api/mail/drops/:id/timeline",
       "/api/mail/campaigns/:campaignId"
     ]
   });
