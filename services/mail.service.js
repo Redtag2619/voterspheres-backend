@@ -1,17 +1,20 @@
 import {
-  addMailTrackingEvent,
+  createMailDrop,
   createMailProgram,
+  createMailTrackingEvent,
   ensureMailTables,
-  getCampaignMailTracking,
+  getCampaignMailTimeline,
   getMailDashboard,
-  getMailProgramById,
+  getMailDropTimeline,
+  getPlatformMailTimeline,
+  listMailDrops,
   listMailPrograms
 } from "../repositories/mail.repository.js";
 
-export async function initMailModule(req, res, next) {
+export async function initMailTables(req, res, next) {
   try {
     await ensureMailTables();
-    res.json({ ok: true, message: "MailOps tables ready" });
+    res.json({ ok: true, message: "MailOps tables initialized" });
   } catch (err) {
     next(err);
   }
@@ -19,17 +22,8 @@ export async function initMailModule(req, res, next) {
 
 export async function createMailProgramHandler(req, res, next) {
   try {
-    const created = await createMailProgram(req.body || {});
-    res.status(201).json(created);
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function addMailTrackingEventHandler(req, res, next) {
-  try {
-    const created = await addMailTrackingEvent(req.params.id, req.body || {});
-    res.status(201).json(created);
+    const record = await createMailProgram(req.body);
+    res.status(201).json(record);
   } catch (err) {
     next(err);
   }
@@ -37,31 +31,63 @@ export async function addMailTrackingEventHandler(req, res, next) {
 
 export async function listMailProgramsHandler(req, res, next) {
   try {
-    const data = await listMailPrograms({
-      search: req.query.search || "",
-      status: req.query.status || "",
-      state: req.query.state || "",
-      campaign_id: req.query.campaign_id || "",
-      firm_id: req.query.firm_id || "",
-      page: req.query.page || 1,
-      limit: req.query.limit || 25
-    });
-
-    res.json(data);
+    const results = await listMailPrograms(req.query || {});
+    res.json({ results });
   } catch (err) {
     next(err);
   }
 }
 
-export async function getMailProgramHandler(req, res, next) {
+export async function createMailDropHandler(req, res, next) {
   try {
-    const program = await getMailProgramById(req.params.id);
+    const record = await createMailDrop(req.body);
+    res.status(201).json(record);
+  } catch (err) {
+    next(err);
+  }
+}
 
-    if (!program) {
-      return res.status(404).json({ error: "mail program not found" });
-    }
+export async function listMailDropsHandler(req, res, next) {
+  try {
+    const results = await listMailDrops(req.query || {});
+    res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+}
 
-    res.json(program);
+export async function createMailTrackingEventHandler(req, res, next) {
+  try {
+    const record = await createMailTrackingEvent(req.body);
+    res.status(201).json(record);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMailDropTimelineHandler(req, res, next) {
+  try {
+    const results = await getMailDropTimeline(req.params.id);
+    res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCampaignMailTimelineHandler(req, res, next) {
+  try {
+    const results = await getCampaignMailTimeline(req.params.campaignId);
+    res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPlatformMailTimelineHandler(req, res, next) {
+  try {
+    const limit = req.query.limit || 50;
+    const results = await getPlatformMailTimeline(limit);
+    res.json({ results });
   } catch (err) {
     next(err);
   }
@@ -69,26 +95,8 @@ export async function getMailProgramHandler(req, res, next) {
 
 export async function getMailDashboardHandler(req, res, next) {
   try {
-    const data = await getMailDashboard({
-      firm_id: req.query.firm_id || "",
-      campaign_id: req.query.campaign_id || ""
-    });
-
-    res.json(data);
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getCampaignMailTrackingHandler(req, res, next) {
-  try {
-    const data = await getCampaignMailTracking(req.params.campaignId);
-
-    if (!data) {
-      return res.status(404).json({ error: "campaign not found" });
-    }
-
-    res.json(data);
+    const dashboard = await getMailDashboard();
+    res.json(dashboard);
   } catch (err) {
     next(err);
   }
