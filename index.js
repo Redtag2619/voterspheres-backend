@@ -54,20 +54,11 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
-
       "/api/candidates",
-      "/api/candidates/dropdowns/states",
-      "/api/candidates/dropdowns/offices",
-      "/api/candidates/dropdowns/parties",
-      "/api/candidates/dropdowns/counties",
-
       "/api/consultants",
-      "/api/consultants/dropdowns/states",
-
       "/api/vendors",
       "/api/vendors/dropdowns/categories",
       "/api/vendors/dropdowns/statuses",
-
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -76,19 +67,15 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
-
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
-
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
-
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
-
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -98,18 +85,14 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
-
       "/api/crm-dashboard/summary",
-
       "/api/firms/:id/workspace",
-
       "/api/mail/init",
       "/api/mail/dashboard",
       "/api/mail/programs",
-      "/api/mail/programs/:program_id",
-      "/api/mail/drops",
-      "/api/mail/drops/:drop_id/events",
-      "/api/mail/campaigns/:id"
+      "/api/mail/programs/:id",
+      "/api/mail/programs/:id/events",
+      "/api/mail/campaigns/:campaignId"
     ]
   });
 });
