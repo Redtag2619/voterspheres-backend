@@ -15,6 +15,7 @@ import forecastRoutes from "./routes/forecast.routes.js";
 import crmRoutes from "./routes/crm.routes.js";
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
+import mailRoutes from "./routes/mail.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
@@ -64,7 +65,8 @@ app.get("/", (_req, res) => {
       "/api/consultants/dropdowns/states",
 
       "/api/vendors",
-      "/api/vendors/dropdowns/states",
+      "/api/vendors/dropdowns/categories",
+      "/api/vendors/dropdowns/statuses",
 
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
@@ -99,7 +101,15 @@ app.get("/", (_req, res) => {
 
       "/api/crm-dashboard/summary",
 
-      "/api/firms/:id/workspace"
+      "/api/firms/:id/workspace",
+
+      "/api/mail/init",
+      "/api/mail/dashboard",
+      "/api/mail/programs",
+      "/api/mail/programs/:program_id",
+      "/api/mail/drops",
+      "/api/mail/drops/:drop_id/events",
+      "/api/mail/campaigns/:id"
     ]
   });
 });
@@ -126,6 +136,7 @@ app.use("/api/forecast", forecastRoutes);
 app.use("/api/crm", crmRoutes);
 app.use("/api/crm-dashboard", crmDashboardRoutes);
 app.use("/api/firms", firmWorkspaceRoutes);
+app.use("/api/mail", mailRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
