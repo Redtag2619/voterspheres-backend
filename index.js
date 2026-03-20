@@ -40,7 +40,7 @@ process.on("unhandledRejection", (reason) => {
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
@@ -60,17 +60,8 @@ app.get("/", (_req, res) => {
       "/health",
 
       "/api/candidates",
-      "/api/candidates/dropdowns/states",
-      "/api/candidates/dropdowns/offices",
-      "/api/candidates/dropdowns/parties",
-      "/api/candidates/dropdowns/counties",
-
       "/api/consultants",
-      "/api/consultants/dropdowns/states",
-
       "/api/vendors",
-      "/api/vendors/dropdowns/categories",
-      "/api/vendors/dropdowns/statuses",
 
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
@@ -114,11 +105,11 @@ app.get("/", (_req, res) => {
       "/api/mail/tracking-events",
       "/api/mail/timeline",
       "/api/mail/campaigns/:campaignId/timeline",
-      "/api/mail/drops/:id/timeline" 
+      "/api/mail/drops/:id/timeline",
       "/api/mail/intelligence/summary",
       "/api/mail/intelligence/vendors",
       "/api/mail/intelligence/campaigns",
-      "/api/mail/intelligence/regions",
+      "/api/mail/intelligence/regions"
     ]
   });
 });
