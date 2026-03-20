@@ -17,6 +17,7 @@ import crmRoutes from "./routes/crm.routes.js";
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
 import mailRoutes from "./routes/mail.routes.js";
+import platformRoutes from "./routes/platform.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -95,7 +96,6 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/documents",
 
       "/api/crm-dashboard/summary",
-
       "/api/firms/:id/workspace",
 
       "/api/mail/init",
@@ -109,7 +109,9 @@ app.get("/", (_req, res) => {
       "/api/mail/intelligence/summary",
       "/api/mail/intelligence/vendors",
       "/api/mail/intelligence/campaigns",
-      "/api/mail/intelligence/regions"
+      "/api/mail/intelligence/regions",
+
+      "/api/platform/executive-dashboard"
     ]
   });
 });
@@ -137,6 +139,7 @@ app.use("/api/crm", crmRoutes);
 app.use("/api/crm-dashboard", crmDashboardRoutes);
 app.use("/api/firms", firmWorkspaceRoutes);
 app.use("/api/mail", mailRoutes);
+app.use("/api/platform", platformRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
