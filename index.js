@@ -18,6 +18,7 @@ import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
 import mailRoutes from "./routes/mail.routes.js";
 import platformRoutes from "./routes/platform.routes.js";
+import alertsRoutes from "./routes/alerts.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -59,11 +60,9 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
-
       "/api/candidates",
       "/api/consultants",
       "/api/vendors",
-
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -72,19 +71,15 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
-
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
-
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
-
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
-
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -94,10 +89,8 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
-
       "/api/crm-dashboard/summary",
       "/api/firms/:id/workspace",
-
       "/api/mail/init",
       "/api/mail/dashboard",
       "/api/mail/programs",
@@ -110,8 +103,10 @@ app.get("/", (_req, res) => {
       "/api/mail/intelligence/vendors",
       "/api/mail/intelligence/campaigns",
       "/api/mail/intelligence/regions",
-
-      "/api/platform/executive-dashboard"
+      "/api/platform/executive-dashboard",
+      "/api/alerts",
+      "/api/alerts/campaigns/:id",
+      "/api/alerts/rebuild"
     ]
   });
 });
@@ -140,6 +135,7 @@ app.use("/api/crm-dashboard", crmDashboardRoutes);
 app.use("/api/firms", firmWorkspaceRoutes);
 app.use("/api/mail", mailRoutes);
 app.use("/api/platform", platformRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
