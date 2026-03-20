@@ -114,7 +114,11 @@ app.get("/", (_req, res) => {
       "/api/mail/tracking-events",
       "/api/mail/timeline",
       "/api/mail/campaigns/:campaignId/timeline",
-      "/api/mail/drops/:id/timeline"
+      "/api/mail/drops/:id/timeline" 
+      "/api/mail/intelligence/summary",
+      "/api/mail/intelligence/vendors",
+      "/api/mail/intelligence/campaigns",
+      "/api/mail/intelligence/regions",
     ]
   });
 });
