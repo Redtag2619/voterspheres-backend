@@ -1,68 +1,43 @@
 import { pool } from "../db/pool.js";
 import { ensureCrmTables } from "../repositories/crm.repository.js";
 
-function money(value) {
-  return Number(value || 0);
-}
-
-function compactMoney(value) {
-  const n = Number(value || 0);
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
-  return `$${n.toLocaleString()}`;
-}
-
-export async function getCrmDashboardSummary(_req, res, next) {
+export async function getCrmDashboardSummary(req, res, next) {
   try {
     await ensureCrmTables();
 
     const [
+      firmsResult,
       campaignsResult,
       tasksResult,
       vendorsResult,
-      firmsResult,
-      usersResult,
-      activityResult
+      activityResult,
+      revenueResult
     ] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS total FROM firms`),
       pool.query(`
-        SELECT
-          c.*,
-          f.name AS firm_name
-        FROM campaigns c
-        LEFT JOIN firms f ON f.id = c.firm_id
-        ORDER BY c.updated_at DESC, c.created_at DESC
+        SELECT *
+        FROM campaigns
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 12
       `),
       pool.query(`
-        SELECT
-          t.*,
-          c.campaign_name,
-          c.candidate_name
-        FROM campaign_tasks t
-        INNER JOIN campaigns c ON c.id = t.campaign_id
-        WHERE t.status <> 'done'
-        ORDER BY
-          CASE t.priority
-            WHEN 'high' THEN 1
-            WHEN 'medium' THEN 2
-            WHEN 'low' THEN 3
-            ELSE 4
-          END,
-          t.due_date ASC NULLS LAST,
-          t.updated_at DESC
-        LIMIT 10
+        SELECT *
+        FROM campaign_tasks
+        WHERE LOWER(COALESCE(status, '')) <> 'done'
+        ORDER BY created_at DESC
+        LIMIT 12
       `),
       pool.query(`
         SELECT
           v.*,
           c.campaign_name,
-          c.candidate_name
+          c.candidate_name,
+          c.state
         FROM campaign_vendors v
         INNER JOIN campaigns c ON c.id = v.campaign_id
         ORDER BY v.updated_at DESC, v.created_at DESC
-        LIMIT 10
+        LIMIT 12
       `),
-      pool.query(`SELECT * FROM firms ORDER BY updated_at DESC, created_at DESC`),
-      pool.query(`SELECT * FROM app_users ORDER BY updated_at DESC, created_at DESC`),
       pool.query(`
         SELECT
           a.*,
@@ -71,133 +46,60 @@ export async function getCrmDashboardSummary(_req, res, next) {
         FROM campaign_activity a
         INNER JOIN campaigns c ON c.id = a.campaign_id
         ORDER BY a.created_at DESC
-        LIMIT 12
+        LIMIT 20
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_campaigns,
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, 'open')) = 'open'
+          )::int AS active_campaigns,
+          COALESCE(SUM(contract_value), 0)::numeric AS pipeline_revenue,
+          COALESCE(SUM(budget_total), 0)::numeric AS tracked_budget
+        FROM campaigns
       `)
     ]);
 
-    const campaigns = campaignsResult.rows;
-    const tasks = tasksResult.rows;
-    const vendors = vendorsResult.rows;
-    const firms = firmsResult.rows;
-    const users = usersResult.rows;
-    const activity = activityResult.rows;
-
-    const activeCampaigns = campaigns.filter(
-      (campaign) =>
-        String(campaign.status || "").toLowerCase() !== "closed" &&
-        String(campaign.stage || "").toLowerCase() !== "post-election"
-    );
-
-    const pipelineRevenue = campaigns.reduce(
-      (sum, campaign) => sum + money(campaign.contract_value),
-      0
-    );
-
-    const budgetTracked = campaigns.reduce(
-      (sum, campaign) => sum + money(campaign.budget_total),
-      0
-    );
-
-    const stageCounts = [
-      "Lead",
-      "Prospect",
-      "Proposal",
-      "Contracted",
-      "Active Campaign",
-      "Post-Election"
-    ].map((stage) => ({
-      stage,
-      count: campaigns.filter((campaign) => campaign.stage === stage).length
-    }));
-
-    const activeCampaignRows = activeCampaigns.slice(0, 6).map((campaign) => ({
-      id: campaign.id,
-      campaign_name: campaign.campaign_name,
-      candidate_name: campaign.candidate_name,
-      office: campaign.office,
-      state: campaign.state,
-      party: campaign.party,
-      stage: campaign.stage,
-      status: campaign.status,
-      contract_value: money(campaign.contract_value),
-      budget_total: money(campaign.budget_total),
-      firm_name: campaign.firm_name || null
-    }));
-
-    const vendorActivity = vendors.map((vendor) => ({
-      id: vendor.id,
-      vendor_name: vendor.vendor_name,
-      category: vendor.category,
-      status: vendor.status,
-      contract_value: money(vendor.contract_value),
-      campaign_id: vendor.campaign_id,
-      campaign_name: vendor.campaign_name,
-      candidate_name: vendor.candidate_name,
-      updated_at: vendor.updated_at
-    }));
-
-    const taskAlerts = tasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      due_date: task.due_date,
-      campaign_id: task.campaign_id,
-      campaign_name: task.campaign_name,
-      candidate_name: task.candidate_name
-    }));
-
-    const recentActivity = activity.map((item) => ({
-      id: item.id,
-      activity_type: item.activity_type,
-      summary: item.summary,
-      created_at: item.created_at,
-      campaign_id: item.campaign_id,
-      campaign_name: item.campaign_name,
-      candidate_name: item.candidate_name
-    }));
+    const revenue = revenueResult.rows[0] || {};
 
     res.json({
       metrics: [
         {
+          label: "Firms",
+          value: `${firmsResult.rows[0]?.total || 0}`,
+          delta: "CRM accounts",
+          tone: "up"
+        },
+        {
           label: "Active Campaigns",
-          value: `${activeCampaigns.length}`,
+          value: `${revenue.active_campaigns || 0}`,
           delta: "Open workspaces",
           tone: "up"
         },
         {
           label: "Pipeline Revenue",
-          value: compactMoney(pipelineRevenue),
-          delta: "Contract value tracked",
+          value: `$${Number(revenue.pipeline_revenue || 0).toLocaleString()}`,
+          delta: "Tracked contract value",
           tone: "up"
         },
         {
-          label: "Budget Tracked",
-          value: compactMoney(budgetTracked),
+          label: "Tracked Budget",
+          value: `$${Number(revenue.tracked_budget || 0).toLocaleString()}`,
           delta: "Campaign budgets",
           tone: "up"
-        },
-        {
-          label: "Task Alerts",
-          value: `${taskAlerts.length}`,
-          delta: "Open action items",
-          tone: taskAlerts.length > 0 ? "alert" : "up"
         }
       ],
       summary: {
-        firms: firms.length,
-        users: users.length,
-        campaigns: campaigns.length,
-        active_campaigns: activeCampaigns.length,
-        pipeline_revenue: pipelineRevenue,
-        budget_tracked: budgetTracked
+        firms: Number(firmsResult.rows[0]?.total || 0),
+        total_campaigns: Number(revenue.total_campaigns || 0),
+        active_campaigns: Number(revenue.active_campaigns || 0),
+        pipeline_revenue: Number(revenue.pipeline_revenue || 0),
+        tracked_budget: Number(revenue.tracked_budget || 0)
       },
-      stage_counts: stageCounts,
-      active_campaigns: activeCampaignRows,
-      task_alerts: taskAlerts,
-      vendor_activity: vendorActivity,
-      recent_activity: recentActivity
+      active_campaigns: campaignsResult.rows || [],
+      task_alerts: tasksResult.rows || [],
+      vendor_activity: vendorsResult.rows || [],
+      recent_activity: activityResult.rows || []
     });
   } catch (err) {
     next(err);
