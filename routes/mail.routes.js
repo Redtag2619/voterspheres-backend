@@ -9,7 +9,11 @@ import {
   createMailTrackingEventHandler,
   getPlatformMailTimelineHandler,
   getCampaignMailTimelineHandler,
-  getMailDropTimelineHandler
+  getMailDropTimelineHandler,
+  getMailIntelligenceSummaryHandler,
+  getMailVendorIntelligenceHandler,
+  getMailCampaignIntelligenceHandler,
+  getMailRegionalIntelligenceHandler
 } from "../services/mail.service.js";
 
 const router = express.Router();
@@ -29,5 +33,10 @@ router.post("/tracking-events", createMailTrackingEventHandler);
 router.get("/timeline", getPlatformMailTimelineHandler);
 router.get("/campaigns/:campaignId/timeline", getCampaignMailTimelineHandler);
 router.get("/drops/:id/timeline", getMailDropTimelineHandler);
+
+router.get("/intelligence/summary", getMailIntelligenceSummaryHandler);
+router.get("/intelligence/vendors", getMailVendorIntelligenceHandler);
+router.get("/intelligence/campaigns", getMailCampaignIntelligenceHandler);
+router.get("/intelligence/regions", getMailRegionalIntelligenceHandler);
 
 export default router;
