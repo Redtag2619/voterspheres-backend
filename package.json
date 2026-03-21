@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
-  "scripts": {
+"scripts": {
   "dev": "node index.js",
   "dev:clean": "kill-port 10000 && node index.js",
   "start": "node index.js",
