@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "node index.js",
+    "dev:clean": "kill-port 10000 && node index.js",
     "start": "node index.js",
+    "start:clean": "kill-port 10000 && node index.js",
     "db:migrate": "node db/runMigrations.js",
     "db:seed": "node db/seed.js",
     "db:init": "npm run db:migrate && npm run db:seed",
@@ -36,6 +38,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.3.2",
+    "kill-port": "^2.0.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   }
