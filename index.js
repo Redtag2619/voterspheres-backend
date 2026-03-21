@@ -19,6 +19,7 @@ import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
 import mailRoutes from "./routes/mail.routes.js";
 import platformRoutes from "./routes/platform.routes.js";
 import alertsRoutes from "./routes/alerts.routes.js";
+import campaignCommandRoutes from "./routes/campaignCommand.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -106,7 +107,8 @@ app.get("/", (_req, res) => {
       "/api/platform/executive-dashboard",
       "/api/alerts",
       "/api/alerts/campaigns/:id",
-      "/api/alerts/rebuild"
+      "/api/alerts/rebuild",
+      "/api/campaigns/:id/command-center"
     ]
   });
 });
@@ -136,6 +138,7 @@ app.use("/api/firms", firmWorkspaceRoutes);
 app.use("/api/mail", mailRoutes);
 app.use("/api/platform", platformRoutes);
 app.use("/api/alerts", alertsRoutes);
+app.use("/api/campaigns", campaignCommandRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
