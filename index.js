@@ -61,9 +61,11 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+
       "/api/candidates",
       "/api/consultants",
       "/api/vendors",
+
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -72,15 +74,19 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
+
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
+
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
+
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
+
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -90,8 +96,10 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
+
       "/api/crm-dashboard/summary",
       "/api/firms/:id/workspace",
+
       "/api/mail/init",
       "/api/mail/dashboard",
       "/api/mail/programs",
@@ -104,11 +112,21 @@ app.get("/", (_req, res) => {
       "/api/mail/intelligence/vendors",
       "/api/mail/intelligence/campaigns",
       "/api/mail/intelligence/regions",
+
       "/api/platform/executive-dashboard",
+
       "/api/alerts",
       "/api/alerts/campaigns/:id",
       "/api/alerts/rebuild",
-      "/api/campaigns/:id/command-center"
+
+      "/api/campaigns/:id/command-center",
+      "/api/campaigns/:id/tasks",
+      "/api/campaigns/:id/contacts",
+      "/api/campaigns/:id/vendors",
+      "/api/campaigns/:id/documents",
+      "/api/campaigns/:id/mail-programs",
+      "/api/campaigns/:id/mail-drops",
+      "/api/campaigns/:id/mail-events"
     ]
   });
 });
@@ -165,9 +183,9 @@ async function startServer() {
     });
 
     server.on("error", (err) => {
-  console.error("SERVER ERROR:", err);
-  process.exit(1);
-});
+      console.error("SERVER ERROR:", err);
+      process.exit(1);
+    });
   } catch (err) {
     console.error("FAILED TO START SERVER:", err);
     process.exit(1);
