@@ -39,6 +39,24 @@ async function ensureMailTables() {
   `);
 }
 
+async function ensureCampaignActivityTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_activity (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL,
+      activity_type TEXT NOT NULL,
+      details JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+}
+
+async function ensureAllTables() {
+  await ensureCrmTables();
+  await ensureMailTables();
+  await ensureCampaignActivityTable();
+}
+
 function n(value) {
   return Number(value || 0);
 }
@@ -60,10 +78,29 @@ function taskSeverity(priority = "medium") {
   return "medium";
 }
 
+async function campaignExists(campaignId) {
+  const result = await pool.query(
+    `SELECT id, candidate_name, campaign_name FROM campaigns WHERE id = $1 LIMIT 1`,
+    [campaignId]
+  );
+  return result.rows[0] || null;
+}
+
+async function logCampaignActivity(campaignId, activityType, details = {}) {
+  await ensureCampaignActivityTable();
+
+  await pool.query(
+    `
+    INSERT INTO campaign_activity (campaign_id, activity_type, details)
+    VALUES ($1, $2, $3::jsonb)
+    `,
+    [campaignId, activityType, JSON.stringify(details)]
+  );
+}
+
 export async function getCampaignCommandCenter(req, res, next) {
   try {
-    await ensureCrmTables();
-    await ensureMailTables();
+    await ensureAllTables();
 
     const campaignId = Number(req.params.id);
     if (!campaignId) {
@@ -397,6 +434,326 @@ export async function getCampaignCommandCenter(req, res, next) {
         delivered_events: deliveredMailEvents
       }
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandTask(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      assigned_user_id = null,
+      title,
+      description = "",
+      priority = "medium",
+      status = "todo",
+      due_date = null
+    } = req.body || {};
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: "title is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO campaign_tasks
+      (campaign_id, assigned_user_id, title, description, priority, status, due_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+      `,
+      [
+        campaignId,
+        assigned_user_id || null,
+        String(title).trim(),
+        description,
+        priority,
+        status,
+        due_date || null
+      ]
+    );
+
+    await logCampaignActivity(campaignId, "task_created", {
+      task_id: result.rows[0].id,
+      title: result.rows[0].title
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandContact(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      full_name,
+      email = "",
+      phone = "",
+      role = "",
+      notes = ""
+    } = req.body || {};
+
+    if (!full_name || !String(full_name).trim()) {
+      return res.status(400).json({ error: "full_name is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO campaign_contacts
+      (campaign_id, full_name, email, phone, role, notes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+      `,
+      [campaignId, String(full_name).trim(), email, phone, role, notes]
+    );
+
+    await logCampaignActivity(campaignId, "contact_created", {
+      contact_id: result.rows[0].id,
+      full_name: result.rows[0].full_name
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandVendor(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      vendor_name,
+      category = "",
+      status = "active",
+      contract_value = 0,
+      notes = ""
+    } = req.body || {};
+
+    if (!vendor_name || !String(vendor_name).trim()) {
+      return res.status(400).json({ error: "vendor_name is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO campaign_vendors
+      (campaign_id, vendor_name, category, status, contract_value, notes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+      `,
+      [
+        campaignId,
+        String(vendor_name).trim(),
+        category,
+        status,
+        n(contract_value),
+        notes
+      ]
+    );
+
+    await logCampaignActivity(campaignId, "vendor_created", {
+      vendor_id: result.rows[0].id,
+      vendor_name: result.rows[0].vendor_name
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandDocument(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      title,
+      document_type = "",
+      file_url = "",
+      notes = ""
+    } = req.body || {};
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: "title is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO campaign_documents
+      (campaign_id, title, document_type, file_url, notes)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+      `,
+      [campaignId, String(title).trim(), document_type, file_url, notes]
+    );
+
+    await logCampaignActivity(campaignId, "document_created", {
+      document_id: result.rows[0].id,
+      title: result.rows[0].title
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandMailProgram(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const { name, description = "" } = req.body || {};
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "name is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO mail_programs
+      (campaign_id, name, description)
+      VALUES ($1, $2, $3)
+      RETURNING *
+      `,
+      [campaignId, String(name).trim(), description]
+    );
+
+    await logCampaignActivity(campaignId, "mail_program_created", {
+      program_id: result.rows[0].id,
+      name: result.rows[0].name
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandMailDrop(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      program_id = null,
+      drop_date,
+      quantity = 0
+    } = req.body || {};
+
+    if (!drop_date) {
+      return res.status(400).json({ error: "drop_date is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO mail_drops
+      (campaign_id, program_id, drop_date, quantity)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+      `,
+      [campaignId, program_id || null, drop_date, n(quantity)]
+    );
+
+    await logCampaignActivity(campaignId, "mail_drop_created", {
+      mail_drop_id: result.rows[0].id,
+      quantity: result.rows[0].quantity
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCampaignCommandMailEvent(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const campaign = await campaignExists(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "campaign not found" });
+    }
+
+    const {
+      mail_drop_id = null,
+      event_type,
+      status = "",
+      location_name = "",
+      facility_type = "",
+      notes = "",
+      source = "manual"
+    } = req.body || {};
+
+    if (!event_type || !String(event_type).trim()) {
+      return res.status(400).json({ error: "event_type is required" });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO mail_tracking_events
+      (campaign_id, mail_drop_id, event_type, status, location_name, facility_type, notes, source)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+      `,
+      [
+        campaignId,
+        mail_drop_id || null,
+        String(event_type).trim(),
+        status,
+        location_name,
+        facility_type,
+        notes,
+        source
+      ]
+    );
+
+    await logCampaignActivity(campaignId, "mail_event_created", {
+      event_id: result.rows[0].id,
+      event_type: result.rows[0].event_type,
+      mail_drop_id: result.rows[0].mail_drop_id
+    });
+
+    res.status(201).json(result.rows[0]);
   } catch (err) {
     next(err);
   }
