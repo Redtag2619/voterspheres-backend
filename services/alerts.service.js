@@ -1,5 +1,6 @@
 import { pool } from "../db/pool.js";
 import { ensureCrmTables } from "../repositories/crm.repository.js";
+import { logCampaignActivity } from "./campaignCommand.service.js";
 
 async function ensureMailTables() {
   await pool.query(`
@@ -57,23 +58,10 @@ async function ensureAlertsTable() {
   `);
 }
 
-async function ensureCampaignActivityTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS campaign_activity (
-      id SERIAL PRIMARY KEY,
-      campaign_id INTEGER NOT NULL,
-      activity_type TEXT NOT NULL,
-      details JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
-}
-
 async function ensureAllTables() {
   await ensureCrmTables();
   await ensureMailTables();
   await ensureAlertsTable();
-  await ensureCampaignActivityTable();
 }
 
 function normalizePriority(priority = "medium") {
@@ -87,18 +75,6 @@ function severityRank(severity = "medium") {
   if (severity === "high") return 3;
   if (severity === "medium") return 2;
   return 1;
-}
-
-async function logCampaignActivity(campaignId, activityType, details = {}) {
-  if (!campaignId) return;
-
-  await pool.query(
-    `
-    INSERT INTO campaign_activity (campaign_id, activity_type, details)
-    VALUES ($1, $2, $3::jsonb)
-    `,
-    [campaignId, activityType, JSON.stringify(details)]
-  );
 }
 
 async function loadAlertActionsMap() {
