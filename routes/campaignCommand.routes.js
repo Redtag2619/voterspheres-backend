@@ -1,6 +1,7 @@
-import express from "express"; 
+import express from "express";
 import {
   getCampaignCommandCenter,
+  getCampaignActivityTimeline,
   createCampaignCommandTask,
   createCampaignCommandContact,
   createCampaignCommandVendor,
@@ -16,6 +17,7 @@ import {
 const router = express.Router();
 
 router.get("/:id/command-center", getCampaignCommandCenter);
+router.get("/:id/activity", getCampaignActivityTimeline);
 
 router.post("/:id/tasks", createCampaignCommandTask);
 router.post("/:id/contacts", createCampaignCommandContact);
