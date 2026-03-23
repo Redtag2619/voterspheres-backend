@@ -39,6 +39,43 @@ async function ensureMailTables() {
   `);
 }
 
+async function ensureAlertsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS alert_actions (
+      id SERIAL PRIMARY KEY,
+      alert_key TEXT NOT NULL UNIQUE,
+      alert_type TEXT NOT NULL,
+      campaign_id INTEGER,
+      entity_id INTEGER,
+      action_status TEXT NOT NULL DEFAULT 'open',
+      notes TEXT DEFAULT '',
+      resolved_at TIMESTAMP NULL,
+      dismissed_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+}
+
+async function ensureCampaignActivityTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campaign_activity (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL,
+      activity_type TEXT NOT NULL,
+      details JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+}
+
+async function ensureAllTables() {
+  await ensureCrmTables();
+  await ensureMailTables();
+  await ensureAlertsTable();
+  await ensureCampaignActivityTable();
+}
+
 function normalizePriority(priority = "medium") {
   const value = String(priority).toLowerCase();
   if (value === "high") return "high";
@@ -52,13 +89,70 @@ function severityRank(severity = "medium") {
   return 1;
 }
 
-async function buildAlerts() {
-  await ensureCrmTables();
-  await ensureMailTables();
+async function logCampaignActivity(campaignId, activityType, details = {}) {
+  if (!campaignId) return;
 
-  const [tasksResult, delayedMailResult, campaignsResult, vendorResult] =
+  await pool.query(
+    `
+    INSERT INTO campaign_activity (campaign_id, activity_type, details)
+    VALUES ($1, $2, $3::jsonb)
+    `,
+    [campaignId, activityType, JSON.stringify(details)]
+  );
+}
+
+async function loadAlertActionsMap() {
+  const result = await pool.query(`
+    SELECT *
+    FROM alert_actions
+  `);
+
+  const map = new Map();
+  for (const row of result.rows) {
+    map.set(row.alert_key, row);
+  }
+  return map;
+}
+
+function attachAlertState(alert, actionRow) {
+  if (!actionRow) {
+    return {
+      ...alert,
+      action_status: "open",
+      notes: "",
+      resolved_at: null,
+      dismissed_at: null
+    };
+  }
+
+  return {
+    ...alert,
+    action_status: actionRow.action_status,
+    notes: actionRow.notes || "",
+    resolved_at: actionRow.resolved_at,
+    dismissed_at: actionRow.dismissed_at
+  };
+}
+
+async function buildAlertsInternal(campaignId = null) {
+  await ensureAllTables();
+
+  const params = [];
+  const campaignWhere = campaignId ? `WHERE t.campaign_id = $1` : "";
+  const delayedWhere = campaignId
+    ? `WHERE (LOWER(COALESCE(mte.event_type, '')) = 'delayed' OR LOWER(COALESCE(mte.status, '')) = 'delayed') AND mte.campaign_id = $1`
+    : `WHERE LOWER(COALESCE(mte.event_type, '')) = 'delayed' OR LOWER(COALESCE(mte.status, '')) = 'delayed'`;
+  const campaignsWhere = campaignId ? `WHERE id = $1` : "";
+  const vendorsWhere = campaignId ? `WHERE v.campaign_id = $1` : "";
+
+  if (campaignId) {
+    params.push(campaignId);
+  }
+
+  const [tasksResult, delayedMailResult, campaignsResult, vendorResult, actionsMap] =
     await Promise.all([
-      pool.query(`
+      pool.query(
+        `
         SELECT
           t.id,
           t.campaign_id,
@@ -70,11 +164,15 @@ async function buildAlerts() {
           c.candidate_name
         FROM campaign_tasks t
         INNER JOIN campaigns c ON c.id = t.campaign_id
-        WHERE LOWER(COALESCE(t.status, 'todo')) <> 'done'
+        ${campaignWhere}
+        AND LOWER(COALESCE(t.status, 'todo')) <> 'done'
         ORDER BY t.created_at DESC
-      `),
+        `.replace(/\n\s+AND/, "\nWHERE"),
+        params
+      ),
 
-      pool.query(`
+      pool.query(
+        `
         SELECT
           mte.id,
           mte.campaign_id,
@@ -89,12 +187,14 @@ async function buildAlerts() {
           c.candidate_name
         FROM mail_tracking_events mte
         LEFT JOIN campaigns c ON c.id = mte.campaign_id
-        WHERE LOWER(COALESCE(mte.event_type, '')) = 'delayed'
-           OR LOWER(COALESCE(mte.status, '')) = 'delayed'
+        ${delayedWhere}
         ORDER BY mte.created_at DESC
-      `),
+        `,
+        params
+      ),
 
-      pool.query(`
+      pool.query(
+        `
         SELECT
           id,
           campaign_name,
@@ -105,10 +205,14 @@ async function buildAlerts() {
           budget_total,
           updated_at
         FROM campaigns
+        ${campaignsWhere}
         ORDER BY updated_at DESC
-      `),
+        `,
+        params
+      ),
 
-      pool.query(`
+      pool.query(
+        `
         SELECT
           v.id,
           v.campaign_id,
@@ -116,51 +220,76 @@ async function buildAlerts() {
           v.category,
           v.status,
           v.contract_value,
+          v.updated_at,
+          v.created_at,
           c.campaign_name,
           c.candidate_name
         FROM campaign_vendors v
         INNER JOIN campaigns c ON c.id = v.campaign_id
+        ${vendorsWhere}
         ORDER BY v.updated_at DESC, v.created_at DESC
-      `)
+        `,
+        params
+      ),
+
+      loadAlertActionsMap()
     ]);
 
   const alerts = [];
 
   for (const task of tasksResult.rows) {
     const severity = normalizePriority(task.priority) === "high" ? "high" : "medium";
+    const alertKey = `task-${task.id}`;
 
-    alerts.push({
-      id: `task-${task.id}`,
-      type: "task",
-      severity,
-      campaign_id: task.campaign_id,
-      title: `Open ${normalizePriority(task.priority)} priority task`,
-      message: `${task.title} • ${task.campaign_name || task.candidate_name || "Campaign"}`,
-      meta: {
-        task_id: task.id,
-        task_status: task.status,
-        priority: task.priority
-      },
-      created_at: task.created_at
-    });
+    alerts.push(
+      attachAlertState(
+        {
+          id: alertKey,
+          alert_key: alertKey,
+          type: "task",
+          entity_id: task.id,
+          severity,
+          campaign_id: task.campaign_id,
+          title: `Open ${normalizePriority(task.priority)} priority task`,
+          message: `${task.title} • ${task.campaign_name || task.candidate_name || "Campaign"}`,
+          meta: {
+            task_id: task.id,
+            task_status: task.status,
+            priority: task.priority
+          },
+          created_at: task.created_at
+        },
+        actionsMap.get(alertKey)
+      )
+    );
   }
 
   for (const event of delayedMailResult.rows) {
-    alerts.push({
-      id: `mail-${event.id}`,
-      type: "mail_delay",
-      severity: "high",
-      campaign_id: event.campaign_id,
-      title: "Delayed mail detected",
-      message: `Drop #${event.mail_drop_id} delayed at ${event.location_name || event.facility_type || "mail network"}`,
-      meta: {
-        mail_drop_id: event.mail_drop_id,
-        location_name: event.location_name,
-        facility_type: event.facility_type,
-        notes: event.notes
-      },
-      created_at: event.created_at
-    });
+    const alertKey = `mail-${event.id}`;
+
+    alerts.push(
+      attachAlertState(
+        {
+          id: alertKey,
+          alert_key: alertKey,
+          type: "mail_delay",
+          entity_id: event.id,
+          severity: "high",
+          campaign_id: event.campaign_id,
+          title: "Delayed mail detected",
+          message: `Drop #${event.mail_drop_id} delayed at ${event.location_name || event.facility_type || "mail network"}`,
+          meta: {
+            mail_event_id: event.id,
+            mail_drop_id: event.mail_drop_id,
+            location_name: event.location_name,
+            facility_type: event.facility_type,
+            notes: event.notes
+          },
+          created_at: event.created_at
+        },
+        actionsMap.get(alertKey)
+      )
+    );
   }
 
   for (const campaign of campaignsResult.rows) {
@@ -168,67 +297,100 @@ async function buildAlerts() {
     const budgetTotal = Number(campaign.budget_total || 0);
 
     if (contractValue > 0 && budgetTotal > 0 && contractValue > budgetTotal) {
-      alerts.push({
-        id: `budget-${campaign.id}`,
-        type: "budget",
-        severity: "medium",
-        campaign_id: campaign.id,
-        title: "Contract value exceeds tracked budget",
-        message: `${campaign.campaign_name || campaign.candidate_name || "Campaign"} has contract value above current budget tracking`,
-        meta: {
-          contract_value: contractValue,
-          budget_total: budgetTotal
-        },
-        created_at: campaign.updated_at
-      });
+      const alertKey = `budget-${campaign.id}`;
+
+      alerts.push(
+        attachAlertState(
+          {
+            id: alertKey,
+            alert_key: alertKey,
+            type: "budget",
+            entity_id: campaign.id,
+            severity: "medium",
+            campaign_id: campaign.id,
+            title: "Contract value exceeds tracked budget",
+            message: `${campaign.campaign_name || campaign.candidate_name || "Campaign"} has contract value above current budget tracking`,
+            meta: {
+              contract_value: contractValue,
+              budget_total: budgetTotal
+            },
+            created_at: campaign.updated_at
+          },
+          actionsMap.get(alertKey)
+        )
+      );
     }
 
-    if (String(campaign.status || "").toLowerCase() === "open" && String(campaign.stage || "").toLowerCase() === "lead") {
-      alerts.push({
-        id: `pipeline-${campaign.id}`,
-        type: "pipeline",
-        severity: "low",
-        campaign_id: campaign.id,
-        title: "Lead-stage campaign still open",
-        message: `${campaign.campaign_name || campaign.candidate_name || "Campaign"} remains in lead stage`,
-        meta: {
-          stage: campaign.stage,
-          status: campaign.status
-        },
-        created_at: campaign.updated_at
-      });
+    if (
+      String(campaign.status || "").toLowerCase() === "open" &&
+      String(campaign.stage || "").toLowerCase() === "lead"
+    ) {
+      const alertKey = `pipeline-${campaign.id}`;
+
+      alerts.push(
+        attachAlertState(
+          {
+            id: alertKey,
+            alert_key: alertKey,
+            type: "pipeline",
+            entity_id: campaign.id,
+            severity: "low",
+            campaign_id: campaign.id,
+            title: "Lead-stage campaign still open",
+            message: `${campaign.campaign_name || campaign.candidate_name || "Campaign"} remains in lead stage`,
+            meta: {
+              stage: campaign.stage,
+              status: campaign.status
+            },
+            created_at: campaign.updated_at
+          },
+          actionsMap.get(alertKey)
+        )
+      );
     }
   }
 
   for (const vendor of vendorResult.rows) {
     if (String(vendor.status || "").toLowerCase() === "at_risk") {
-      alerts.push({
-        id: `vendor-${vendor.id}`,
-        type: "vendor",
-        severity: "high",
-        campaign_id: vendor.campaign_id,
-        title: "Vendor marked at risk",
-        message: `${vendor.vendor_name} is at risk on ${vendor.campaign_name || vendor.candidate_name || "campaign"}`,
-        meta: {
-          vendor_id: vendor.id,
-          vendor_name: vendor.vendor_name,
-          category: vendor.category
-        },
-        created_at: new Date().toISOString()
-      });
+      const alertKey = `vendor-${vendor.id}`;
+
+      alerts.push(
+        attachAlertState(
+          {
+            id: alertKey,
+            alert_key: alertKey,
+            type: "vendor",
+            entity_id: vendor.id,
+            severity: "high",
+            campaign_id: vendor.campaign_id,
+            title: "Vendor marked at risk",
+            message: `${vendor.vendor_name} is at risk on ${vendor.campaign_name || vendor.candidate_name || "campaign"}`,
+            meta: {
+              vendor_id: vendor.id,
+              vendor_name: vendor.vendor_name,
+              category: vendor.category
+            },
+            created_at: vendor.updated_at || vendor.created_at || new Date().toISOString()
+          },
+          actionsMap.get(alertKey)
+        )
+      );
     }
   }
 
-  return alerts.sort((a, b) => {
-    const severityDiff = severityRank(b.severity) - severityRank(a.severity);
-    if (severityDiff !== 0) return severityDiff;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  return alerts
+    .filter((alert) => alert.action_status !== "dismissed")
+    .sort((a, b) => {
+      const severityDiff = severityRank(b.severity) - severityRank(a.severity);
+      if (severityDiff !== 0) return severityDiff;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 }
 
 export async function getAllAlerts(req, res, next) {
   try {
-    const alerts = await buildAlerts();
+    const alerts = await buildAlertsInternal();
+
     res.json({
       metrics: [
         {
@@ -258,8 +420,8 @@ export async function getCampaignAlerts(req, res, next) {
       return res.status(400).json({ error: "valid campaign id required" });
     }
 
-    const alerts = await buildAlerts();
-    res.json(alerts.filter((alert) => Number(alert.campaign_id) === campaignId));
+    const alerts = await buildAlertsInternal(campaignId);
+    res.json(alerts);
   } catch (err) {
     next(err);
   }
@@ -267,11 +429,115 @@ export async function getCampaignAlerts(req, res, next) {
 
 export async function rebuildAlerts(req, res, next) {
   try {
-    const alerts = await buildAlerts();
+    const alerts = await buildAlertsInternal();
     res.json({
       ok: true,
       rebuilt: alerts.length,
       alerts
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resolveAlert(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const {
+      alert_key,
+      alert_type,
+      campaign_id = null,
+      entity_id = null,
+      notes = ""
+    } = req.body || {};
+
+    if (!alert_key || !alert_type) {
+      return res.status(400).json({ error: "alert_key and alert_type are required" });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO alert_actions
+      (alert_key, alert_type, campaign_id, entity_id, action_status, notes, resolved_at, dismissed_at, updated_at)
+      VALUES ($1, $2, $3, $4, 'resolved', $5, NOW(), NULL, NOW())
+      ON CONFLICT (alert_key)
+      DO UPDATE SET
+        alert_type = EXCLUDED.alert_type,
+        campaign_id = EXCLUDED.campaign_id,
+        entity_id = EXCLUDED.entity_id,
+        action_status = 'resolved',
+        notes = EXCLUDED.notes,
+        resolved_at = NOW(),
+        dismissed_at = NULL,
+        updated_at = NOW()
+      `,
+      [alert_key, alert_type, campaign_id, entity_id, notes]
+    );
+
+    await logCampaignActivity(campaign_id, "alert_resolved", {
+      alert_key,
+      alert_type,
+      entity_id,
+      notes
+    });
+
+    res.json({
+      ok: true,
+      alert_key,
+      action_status: "resolved"
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function dismissAlert(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const {
+      alert_key,
+      alert_type,
+      campaign_id = null,
+      entity_id = null,
+      notes = ""
+    } = req.body || {};
+
+    if (!alert_key || !alert_type) {
+      return res.status(400).json({ error: "alert_key and alert_type are required" });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO alert_actions
+      (alert_key, alert_type, campaign_id, entity_id, action_status, notes, resolved_at, dismissed_at, updated_at)
+      VALUES ($1, $2, $3, $4, 'dismissed', $5, NULL, NOW(), NOW())
+      ON CONFLICT (alert_key)
+      DO UPDATE SET
+        alert_type = EXCLUDED.alert_type,
+        campaign_id = EXCLUDED.campaign_id,
+        entity_id = EXCLUDED.entity_id,
+        action_status = 'dismissed',
+        notes = EXCLUDED.notes,
+        resolved_at = NULL,
+        dismissed_at = NOW(),
+        updated_at = NOW()
+      `,
+      [alert_key, alert_type, campaign_id, entity_id, notes]
+    );
+
+    await logCampaignActivity(campaign_id, "alert_dismissed", {
+      alert_key,
+      alert_type,
+      entity_id,
+      notes
+    });
+
+    res.json({
+      ok: true,
+      alert_key,
+      action_status: "dismissed"
     });
   } catch (err) {
     next(err);
