@@ -118,7 +118,8 @@ export async function getCampaignCommandCenter(req, res, next) {
       mailDropsResult,
       mailEventsResult,
       forecastSnapshotResult,
-      forecastRacesResult
+      forecastRacesResult,
+      alertActionsResult
     ] = await Promise.all([
       pool.query(
         `
@@ -152,7 +153,7 @@ export async function getCampaignCommandCenter(req, res, next) {
         SELECT *
         FROM campaign_vendors
         WHERE campaign_id = $1
-        ORDER BY updated_at DESC, created_at DESC
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
         LIMIT 12
         `,
         [campaignId]
@@ -252,6 +253,15 @@ export async function getCampaignCommandCenter(req, res, next) {
         LIMIT 15
         `,
         [campaignId]
+      ).catch(() => ({ rows: [] })),
+
+      pool.query(
+        `
+        SELECT *
+        FROM alert_actions
+        WHERE campaign_id = $1
+        `,
+        [campaignId]
       ).catch(() => ({ rows: [] }))
     ]);
 
@@ -270,6 +280,12 @@ export async function getCampaignCommandCenter(req, res, next) {
     const mailEvents = mailEventsResult.rows || [];
     const forecastSnapshot = forecastSnapshotResult.rows?.[0] || null;
     const forecastRaces = forecastRacesResult.rows || [];
+    const alertActions = alertActionsResult.rows || [];
+
+    const alertActionsMap = new Map();
+    for (const row of alertActions) {
+      alertActionsMap.set(row.alert_key, row);
+    }
 
     const openTasks = tasks.filter(
       (task) => String(task.status || "").toLowerCase() !== "done"
@@ -302,11 +318,14 @@ export async function getCampaignCommandCenter(req, res, next) {
       0
     );
 
-    const alerts = [
+    const rawAlerts = [
       ...highPriorityTasks.map((task) => ({
         id: `task-${task.id}`,
+        alert_key: `task-${task.id}`,
         type: "task",
+        entity_id: task.id,
         severity: "high",
+        campaign_id: campaignId,
         title: "High-priority task open",
         message: task.title,
         meta: {
@@ -319,11 +338,15 @@ export async function getCampaignCommandCenter(req, res, next) {
 
       ...delayedMailEvents.map((event) => ({
         id: `mail-${event.id}`,
+        alert_key: `mail-${event.id}`,
         type: "mail_delay",
+        entity_id: event.id,
         severity: "high",
+        campaign_id: campaignId,
         title: "Delayed mail event",
         message: `Drop #${event.mail_drop_id} delayed at ${event.location_name || event.facility_type || "network"}`,
         meta: {
+          mail_event_id: event.id,
           mail_drop_id: event.mail_drop_id,
           location_name: event.location_name,
           facility_type: event.facility_type
@@ -333,8 +356,11 @@ export async function getCampaignCommandCenter(req, res, next) {
 
       ...atRiskVendors.map((vendor) => ({
         id: `vendor-${vendor.id}`,
+        alert_key: `vendor-${vendor.id}`,
         type: "vendor",
+        entity_id: vendor.id,
         severity: "high",
+        campaign_id: campaignId,
         title: "Vendor at risk",
         message: `${vendor.vendor_name} is marked at risk`,
         meta: {
@@ -343,11 +369,25 @@ export async function getCampaignCommandCenter(req, res, next) {
         },
         created_at: vendor.updated_at || vendor.created_at
       }))
-    ].sort((a, b) => {
-      const severityDiff = severityRank(b.severity) - severityRank(a.severity);
-      if (severityDiff !== 0) return severityDiff;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+    ];
+
+    const alerts = rawAlerts
+      .map((alert) => {
+        const action = alertActionsMap.get(alert.alert_key);
+        return {
+          ...alert,
+          action_status: action?.action_status || "open",
+          notes: action?.notes || "",
+          resolved_at: action?.resolved_at || null,
+          dismissed_at: action?.dismissed_at || null
+        };
+      })
+      .filter((alert) => alert.action_status !== "dismissed")
+      .sort((a, b) => {
+        const severityDiff = severityRank(b.severity) - severityRank(a.severity);
+        if (severityDiff !== 0) return severityDiff;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
 
     res.json({
       campaign: {
@@ -754,6 +794,153 @@ export async function createCampaignCommandMailEvent(req, res, next) {
     });
 
     res.status(201).json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateCampaignCommandTask(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const taskId = Number(req.params.taskId);
+
+    if (!campaignId || !taskId) {
+      return res.status(400).json({ error: "valid campaign id and task id required" });
+    }
+
+    const { status, priority, title, description } = req.body || {};
+
+    const result = await pool.query(
+      `
+      UPDATE campaign_tasks
+      SET
+        status = COALESCE($3, status),
+        priority = COALESCE($4, priority),
+        title = COALESCE($5, title),
+        description = COALESCE($6, description)
+      WHERE id = $1 AND campaign_id = $2
+      RETURNING *
+      `,
+      [taskId, campaignId, status ?? null, priority ?? null, title ?? null, description ?? null]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "task not found" });
+    }
+
+    await logCampaignActivity(campaignId, "task_updated", {
+      task_id: taskId,
+      status: result.rows[0].status,
+      priority: result.rows[0].priority
+    });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateCampaignCommandVendor(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const vendorId = Number(req.params.vendorId);
+
+    if (!campaignId || !vendorId) {
+      return res.status(400).json({ error: "valid campaign id and vendor id required" });
+    }
+
+    const { status, category, contract_value, notes } = req.body || {};
+
+    const result = await pool.query(
+      `
+      UPDATE campaign_vendors
+      SET
+        status = COALESCE($3, status),
+        category = COALESCE($4, category),
+        contract_value = COALESCE($5, contract_value),
+        notes = COALESCE($6, notes),
+        updated_at = NOW()
+      WHERE id = $1 AND campaign_id = $2
+      RETURNING *
+      `,
+      [
+        vendorId,
+        campaignId,
+        status ?? null,
+        category ?? null,
+        contract_value !== undefined ? n(contract_value) : null,
+        notes ?? null
+      ]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "vendor not found" });
+    }
+
+    await logCampaignActivity(campaignId, "vendor_updated", {
+      vendor_id: vendorId,
+      status: result.rows[0].status
+    });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateCampaignCommandMailEvent(req, res, next) {
+  try {
+    await ensureAllTables();
+
+    const campaignId = Number(req.params.id);
+    const eventId = Number(req.params.eventId);
+
+    if (!campaignId || !eventId) {
+      return res.status(400).json({ error: "valid campaign id and event id required" });
+    }
+
+    const { event_type, status, location_name, facility_type, notes, source } = req.body || {};
+
+    const result = await pool.query(
+      `
+      UPDATE mail_tracking_events
+      SET
+        event_type = COALESCE($3, event_type),
+        status = COALESCE($4, status),
+        location_name = COALESCE($5, location_name),
+        facility_type = COALESCE($6, facility_type),
+        notes = COALESCE($7, notes),
+        source = COALESCE($8, source)
+      WHERE id = $1 AND campaign_id = $2
+      RETURNING *
+      `,
+      [
+        eventId,
+        campaignId,
+        event_type ?? null,
+        status ?? null,
+        location_name ?? null,
+        facility_type ?? null,
+        notes ?? null,
+        source ?? null
+      ]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "mail event not found" });
+    }
+
+    await logCampaignActivity(campaignId, "mail_event_updated", {
+      event_id: eventId,
+      status: result.rows[0].status,
+      event_type: result.rows[0].event_type
+    });
+
+    res.json(result.rows[0]);
   } catch (err) {
     next(err);
   }
