@@ -121,7 +121,7 @@ app.get("/", (_req, res) => {
       "/api/alerts/resolve",
       "/api/alerts/dismiss",
 
-      "/api/campaigns/:id/command-center",
+      "/api/campaigns/:id/command-center", 
       "/api/campaigns/:id/activity",
       "/api/campaigns/:id/tasks",
       "/api/campaigns/:id/tasks/:taskId",
