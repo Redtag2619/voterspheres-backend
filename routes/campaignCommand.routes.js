@@ -12,7 +12,7 @@ import {
   updateCampaignCommandTask,
   updateCampaignCommandVendor,
   updateCampaignCommandMailEvent
-} from "../services/campaignCommand.service.js";
+} from "../services/campaignCommand.service.js"; 
 
 const router = express.Router();
 
