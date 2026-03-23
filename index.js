@@ -118,15 +118,20 @@ app.get("/", (_req, res) => {
       "/api/alerts",
       "/api/alerts/campaigns/:id",
       "/api/alerts/rebuild",
+      "/api/alerts/resolve",
+      "/api/alerts/dismiss",
 
       "/api/campaigns/:id/command-center",
       "/api/campaigns/:id/tasks",
+      "/api/campaigns/:id/tasks/:taskId",
       "/api/campaigns/:id/contacts",
       "/api/campaigns/:id/vendors",
+      "/api/campaigns/:id/vendors/:vendorId",
       "/api/campaigns/:id/documents",
       "/api/campaigns/:id/mail-programs",
       "/api/campaigns/:id/mail-drops",
-      "/api/campaigns/:id/mail-events"
+      "/api/campaigns/:id/mail-events",
+      "/api/campaigns/:id/mail-events/:eventId"
     ]
   });
 });
