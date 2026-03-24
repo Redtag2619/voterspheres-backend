@@ -20,6 +20,7 @@ import mailRoutes from "./routes/mail.routes.js";
 import platformRoutes from "./routes/platform.routes.js";
 import alertsRoutes from "./routes/alerts.routes.js";
 import campaignCommandRoutes from "./routes/campaignCommand.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -61,11 +62,13 @@ app.get("/", (_req, res) => {
     service: "VoterSpheres Backend",
     routes: [
       "/health",
+      "/api/auth/signup",
+      "/api/auth/login",
+      "/api/auth/me",
 
       "/api/candidates",
       "/api/consultants",
       "/api/vendors",
-
       "/api/intelligence/summary",
       "/api/intelligence/dashboard",
       "/api/intelligence/forecast",
@@ -74,19 +77,15 @@ app.get("/", (_req, res) => {
       "/api/intelligence/fundraising/live",
       "/api/intelligence/fundraising/leaderboard",
       "/api/intelligence/fundraising/ingest",
-
       "/api/map/geojson/states",
       "/api/map/geojson/states/:stateName",
       "/api/map/ingest",
-
       "/api/fec/ingest",
       "/api/fec/candidates",
       "/api/fec/fundraising",
-
       "/api/forecast/rebuild",
       "/api/forecast/published",
       "/api/forecast/overlays",
-
       "/api/crm/init",
       "/api/crm/firms",
       "/api/crm/users",
@@ -96,10 +95,8 @@ app.get("/", (_req, res) => {
       "/api/crm/campaigns/:id/vendors",
       "/api/crm/campaigns/:id/tasks",
       "/api/crm/campaigns/:id/documents",
-
       "/api/crm-dashboard/summary",
       "/api/firms/:id/workspace",
-
       "/api/mail/init",
       "/api/mail/dashboard",
       "/api/mail/programs",
@@ -112,16 +109,13 @@ app.get("/", (_req, res) => {
       "/api/mail/intelligence/vendors",
       "/api/mail/intelligence/campaigns",
       "/api/mail/intelligence/regions",
-
       "/api/platform/executive-dashboard",
-
       "/api/alerts",
       "/api/alerts/campaigns/:id",
       "/api/alerts/rebuild",
       "/api/alerts/resolve",
       "/api/alerts/dismiss",
-
-      "/api/campaigns/:id/command-center", 
+      "/api/campaigns/:id/command-center",
       "/api/campaigns/:id/activity",
       "/api/campaigns/:id/tasks",
       "/api/campaigns/:id/tasks/:taskId",
@@ -149,6 +143,7 @@ app.get("/health", async (_req, res, next) => {
   }
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/candidates", candidatesRoutes);
 app.use("/api/consultants", consultantsRoutes);
 app.use("/api/vendors", vendorsRoutes);
