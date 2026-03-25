@@ -12,30 +12,23 @@ async function ensureAuthTables() {
       slug TEXT,
       plan_tier TEXT DEFAULT 'trial',
       status TEXT DEFAULT 'active',
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      stripe_price_id TEXT,
+      stripe_subscription_status TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
   `);
 
-  await pool.query(`
-    ALTER TABLE firms
-    ADD COLUMN IF NOT EXISTS slug TEXT;
-  `);
-
-  await pool.query(`
-    ALTER TABLE firms
-    ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'trial';
-  `);
-
-  await pool.query(`
-    ALTER TABLE firms
-    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-  `);
-
-  await pool.query(`
-    ALTER TABLE firms
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-  `);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS slug TEXT;`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'trial';`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS stripe_price_id TEXT;`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS stripe_subscription_status TEXT;`);
+  await pool.query(`ALTER TABLE firms ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS app_users (
@@ -52,42 +45,17 @@ async function ensureAuthTables() {
     );
   `);
 
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS firm_id INTEGER NULL;
-  `);
-
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS first_name TEXT;
-  `);
-
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS last_name TEXT;
-  `);
-
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'viewer';
-  `);
-
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-  `);
-
-  await pool.query(`
-    ALTER TABLE app_users
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-  `);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS firm_id INTEGER NULL;`);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS first_name TEXT;`);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_name TEXT;`);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'viewer';`);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`);
+  await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`);
 }
 
 function signToken(user) {
   const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error("JWT_SECRET is not configured");
-  }
+  if (!secret) throw new Error("JWT_SECRET is not configured");
 
   return jwt.sign(
     {
@@ -101,7 +69,7 @@ function signToken(user) {
   );
 }
 
-function sanitizeUser(row) {
+function normalizeUser(row) {
   return {
     id: row.id,
     firm_id: row.firm_id,
@@ -110,8 +78,34 @@ function sanitizeUser(row) {
     email: row.email,
     role: row.role,
     status: row.status,
-    created_at: row.created_at
+    firm: row.firm_id
+      ? {
+          id: row.firm_id,
+          name: row.firm_name,
+          plan_tier: row.plan_tier || "trial",
+          subscription_status: row.stripe_subscription_status || "inactive"
+        }
+      : null
   };
+}
+
+async function loadUserById(userId) {
+  const result = await pool.query(
+    `
+    SELECT
+      u.*,
+      f.name AS firm_name,
+      f.plan_tier,
+      f.stripe_subscription_status
+    FROM app_users u
+    LEFT JOIN firms f ON f.id = u.firm_id
+    WHERE u.id = $1
+    LIMIT 1
+    `,
+    [userId]
+  );
+
+  return result.rows[0] || null;
 }
 
 export async function signup(req, res, next) {
@@ -153,8 +147,8 @@ export async function signup(req, res, next) {
     if (firm_name && String(firm_name).trim()) {
       const firmInsert = await pool.query(
         `
-        INSERT INTO firms (name, slug, plan_tier, status, updated_at)
-        VALUES ($1, NULL, 'trial', 'active', NOW())
+        INSERT INTO firms (name, slug, plan_tier, status, stripe_subscription_status, updated_at)
+        VALUES ($1, NULL, 'trial', 'active', 'inactive', NOW())
         RETURNING *
         `,
         [String(firm_name).trim()]
@@ -180,13 +174,11 @@ export async function signup(req, res, next) {
       ]
     );
 
-    const user = sanitizeUser(userInsert.rows[0]);
+    const fullUser = await loadUserById(userInsert.rows[0].id);
+    const user = normalizeUser(fullUser);
     const token = signToken(user);
 
-    res.status(201).json({
-      token,
-      user
-    });
+    res.status(201).json({ token, user });
   } catch (err) {
     next(err);
   }
@@ -230,13 +222,11 @@ export async function login(req, res, next) {
       return res.status(403).json({ error: "user account is not active" });
     }
 
-    const user = sanitizeUser(userRow);
+    const fullUser = await loadUserById(userRow.id);
+    const user = normalizeUser(fullUser);
     const token = signToken(user);
 
-    res.json({
-      token,
-      user
-    });
+    res.json({ token, user });
   } catch (err) {
     next(err);
   }
@@ -246,27 +236,13 @@ export async function me(req, res, next) {
   try {
     await ensureAuthTables();
 
-    const userId = req.user?.id;
+    const fullUser = await loadUserById(req.user.id);
 
-    const result = await pool.query(
-      `
-      SELECT *
-      FROM app_users
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [userId]
-    );
-
-    const userRow = result.rows[0];
-
-    if (!userRow) {
+    if (!fullUser) {
       return res.status(404).json({ error: "user not found" });
     }
 
-    res.json({
-      user: sanitizeUser(userRow)
-    });
+    res.json({ user: normalizeUser(fullUser) });
   } catch (err) {
     next(err);
   }
