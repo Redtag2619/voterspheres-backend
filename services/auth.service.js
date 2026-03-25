@@ -6,6 +6,38 @@ const SALT_ROUNDS = 10;
 
 async function ensureAuthTables() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS firms (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT,
+      plan_tier TEXT DEFAULT 'trial',
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE firms
+    ADD COLUMN IF NOT EXISTS slug TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE firms
+    ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'trial';
+  `);
+
+  await pool.query(`
+    ALTER TABLE firms
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+  `);
+
+  await pool.query(`
+    ALTER TABLE firms
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS app_users (
       id SERIAL PRIMARY KEY,
       firm_id INTEGER NULL,
@@ -21,21 +53,38 @@ async function ensureAuthTables() {
   `);
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS firms (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      slug TEXT,
-      plan_tier TEXT DEFAULT 'trial',
-      status TEXT DEFAULT 'active',
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
-    );
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS firm_id INTEGER NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS first_name TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS last_name TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'viewer';
+  `);
+
+  await pool.query(`
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+  `);
+
+  await pool.query(`
+    ALTER TABLE app_users
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
   `);
 }
 
 function signToken(user) {
   const secret = process.env.JWT_SECRET;
-
   if (!secret) {
     throw new Error("JWT_SECRET is not configured");
   }
