@@ -43,14 +43,14 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
-app.post(
-  "/api/billing/webhook",
-  express.raw({ type: "application/json" }),
-  handleStripeWebhook
-);
-
 app.use(helmet());
 app.use(cors());
+
+// IMPORTANT:
+// mount billing routes BEFORE express.json()
+// so Stripe webhook raw body remains intact
+app.use("/api/billing", billingRoutes);
+
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -59,7 +59,7 @@ app.use(
     windowMs: 15 * 60 * 1000,
     max: 300,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
   })
 );
 
@@ -134,11 +134,11 @@ app.get("/", (_req, res) => {
       "/api/campaigns/:id/mail-drops",
       "/api/campaigns/:id/mail-events",
       "/api/campaigns/:id/mail-events/:eventId",
-      "/api/billing/status",
-      "/api/billing/checkout/session",
+      "/api/billing/config",
+      "/api/billing/checkout-session",
       "/api/billing/webhook",
-      "/api/billing/portal"
-    ]
+      "/api/billing/portal-session",
+    ],
   });
 });
 
@@ -147,7 +147,7 @@ app.get("/health", async (_req, res, next) => {
     await pool.query("SELECT 1");
     res.json({
       status: "ok",
-      database: "ok"
+      database: "ok",
     });
   } catch (err) {
     next(err);
@@ -169,7 +169,6 @@ app.use("/api/mail", mailRoutes);
 app.use("/api/platform", platformRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/campaigns", campaignCommandRoutes);
-app.use("/api/billing", billingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
