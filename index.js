@@ -21,6 +21,7 @@ import platformRoutes from "./routes/platform.routes.js";
 import alertsRoutes from "./routes/alerts.routes.js";
 import campaignCommandRoutes from "./routes/campaignCommand.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import billingRoutes from "./routes/billing.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -126,7 +127,10 @@ app.get("/", (_req, res) => {
       "/api/campaigns/:id/mail-programs",
       "/api/campaigns/:id/mail-drops",
       "/api/campaigns/:id/mail-events",
-      "/api/campaigns/:id/mail-events/:eventId"
+      "/api/campaigns/:id/mail-events/:eventId",
+      "/api/billing/status",
+      "/api/billing/checkout",
+      "/api/billing/portal"
     ]
   });
 });
@@ -158,6 +162,7 @@ app.use("/api/mail", mailRoutes);
 app.use("/api/platform", platformRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/campaigns", campaignCommandRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
