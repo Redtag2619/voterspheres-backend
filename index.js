@@ -25,6 +25,11 @@ import authRoutes from "./routes/auth.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import {
+  requireStarter,
+  requirePro,
+  requireEnterprise,
+} from "./middleware/requirePlan.js";
 
 import { startFundraisingIngestionJob } from "./jobs/fundraisingIngestion.job.js";
 import { startForecastScheduler } from "./jobs/forecastScheduler.job.js";
@@ -43,12 +48,32 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://voterspheres.org",
+  "https://www.voterspheres.org",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 app.use(helmet());
-app.use(cors());
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
 // IMPORTANT:
-// mount billing routes BEFORE express.json()
-// so Stripe webhook raw body remains intact
+// Mount billing BEFORE express.json()
+// so Stripe webhook raw body remains intact.
 app.use("/api/billing", billingRoutes);
 
 app.use(express.json({ limit: "5mb" }));
@@ -62,6 +87,11 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 app.get("/", (_req, res) => {
   res.json({
@@ -155,20 +185,36 @@ app.get("/health", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRoutes);
+
+// Public routes
 app.use("/api/candidates", candidatesRoutes);
-app.use("/api/consultants", consultantsRoutes);
 app.use("/api/vendors", vendorsRoutes);
-app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/map", mapRoutes);
+
+// Path-level premium enforcement for mixed routers
+app.use("/api/intelligence/forecast", requirePro);
+app.use("/api/intelligence/rankings", requirePro);
+app.use("/api/intelligence/fundraising", requireEnterprise);
+app.use("/api/fec/fundraising", requireEnterprise);
+
+// Mixed/public routers mounted after targeted gates
+app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/fec", fecRoutes);
-app.use("/api/forecast", forecastRoutes);
-app.use("/api/crm", crmRoutes);
-app.use("/api/crm-dashboard", crmDashboardRoutes);
-app.use("/api/firms", firmWorkspaceRoutes);
-app.use("/api/mail", mailRoutes);
-app.use("/api/platform", platformRoutes);
-app.use("/api/alerts", alertsRoutes);
-app.use("/api/campaigns", campaignCommandRoutes);
+
+// Starter tier
+app.use("/api/crm", requireStarter, crmRoutes);
+app.use("/api/crm-dashboard", requireStarter, crmDashboardRoutes);
+app.use("/api/firms", requireStarter, firmWorkspaceRoutes);
+
+// Pro tier
+app.use("/api/forecast", requirePro, forecastRoutes);
+app.use("/api/alerts", requirePro, alertsRoutes);
+app.use("/api/campaigns", requirePro, campaignCommandRoutes);
+
+// Enterprise tier
+app.use("/api/consultants", requireEnterprise, consultantsRoutes);
+app.use("/api/mail", requireEnterprise, mailRoutes);
+app.use("/api/platform", requireEnterprise, platformRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
