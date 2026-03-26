@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import pool from "../db.js";
+import { pool } from "../db.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -22,7 +22,10 @@ function mapPriceIdToPlanTier(priceId) {
     return "starter";
   }
 
-  if (process.env.STRIPE_PRICE_PRO && priceId === process.env.STRIPE_PRICE_PRO) {
+  if (
+    process.env.STRIPE_PRICE_PRO &&
+    priceId === process.env.STRIPE_PRICE_PRO
+  ) {
     return "pro";
   }
 
@@ -214,7 +217,10 @@ export async function createBillingPortalSession({ firmId, returnUrl }) {
 }
 
 export async function attachCheckoutSessionToFirm(session) {
-  const firmId = session?.metadata?.firm_id || session?.client_reference_id || null;
+  const firmId =
+    session?.metadata?.firm_id ||
+    session?.client_reference_id ||
+    null;
 
   if (!firmId) {
     console.warn("checkout.session.completed missing firm_id/client_reference_id");
