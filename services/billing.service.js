@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import { pool } from "../db.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -43,19 +44,15 @@ function mapStripeStatusToFirmStatus(stripeStatus) {
     case "active":
     case "trialing":
       return "active";
-
     case "past_due":
     case "unpaid":
     case "incomplete":
     case "incomplete_expired":
       return "past_due";
-
     case "canceled":
       return "canceled";
-
     case "paused":
       return "paused";
-
     default:
       return "inactive";
   }
