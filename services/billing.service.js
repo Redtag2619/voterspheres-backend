@@ -1,7 +1,37 @@
 import Stripe from "stripe";
-import { pool } from "../db.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+async function loadPool() {
+  const candidates = [
+    "../db.js",
+    "../config/db.js",
+    "../config/database.js",
+    "../database.js",
+    "../lib/db.js",
+  ];
+
+  const errors = [];
+
+  for (const path of candidates) {
+    try {
+      const mod = await import(path);
+
+      if (mod.pool) return mod.pool;
+      if (mod.default?.query) return mod.default;
+      if (mod.default?.pool) return mod.default.pool;
+      if (mod.db?.query) return mod.db;
+    } catch (err) {
+      errors.push(`${path}: ${err.message}`);
+    }
+  }
+
+  throw new Error(
+    `Could not load database pool. Tried: ${candidates.join(", ")}\n${errors.join("\n")}`
+  );
+}
+
+const pool = await loadPool();
 
 function normalizePlanTier(value) {
   const v = String(value || "free").toLowerCase().trim();
