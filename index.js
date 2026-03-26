@@ -137,7 +137,6 @@ app.get("/", (_req, res) => {
       "/api/campaigns/:id/mail-events/:eventId",
       "/api/billing/status",
       "/api/billing/checkout",
-      "/api/billing/checkout/session",
       "/api/billing/webhook",
       "/api/billing/portal"
     ]
