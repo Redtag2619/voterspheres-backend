@@ -22,6 +22,7 @@ import alertsRoutes from "./routes/alerts.routes.js";
 import campaignCommandRoutes from "./routes/campaignCommand.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
+import billingRoutes, { handleStripeWebhook } from "./routes/billing.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -42,6 +43,12 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
+
+app.post(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook
+);
 
 app.use(helmet());
 app.use(cors());
@@ -130,6 +137,8 @@ app.get("/", (_req, res) => {
       "/api/campaigns/:id/mail-events/:eventId",
       "/api/billing/status",
       "/api/billing/checkout",
+      "/api/billing/checkout/session",
+      "/api/billing/webhook",
       "/api/billing/portal"
     ]
   });
