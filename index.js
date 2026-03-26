@@ -21,7 +21,6 @@ import platformRoutes from "./routes/platform.routes.js";
 import alertsRoutes from "./routes/alerts.routes.js";
 import campaignCommandRoutes from "./routes/campaignCommand.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-import billingRoutes from "./routes/billing.routes.js";
 import billingRoutes, { handleStripeWebhook } from "./routes/billing.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
