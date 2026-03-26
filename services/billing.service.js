@@ -3,10 +3,6 @@ import { pool } from "../config/db.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// -----------------------------
-// Helpers
-// -----------------------------
-
 function normalizePlanTier(plan) {
   if (!plan) return "free";
   const value = String(plan).toLowerCase().trim();
@@ -76,10 +72,6 @@ function getPlanTierFromSubscription(subscription) {
   return normalizePlanTier(metadataPlan);
 }
 
-// -----------------------------
-// DB lookups
-// -----------------------------
-
 export async function getFirmById(firmId) {
   const { rows } = await pool.query(
     `
@@ -125,10 +117,6 @@ export async function getFirmByStripeSubscriptionId(subscriptionId) {
 
   return rows[0] || null;
 }
-
-// -----------------------------
-// Stripe customer / checkout
-// -----------------------------
 
 export async function ensureStripeCustomerForFirm(firmId) {
   const firm = await getFirmById(firmId);
@@ -200,10 +188,6 @@ export async function createCheckoutSession({
 
   return session;
 }
-
-// -----------------------------
-// DB sync helpers
-// -----------------------------
 
 export async function attachCheckoutSessionToFirm(session) {
   const firmId =
@@ -386,10 +370,6 @@ export async function markFirmInvoicePaymentFailed(invoice) {
 
   return rows[0] || null;
 }
-
-// -----------------------------
-// Webhook construction / handler
-// -----------------------------
 
 export function constructStripeEvent(rawBody, signature) {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
