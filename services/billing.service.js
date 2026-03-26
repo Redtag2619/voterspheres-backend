@@ -1,476 +1,152 @@
 import Stripe from "stripe";
+import { pool } from "../db/pool.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-async function getPool() {
-  const candidates = [
-    "../db.js",
-    "../config/db.js",
-    "../database.js",
-    "../lib/db.js",
-  ];
-
-  for (const path of candidates) {
-    try {
-      const mod = await import(path);
-      if (mod.pool) return mod.pool;
-      if (mod.default?.query) return mod.default;
-      if (mod.default?.pool) return mod.default.pool;
-    } catch {}
-  }
-
-  throw new Error(
-    "Database pool module not found. Tried: ../db.js, ../config/db.js, ../database.js, ../lib/db.js"
-  );
-}
-
-const pool = await getPool();
-
-function normalizePlanTier(value) {
-  const v = String(value || "free").toLowerCase().trim();
-
-  if (["starter", "basic"].includes(v)) return "starter";
-  if (["pro", "professional"].includes(v)) return "pro";
-  if (["enterprise", "business"].includes(v)) return "enterprise";
-  return "free";
-}
-
-function mapPriceIdToPlanTier(priceId) {
-  if (!priceId) return "free";
-
-  if (
-    process.env.STRIPE_PRICE_STARTER &&
-    priceId === process.env.STRIPE_PRICE_STARTER
-  ) {
-    return "starter";
-  }
-
-  if (
-    process.env.STRIPE_PRICE_PRO &&
-    priceId === process.env.STRIPE_PRICE_PRO
-  ) {
-    return "pro";
-  }
-
-  if (
-    process.env.STRIPE_PRICE_ENTERPRISE &&
-    priceId === process.env.STRIPE_PRICE_ENTERPRISE
-  ) {
-    return "enterprise";
-  }
-
-  return "free";
-}
-
-function mapStripeStatusToFirmStatus(stripeStatus) {
-  switch (stripeStatus) {
-    case "active":
-    case "trialing":
-      return "active";
-    case "past_due":
-    case "unpaid":
-    case "incomplete":
-    case "incomplete_expired":
-      return "past_due";
-    case "canceled":
-      return "canceled";
-    case "paused":
-      return "paused";
-    default:
-      return "inactive";
-  }
-}
-
-function getSubscriptionPriceId(subscription) {
-  return subscription?.items?.data?.[0]?.price?.id || null;
-}
-
-function getPlanTierFromSubscription(subscription) {
-  const priceId = getSubscriptionPriceId(subscription);
-
-  if (priceId) {
-    const mapped = mapPriceIdToPlanTier(priceId);
-    if (mapped !== "free") return mapped;
-  }
-
-  const metadataPlan =
-    subscription?.metadata?.plan_tier ||
-    subscription?.metadata?.plan ||
-    subscription?.items?.data?.[0]?.price?.metadata?.plan_tier ||
-    "free";
-
-  return normalizePlanTier(metadataPlan);
-}
-
-export async function getFirmById(firmId) {
-  const { rows } = await pool.query(
-    `
-      SELECT id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-      FROM firms
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [firmId]
+// ================================
+// CREATE CHECKOUT SESSION
+// ================================
+export async function createCheckoutSession({ firm_id, price_id }) {
+  const firmRes = await pool.query(
+    "SELECT * FROM firms WHERE id = $1",
+    [firm_id]
   );
 
-  return rows[0] || null;
-}
-
-export async function getFirmByStripeCustomerId(customerId) {
-  if (!customerId) return null;
-
-  const { rows } = await pool.query(
-    `
-      SELECT id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-      FROM firms
-      WHERE stripe_customer_id = $1
-      LIMIT 1
-    `,
-    [customerId]
-  );
-
-  return rows[0] || null;
-}
-
-export async function getFirmByStripeSubscriptionId(subscriptionId) {
-  if (!subscriptionId) return null;
-
-  const { rows } = await pool.query(
-    `
-      SELECT id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-      FROM firms
-      WHERE stripe_subscription_id = $1
-      LIMIT 1
-    `,
-    [subscriptionId]
-  );
-
-  return rows[0] || null;
-}
-
-export async function ensureStripeCustomerForFirm(firmId) {
-  const firm = await getFirmById(firmId);
-
-  if (!firm) {
-    throw new Error(`Firm not found for id=${firmId}`);
+  if (firmRes.rows.length === 0) {
+    throw new Error("Firm not found");
   }
 
-  if (firm.stripe_customer_id) {
-    return firm.stripe_customer_id;
+  const firm = firmRes.rows[0];
+
+  let customerId = firm.stripe_customer_id;
+
+  // Create Stripe customer if missing
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: firm.email,
+      metadata: {
+        firm_id: firm.id,
+      },
+    });
+
+    customerId = customer.id;
+
+    await pool.query(
+      "UPDATE firms SET stripe_customer_id = $1 WHERE id = $2",
+      [customerId, firm.id]
+    );
   }
-
-  const customer = await stripe.customers.create({
-    name: firm.name || `Firm ${firm.id}`,
-    metadata: {
-      firm_id: String(firm.id),
-    },
-  });
-
-  await pool.query(
-    `
-      UPDATE firms
-      SET stripe_customer_id = $1,
-          updated_at = NOW()
-      WHERE id = $2
-    `,
-    [customer.id, firm.id]
-  );
-
-  return customer.id;
-}
-
-export async function createCheckoutSession({
-  firmId,
-  priceId,
-  successUrl,
-  cancelUrl,
-}) {
-  if (!firmId) throw new Error("firmId is required");
-  if (!priceId) throw new Error("priceId is required");
-  if (!successUrl) throw new Error("successUrl is required");
-  if (!cancelUrl) throw new Error("cancelUrl is required");
-
-  const customerId = await ensureStripeCustomerForFirm(firmId);
-  const planTier = mapPriceIdToPlanTier(priceId);
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     line_items: [
       {
-        price: priceId,
+        price: price_id,
         quantity: 1,
       },
     ],
-    allow_promotion_codes: true,
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    client_reference_id: String(firmId),
-    metadata: {
-      firm_id: String(firmId),
-      plan_tier: planTier,
-    },
-    subscription_data: {
-      metadata: {
-        firm_id: String(firmId),
-        plan_tier: planTier,
-      },
-    },
+    success_url: `${process.env.FRONTEND_URL}/billing/success`,
+    cancel_url: `${process.env.FRONTEND_URL}/billing/cancel`,
   });
 
   return session;
 }
 
-export async function createBillingPortalSession({ firmId, returnUrl }) {
-  if (!firmId) throw new Error("firmId is required");
-  if (!returnUrl) throw new Error("returnUrl is required");
-
-  const customerId = await ensureStripeCustomerForFirm(firmId);
-
-  const session = await stripe.billingPortal.sessions.create({
-    customer: customerId,
-    return_url: returnUrl,
-  });
-
-  return session;
-}
-
-export async function attachCheckoutSessionToFirm(session) {
-  const firmId =
-    session?.metadata?.firm_id ||
-    session?.client_reference_id ||
-    null;
-
-  if (!firmId) {
-    console.warn("checkout.session.completed missing firm_id/client_reference_id");
-    return null;
-  }
-
-  const stripeCustomerId =
-    typeof session.customer === "string" ? session.customer : session.customer?.id;
-
-  const stripeSubscriptionId =
-    typeof session.subscription === "string"
-      ? session.subscription
-      : session.subscription?.id || null;
-
-  const desiredPlan = session?.metadata?.plan_tier
-    ? normalizePlanTier(session.metadata.plan_tier)
-    : null;
-
-  const { rows } = await pool.query(
-    `
-      UPDATE firms
-      SET stripe_customer_id = COALESCE($1, stripe_customer_id),
-          stripe_subscription_id = COALESCE($2, stripe_subscription_id),
-          plan_tier = CASE
-                        WHEN $3 IS NOT NULL THEN $3
-                        ELSE plan_tier
-                      END,
-          status = CASE
-                     WHEN $2 IS NOT NULL THEN 'active'
-                     ELSE status
-                   END,
-          updated_at = NOW()
-      WHERE id = $4
-      RETURNING id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-    `,
-    [stripeCustomerId, stripeSubscriptionId, desiredPlan, firmId]
-  );
-
-  if (!rows[0]) {
-    console.warn(`No firm found for checkout.session.completed firm_id=${firmId}`);
-    return null;
-  }
-
-  return rows[0];
-}
-
-export async function syncSubscriptionToFirm(subscription) {
-  const subscriptionId = subscription?.id || null;
-  const customerId =
-    typeof subscription?.customer === "string"
-      ? subscription.customer
-      : subscription?.customer?.id || null;
-
-  const firmIdFromMetadata = subscription?.metadata?.firm_id || null;
-
-  let firm = null;
-
-  if (firmIdFromMetadata) {
-    firm = await getFirmById(firmIdFromMetadata);
-  }
-
-  if (!firm && subscriptionId) {
-    firm = await getFirmByStripeSubscriptionId(subscriptionId);
-  }
-
-  if (!firm && customerId) {
-    firm = await getFirmByStripeCustomerId(customerId);
-  }
-
-  if (!firm) {
-    console.warn(
-      `No firm found for subscription sync. subscription=${subscriptionId}, customer=${customerId}`
-    );
-    return null;
-  }
-
-  let planTier = getPlanTierFromSubscription(subscription);
-  let status = mapStripeStatusToFirmStatus(subscription.status);
-
-  if (subscription.status === "canceled") {
-    planTier = "free";
-    status = "canceled";
-  }
-
-  const { rows } = await pool.query(
-    `
-      UPDATE firms
-      SET stripe_customer_id = COALESCE($1, stripe_customer_id),
-          stripe_subscription_id = COALESCE($2, stripe_subscription_id),
-          plan_tier = $3,
-          status = $4,
-          updated_at = NOW()
-      WHERE id = $5
-      RETURNING id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-    `,
-    [customerId, subscriptionId, planTier, status, firm.id]
-  );
-
-  return rows[0] || null;
-}
-
-export async function markFirmInvoicePaid(invoice) {
-  const subscriptionId =
-    typeof invoice?.subscription === "string"
-      ? invoice.subscription
-      : invoice?.subscription?.id || null;
-
-  const customerId =
-    typeof invoice?.customer === "string"
-      ? invoice.customer
-      : invoice?.customer?.id || null;
-
-  let firm = null;
-
-  if (subscriptionId) {
-    firm = await getFirmByStripeSubscriptionId(subscriptionId);
-  }
-
-  if (!firm && customerId) {
-    firm = await getFirmByStripeCustomerId(customerId);
-  }
-
-  if (!firm) {
-    console.warn(
-      `No firm found for invoice.paid. subscription=${subscriptionId}, customer=${customerId}`
-    );
-    return null;
-  }
-
-  const { rows } = await pool.query(
-    `
-      UPDATE firms
-      SET status = 'active',
-          updated_at = NOW()
-      WHERE id = $1
-      RETURNING id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-    `,
-    [firm.id]
-  );
-
-  return rows[0] || null;
-}
-
-export async function markFirmInvoicePaymentFailed(invoice) {
-  const subscriptionId =
-    typeof invoice?.subscription === "string"
-      ? invoice.subscription
-      : invoice?.subscription?.id || null;
-
-  const customerId =
-    typeof invoice?.customer === "string"
-      ? invoice.customer
-      : invoice?.customer?.id || null;
-
-  let firm = null;
-
-  if (subscriptionId) {
-    firm = await getFirmByStripeSubscriptionId(subscriptionId);
-  }
-
-  if (!firm && customerId) {
-    firm = await getFirmByStripeCustomerId(customerId);
-  }
-
-  if (!firm) {
-    console.warn(
-      `No firm found for invoice.payment_failed. subscription=${subscriptionId}, customer=${customerId}`
-    );
-    return null;
-  }
-
-  const { rows } = await pool.query(
-    `
-      UPDATE firms
-      SET status = 'past_due',
-          updated_at = NOW()
-      WHERE id = $1
-      RETURNING id, name, status, plan_tier, stripe_customer_id, stripe_subscription_id
-    `,
-    [firm.id]
-  );
-
-  return rows[0] || null;
-}
-
-export function constructStripeEvent(rawBody, signature) {
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    throw new Error("Missing STRIPE_WEBHOOK_SECRET");
-  }
-
-  if (!signature) {
-    throw new Error("Missing Stripe signature");
-  }
-
-  return stripe.webhooks.constructEvent(
-    rawBody,
-    signature,
-    process.env.STRIPE_WEBHOOK_SECRET
-  );
-}
-
-export async function handleStripeWebhookEvent(event) {
+// ================================
+// HANDLE STRIPE WEBHOOKS
+// ================================
+export async function handleStripeWebhook(event) {
   switch (event.type) {
-    case "checkout.session.completed":
-      return await attachCheckoutSessionToFirm(event.data.object);
+    case "checkout.session.completed": {
+      const session = event.data.object;
+
+      const customerId = session.customer;
+      const subscriptionId = session.subscription;
+
+      // attach subscription to firm
+      await pool.query(
+        `UPDATE firms 
+         SET stripe_subscription_id = $1 
+         WHERE stripe_customer_id = $2`,
+        [subscriptionId, customerId]
+      );
+
+      break;
+    }
 
     case "customer.subscription.created":
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted":
-      return await syncSubscriptionToFirm(event.data.object);
+    case "customer.subscription.updated": {
+      const subscription = event.data.object;
 
-    case "invoice.paid":
-      return await markFirmInvoicePaid(event.data.object);
+      const customerId = subscription.customer;
+      const status = subscription.status;
 
-    case "invoice.payment_failed":
-      return await markFirmInvoicePaymentFailed(event.data.object);
+      let plan = "free";
+
+      if (subscription.items.data.length > 0) {
+        const priceId = subscription.items.data[0].price.id;
+
+        // Map price → plan
+        if (priceId === process.env.STRIPE_PRICE_PRO) {
+          plan = "pro";
+        } else if (priceId === process.env.STRIPE_PRICE_ENTERPRISE) {
+          plan = "enterprise";
+        }
+      }
+
+      await pool.query(
+        `UPDATE firms
+         SET plan_tier = $1,
+             subscription_status = $2
+         WHERE stripe_customer_id = $3`,
+        [plan, status, customerId]
+      );
+
+      break;
+    }
+
+    case "customer.subscription.deleted": {
+      const subscription = event.data.object;
+
+      await pool.query(
+        `UPDATE firms
+         SET plan_tier = 'free',
+             subscription_status = 'canceled'
+         WHERE stripe_customer_id = $1`,
+        [subscription.customer]
+      );
+
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object;
+
+      await pool.query(
+        `UPDATE firms
+         SET subscription_status = 'past_due'
+         WHERE stripe_customer_id = $1`,
+        [invoice.customer]
+      );
+
+      break;
+    }
+
+    case "invoice.paid": {
+      const invoice = event.data.object;
+
+      await pool.query(
+        `UPDATE firms
+         SET subscription_status = 'active'
+         WHERE stripe_customer_id = $1`,
+        [invoice.customer]
+      );
+
+      break;
+    }
 
     default:
-      console.log(`Unhandled Stripe event: ${event.type}`);
-      return null;
+      console.log(`Unhandled event: ${event.type}`);
   }
 }
-
-export default {
-  createCheckoutSession,
-  createBillingPortalSession,
-  ensureStripeCustomerForFirm,
-  constructStripeEvent,
-  handleStripeWebhookEvent,
-  attachCheckoutSessionToFirm,
-  syncSubscriptionToFirm,
-  markFirmInvoicePaid,
-  markFirmInvoicePaymentFailed,
-};
