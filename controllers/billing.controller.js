@@ -12,7 +12,7 @@ export async function getBillingConfig(req, res) {
     prices: {
       starter: process.env.STRIPE_PRICE_STARTER,
       pro: process.env.STRIPE_PRICE_PRO,
-      enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
+      enterprise: process.env.STRIPE_PRICE_ENTERPRISE, 
     },
   });
 }
