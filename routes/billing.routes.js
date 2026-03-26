@@ -1,12 +1,21 @@
 import express from "express";
 import {
-  createCheckoutSession,
-  handleStripeWebhook
-} from "../services/billing.service.js";
+  getBillingConfig,
+  createCheckoutSessionController,
+  createBillingPortalSessionController,
+  stripeWebhook,
+} from "../controllers/billing.controller.js";
 
 const router = express.Router();
 
-router.post("/checkout/session", createCheckoutSession);
+router.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
+
+router.get("/config", getBillingConfig);
+router.post("/checkout-session", createCheckoutSessionController);
+router.post("/portal-session", createBillingPortalSessionController);
 
 export default router;
-export { handleStripeWebhook };
