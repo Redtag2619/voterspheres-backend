@@ -12,23 +12,107 @@ import {
   updateCampaignCommandTask,
   updateCampaignCommandVendor,
   updateCampaignCommandMailEvent
-} from "../services/campaignCommand.service.js"; 
+} from "../services/campaignCommand.service.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireFirmAccessToCampaign } from "../middleware/firmAccess.middleware.js";
+import { requirePlan } from "../middleware/planGuard.middleware.js";
 
 const router = express.Router();
 
-router.get("/:id/command-center", getCampaignCommandCenter);
-router.get("/:id/activity", getCampaignActivityTimeline);
+router.get(
+  "/:id/command-center",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  getCampaignCommandCenter
+);
 
-router.post("/:id/tasks", createCampaignCommandTask);
-router.post("/:id/contacts", createCampaignCommandContact);
-router.post("/:id/vendors", createCampaignCommandVendor);
-router.post("/:id/documents", createCampaignCommandDocument);
-router.post("/:id/mail-programs", createCampaignCommandMailProgram);
-router.post("/:id/mail-drops", createCampaignCommandMailDrop);
-router.post("/:id/mail-events", createCampaignCommandMailEvent);
+router.get(
+  "/:id/activity",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  getCampaignActivityTimeline
+);
 
-router.patch("/:id/tasks/:taskId", updateCampaignCommandTask);
-router.patch("/:id/vendors/:vendorId", updateCampaignCommandVendor);
-router.patch("/:id/mail-events/:eventId", updateCampaignCommandMailEvent);
+router.post(
+  "/:id/tasks",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandTask
+);
+
+router.post(
+  "/:id/contacts",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandContact
+);
+
+router.post(
+  "/:id/vendors",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandVendor
+);
+
+router.post(
+  "/:id/documents",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandDocument
+);
+
+router.post(
+  "/:id/mail-programs",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandMailProgram
+);
+
+router.post(
+  "/:id/mail-drops",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandMailDrop
+);
+
+router.post(
+  "/:id/mail-events",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  createCampaignCommandMailEvent
+);
+
+router.patch(
+  "/:id/tasks/:taskId",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  updateCampaignCommandTask
+);
+
+router.patch(
+  "/:id/vendors/:vendorId",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  updateCampaignCommandVendor
+);
+
+router.patch(
+  "/:id/mail-events/:eventId",
+  requireAuth,
+  requireFirmAccessToCampaign,
+  requirePlan("pro"),
+  updateCampaignCommandMailEvent
+);
 
 export default router;
