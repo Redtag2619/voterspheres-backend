@@ -48,21 +48,44 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
-const allowedOrigins = [
+const explicitAllowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "https://voterspheres.org",
   "https://www.voterspheres.org",
   process.env.FRONTEND_URL,
+  process.env.VERCEL_FRONTEND_URL,
 ].filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (explicitAllowedOrigins.includes(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+
+    if (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app")
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
 
 app.use(helmet());
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -97,78 +120,6 @@ app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     service: "VoterSpheres Backend",
-    routes: [
-      "/health",
-      "/api/auth/signup",
-      "/api/auth/login",
-      "/api/auth/me",
-
-      "/api/candidates",
-      "/api/consultants",
-      "/api/vendors",
-      "/api/intelligence/summary",
-      "/api/intelligence/dashboard",
-      "/api/intelligence/forecast",
-      "/api/intelligence/rankings",
-      "/api/intelligence/map",
-      "/api/intelligence/fundraising/live",
-      "/api/intelligence/fundraising/leaderboard",
-      "/api/intelligence/fundraising/ingest",
-      "/api/map/geojson/states",
-      "/api/map/geojson/states/:stateName",
-      "/api/map/ingest",
-      "/api/fec/ingest",
-      "/api/fec/candidates",
-      "/api/fec/fundraising",
-      "/api/forecast/rebuild",
-      "/api/forecast/published",
-      "/api/forecast/overlays",
-      "/api/crm/init",
-      "/api/crm/firms",
-      "/api/crm/users",
-      "/api/crm/campaigns",
-      "/api/crm/campaigns/:id",
-      "/api/crm/campaigns/:id/contacts",
-      "/api/crm/campaigns/:id/vendors",
-      "/api/crm/campaigns/:id/tasks",
-      "/api/crm/campaigns/:id/documents",
-      "/api/crm-dashboard/summary",
-      "/api/firms/:id/workspace",
-      "/api/mail/init",
-      "/api/mail/dashboard",
-      "/api/mail/programs",
-      "/api/mail/drops",
-      "/api/mail/tracking-events",
-      "/api/mail/timeline",
-      "/api/mail/campaigns/:campaignId/timeline",
-      "/api/mail/drops/:id/timeline",
-      "/api/mail/intelligence/summary",
-      "/api/mail/intelligence/vendors",
-      "/api/mail/intelligence/campaigns",
-      "/api/mail/intelligence/regions",
-      "/api/platform/executive-dashboard",
-      "/api/alerts",
-      "/api/alerts/campaigns/:id",
-      "/api/alerts/rebuild",
-      "/api/alerts/resolve",
-      "/api/alerts/dismiss",
-      "/api/campaigns/:id/command-center",
-      "/api/campaigns/:id/activity",
-      "/api/campaigns/:id/tasks",
-      "/api/campaigns/:id/tasks/:taskId",
-      "/api/campaigns/:id/contacts",
-      "/api/campaigns/:id/vendors",
-      "/api/campaigns/:id/vendors/:vendorId",
-      "/api/campaigns/:id/documents",
-      "/api/campaigns/:id/mail-programs",
-      "/api/campaigns/:id/mail-drops",
-      "/api/campaigns/:id/mail-events",
-      "/api/campaigns/:id/mail-events/:eventId",
-      "/api/billing/config",
-      "/api/billing/checkout-session",
-      "/api/billing/webhook",
-      "/api/billing/portal-session",
-    ],
   });
 });
 
