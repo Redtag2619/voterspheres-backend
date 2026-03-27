@@ -48,7 +48,6 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
-// FORCE CORS FIRST
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
