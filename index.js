@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
@@ -47,17 +48,18 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
+const explicitAllowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://voterspheres.org",
+  "https://www.voterspheres.org",
+  process.env.FRONTEND_URL,
+  process.env.VERCEL_FRONTEND_URL,
+].filter(Boolean);
+
 function isAllowedOrigin(origin) {
   if (!origin) return true;
-
-  if (
-    origin === "https://voterspheres.org" ||
-    origin === "https://www.voterspheres.org" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://127.0.0.1:5173"
-  ) {
-    return true;
-  }
+  if (explicitAllowedOrigins.includes(origin)) return true;
 
   try {
     const url = new URL(origin);
@@ -67,36 +69,24 @@ function isAllowedOrigin(origin) {
   }
 }
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
 
-  if (isAllowedOrigin(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
-  }
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Vary", "Origin");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(helmet());
 
-// IMPORTANT:
-// Mount billing BEFORE express.json()
-// so Stripe webhook raw body remains intact.
 app.use("/api/billing", billingRoutes);
 
 app.use(express.json({ limit: "5mb" }));
@@ -137,32 +127,26 @@ app.get("/health", async (_req, res, next) => {
 
 app.use("/api/auth", authRoutes);
 
-// Public routes
 app.use("/api/candidates", candidatesRoutes);
 app.use("/api/vendors", vendorsRoutes);
 app.use("/api/map", mapRoutes);
 
-// Path-level premium enforcement for mixed routers
 app.use("/api/intelligence/forecast", requirePro);
 app.use("/api/intelligence/rankings", requirePro);
 app.use("/api/intelligence/fundraising", requireEnterprise);
 app.use("/api/fec/fundraising", requireEnterprise);
 
-// Mixed/public routers
 app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/fec", fecRoutes);
 
-// Starter tier
 app.use("/api/crm", requireStarter, crmRoutes);
 app.use("/api/crm-dashboard", requireStarter, crmDashboardRoutes);
 app.use("/api/firms", requireStarter, firmWorkspaceRoutes);
 
-// Pro tier
 app.use("/api/forecast", requirePro, forecastRoutes);
 app.use("/api/alerts", requirePro, alertsRoutes);
 app.use("/api/campaigns", requirePro, campaignCommandRoutes);
 
-// Enterprise tier
 app.use("/api/consultants", requireEnterprise, consultantsRoutes);
 app.use("/api/mail", requireEnterprise, mailRoutes);
 app.use("/api/platform", requireEnterprise, platformRoutes);
