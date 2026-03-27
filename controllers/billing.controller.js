@@ -200,6 +200,58 @@ export async function createBillingPortalSessionController(req, res) {
   }
 }
 
+export async function getMyBillingDebug(req, res) {
+  try {
+    const { firmId, userId } = await getAuthedUser(req);
+
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          name,
+          firm_name,
+          email,
+          plan_tier,
+          status,
+          stripe_customer_id,
+          stripe_subscription_id,
+          updated_at
+        FROM firms
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [firmId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: "Firm not found",
+      });
+    }
+
+    const firm = result.rows[0];
+
+    return res.status(200).json({
+      ok: true,
+      user_id: userId || null,
+      firm_id: firm.id,
+      firm_name: firm.firm_name || firm.name || null,
+      email: firm.email || null,
+      plan_tier: firm.plan_tier || "free",
+      status: firm.status || "inactive",
+      stripe_customer_id: firm.stripe_customer_id || null,
+      stripe_subscription_id: firm.stripe_subscription_id || null,
+      updated_at: firm.updated_at || null,
+    });
+  } catch (error) {
+    console.error("getMyBillingDebug error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Failed to load billing debug info",
+    });
+  }
+}
+
 export async function stripeWebhook(req, res) {
   try {
     const signature = req.headers["stripe-signature"];
