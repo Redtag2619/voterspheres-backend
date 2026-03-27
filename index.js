@@ -40,6 +40,37 @@ const app = express();
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
 
+// 🔥 FORCE CORS FIRST (before anything else)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && origin.includes(".vercel.app")) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (
+    origin === "https://voterspheres.org" ||
+    origin === "https://www.voterspheres.org" ||
+    origin === "http://localhost:5173"
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // Handle preflight
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
 });
