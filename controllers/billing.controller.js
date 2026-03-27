@@ -215,6 +215,9 @@ export async function getMyBillingDebug(req, res) {
           status,
           stripe_customer_id,
           stripe_subscription_id,
+          last_webhook_event_id,
+          last_webhook_event_type,
+          last_webhook_event_at,
           updated_at
         FROM firms
         WHERE id = $1
@@ -241,6 +244,9 @@ export async function getMyBillingDebug(req, res) {
       status: firm.status || "inactive",
       stripe_customer_id: firm.stripe_customer_id || null,
       stripe_subscription_id: firm.stripe_subscription_id || null,
+      last_webhook_event_id: firm.last_webhook_event_id || null,
+      last_webhook_event_type: firm.last_webhook_event_type || null,
+      last_webhook_event_at: firm.last_webhook_event_at || null,
       updated_at: firm.updated_at || null,
     });
   } catch (error) {
