@@ -86,7 +86,18 @@ function getPlanTierFromSubscription(subscription) {
 export async function getFirmById(firmId) {
   const { rows } = await pool.query(
     `
-      SELECT id, name, firm_name, email, status, plan_tier, stripe_customer_id, stripe_subscription_id
+      SELECT
+        id,
+        name,
+        firm_name,
+        email,
+        status,
+        plan_tier,
+        stripe_customer_id,
+        stripe_subscription_id,
+        last_webhook_event_id,
+        last_webhook_event_type,
+        last_webhook_event_at
       FROM firms
       WHERE id = $1
       LIMIT 1
@@ -102,7 +113,18 @@ export async function getFirmByStripeCustomerId(customerId) {
 
   const { rows } = await pool.query(
     `
-      SELECT id, name, firm_name, email, status, plan_tier, stripe_customer_id, stripe_subscription_id
+      SELECT
+        id,
+        name,
+        firm_name,
+        email,
+        status,
+        plan_tier,
+        stripe_customer_id,
+        stripe_subscription_id,
+        last_webhook_event_id,
+        last_webhook_event_type,
+        last_webhook_event_at
       FROM firms
       WHERE stripe_customer_id = $1
       LIMIT 1
@@ -118,7 +140,18 @@ export async function getFirmByStripeSubscriptionId(subscriptionId) {
 
   const { rows } = await pool.query(
     `
-      SELECT id, name, firm_name, email, status, plan_tier, stripe_customer_id, stripe_subscription_id
+      SELECT
+        id,
+        name,
+        firm_name,
+        email,
+        status,
+        plan_tier,
+        stripe_customer_id,
+        stripe_subscription_id,
+        last_webhook_event_id,
+        last_webhook_event_type,
+        last_webhook_event_at
       FROM firms
       WHERE stripe_subscription_id = $1
       LIMIT 1
@@ -229,7 +262,23 @@ export function constructStripeEvent(rawBody, signature) {
   );
 }
 
-async function attachCheckoutSessionToFirm(session) {
+async function stampWebhookAuditForFirm(firmId, event) {
+  if (!firmId || !event?.id || !event?.type) return;
+
+  await pool.query(
+    `
+      UPDATE firms
+      SET last_webhook_event_id = $1,
+          last_webhook_event_type = $2,
+          last_webhook_event_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $3
+    `,
+    [event.id, event.type, firmId]
+  );
+}
+
+async function attachCheckoutSessionToFirm(session, event) {
   const firmId =
     session?.metadata?.firm_id ||
     session?.client_reference_id ||
@@ -272,10 +321,12 @@ async function attachCheckoutSessionToFirm(session) {
     [stripeCustomerId, stripeSubscriptionId, desiredPlan, firmId]
   );
 
+  await stampWebhookAuditForFirm(firmId, event);
+
   return rows[0] || null;
 }
 
-async function syncSubscriptionToFirm(subscription) {
+async function syncSubscriptionToFirm(subscription, event) {
   const subscriptionId = subscription?.id || null;
   const customerId =
     typeof subscription?.customer === "string"
@@ -327,10 +378,12 @@ async function syncSubscriptionToFirm(subscription) {
     [customerId, subscriptionId, planTier, status, firm.id]
   );
 
+  await stampWebhookAuditForFirm(firm.id, event);
+
   return rows[0] || null;
 }
 
-async function markFirmInvoicePaid(invoice) {
+async function markFirmInvoicePaid(invoice, event) {
   const subscriptionId =
     typeof invoice?.subscription === "string"
       ? invoice.subscription
@@ -369,10 +422,12 @@ async function markFirmInvoicePaid(invoice) {
     [firm.id]
   );
 
+  await stampWebhookAuditForFirm(firm.id, event);
+
   return rows[0] || null;
 }
 
-async function markFirmInvoicePaymentFailed(invoice) {
+async function markFirmInvoicePaymentFailed(invoice, event) {
   const subscriptionId =
     typeof invoice?.subscription === "string"
       ? invoice.subscription
@@ -411,24 +466,26 @@ async function markFirmInvoicePaymentFailed(invoice) {
     [firm.id]
   );
 
+  await stampWebhookAuditForFirm(firm.id, event);
+
   return rows[0] || null;
 }
 
 export async function handleStripeWebhookEvent(event) {
   switch (event.type) {
     case "checkout.session.completed":
-      return await attachCheckoutSessionToFirm(event.data.object);
+      return await attachCheckoutSessionToFirm(event.data.object, event);
 
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
-      return await syncSubscriptionToFirm(event.data.object);
+      return await syncSubscriptionToFirm(event.data.object, event);
 
     case "invoice.paid":
-      return await markFirmInvoicePaid(event.data.object);
+      return await markFirmInvoicePaid(event.data.object, event);
 
     case "invoice.payment_failed":
-      return await markFirmInvoicePaymentFailed(event.data.object);
+      return await markFirmInvoicePaymentFailed(event.data.object, event);
 
     default:
       console.log(`Unhandled Stripe event: ${event.type}`);
