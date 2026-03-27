@@ -64,10 +64,7 @@ function isAllowedOrigin(origin) {
   try {
     const url = new URL(origin);
 
-    if (
-      url.protocol === "https:" &&
-      url.hostname.endsWith(".vercel.app")
-    ) {
+    if (url.protocol === "https:" && url.hostname.endsWith(".vercel.app")) {
       return true;
     }
   } catch {
@@ -77,22 +74,22 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
 app.use(helmet());
-
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (isAllowedOrigin(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // IMPORTANT:
 // Mount billing BEFORE express.json()
