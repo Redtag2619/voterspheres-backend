@@ -1,6 +1,5 @@
 import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
@@ -48,18 +47,31 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
 
-  if (origin && origin.includes(".vercel.app")) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else if (
+  if (
     origin === "https://voterspheres.org" ||
     origin === "https://www.voterspheres.org" ||
     origin === "http://localhost:5173" ||
     origin === "http://127.0.0.1:5173"
   ) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
   }
 
   res.setHeader(
@@ -71,16 +83,16 @@ app.use((req, res, next) => {
     "Content-Type, Authorization"
   );
   res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
 
   if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
+    return res.sendStatus(204);
   }
 
   next();
 });
 
 app.use(helmet());
-app.use(cors());
 
 // IMPORTANT:
 // Mount billing BEFORE express.json()
@@ -136,7 +148,7 @@ app.use("/api/intelligence/rankings", requirePro);
 app.use("/api/intelligence/fundraising", requireEnterprise);
 app.use("/api/fec/fundraising", requireEnterprise);
 
-// Mixed/public routers mounted after targeted gates
+// Mixed/public routers
 app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/fec", fecRoutes);
 
