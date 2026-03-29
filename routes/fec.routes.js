@@ -1,14 +1,13 @@
 import express from "express";
+import { requireEnterprise } from "../middleware/requirePlan.js";
 import {
-  triggerFecCandidateIngestion,
-  getStoredFecCandidates,
-  getStoredFundraisingSnapshots
+  getFundraisingLeaderboard,
+  getFundraisingSummary,
 } from "../services/fecIngestion.service.js";
 
 const router = express.Router();
 
-router.post("/ingest", triggerFecCandidateIngestion);
-router.get("/candidates", getStoredFecCandidates);
-router.get("/fundraising", getStoredFundraisingSnapshots);
+router.get("/fundraising/leaderboard", requireEnterprise, getFundraisingLeaderboard);
+router.get("/fundraising/summary", requireEnterprise, getFundraisingSummary);
 
 export default router;
