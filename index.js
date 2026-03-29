@@ -25,6 +25,7 @@ import authRoutes from "./routes/auth.routes.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { requireAuth } from "./middleware/auth.middleware.js";
 import {
   requireStarter,
   requirePro,
@@ -131,25 +132,20 @@ app.use("/api/candidates", candidatesRoutes);
 app.use("/api/vendors", vendorsRoutes);
 app.use("/api/map", mapRoutes);
 
-app.use("/api/intelligence/forecast", requirePro);
-app.use("/api/intelligence/rankings", requirePro);
-app.use("/api/intelligence/fundraising", requireEnterprise);
-app.use("/api/fec/fundraising", requireEnterprise);
+app.use("/api/intelligence", requireAuth, intelligenceRoutes);
+app.use("/api/fec", requireAuth, fecRoutes);
 
-app.use("/api/intelligence", intelligenceRoutes);
-app.use("/api/fec", fecRoutes);
+app.use("/api/crm", requireAuth, requireStarter, crmRoutes);
+app.use("/api/crm-dashboard", requireAuth, requireStarter, crmDashboardRoutes);
+app.use("/api/firms", requireAuth, requireStarter, firmWorkspaceRoutes);
 
-app.use("/api/crm", requireStarter, crmRoutes);
-app.use("/api/crm-dashboard", requireStarter, crmDashboardRoutes);
-app.use("/api/firms", requireStarter, firmWorkspaceRoutes);
+app.use("/api/forecast", requireAuth, requirePro, forecastRoutes);
+app.use("/api/alerts", requireAuth, requirePro, alertsRoutes);
+app.use("/api/campaigns", requireAuth, requirePro, campaignCommandRoutes);
 
-app.use("/api/forecast", requirePro, forecastRoutes);
-app.use("/api/alerts", requirePro, alertsRoutes);
-app.use("/api/campaigns", requirePro, campaignCommandRoutes);
-
-app.use("/api/consultants", requireEnterprise, consultantsRoutes);
-app.use("/api/mail", requireEnterprise, mailRoutes);
-app.use("/api/platform", requireEnterprise, platformRoutes);
+app.use("/api/consultants", requireAuth, requireEnterprise, consultantsRoutes);
+app.use("/api/mail", requireAuth, requireEnterprise, mailRoutes);
+app.use("/api/platform", requireAuth, requireEnterprise, platformRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
