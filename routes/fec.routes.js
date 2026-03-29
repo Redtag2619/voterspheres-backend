@@ -7,7 +7,16 @@ import {
 
 const router = express.Router();
 
-router.get("/fundraising/leaderboard", requireEnterprise, getFundraisingLeaderboard);
-router.get("/fundraising/summary", requireEnterprise, getFundraisingSummary);
+router.get(
+  "/fundraising/leaderboard",
+  requireEnterprise,
+  getFundraisingLeaderboard
+);
+
+router.get(
+  "/fundraising/summary",
+  requireEnterprise,
+  getFundraisingSummary
+);
 
 export default router;
