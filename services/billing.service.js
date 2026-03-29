@@ -1,6 +1,10 @@
 import Stripe from "stripe";
 import { pool } from "../db/pool.js";
 
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("Missing STRIPE_SECRET_KEY");
+}
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 function normalizePlanTier(value) {
@@ -9,6 +13,7 @@ function normalizePlanTier(value) {
   if (["starter", "basic"].includes(v)) return "starter";
   if (["pro", "professional"].includes(v)) return "pro";
   if (["enterprise", "business"].includes(v)) return "enterprise";
+
   return "free";
 }
 
@@ -41,22 +46,18 @@ function mapPriceIdToPlanTier(priceId) {
 
 function mapStripeStatusToFirmStatus(stripeStatus) {
   switch (stripeStatus) {
-    case "active":
     case "trialing":
+    case "active":
       return "active";
-
     case "past_due":
     case "unpaid":
     case "incomplete":
     case "incomplete_expired":
       return "past_due";
-
     case "canceled":
       return "canceled";
-
     case "paused":
       return "paused";
-
     default:
       return "inactive";
   }
@@ -97,7 +98,8 @@ export async function getFirmById(firmId) {
         stripe_subscription_id,
         last_webhook_event_id,
         last_webhook_event_type,
-        last_webhook_event_at
+        last_webhook_event_at,
+        updated_at
       FROM firms
       WHERE id = $1
       LIMIT 1
@@ -124,7 +126,8 @@ export async function getFirmByStripeCustomerId(customerId) {
         stripe_subscription_id,
         last_webhook_event_id,
         last_webhook_event_type,
-        last_webhook_event_at
+        last_webhook_event_at,
+        updated_at
       FROM firms
       WHERE stripe_customer_id = $1
       LIMIT 1
@@ -151,7 +154,8 @@ export async function getFirmByStripeSubscriptionId(subscriptionId) {
         stripe_subscription_id,
         last_webhook_event_id,
         last_webhook_event_type,
-        last_webhook_event_at
+        last_webhook_event_at,
+        updated_at
       FROM firms
       WHERE stripe_subscription_id = $1
       LIMIT 1
@@ -199,6 +203,7 @@ export async function createCheckoutSession({
   priceId,
   successUrl,
   cancelUrl,
+  trialDays,
 }) {
   if (!firmId) throw new Error("firmId is required");
   if (!priceId) throw new Error("priceId is required");
@@ -207,6 +212,17 @@ export async function createCheckoutSession({
 
   const customerId = await ensureStripeCustomerForFirm(firmId);
   const planTier = mapPriceIdToPlanTier(priceId);
+
+  const subscriptionData = {
+    metadata: {
+      firm_id: String(firmId),
+      plan_tier: planTier,
+    },
+  };
+
+  if (trialDays && Number(trialDays) > 0) {
+    subscriptionData.trial_period_days = Number(trialDays);
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -225,12 +241,7 @@ export async function createCheckoutSession({
       firm_id: String(firmId),
       plan_tier: planTier,
     },
-    subscription_data: {
-      metadata: {
-        firm_id: String(firmId),
-        plan_tier: planTier,
-      },
-    },
+    subscription_data: subscriptionData,
   });
 
   return session;
@@ -279,10 +290,7 @@ async function stampWebhookAuditForFirm(firmId, event) {
 }
 
 async function attachCheckoutSessionToFirm(session, event) {
-  const firmId =
-    session?.metadata?.firm_id ||
-    session?.client_reference_id ||
-    null;
+  const firmId = session?.metadata?.firm_id || session?.client_reference_id || null;
 
   if (!firmId) {
     console.warn("checkout.session.completed missing firm_id/client_reference_id");
@@ -492,11 +500,3 @@ export async function handleStripeWebhookEvent(event) {
       return null;
   }
 }
-
-export default {
-  createCheckoutSession,
-  createBillingPortalSession,
-  ensureStripeCustomerForFirm,
-  constructStripeEvent,
-  handleStripeWebhookEvent,
-};
