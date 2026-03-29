@@ -1,25 +1,17 @@
 import express from "express";
+import { requirePro, requireEnterprise } from "../middleware/requirePlan.js";
 import {
-  getIntelligenceSummary,
-  getIntelligenceDashboard,
-  getIntelligenceForecast,
-  getIntelligenceRankings,
-  getIntelligenceMap,
-  getLiveFundraising,
+  getMapIntelligence,
+  getForecastOverlays,
   getFundraisingLeaderboard,
-  runManualFundraisingIngestion
+  getPowerRankings,
 } from "../services/intelligence.service.js";
 
 const router = express.Router();
 
-router.get("/summary", getIntelligenceSummary);
-router.get("/dashboard", getIntelligenceDashboard);
-router.get("/forecast", getIntelligenceForecast);
-router.get("/rankings", getIntelligenceRankings);
-router.get("/map", getIntelligenceMap);
-
-router.get("/fundraising/live", getLiveFundraising);
-router.get("/fundraising/leaderboard", getFundraisingLeaderboard);
-router.post("/fundraising/ingest", runManualFundraisingIngestion);
+router.get("/map", getMapIntelligence);
+router.get("/forecast/overlays", requirePro, getForecastOverlays);
+router.get("/rankings", requirePro, getPowerRankings);
+router.get("/fundraising/leaderboard", requireEnterprise, getFundraisingLeaderboard);
 
 export default router;
