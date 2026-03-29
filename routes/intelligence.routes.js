@@ -1,68 +1,28 @@
 import express from "express";
-import { requirePro, requireEnterprise } from "../middleware/requirePlan.js"; 
-import * as intelligenceService from "../services/intelligence.service.js";
+import { requirePro, requireEnterprise } from "../middleware/requirePlan.js";
+import {
+  getIntelligenceSummary,
+  getIntelligenceDashboard,
+  getIntelligenceForecast,
+  getIntelligenceRankings,
+  getIntelligenceMap,
+  getLiveFundraising,
+  getFundraisingLeaderboard,
+  runManualFundraisingIngestion,
+} from "../services/intelligence.service.js";
 
 const router = express.Router();
 
-function resolveHandler(...names) {
-  for (const name of names) {
-    if (typeof intelligenceService[name] === "function") {
-      return intelligenceService[name];
-    }
-  }
+router.get("/summary", getIntelligenceSummary);
+router.get("/dashboard", getIntelligenceDashboard);
 
-  return (_req, res) => {
-    return res.status(501).json({
-      error: "Route handler not implemented",
-      tried: names,
-    });
-  };
-}
+router.get("/forecast", requirePro, getIntelligenceForecast);
+router.get("/rankings", requirePro, getIntelligenceRankings);
+router.get("/map", requirePro, getIntelligenceMap);
 
-// General / lower-friction intelligence route
-router.get(
-  "/map",
-  resolveHandler(
-    "getMapIntelligence",
-    "getMapOverview",
-    "getIntelligenceMap",
-    "getMapData"
-  )
-);
+router.get("/fundraising/live", requireEnterprise, getLiveFundraising);
+router.get("/fundraising/leaderboard", requireEnterprise, getFundraisingLeaderboard);
 
-// Pro routes
-router.get(
-  "/forecast/overlays",
-  requirePro,
-  resolveHandler(
-    "getForecastOverlays",
-    "getForecastOverlay",
-    "getForecastData",
-    "getForecastIntelligence"
-  )
-);
-
-router.get(
-  "/rankings",
-  requirePro,
-  resolveHandler(
-    "getPowerRankings",
-    "getRankings",
-    "getCandidateRankings",
-    "getIntelligenceRankings"
-  )
-);
-
-// Enterprise routes
-router.get(
-  "/fundraising/leaderboard",
-  requireEnterprise,
-  resolveHandler(
-    "getFundraisingLeaderboard",
-    "getLeaderboard",
-    "getFundraisingData",
-    "getFundraisingIntelligence"
-  )
-);
+router.post("/fundraising/ingest", requireEnterprise, runManualFundraisingIngestion);
 
 export default router;
