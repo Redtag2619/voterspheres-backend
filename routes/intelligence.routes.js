@@ -1,5 +1,5 @@
 import express from "express";
-import { requirePro, requireEnterprise } from "../middleware/requirePlan.js";
+import { requirePro, requireEnterprise } from "../middleware/requirePlan.js"; 
 import * as intelligenceService from "../services/intelligence.service.js";
 
 const router = express.Router();
