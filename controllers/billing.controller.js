@@ -70,7 +70,7 @@ async function getAuthedUser(req) {
   const result = await pool.query(
     `
       SELECT id, email, role, firm_id
-      FROM users
+      FROM app_users
       WHERE id = $1
       LIMIT 1
     `,
@@ -100,7 +100,7 @@ async function getAuthedUser(req) {
   };
 }
 
-export async function getBillingConfig(req, res) {
+export async function getBillingConfig(_req, res) {
   try {
     return res.status(200).json({
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
@@ -122,7 +122,7 @@ export async function getBillingConfig(req, res) {
 export async function createCheckoutSessionController(req, res) {
   try {
     const { firmId } = await getAuthedUser(req);
-    const { priceId, successUrl, cancelUrl } = req.body || {};
+    const { priceId, successUrl, cancelUrl, trialDays } = req.body || {};
 
     if (!priceId) {
       return res.status(400).json({
@@ -137,6 +137,7 @@ export async function createCheckoutSessionController(req, res) {
       priceId,
       successUrl: successUrl || `${frontendUrl}/billing?success=1`,
       cancelUrl: cancelUrl || `${frontendUrl}/billing?canceled=1`,
+      trialDays,
     });
 
     return res.status(200).json({
