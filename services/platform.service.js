@@ -1,4 +1,4 @@
-import { publishEvent } from "../lib/intelligence.events.js";
+import { publishEvent } from "../lib/intelligence.events.js"; 
 
 const CHAT_FALLBACK = {
   metrics: [
