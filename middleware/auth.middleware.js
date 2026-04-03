@@ -1,12 +1,9 @@
 import jwt from "jsonwebtoken";
 
 let cachedDb = null;
-let cachedDbSource = null;
 
 async function getDb() {
-  if (cachedDb) {
-    return { db: cachedDb, source: cachedDbSource };
-  }
+  if (cachedDb) return cachedDb;
 
   const candidates = [
     "../config/database.js",
@@ -18,22 +15,20 @@ async function getDb() {
     try {
       const mod = await import(path);
       const db = mod.default || mod.db || mod.pool || mod.client || null;
-
       if (db) {
         cachedDb = db;
-        cachedDbSource = path;
-        return { db, source: path };
+        return db;
       }
     } catch {
       // try next
     }
   }
 
-  return { db: null, source: null };
+  return null;
 }
 
 async function safeQuery(sql, params = []) {
-  const { db } = await getDb();
+  const db = await getDb();
 
   if (!db) {
     throw new Error("Database connection not available");
@@ -66,9 +61,20 @@ export async function requireAuth(req, res, next) {
     }
 
     const secret = process.env.JWT_SECRET || "dev-secret";
-    const decoded = jwt.verify(token, secret);
+    const payload = jwt.verify(token, secret);
 
-    const result = await safeQuery(
+    const userId =
+      payload?.id ||
+      payload?.userId ||
+      payload?.user_id ||
+      payload?.sub ||
+      null;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unable to determine authenticated user" });
+    }
+
+    const userResult = await safeQuery(
       `
         select
           u.id,
@@ -88,10 +94,10 @@ export async function requireAuth(req, res, next) {
         where u.id = $1
         limit 1
       `,
-      [decoded.id]
+      [userId]
     );
 
-    const user = result.rows?.[0];
+    const user = userResult.rows?.[0];
 
     if (!user) {
       return res.status(401).json({ error: "User not found" });
@@ -109,8 +115,17 @@ export async function requireAuth(req, res, next) {
       plan_tier: user.plan_tier || "starter",
       firm_status: user.firm_status || "active",
       stripe_customer_id: user.stripe_customer_id || null,
-      stripe_subscription_id: user.stripe_subscription_id || null,
-      token_payload: decoded
+      stripe_subscription_id: user.stripe_subscription_id || null
+    };
+
+    req.auth = {
+      token,
+      payload,
+      user: req.user,
+      userId: req.user.id,
+      firmId: req.user.firm_id,
+      planTier: String(req.user.plan_tier || "starter").toLowerCase(),
+      role: req.user.role
     };
 
     next();
