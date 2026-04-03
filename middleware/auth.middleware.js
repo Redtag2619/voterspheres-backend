@@ -46,6 +46,75 @@ async function safeQuery(sql, params = []) {
   throw new Error("Unsupported database driver");
 }
 
+async function findUserById(userId) {
+  const attempts = [
+    `
+      select
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.role,
+        u.firm_id
+      from users u
+      where u.id = $1
+      limit 1
+    `,
+    `
+      select
+        u.id,
+        null::text as first_name,
+        null::text as last_name,
+        u.email,
+        u.role,
+        u.firm_id
+      from app_users u
+      where u.id = $1
+      limit 1
+    `
+  ];
+
+  for (const sql of attempts) {
+    try {
+      const result = await safeQuery(sql, [userId]);
+      if (result.rows?.length) {
+        return result.rows[0];
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  return null;
+}
+
+async function findFirmById(firmId) {
+  if (!firmId) return null;
+
+  try {
+    const result = await safeQuery(
+      `
+        select
+          id,
+          name,
+          slug,
+          plan_tier,
+          status,
+          stripe_customer_id,
+          stripe_subscription_id
+        from firms
+        where id = $1
+        limit 1
+      `,
+      [firmId]
+    );
+
+    return result.rows?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization || "";
@@ -70,38 +139,25 @@ export async function requireAuth(req, res, next) {
       payload?.sub ||
       null;
 
+    const firmIdFromToken =
+      payload?.firm_id ||
+      payload?.firmId ||
+      payload?.user?.firm_id ||
+      payload?.user?.firmId ||
+      null;
+
     if (!userId) {
       return res.status(401).json({ error: "Unable to determine authenticated user" });
     }
 
-    const userResult = await safeQuery(
-      `
-        select
-          u.id,
-          u.first_name,
-          u.last_name,
-          u.email,
-          u.role,
-          u.firm_id,
-          f.name as firm_name,
-          f.slug as firm_slug,
-          f.plan_tier,
-          f.status as firm_status,
-          f.stripe_customer_id,
-          f.stripe_subscription_id
-        from users u
-        left join firms f on f.id = u.firm_id
-        where u.id = $1
-        limit 1
-      `,
-      [userId]
-    );
-
-    const user = userResult.rows?.[0];
+    const user = await findUserById(userId);
 
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }
+
+    const resolvedFirmId = user.firm_id || firmIdFromToken || null;
+    const firm = await findFirmById(resolvedFirmId);
 
     req.user = {
       id: user.id,
@@ -109,13 +165,13 @@ export async function requireAuth(req, res, next) {
       last_name: user.last_name || "",
       email: user.email,
       role: user.role || "user",
-      firm_id: user.firm_id || null,
-      firm_name: user.firm_name || null,
-      firm_slug: user.firm_slug || null,
-      plan_tier: user.plan_tier || "starter",
-      firm_status: user.firm_status || "active",
-      stripe_customer_id: user.stripe_customer_id || null,
-      stripe_subscription_id: user.stripe_subscription_id || null
+      firm_id: resolvedFirmId,
+      firm_name: firm?.name || null,
+      firm_slug: firm?.slug || null,
+      plan_tier: firm?.plan_tier || "starter",
+      firm_status: firm?.status || "active",
+      stripe_customer_id: firm?.stripe_customer_id || null,
+      stripe_subscription_id: firm?.stripe_subscription_id || null
     };
 
     req.auth = {
