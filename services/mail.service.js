@@ -4,7 +4,7 @@ async function getDb() {
   const candidates = [
     "../config/database.js", 
     "../db.js",
-    "../config/db.js"
+    "../config/db.js" 
   ];
 
   for (const path of candidates) {
