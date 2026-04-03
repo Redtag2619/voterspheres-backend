@@ -1,42 +1,47 @@
 import express from "express";
 import {
-  initMailTables,
-  getMailDashboardHandler,
-  listMailProgramsHandler,
-  createMailProgramHandler,
-  listMailDropsHandler,
-  createMailDropHandler,
-  createMailTrackingEventHandler,
-  getPlatformMailTimelineHandler,
-  getCampaignMailTimelineHandler,
-  getMailDropTimelineHandler,
-  getMailIntelligenceSummaryHandler,
-  getMailVendorIntelligenceHandler,
-  getMailCampaignIntelligenceHandler,
-  getMailRegionalIntelligenceHandler
+  createMailEvent,
+  getMailDashboard,
+  getMailIntelligenceSummary,
+  getMailTimeline
 } from "../services/mail.service.js";
 
 const router = express.Router();
 
-router.post("/init", initMailTables);
+router.get("/dashboard", async (_req, res) => {
+  try {
+    const data = await getMailDashboard();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load mail dashboard" });
+  }
+});
 
-router.get("/dashboard", getMailDashboardHandler);
+router.get("/timeline", async (_req, res) => {
+  try {
+    const data = await getMailTimeline();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load mail timeline" });
+  }
+});
 
-router.get("/programs", listMailProgramsHandler);
-router.post("/programs", createMailProgramHandler);
+router.get("/intelligence/summary", async (_req, res) => {
+  try {
+    const data = await getMailIntelligenceSummary();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load mail intelligence" });
+  }
+});
 
-router.get("/drops", listMailDropsHandler);
-router.post("/drops", createMailDropHandler);
-
-router.post("/tracking-events", createMailTrackingEventHandler);
-
-router.get("/timeline", getPlatformMailTimelineHandler);
-router.get("/campaigns/:campaignId/timeline", getCampaignMailTimelineHandler);
-router.get("/drops/:id/timeline", getMailDropTimelineHandler);
-
-router.get("/intelligence/summary", getMailIntelligenceSummaryHandler);
-router.get("/intelligence/vendors", getMailVendorIntelligenceHandler);
-router.get("/intelligence/campaigns", getMailCampaignIntelligenceHandler);
-router.get("/intelligence/regions", getMailRegionalIntelligenceHandler);
+router.post("/events", async (req, res) => {
+  try {
+    const data = await createMailEvent(req.body || {});
+    res.status(201).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to create mail event" });
+  }
+});
 
 export default router;
