@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { pool } from "../db/pool.js"; 
 import { getIntelligenceInputs } from "../repositories/intelligence.repository.js";
 import { fetchLiveFundraisingSnapshot } from "../providers/fec.provider.js";
 import { buildForecastPackage } from "../analytics/forecast.engine.js";
