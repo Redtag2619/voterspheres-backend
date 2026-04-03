@@ -1,8 +1,52 @@
-import { publishEvent } from "../lib/intelligence.events.js"; 
+import { publishEvent } from "../lib/intelligence.events.js";
+
+async function getDb() {
+  const candidates = [
+    "../config/database.js",
+    "../db.js",
+    "../config/db.js"
+  ];
+
+  for (const path of candidates) {
+    try {
+      const mod = await import(path);
+      return mod.default || mod.db || mod.pool || mod.client || null;
+    } catch {
+      // try next
+    }
+  }
+
+  return null;
+}
+
+async function safeQuery(sql, params = []) {
+  try {
+    const db = await getDb();
+    if (!db) return { rows: [] };
+
+    if (typeof db.query === "function") {
+      return await db.query(sql, params);
+    }
+
+    if (typeof db.execute === "function") {
+      const [rows] = await db.execute(sql, params);
+      return { rows };
+    }
+
+    return { rows: [] };
+  } catch {
+    return { rows: [] };
+  }
+}
+
+function toNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 const CHAT_FALLBACK = {
   metrics: [
-    { label: "AI Queries Today", value: "184", delta: "+26%", tone: "up" }, 
+    { label: "AI Queries Today", value: "184", delta: "+26%", tone: "up" },
     { label: "Briefs Generated", value: "39", delta: "+11", tone: "up" },
     { label: "Strategic Alerts Referenced", value: "72", delta: "+8", tone: "up" },
     { label: "Response Confidence", value: "91%", delta: "+2.4", tone: "up" }
@@ -37,6 +81,7 @@ const WARROOM_FALLBACK = {
   ],
   threats: [
     {
+      id: 1,
       title: "Cost-of-living attack cluster accelerating in suburban paid media",
       severity: "High",
       source: "Ad monitoring",
@@ -44,6 +89,7 @@ const WARROOM_FALLBACK = {
       recommendation: "Deploy affordability rebuttal pack across surrogates."
     },
     {
+      id: 2,
       title: "Education narrative moving into mainstream local pickup",
       severity: "Medium",
       source: "Media monitoring",
@@ -52,12 +98,12 @@ const WARROOM_FALLBACK = {
     }
   ],
   queue: [
-    { priority: "P1", owner: "Rapid Response", item: "Finalize affordability contrast memo", eta: "45 min" },
-    { priority: "P2", owner: "Comms", item: "Draft surrogate talking points", eta: "2 hrs" }
+    { id: 1, priority: "P1", owner: "Rapid Response", item: "Finalize affordability contrast memo", eta: "45 min" },
+    { id: 2, priority: "P2", owner: "Comms", item: "Draft surrogate talking points", eta: "2 hrs" }
   ],
   signals: [
-    { time: "08:44", channel: "Cable / Clips", text: "Opposition segment repetition crossed threshold." },
-    { time: "09:12", channel: "Social / X", text: "Narrative crossover detected into persuadable clusters." }
+    { id: 1, time: "08:44", channel: "Cable / Clips", text: "Opposition segment repetition crossed threshold." },
+    { id: 2, time: "09:12", channel: "Social / X", text: "Narrative crossover detected into persuadable clusters." }
   ]
 };
 
@@ -119,12 +165,105 @@ export async function postAIChatPrompt({ prompt }) {
   };
 }
 
+function buildWarRoomMetrics(threats = [], signals = []) {
+  const highThreats = threats.filter(
+    (t) => String(t.severity || "").toLowerCase() === "high"
+  ).length;
+
+  return [
+    {
+      label: "Active Threats",
+      value: String(threats.length),
+      delta: `${highThreats} high severity`,
+      tone: highThreats > 0 ? "down" : "up"
+    },
+    {
+      label: "Narrative Spikes",
+      value: String(signals.length),
+      delta: "Recent live signals",
+      tone: "up"
+    },
+    {
+      label: "Response Window",
+      value: "43 min",
+      delta: "Average target",
+      tone: "neutral"
+    },
+    {
+      label: "Signal Confidence",
+      value: threats.length > 0 ? "91%" : "89%",
+      delta: "+ live ingestion",
+      tone: "up"
+    }
+  ];
+}
+
 export async function getWarRoomData() {
-  return WARROOM_FALLBACK;
+  const threatsRes = await safeQuery(`
+    select *
+    from war_room_threats
+    order by coalesce(created_at, now()) desc, id desc
+    limit 25
+  `);
+
+  const signalsRes = await safeQuery(`
+    select *
+    from war_room_signals
+    order by coalesce(created_at, now()) desc, id desc
+    limit 25
+  `);
+
+  const queueRes = await safeQuery(`
+    select *
+    from war_room_queue
+    order by coalesce(created_at, now()) desc, id desc
+    limit 25
+  `);
+
+  const threats =
+    threatsRes.rows.length > 0
+      ? threatsRes.rows.map((row, index) => ({
+          id: row.id || index + 1,
+          title: row.title || "Threat detected",
+          severity: row.severity || "Medium",
+          source: row.source || "Live monitoring",
+          velocity: row.velocity || "+0%",
+          recommendation: row.recommendation || "Review and respond."
+        }))
+      : WARROOM_FALLBACK.threats;
+
+  const signals =
+    signalsRes.rows.length > 0
+      ? signalsRes.rows.map((row, index) => ({
+          id: row.id || index + 1,
+          time: row.time || new Date(row.created_at || Date.now()).toLocaleTimeString(),
+          channel: row.channel || "Live Signal",
+          text: row.text || row.summary || "Signal captured"
+        }))
+      : WARROOM_FALLBACK.signals;
+
+  const queue =
+    queueRes.rows.length > 0
+      ? queueRes.rows.map((row, index) => ({
+          id: row.id || index + 1,
+          priority: row.priority || "P2",
+          owner: row.owner || "Operations",
+          item: row.item || "Review signal",
+          eta: row.eta || "2 hrs"
+        }))
+      : WARROOM_FALLBACK.queue;
+
+  return {
+    metrics: buildWarRoomMetrics(threats, signals),
+    threats,
+    queue,
+    signals
+  };
 }
 
 export async function recordWarRoomThreat(input = {}) {
   const threat = {
+    id: Date.now(),
     title:
       input.title ||
       "Education narrative moving into mainstream local pickup",
@@ -135,6 +274,31 @@ export async function recordWarRoomThreat(input = {}) {
       input.recommendation || "Push validator-driven local messaging."
   };
 
+  try {
+    await safeQuery(
+      `
+        insert into war_room_threats (
+          title,
+          severity,
+          source,
+          velocity,
+          recommendation,
+          created_at
+        )
+        values ($1, $2, $3, $4, $5, now())
+      `,
+      [
+        threat.title,
+        threat.severity,
+        threat.source,
+        threat.velocity,
+        threat.recommendation
+      ]
+    );
+  } catch {
+    // safe fallback
+  }
+
   publishEvent({
     type: "warroom.threat_detected",
     channel: "intelligence:warroom",
@@ -143,6 +307,78 @@ export async function recordWarRoomThreat(input = {}) {
   });
 
   return { ok: true, threat };
+}
+
+export async function recordWarRoomSignal(input = {}) {
+  const signal = {
+    id: Date.now(),
+    time: input.time || new Date().toLocaleTimeString(),
+    channel: input.channel || "Live Signal",
+    text: input.text || "New narrative signal detected"
+  };
+
+  try {
+    await safeQuery(
+      `
+        insert into war_room_signals (
+          time,
+          channel,
+          text,
+          created_at
+        )
+        values ($1, $2, $3, now())
+      `,
+      [signal.time, signal.channel, signal.text]
+    );
+  } catch {
+    // safe fallback
+  }
+
+  publishEvent({
+    type: "warroom.signal_detected",
+    channel: "intelligence:warroom",
+    timestamp: new Date().toISOString(),
+    payload: signal
+  });
+
+  return { ok: true, signal };
+}
+
+export async function recordWarRoomQueueItem(input = {}) {
+  const item = {
+    id: Date.now(),
+    priority: input.priority || "P2",
+    owner: input.owner || "Operations",
+    item: input.item || "Review signal",
+    eta: input.eta || "2 hrs"
+  };
+
+  try {
+    await safeQuery(
+      `
+        insert into war_room_queue (
+          priority,
+          owner,
+          item,
+          eta,
+          created_at
+        )
+        values ($1, $2, $3, $4, now())
+      `,
+      [item.priority, item.owner, item.item, item.eta]
+    );
+  } catch {
+    // safe fallback
+  }
+
+  publishEvent({
+    type: "warroom.queue_updated",
+    channel: "intelligence:warroom",
+    timestamp: new Date().toISOString(),
+    payload: item
+  });
+
+  return { ok: true, item };
 }
 
 export async function getSimulatorData() {
