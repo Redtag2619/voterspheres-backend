@@ -1,127 +1,124 @@
 import jwt from "jsonwebtoken";
-import { pool } from "../db/pool.js";
+
+let cachedDb = null;
+let cachedDbSource = null;
+
+async function getDb() {
+  if (cachedDb) {
+    return { db: cachedDb, source: cachedDbSource };
+  }
+
+  const candidates = [
+    "../config/database.js",
+    "../config/db.js",
+    "../db.js"
+  ];
+
+  for (const path of candidates) {
+    try {
+      const mod = await import(path);
+      const db = mod.default || mod.db || mod.pool || mod.client || null;
+
+      if (db) {
+        cachedDb = db;
+        cachedDbSource = path;
+        return { db, source: path };
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  return { db: null, source: null };
+}
+
+async function safeQuery(sql, params = []) {
+  const { db } = await getDb();
+
+  if (!db) {
+    throw new Error("Database connection not available");
+  }
+
+  if (typeof db.query === "function") {
+    return db.query(sql, params);
+  }
+
+  if (typeof db.execute === "function") {
+    const [rows] = await db.execute(sql, params);
+    return { rows };
+  }
+
+  throw new Error("Unsupported database driver");
+}
 
 export async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization || "";
 
     if (!authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        error: "Missing bearer token",
-      });
+      return res.status(401).json({ error: "Missing bearer token" });
     }
 
     const token = authHeader.slice(7).trim();
 
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        error: "Missing JWT_SECRET",
-      });
+    if (!token) {
+      return res.status(401).json({ error: "Missing bearer token" });
     }
 
-    let payload;
-    try {
-      payload = jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
-      return res.status(401).json({
-        error: "Invalid or expired token",
-      });
-    }
+    const secret = process.env.JWT_SECRET || "dev-secret";
+    const decoded = jwt.verify(token, secret);
 
-    const userId =
-      payload?.id ||
-      payload?.userId ||
-      payload?.user_id ||
-      payload?.sub ||
-      payload?.user?.id ||
-      null;
-
-    const firmIdFromToken =
-      payload?.firm_id ||
-      payload?.firmId ||
-      payload?.user?.firm_id ||
-      payload?.user?.firmId ||
-      null;
-
-    if (!userId && !firmIdFromToken) {
-      return res.status(401).json({
-        error: "Unable to determine authenticated user",
-      });
-    }
-
-    let user = null;
-    let firm = null;
-
-    if (userId) {
-      const userResult = await pool.query(
-        `
-          SELECT id, email, role, firm_id
-          FROM app_users
-          WHERE id = $1
-          LIMIT 1
-        `,
-        [userId]
-      );
-
-      if (userResult.rows.length === 0) {
-        return res.status(401).json({
-          error: "User not found",
-        });
-      }
-
-      user = userResult.rows[0];
-    }
-
-    const resolvedFirmId = user?.firm_id || firmIdFromToken || null;
-
-    if (!resolvedFirmId) {
-      return res.status(403).json({
-        error: "No firm linked to this account",
-      });
-    }
-
-    const firmResult = await pool.query(
+    const result = await safeQuery(
       `
-        SELECT
-          id,
-          name,
-          firm_name,
-          email,
-          plan_tier,
-          status,
-          stripe_customer_id,
-          stripe_subscription_id
-        FROM firms
-        WHERE id = $1
-        LIMIT 1
+        select
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+          u.firm_id,
+          f.name as firm_name,
+          f.slug as firm_slug,
+          f.plan_tier,
+          f.status as firm_status,
+          f.stripe_customer_id,
+          f.stripe_subscription_id
+        from users u
+        left join firms f on f.id = u.firm_id
+        where u.id = $1
+        limit 1
       `,
-      [resolvedFirmId]
+      [decoded.id]
     );
 
-    if (firmResult.rows.length === 0) {
-      return res.status(403).json({
-        error: "Firm not found",
-      });
+    const user = result.rows?.[0];
+
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
     }
 
-    firm = firmResult.rows[0];
-
-    req.auth = {
-      token,
-      payload,
-      user: user || null,
-      userId: user?.id || userId || null,
-      firm,
-      firmId: firm.id,
-      planTier: String(firm.plan_tier || "free").toLowerCase(),
-      role: user?.role || null,
+    req.user = {
+      id: user.id,
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
+      email: user.email,
+      role: user.role || "user",
+      firm_id: user.firm_id || null,
+      firm_name: user.firm_name || null,
+      firm_slug: user.firm_slug || null,
+      plan_tier: user.plan_tier || "starter",
+      firm_status: user.firm_status || "active",
+      stripe_customer_id: user.stripe_customer_id || null,
+      stripe_subscription_id: user.stripe_subscription_id || null,
+      token_payload: decoded
     };
 
     next();
   } catch (error) {
-    console.error("requireAuth error:", error);
-    return res.status(500).json({
-      error: "Authentication failed",
+    return res.status(401).json({
+      error: error.message || "Unauthorized"
     });
   }
 }
+
+export default requireAuth;
