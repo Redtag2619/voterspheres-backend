@@ -4,41 +4,63 @@ import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
+let cachedDb = null;
+let cachedDbSource = null;
+
 async function getDb() {
+  if (cachedDb) {
+    return { db: cachedDb, source: cachedDbSource };
+  }
+
   const candidates = [
     "../config/database.js",
+    "../config/db.js",
     "../db.js",
-    "../config/db.js"
+    "../database.js",
+    "../lib/database.js",
+    "../lib/db.js",
+    "../services/../config/database.js",
+    "../services/../config/db.js"
   ];
 
   for (const path of candidates) {
     try {
       const mod = await import(path);
-      return mod.default || mod.db || mod.pool || mod.client || null;
+      const db = mod.default || mod.db || mod.pool || mod.client || null;
+
+      if (db) {
+        cachedDb = db;
+        cachedDbSource = path;
+        return { db, source: path };
+      }
     } catch {
-      // keep trying
+      // try next
     }
   }
 
-  return null;
+  return { db: null, source: null };
 }
 
 async function safeQuery(sql, params = []) {
-  const db = await getDb();
+  const { db, source } = await getDb();
+
   if (!db) {
-    throw new Error("Database connection not available");
+    throw new Error(
+      "Database connection not available. Auth route could not resolve your DB module."
+    );
   }
 
   if (typeof db.query === "function") {
-    return db.query(sql, params);
+    const result = await db.query(sql, params);
+    return { ...result, _dbSource: source };
   }
 
   if (typeof db.execute === "function") {
     const [rows] = await db.execute(sql, params);
-    return { rows };
+    return { rows, _dbSource: source };
   }
 
-  throw new Error("Database driver does not support query/execute");
+  throw new Error(`Unsupported DB driver from source: ${source}`);
 }
 
 function slugify(value = "") {
@@ -91,6 +113,22 @@ function signToken(user) {
     { expiresIn: "7d" }
   );
 }
+
+router.get("/debug/db", async (_req, res) => {
+  try {
+    const { db, source } = await getDb();
+
+    return res.status(200).json({
+      ok: Boolean(db),
+      source: source || null
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message || "DB debug failed"
+    });
+  }
+});
 
 router.post("/signup", async (req, res) => {
   try {
