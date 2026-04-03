@@ -1,9 +1,10 @@
-import express from "express"; 
+import express from "express";
 import {
   createMailEvent,
   getMailDashboard,
   getMailIntelligenceSummary,
-  getMailTimeline
+  getMailTimeline,
+  updateMailEvent
 } from "../services/mail.service.js";
 
 const router = express.Router();
@@ -41,6 +42,15 @@ router.post("/events", async (req, res) => {
     res.status(201).json(data);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to create mail event" });
+  }
+});
+
+router.patch("/events/:eventId", async (req, res) => {
+  try {
+    const data = await updateMailEvent(req.params.eventId, req.body || {});
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to update mail event" });
   }
 });
 
