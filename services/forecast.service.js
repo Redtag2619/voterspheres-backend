@@ -8,17 +8,67 @@ const FALLBACK_FORECAST = {
     { label: "Persuasion Efficiency", value: "8.3", delta: "+0.9", tone: "up" }
   ],
   races: [
-    { id: 1, race: "PA Senate", state: "Pennsylvania", office: "Senate", winProb: 54, change: "+2.1", rating: "Lean", status: "Momentum Up", overlayTier: "elevated", overlayScore: 78, funds: "$12.4M" },
-    { id: 2, race: "GA Senate", state: "Georgia", office: "Senate", winProb: 57, change: "+2.9", rating: "Lean", status: "Improving", overlayTier: "high", overlayScore: 81, funds: "$14.1M" },
-    { id: 3, race: "AZ-01", state: "Arizona", office: "House", winProb: 51, change: "+1.4", rating: "Toss-up", status: "Watch", overlayTier: "watch", overlayScore: 70, funds: "$7.8M" }
+    {
+      id: 1,
+      race: "PA Senate",
+      state: "Pennsylvania",
+      office: "Senate",
+      winProb: 54,
+      change: "+2.1",
+      rating: "Lean",
+      status: "Momentum Up",
+      overlayTier: "elevated",
+      overlayScore: 78,
+      funds: "$12.4M"
+    },
+    {
+      id: 2,
+      race: "GA Senate",
+      state: "Georgia",
+      office: "Senate",
+      winProb: 57,
+      change: "+2.9",
+      rating: "Lean",
+      status: "Improving",
+      overlayTier: "high",
+      overlayScore: 81,
+      funds: "$14.1M"
+    },
+    {
+      id: 3,
+      race: "AZ-01",
+      state: "Arizona",
+      office: "House",
+      winProb: 51,
+      change: "+1.4",
+      rating: "Toss-up",
+      status: "Watch",
+      overlayTier: "watch",
+      overlayScore: 70,
+      funds: "$7.8M"
+    }
   ],
   scenarios: [
-    { title: "Base Case", probability: "44%", summary: "Stable suburban gains and neutral press environment." },
-    { title: "Upside Breakout", probability: "27%", summary: "Stronger turnout and message dominance on affordability." }
+    {
+      title: "Base Case",
+      probability: "44%",
+      summary: "Stable suburban gains and neutral press environment."
+    },
+    {
+      title: "Upside Breakout",
+      probability: "27%",
+      summary: "Stronger turnout and message dominance on affordability."
+    }
   ],
   notes: [
-    { title: "Probability curve steepening in top suburban districts", detail: "Confidence is improving where affordability and turnout align." },
-    { title: "Most efficient growth path remains persuasion + validation", detail: "District-tuned validators outperform broad national messaging." }
+    {
+      title: "Probability curve steepening in top suburban districts",
+      detail: "Confidence is improving where affordability and turnout align."
+    },
+    {
+      title: "Most efficient growth path remains persuasion + validation",
+      detail: "District-tuned validators outperform broad national messaging."
+    }
   ]
 };
 
@@ -62,6 +112,14 @@ async function safeQuery(sql, params = []) {
 }
 
 function normalizeRace(row, index = 0) {
+  const winProb = Number(
+    row.win_probability ??
+      row.winProb ??
+      row.win_probability_pct ??
+      row.winProbability ??
+      0
+  );
+
   return {
     id: row.id ?? index + 1,
     race:
@@ -70,8 +128,8 @@ function normalizeRace(row, index = 0) {
       `${row.state || "State"} ${row.office || "Race"}`,
     state: row.state || "Unknown",
     office: row.office || "Race",
-    winProb: Number(row.win_probability ?? row.winProb ?? row.win_probability_pct ?? 0),
-    winProbability: Number(row.win_probability ?? row.winProb ?? row.win_probability_pct ?? 0),
+    winProb,
+    winProbability: winProb,
     change: row.change || row.delta || "+0.0",
     rating: row.rating || row.category || "Competitive",
     status: row.status || "Active",
@@ -95,10 +153,30 @@ function buildMetrics(races) {
   ).length;
 
   return [
-    { label: "Tracked Races", value: String(races.length), delta: "Live forecast feed", tone: "up" },
-    { label: "Average Win Probability", value: `${avg}%`, delta: "Across active board", tone: "up" },
-    { label: "Competitive Races", value: String(tossups), delta: "Closest contests", tone: "down" },
-    { label: "Map Confidence", value: races.length ? "Live" : "Fallback", delta: "Forecast engine online", tone: "up" }
+    {
+      label: "Tracked Races",
+      value: String(races.length),
+      delta: "Live forecast feed",
+      tone: "up"
+    },
+    {
+      label: "Average Win Probability",
+      value: `${avg}%`,
+      delta: "Across active board",
+      tone: "up"
+    },
+    {
+      label: "Competitive Races",
+      value: String(tossups),
+      delta: "Closest contests",
+      tone: "down"
+    },
+    {
+      label: "Map Confidence",
+      value: races.length ? "Live" : "Fallback",
+      delta: "Forecast engine online",
+      tone: "up"
+    }
   ];
 }
 
@@ -174,10 +252,13 @@ export async function getForecastOverlays() {
   return {
     metrics: forecast.metrics,
     battlegrounds: forecast.races.slice(0, 12).map((row) => ({
+      id: row.id,
       name: row.race,
+      race: row.race,
       state: row.state,
       office: row.office,
       winProb: row.winProb,
+      winProbability: row.winProb,
       overlayTier: row.overlayTier,
       overlayScore: row.overlayScore,
       funds: row.funds,
@@ -200,7 +281,6 @@ export async function getForecastOverlays() {
 
 export async function rebuildForecastSnapshot(input = {}) {
   const forecast = await getForecast();
-
   const first = forecast.races[0];
 
   publishEvent({
@@ -210,8 +290,7 @@ export async function rebuildForecastSnapshot(input = {}) {
     payload: {
       state: input.state || first?.state || "Arizona",
       office: input.office || first?.office || "Senate",
-      winProbability:
-        input.winProbability ?? first?.winProb ?? 54,
+      winProbability: input.winProbability ?? first?.winProb ?? 54,
       change: input.change || first?.change || "+2.1"
     }
   });
@@ -222,3 +301,48 @@ export async function rebuildForecastSnapshot(input = {}) {
     count: forecast.races.length
   };
 }
+
+/**
+ * Compatibility exports for older forecast routes
+ */
+
+export async function getPublishedForecast() {
+  const forecast = await getForecast();
+  return {
+    published_at: forecast.snapshot?.published_at || null,
+    races: forecast.races,
+    metrics: forecast.metrics,
+    scenarios: forecast.scenarios,
+    notes: forecast.notes
+  };
+}
+
+export async function getForecastMap() {
+  return getForecastOverlays();
+}
+
+export async function getForecastBattlegrounds() {
+  const forecast = await getForecast();
+  return forecast.battlegrounds || [];
+}
+
+export async function getForecastSnapshot() {
+  return getForecastSummary();
+}
+
+export async function publishForecastUpdate(input = {}) {
+  return rebuildForecastSnapshot(input);
+}
+
+export default {
+  getForecast,
+  getForecastSummary,
+  getForecastRankings,
+  getForecastOverlays,
+  rebuildForecastSnapshot,
+  getPublishedForecast,
+  getForecastMap,
+  getForecastBattlegrounds,
+  getForecastSnapshot,
+  publishForecastUpdate
+};
