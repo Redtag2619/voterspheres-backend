@@ -14,8 +14,7 @@ async function getDb() {
       const mod = await import(path);
       return mod.default || mod.db || mod.pool || mod.client || null;
     } catch {
-      // try next
-    }
+      }
   }
 
   return null;
