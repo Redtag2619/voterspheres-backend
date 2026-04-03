@@ -1,4 +1,4 @@
-import Stripe from "stripe";
+import Stripe from "stripe"; 
 import { publishEvent } from "../lib/intelligence.events.js";
 
 let stripeInstance = null;
