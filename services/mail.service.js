@@ -1,4 +1,4 @@
-import { publishEvent } from "../lib/intelligence.events.js";
+import { publishEvent } from "../lib/intelligence.events.js"; 
 
 async function getDb() {
   const candidates = [
