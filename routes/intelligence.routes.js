@@ -5,7 +5,7 @@ import {
   getForecastRankings,
   getForecastSummary,
   rebuildForecastSnapshot
-} from "../services/forecast.service.js";
+} from "../services/forecast.service.js"; 
 
 const router = express.Router();
 
