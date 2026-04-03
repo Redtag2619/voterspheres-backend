@@ -17,6 +17,9 @@ import platformRoutes from "./routes/platform.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
 import fecRoutes from "./routes/fec.routes.js";
+import candidatesRoutes from "./routes/candidates.routes.js";
+import vendorsRoutes from "./routes/vendors.routes.js";
+import statesRoutes from "./routes/states.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -110,6 +113,9 @@ app.use("/api/platform", requireAuth, platformRoutes);
 app.use("/api/intelligence", requireAuth, intelligenceRoutes);
 app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
+app.use("/api/candidates", candidatesRoutes);
+app.use("/api/vendors", vendorsRoutes);
+app.use("/api/states", statesRoutes);
 
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
