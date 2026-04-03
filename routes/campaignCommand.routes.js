@@ -4,7 +4,7 @@ const router = express.Router();
 
 async function getDb() {
   const candidates = [
-    "../config/database.js",
+    "../config/database.js", 
     "../db.js",
     "../config/db.js"
   ];
