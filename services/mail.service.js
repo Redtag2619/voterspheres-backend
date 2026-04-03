@@ -2,7 +2,7 @@ import { publishEvent } from "../lib/intelligence.events.js";
 
 async function getDb() {
   const candidates = [
-    "../config/database.js",
+    "../config/database.js", 
     "../db.js",
     "../config/db.js"
   ];
