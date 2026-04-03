@@ -2,7 +2,7 @@ import { publishEvent } from "../lib/intelligence.events.js";
 
 const CHAT_FALLBACK = {
   metrics: [
-    { label: "AI Queries Today", value: "184", delta: "+26%", tone: "up" },
+    { label: "AI Queries Today", value: "184", delta: "+26%", tone: "up" }, 
     { label: "Briefs Generated", value: "39", delta: "+11", tone: "up" },
     { label: "Strategic Alerts Referenced", value: "72", delta: "+8", tone: "up" },
     { label: "Response Confidence", value: "91%", delta: "+2.4", tone: "up" }
