@@ -1,292 +1,154 @@
-import { pool } from "../db/pool.js";
-import { ensureCrmTables } from "../repositories/crm.repository.js";
+import { publishEvent } from "../lib/intelligence.events.js";
 
-async function ensureMailTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mail_programs (
-      id SERIAL PRIMARY KEY,
-      campaign_id INTEGER,
-      name TEXT,
-      description TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
+const CHAT_FALLBACK = {
+  metrics: [
+    { label: "AI Queries Today", value: "184", delta: "+26%", tone: "up" },
+    { label: "Briefs Generated", value: "39", delta: "+11", tone: "up" },
+    { label: "Strategic Alerts Referenced", value: "72", delta: "+8", tone: "up" },
+    { label: "Response Confidence", value: "91%", delta: "+2.4", tone: "up" }
+  ],
+  quickPrompts: [
+    "Which battlegrounds moved most in the last 72 hours?",
+    "Summarize fundraising risk across top senate races.",
+    "What is the fastest path to improve win probability in Arizona?"
+  ],
+  conversation: [
+    {
+      role: "assistant",
+      title: "AI Analyst Brief",
+      text: "National control probability improved modestly overnight, driven by suburban persuasion gains."
+    }
+  ],
+  outputs: [
+    {
+      type: "Executive Memo",
+      title: "National battleground briefing",
+      note: "Combines map movement, donor confidence, and war room pressure into one brief."
+    }
+  ]
+};
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mail_drops (
-      id SERIAL PRIMARY KEY,
-      campaign_id INTEGER,
-      program_id INTEGER,
-      drop_date DATE,
-      quantity INTEGER,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
+const WARROOM_FALLBACK = {
+  metrics: [
+    { label: "Active Threats", value: "12", delta: "+3 in last 6 hrs", tone: "down" },
+    { label: "Narrative Spikes", value: "7", delta: "2 containable", tone: "up" },
+    { label: "Response Window", value: "43 min", delta: "Average target", tone: "neutral" },
+    { label: "Signal Confidence", value: "89%", delta: "+4.1", tone: "up" }
+  ],
+  threats: [
+    {
+      title: "Cost-of-living attack cluster accelerating in suburban paid media",
+      severity: "High",
+      source: "Ad monitoring",
+      velocity: "+38%",
+      recommendation: "Deploy affordability rebuttal pack across surrogates."
+    },
+    {
+      title: "Education narrative moving into mainstream local pickup",
+      severity: "Medium",
+      source: "Media monitoring",
+      velocity: "+21%",
+      recommendation: "Push validator-driven local messaging."
+    }
+  ],
+  queue: [
+    { priority: "P1", owner: "Rapid Response", item: "Finalize affordability contrast memo", eta: "45 min" },
+    { priority: "P2", owner: "Comms", item: "Draft surrogate talking points", eta: "2 hrs" }
+  ],
+  signals: [
+    { time: "08:44", channel: "Cable / Clips", text: "Opposition segment repetition crossed threshold." },
+    { time: "09:12", channel: "Social / X", text: "Narrative crossover detected into persuadable clusters." }
+  ]
+};
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mail_tracking_events (
-      id SERIAL PRIMARY KEY,
-      campaign_id INTEGER,
-      mail_drop_id INTEGER,
-      event_type TEXT,
-      status TEXT,
-      location_name TEXT,
-      facility_type TEXT,
-      notes TEXT,
-      source TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
+const COMMAND_CENTER_FALLBACK = {
+  metrics: [
+    { label: "National Win Index", value: "61.4", delta: "+2.8", tone: "up" },
+    { label: "Active Threats", value: "12", delta: "+3", tone: "down" },
+    { label: "Fundraising Pulse", value: "$12.6M", delta: "+11.2%", tone: "up" },
+    { label: "Persuasion Opportunity", value: "8.7", delta: "+0.6", tone: "up" }
+  ],
+  battlegrounds: [
+    { race: "PA Senate", probability: "54%", momentum: "+2.1", risk: "Elevated", priority: "Tier 1" },
+    { race: "AZ-01", probability: "51%", momentum: "+1.4", risk: "Watch", priority: "Tier 1" }
+  ],
+  actions: [
+    {
+      title: "Reallocate persuasion spend",
+      owner: "Paid Media",
+      due: "Today",
+      detail: "Shift 14% of digital spend into three suburban battleground segments."
+    }
+  ],
+  feed: [
+    {
+      time: "08:12",
+      title: "Opposition message spike detected",
+      source: "Ad monitoring",
+      severity: "High"
+    }
+  ]
+};
+
+const SIMULATOR_FALLBACK = {
+  metrics: [
+    { label: "Base Win Scenario", value: "54%", delta: "+2.1", tone: "up" },
+    { label: "Upside Ceiling", value: "63%", delta: "+3.7", tone: "up" },
+    { label: "Downside Risk", value: "41%", delta: "-2.9", tone: "down" },
+    { label: "Model Confidence", value: "78", delta: "+4.2", tone: "up" }
+  ],
+  scenarios: [
+    { title: "Base Case", probability: "44%", outcome: "Stable suburban gains and neutral media conditions.", status: "Most Likely" },
+    { title: "Narrative Shock", probability: "18%", outcome: "Negative media cycle compresses margins.", status: "Risk" }
+  ],
+  board: [
+    { race: "PA Senate", base: "54%", upside: "61%", downside: "47%", trigger: "Women suburban turnout" }
+  ],
+  notes: [
+    { title: "Best upside path", note: "Affordability discipline plus suburban turnout remains the cleanest route." }
+  ]
+};
+
+export async function getAIChatData() {
+  return CHAT_FALLBACK;
 }
 
-function n(value) {
-  return Number(value || 0);
+export async function postAIChatPrompt({ prompt }) {
+  return {
+    answer: `VoterSpheres AI response: ${prompt || "No prompt provided."}`
+  };
 }
 
-function money(value) {
-  return `$${n(value).toLocaleString()}`;
+export async function getWarRoomData() {
+  return WARROOM_FALLBACK;
 }
 
-export async function getExecutiveDashboard(req, res, next) {
-  try {
-    await ensureCrmTables();
-    await ensureMailTables();
+export async function recordWarRoomThreat(input = {}) {
+  const threat = {
+    title:
+      input.title ||
+      "Education narrative moving into mainstream local pickup",
+    severity: input.severity || "Medium",
+    source: input.source || "Media monitoring",
+    velocity: input.velocity || "+21%",
+    recommendation:
+      input.recommendation || "Push validator-driven local messaging."
+  };
 
-    const [
-      firmsResult,
-      campaignsResult,
-      campaignRevenueResult,
-      tasksResult,
-      vendorsResult,
-      fundraisingResult,
-      forecastResult,
-      mapResult,
-      mailDropsResult,
-      mailDelayedResult,
-      mailEventsResult,
-      activityResult
-    ] = await Promise.all([
-      pool.query(`SELECT COUNT(*)::int AS total FROM firms`),
+  publishEvent({
+    type: "warroom.threat_detected",
+    channel: "intelligence:warroom",
+    timestamp: new Date().toISOString(),
+    payload: threat
+  });
 
-      pool.query(`
-        SELECT
-          c.*,
-          u.first_name AS owner_first_name,
-          u.last_name AS owner_last_name
-        FROM campaigns c
-        LEFT JOIN app_users u ON u.id = c.owner_user_id
-        ORDER BY c.updated_at DESC, c.created_at DESC
-        LIMIT 12
-      `),
+  return { ok: true, threat };
+}
 
-      pool.query(`
-        SELECT
-          COUNT(*)::int AS total_campaigns,
-          COUNT(*) FILTER (
-            WHERE LOWER(COALESCE(status, 'open')) = 'open'
-          )::int AS active_campaigns,
-          COALESCE(SUM(contract_value), 0)::numeric AS pipeline_revenue,
-          COALESCE(SUM(budget_total), 0)::numeric AS tracked_budget
-        FROM campaigns
-      `),
+export async function getSimulatorData() {
+  return SIMULATOR_FALLBACK;
+}
 
-      pool.query(`
-        SELECT
-          t.*,
-          c.campaign_name,
-          c.candidate_name
-        FROM campaign_tasks t
-        INNER JOIN campaigns c ON c.id = t.campaign_id
-        WHERE LOWER(COALESCE(t.status, 'todo')) <> 'done'
-        ORDER BY
-          CASE
-            WHEN LOWER(COALESCE(t.priority, 'medium')) = 'high' THEN 1
-            WHEN LOWER(COALESCE(t.priority, 'medium')) = 'medium' THEN 2
-            ELSE 3
-          END,
-          t.created_at DESC
-        LIMIT 10
-      `),
-
-      pool.query(`
-        SELECT
-          v.*,
-          c.campaign_name,
-          c.candidate_name,
-          c.state
-        FROM campaign_vendors v
-        INNER JOIN campaigns c ON c.id = v.campaign_id
-        ORDER BY v.updated_at DESC, v.created_at DESC
-        LIMIT 10
-      `),
-
-      pool.query(`
-        SELECT
-          candidate_name,
-          state,
-          office,
-          party,
-          total_receipts,
-          total_disbursements,
-          cash_on_hand,
-          receipts_last_cycle
-        FROM fundraising
-        ORDER BY COALESCE(total_receipts, 0) DESC
-        LIMIT 10
-      `).catch(() => ({ rows: [] })),
-
-      pool.query(`
-        SELECT *
-        FROM forecast_snapshots
-        ORDER BY created_at DESC
-        LIMIT 1
-      `).catch(() => ({ rows: [] })),
-
-      pool.query(`
-        SELECT state_name, score, margin, category
-        FROM map_overlays
-        ORDER BY ABS(COALESCE(margin, 0)) ASC, COALESCE(score, 0) DESC
-        LIMIT 10
-      `).catch(() => ({ rows: [] })),
-
-      pool.query(`
-        SELECT COUNT(*)::int AS total
-        FROM mail_drops
-      `),
-
-      pool.query(`
-        SELECT COUNT(DISTINCT mail_drop_id)::int AS total
-        FROM mail_tracking_events
-        WHERE LOWER(COALESCE(event_type, '')) = 'delayed'
-      `),
-
-      pool.query(`
-        SELECT *
-        FROM mail_tracking_events
-        ORDER BY created_at DESC
-        LIMIT 12
-      `),
-
-      pool.query(`
-        SELECT
-          a.*,
-          c.campaign_name,
-          c.candidate_name
-        FROM campaign_activity a
-        INNER JOIN campaigns c ON c.id = a.campaign_id
-        ORDER BY a.created_at DESC
-        LIMIT 15
-      `)
-    ]);
-
-    const revenue = campaignRevenueResult.rows[0] || {};
-    const activeCampaigns = campaignsResult.rows || [];
-    const taskAlerts = tasksResult.rows || [];
-    const vendorActivity = vendorsResult.rows || [];
-    const fundraisingLeaders = fundraisingResult.rows || [];
-    const battlegrounds = mapResult.rows || [];
-    const mailTimeline = mailEventsResult.rows || [];
-    const recentActivity = activityResult.rows || [];
-
-    const snapshot = forecastResult.rows?.[0] || null;
-
-    const pipelineRevenue = n(revenue.pipeline_revenue);
-    const trackedBudget = n(revenue.tracked_budget);
-    const activeCampaignCount = n(revenue.active_campaigns);
-    const totalCampaignCount = n(revenue.total_campaigns);
-    const firmCount = n(firmsResult.rows?.[0]?.total);
-
-    const highPriorityTasks = taskAlerts.filter(
-      (task) => String(task.priority || "").toLowerCase() === "high"
-    ).length;
-
-    const delayedMailDrops = n(mailDelayedResult.rows?.[0]?.total);
-    const totalMailDrops = n(mailDropsResult.rows?.[0]?.total);
-
-    const battlegroundStates = battlegrounds.length;
-    const fundraisingTop = fundraisingLeaders[0] || null;
-
-    res.json({
-      metrics: [
-        {
-          label: "Active Campaigns",
-          value: `${activeCampaignCount}`,
-          delta: `${totalCampaignCount} tracked campaigns`,
-          tone: "up"
-        },
-        {
-          label: "Pipeline Revenue",
-          value: money(pipelineRevenue),
-          delta: "Firm-wide contract value",
-          tone: "up"
-        },
-        {
-          label: "Battleground States",
-          value: `${battlegroundStates}`,
-          delta: "Live overlay surface",
-          tone: "up"
-        },
-        {
-          label: "Task Alerts",
-          value: `${highPriorityTasks}`,
-          delta: "High-priority open tasks",
-          tone: highPriorityTasks > 0 ? "down" : "up"
-        },
-        {
-          label: "Mail Delay Alerts",
-          value: `${delayedMailDrops}`,
-          delta: `${totalMailDrops} total drops`,
-          tone: delayedMailDrops > 0 ? "down" : "up"
-        },
-        {
-          label: "Tracked Budget",
-          value: money(trackedBudget),
-          delta: `${firmCount} firms in CRM`,
-          tone: "up"
-        }
-      ],
-      summary: {
-        firms: firmCount,
-        campaigns_total: totalCampaignCount,
-        campaigns_active: activeCampaignCount,
-        pipeline_revenue: pipelineRevenue,
-        tracked_budget: trackedBudget,
-        battleground_states: battlegroundStates,
-        high_priority_tasks: highPriorityTasks,
-        delayed_mail_drops: delayedMailDrops,
-        total_mail_drops: totalMailDrops
-      },
-      active_campaigns: activeCampaigns,
-      pipeline: {
-        total_revenue: pipelineRevenue,
-        tracked_budget: trackedBudget,
-        total_campaigns: totalCampaignCount,
-        active_campaigns: activeCampaignCount
-      },
-      battleground_states: battlegrounds,
-      fundraising_leaders: fundraisingLeaders,
-      task_alerts: taskAlerts,
-      vendor_activity: vendorActivity,
-      mail_intelligence: {
-        delayed_mail_drops: delayedMailDrops,
-        total_mail_drops: totalMailDrops,
-        recent_events: mailTimeline
-      },
-      forecast: snapshot
-        ? {
-            id: snapshot.id,
-            snapshot_run_id: snapshot.snapshot_run_id,
-            created_at: snapshot.created_at,
-            published_at: snapshot.published_at,
-            race_count: snapshot.race_count,
-            tossup_count: snapshot.tossup_count,
-            high_confidence_count: snapshot.high_confidence_count
-          }
-        : null,
-      top_fundraiser: fundraisingTop,
-      recent_activity: recentActivity
-    });
-  } catch (err) {
-    next(err);
-  }
+export async function getCommandCenterData() {
+  return COMMAND_CENTER_FALLBACK;
 }
