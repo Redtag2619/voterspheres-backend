@@ -302,10 +302,6 @@ export async function rebuildForecastSnapshot(input = {}) {
   };
 }
 
-/**
- * Compatibility exports for older forecast routes
- */
-
 export async function getPublishedForecast() {
   const forecast = await getForecast();
   return {
