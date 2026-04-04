@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  getStatesGeoJson,
+  getStatesGeoJson, 
   getStateGeoJson,
   runManualMapIngestion
 } from "../services/map.service.js";
