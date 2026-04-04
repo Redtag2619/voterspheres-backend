@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 
-function readFeatureName(feature) {
+function readFeatureName(feature) { 
   return (
     feature?.properties?.name ||
     feature?.properties?.NAME ||
