@@ -3,8 +3,8 @@ import { publishEvent } from "../lib/intelligence.events.js";
 async function getDb() {
   const candidates = [
     "../config/database.js",
-    "../db.js",
-    "../config/db.js"
+    "../config/db.js",
+    "../db.js"
   ];
 
   for (const path of candidates) {
@@ -37,11 +37,6 @@ async function safeQuery(sql, params = []) {
   } catch {
     return { rows: [] };
   }
-}
-
-function toNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 const CHAT_FALLBACK = {
@@ -128,10 +123,12 @@ const COMMAND_CENTER_FALLBACK = {
   ],
   feed: [
     {
+      id: 1,
       time: "08:12",
       title: "Opposition message spike detected",
       source: "Ad monitoring",
-      severity: "High"
+      severity: "High",
+      type: "warroom.threat_detected"
     }
   ]
 };
@@ -155,14 +152,13 @@ const SIMULATOR_FALLBACK = {
   ]
 };
 
-export async function getAIChatData() {
-  return CHAT_FALLBACK;
-}
-
-export async function postAIChatPrompt({ prompt }) {
-  return {
-    answer: `VoterSpheres AI response: ${prompt || "No prompt provided."}`
-  };
+function toTitleCaseRisk(value = "") {
+  const v = String(value).toLowerCase();
+  if (!v) return "Watch";
+  if (v.includes("high")) return "High";
+  if (v.includes("elevated")) return "Elevated";
+  if (v.includes("watch")) return "Watch";
+  return value;
 }
 
 function buildWarRoomMetrics(threats = [], signals = []) {
@@ -196,6 +192,98 @@ function buildWarRoomMetrics(threats = [], signals = []) {
       tone: "up"
     }
   ];
+}
+
+function buildCommandCenterMetrics({ battlegrounds = [], threats = [], mailDelays = [] }) {
+  const avgProb =
+    battlegrounds.length > 0
+      ? (
+          battlegrounds.reduce((sum, item) => {
+            const num = Number(String(item.probability || "").replace("%", "")) || 0;
+            return sum + num;
+          }, 0) / battlegrounds.length
+        ).toFixed(1)
+      : "61.4";
+
+  return [
+    {
+      label: "National Win Index",
+      value: avgProb,
+      delta: `${battlegrounds.length} tracked races`,
+      tone: "up"
+    },
+    {
+      label: "Active Threats",
+      value: String(threats.length || 0),
+      delta: mailDelays.length ? `${mailDelays.length} mail issues` : "No mail disruptions",
+      tone: threats.length > 0 || mailDelays.length > 0 ? "down" : "up"
+    },
+    {
+      label: "Fundraising Pulse",
+      value: "$12.6M",
+      delta: "+11.2%",
+      tone: "up"
+    },
+    {
+      label: "Persuasion Opportunity",
+      value: "8.7",
+      delta: "+0.6",
+      tone: "up"
+    }
+  ];
+}
+
+function mapThreatToFeed(threat, index = 0) {
+  return {
+    id: threat.id || `threat-${index}`,
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    title: threat.title || "Threat detected",
+    source: threat.source || "War Room",
+    severity: threat.severity || "Medium",
+    type: "warroom.threat_detected"
+  };
+}
+
+function mapMailDelayToFeed(delay, index = 0) {
+  return {
+    id: delay.id || `mail-${index}`,
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    title: `Mail delay detected at ${delay.location_name || delay.facility_type || delay.location || "Unknown facility"}`,
+    source: "Mail Intelligence",
+    severity: "High",
+    type: "mail.delay_detected"
+  };
+}
+
+function mapForecastRaceToBattleground(row, index = 0) {
+  const prob = Number(
+    row.win_probability ??
+      row.winProb ??
+      row.win_probability_pct ??
+      row.winProbability ??
+      0
+  );
+
+  return {
+    race:
+      row.race ||
+      row.race_name ||
+      `${row.state || "State"} ${row.office || "Race"}`,
+    probability: `${prob || 51}%`,
+    momentum: row.change || row.delta || "+1.4",
+    risk: toTitleCaseRisk(row.rating || row.category || row.status || "Watch"),
+    priority: index < 3 ? "Tier 1" : "Tier 2"
+  };
+}
+
+export async function getAIChatData() {
+  return CHAT_FALLBACK;
+}
+
+export async function postAIChatPrompt({ prompt }) {
+  return {
+    answer: `VoterSpheres AI response: ${prompt || "No prompt provided."}`
+  };
 }
 
 export async function getWarRoomData() {
@@ -264,14 +352,11 @@ export async function getWarRoomData() {
 export async function recordWarRoomThreat(input = {}) {
   const threat = {
     id: Date.now(),
-    title:
-      input.title ||
-      "Education narrative moving into mainstream local pickup",
+    title: input.title || "Education narrative moving into mainstream local pickup",
     severity: input.severity || "Medium",
     source: input.source || "Media monitoring",
     velocity: input.velocity || "+21%",
-    recommendation:
-      input.recommendation || "Push validator-driven local messaging."
+    recommendation: input.recommendation || "Push validator-driven local messaging."
   };
 
   try {
@@ -287,13 +372,7 @@ export async function recordWarRoomThreat(input = {}) {
         )
         values ($1, $2, $3, $4, $5, now())
       `,
-      [
-        threat.title,
-        threat.severity,
-        threat.source,
-        threat.velocity,
-        threat.recommendation
-      ]
+      [threat.title, threat.severity, threat.source, threat.velocity, threat.recommendation]
     );
   } catch {
     // safe fallback
@@ -302,6 +381,13 @@ export async function recordWarRoomThreat(input = {}) {
   publishEvent({
     type: "warroom.threat_detected",
     channel: "intelligence:warroom",
+    timestamp: new Date().toISOString(),
+    payload: threat
+  });
+
+  publishEvent({
+    type: "warroom.threat_detected",
+    channel: "intelligence:command-center",
     timestamp: new Date().toISOString(),
     payload: threat
   });
@@ -337,6 +423,13 @@ export async function recordWarRoomSignal(input = {}) {
   publishEvent({
     type: "warroom.signal_detected",
     channel: "intelligence:warroom",
+    timestamp: new Date().toISOString(),
+    payload: signal
+  });
+
+  publishEvent({
+    type: "warroom.signal_detected",
+    channel: "intelligence:command-center",
     timestamp: new Date().toISOString(),
     payload: signal
   });
@@ -378,6 +471,13 @@ export async function recordWarRoomQueueItem(input = {}) {
     payload: item
   });
 
+  publishEvent({
+    type: "warroom.queue_updated",
+    channel: "intelligence:command-center",
+    timestamp: new Date().toISOString(),
+    payload: item
+  });
+
   return { ok: true, item };
 }
 
@@ -386,5 +486,57 @@ export async function getSimulatorData() {
 }
 
 export async function getCommandCenterData() {
-  return COMMAND_CENTER_FALLBACK;
+  const warRoom = await getWarRoomData();
+
+  const forecastRes = await safeQuery(`
+    select *
+    from forecast_races
+    order by coalesce(rank, 999999) asc, coalesce(updated_at, created_at) desc nulls last
+    limit 10
+  `);
+
+  const mailDelayRes = await safeQuery(`
+    select
+      me.*,
+      md.campaign_id
+    from mail_events me
+    left join mail_drops md on md.id = me.mail_drop_id
+    where lower(coalesce(me.status, me.event_type, '')) = 'delayed'
+    order by coalesce(me.created_at, now()) desc, me.id desc
+    limit 10
+  `);
+
+  const battlegrounds =
+    forecastRes.rows.length > 0
+      ? forecastRes.rows.map((row, index) => mapForecastRaceToBattleground(row, index))
+      : COMMAND_CENTER_FALLBACK.battlegrounds;
+
+  const mailDelays = mailDelayRes.rows || [];
+
+  const actions = [
+    ...(warRoom.queue || []).slice(0, 3).map((item) => ({
+      title: item.item,
+      owner: item.owner,
+      due: item.eta,
+      detail: `${item.priority} response item in live queue.`
+    })),
+    ...COMMAND_CENTER_FALLBACK.actions
+  ].slice(0, 4);
+
+  const feed = [
+    ...(warRoom.threats || []).slice(0, 4).map(mapThreatToFeed),
+    ...mailDelays.slice(0, 4).map(mapMailDelayToFeed),
+    ...COMMAND_CENTER_FALLBACK.feed
+  ].slice(0, 8);
+
+  return {
+    metrics: buildCommandCenterMetrics({
+      battlegrounds,
+      threats: warRoom.threats || [],
+      mailDelays
+    }),
+    battlegrounds,
+    actions,
+    feed
+  };
 }
