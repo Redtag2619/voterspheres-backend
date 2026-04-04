@@ -1,5 +1,5 @@
 import { pool } from "../db/pool.js";
-import { ensureCrmTables } from "../repositories/crm.repository.js";
+import { ensureCrmTables } from "../repositories/crm.repository.js"; 
 
 export async function getCrmDashboardSummary(req, res, next) {
   try {
