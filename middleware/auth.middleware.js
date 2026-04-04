@@ -1,50 +1,5 @@
 import jwt from "jsonwebtoken";
-
-let cachedDb = null;
-
-async function getDb() {
-  if (cachedDb) return cachedDb;
-
-  const candidates = [
-    "../config/database.js",
-    "../config/db.js",
-    "../db.js"
-  ];
-
-  for (const path of candidates) {
-    try {
-      const mod = await import(path);
-      const db = mod.default || mod.db || mod.pool || mod.client || null;
-      if (db) {
-        cachedDb = db;
-        return db;
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  return null;
-}
-
-async function safeQuery(sql, params = []) {
-  const db = await getDb();
-
-  if (!db) {
-    throw new Error("Database connection not available");
-  }
-
-  if (typeof db.query === "function") {
-    return db.query(sql, params);
-  }
-
-  if (typeof db.execute === "function") {
-    const [rows] = await db.execute(sql, params);
-    return { rows };
-  }
-
-  throw new Error("Unsupported database driver");
-}
+import pool from "../config/database.js";
 
 export async function requireAuth(req, res, next) {
   try {
@@ -79,7 +34,7 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: "Unable to determine authenticated user" });
     }
 
-    const userResult = await safeQuery(
+    const userResult = await pool.query(
       `
         select
           u.id,
@@ -105,7 +60,7 @@ export async function requireAuth(req, res, next) {
 
     let firm = null;
     if (resolvedFirmId) {
-      const firmResult = await safeQuery(
+      const firmResult = await pool.query(
         `
           select
             id,
