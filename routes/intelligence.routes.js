@@ -1,17 +1,19 @@
 import express from "express";
 import {
-  getForecast,
-  getForecastOverlays,
-  getForecastRankings,
-  getForecastSummary,
-  rebuildForecastSnapshot
-} from "../services/forecast.service.js"; 
+  getFundraisingLeaderboard,
+  getIntelligenceDashboard,
+  getIntelligenceForecast,
+  getIntelligenceMap,
+  getIntelligenceRankings,
+  getIntelligenceSummary,
+  getLiveFundraising
+} from "../services/intelligence.service.js";
 
 const router = express.Router();
 
 router.get("/summary", async (_req, res) => {
   try {
-    const data = await getForecastSummary();
+    const data = await getIntelligenceSummary();
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to load intelligence summary" });
@@ -20,12 +22,8 @@ router.get("/summary", async (_req, res) => {
 
 router.get("/dashboard", async (_req, res) => {
   try {
-    const data = await getForecast();
-    res.status(200).json({
-      metrics: data.metrics,
-      battlegrounds: data.battlegrounds,
-      snapshot: data.snapshot
-    });
+    const data = await getIntelligenceDashboard();
+    res.status(200).json(data);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to load intelligence dashboard" });
   }
@@ -33,37 +31,48 @@ router.get("/dashboard", async (_req, res) => {
 
 router.get("/forecast", async (_req, res) => {
   try {
-    const data = await getForecast();
+    const data = await getIntelligenceForecast();
     res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load forecast" });
+    res.status(500).json({ error: error.message || "Failed to load intelligence forecast" });
   }
 });
 
 router.get("/rankings", async (_req, res) => {
   try {
-    const data = await getForecastRankings();
+    const data = await getIntelligenceRankings();
     res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load rankings" });
+    res.status(500).json({ error: error.message || "Failed to load intelligence rankings" });
   }
 });
 
 router.get("/map", async (_req, res) => {
   try {
-    const data = await getForecastOverlays();
+    const data = await getIntelligenceMap();
     res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load map overlays" });
+    res.status(500).json({ error: error.message || "Failed to load intelligence map" });
   }
 });
 
-router.post("/forecast/rebuild", async (req, res) => {
+router.get("/fundraising/live", async (req, res) => {
   try {
-    const data = await rebuildForecastSnapshot(req.body || {});
+    const limit = Number(req.query.limit || 12);
+    const data = await getLiveFundraising(limit);
     res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to rebuild forecast snapshot" });
+    res.status(500).json({ error: error.message || "Failed to load live fundraising" });
+  }
+});
+
+router.get("/fundraising/leaderboard", async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 12);
+    const data = await getFundraisingLeaderboard(limit);
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load fundraising leaderboard" });
   }
 });
 
