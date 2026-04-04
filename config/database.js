@@ -14,19 +14,16 @@ const pool = new Pool({
 });
 
 pool.on("connect", () => {
-<<<<<<< HEAD
   console.log("🟢 Connected to PostgreSQL");
 });
 
 pool.on("error", (err) => {
   console.error("🔴 PostgreSQL error:", err);
-=======
   console.log("Connected to PostgreSQL");
 });
 
 pool.on("error", (err) => {
   console.error("PostgreSQL error:", err);
->>>>>>> 728345a (Fix auth middleware and add database config)
 });
 
 export default pool;
