@@ -211,19 +211,10 @@ export function getDemoCampaignBundle() {
           contract_value: 120000
         }
       ]
-    },
-
-    mail: {
-      delayed_events: [
-        {
-          id: 1,
-          location_name: "Atlanta NDC",
-          facility_type: "NDC",
-          status: "delayed",
-          event_type: "delayed",
-          notes: "Weekend delivery risk identified for suburban persuasion universe."
-        }
-      ]
     }
   };
+}
+
+export function isDemoModeEnabled() {
+  return String(process.env.BILLING_TEST_MODE || "false").toLowerCase() === "true";
 }
