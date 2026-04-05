@@ -1,4 +1,6 @@
 import express from "express";
+import { getDemoCampaignBundle, isDemoModeEnabled } from "../services/demo.service.js";
+import { pool } from "../db/pool.js";
 
 const router = express.Router();
 
@@ -30,53 +32,6 @@ const FALLBACK_VENDORS = [
 const FALLBACK_CATEGORIES = [...new Set(FALLBACK_VENDORS.map((v) => v.category))];
 const FALLBACK_STATUSES = [...new Set(FALLBACK_VENDORS.map((v) => v.status))];
 
-let cachedDb = null;
-
-async function getDb() {
-  if (cachedDb) return cachedDb;
-
-  const candidates = [
-    "../config/database.js",
-    "../config/db.js",
-    "../db.js"
-  ];
-
-  for (const path of candidates) {
-    try {
-      const mod = await import(path);
-      const db = mod.default || mod.db || mod.pool || mod.client || null;
-      if (db) {
-        cachedDb = db;
-        return db;
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  return null;
-}
-
-async function safeQuery(sql, params = []) {
-  try {
-    const db = await getDb();
-    if (!db) return { rows: [] };
-
-    if (typeof db.query === "function") {
-      return await db.query(sql, params);
-    }
-
-    if (typeof db.execute === "function") {
-      const [rows] = await db.execute(sql, params);
-      return { rows };
-    }
-
-    return { rows: [] };
-  } catch {
-    return { rows: [] };
-  }
-}
-
 function withTimeout(promise, ms = 2500) {
   return Promise.race([
     promise,
@@ -85,9 +40,13 @@ function withTimeout(promise, ms = 2500) {
 }
 
 router.get("/dropdowns/categories", async (_req, res) => {
+  if (isDemoModeEnabled()) {
+    return res.status(200).json({ results: ["Direct Mail", "Digital"] });
+  }
+
   try {
     const result = await withTimeout(
-      safeQuery(
+      pool.query(
         `
           select distinct category
           from campaign_vendors
@@ -110,9 +69,13 @@ router.get("/dropdowns/categories", async (_req, res) => {
 });
 
 router.get("/dropdowns/statuses", async (_req, res) => {
+  if (isDemoModeEnabled()) {
+    return res.status(200).json({ results: ["active", "prospect"] });
+  }
+
   try {
     const result = await withTimeout(
-      safeQuery(
+      pool.query(
         `
           select distinct status
           from campaign_vendors
@@ -135,6 +98,18 @@ router.get("/dropdowns/statuses", async (_req, res) => {
 });
 
 router.get("/", async (req, res) => {
+  if (isDemoModeEnabled()) {
+    const results = getDemoCampaignBundle().vendors.results;
+    const summary = {
+      total_vendors: results.length,
+      active_vendors: results.filter((r) => r.status === "active").length,
+      prospect_vendors: results.filter((r) => r.status === "prospect").length,
+      total_contract_value: results.reduce((sum, r) => sum + Number(r.contract_value || 0), 0)
+    };
+
+    return res.status(200).json({ results, summary });
+  }
+
   try {
     const {
       search = "",
@@ -144,7 +119,7 @@ router.get("/", async (req, res) => {
     } = req.query;
 
     const result = await withTimeout(
-      safeQuery(
+      pool.query(
         `
           select
             v.*,
@@ -184,7 +159,7 @@ router.get("/", async (req, res) => {
             const categoryMatch = !category || item.category === category;
             const statusMatch = !status || item.status === status;
             const stateMatch = !state || item.state === state;
-            return searchMatch && categoryMatch && statusMatch && stateMatch;
+            return searchMatch && categoryMatch && stateMatch && statusMatch;
           });
 
     const summary = {
