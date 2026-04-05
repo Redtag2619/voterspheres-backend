@@ -6,6 +6,10 @@ function getEnv(name, fallback = "") {
   return process.env[name] || fallback;
 }
 
+function isBillingTestMode() {
+  return String(getEnv("BILLING_TEST_MODE", "false")).toLowerCase() === "true";
+}
+
 function getAppBaseUrl() {
   return (
     getEnv("FRONTEND_URL") ||
@@ -18,8 +22,32 @@ function getPriceMap() {
   return {
     starter: getEnv("STRIPE_PRICE_STARTER"),
     pro: getEnv("STRIPE_PRICE_PRO"),
-    enterprise: getEnv("STRIPE_PRICE_ENTERPRISE"),
+    enterprise: getEnv("STRIPE_PRICE_ENTERPRISE")
   };
+}
+
+function inferPlanTierFromPriceId(priceId) {
+  const prices = getPriceMap();
+
+  if (priceId && prices.enterprise && priceId === prices.enterprise) {
+    return "enterprise";
+  }
+
+  if (priceId && prices.pro && priceId === prices.pro) {
+    return "pro";
+  }
+
+  if (priceId && prices.starter && priceId === prices.starter) {
+    return "starter";
+  }
+
+  const value = String(priceId || "").toLowerCase();
+
+  if (value.includes("enterprise")) return "enterprise";
+  if (value.includes("pro")) return "pro";
+  if (value.includes("starter")) return "starter";
+
+  return "starter";
 }
 
 async function getStripe() {
@@ -55,7 +83,8 @@ export async function getBillingConfig() {
   return {
     prices,
     has_stripe_key: Boolean(getEnv("STRIPE_SECRET_KEY")),
-    app_base_url: getAppBaseUrl(),
+    billing_test_mode: isBillingTestMode(),
+    app_base_url: getAppBaseUrl()
   };
 }
 
@@ -86,11 +115,64 @@ export async function getBillingDebugForFirm(firmId) {
   return result.rows[0] || null;
 }
 
+async function createTestModeCheckoutSessionForFirm({ firmId, priceId }) {
+  await ensureBillingColumns();
+
+  if (!firmId) {
+    throw new Error("Missing firm id");
+  }
+
+  const firmResult = await pool.query(
+    `
+      select id, name
+      from firms
+      where id = $1
+      limit 1
+    `,
+    [firmId]
+  );
+
+  const firm = firmResult.rows[0];
+  if (!firm) {
+    throw new Error("Firm not found");
+  }
+
+  const planTier = inferPlanTierFromPriceId(priceId);
+
+  await pool.query(
+    `
+      update firms
+      set
+        plan_tier = $2,
+        status = 'active',
+        stripe_price_id = $3,
+        last_webhook_event_type = 'billing_test_mode_checkout',
+        last_webhook_event_id = $4,
+        last_webhook_event_at = now(),
+        updated_at = now()
+      where id = $1
+    `,
+    [firmId, planTier, priceId || `test_${planTier}`, `test_checkout_${Date.now()}`]
+  );
+
+  const baseUrl = getAppBaseUrl();
+
+  return {
+    id: `test_checkout_${Date.now()}`,
+    url: `${baseUrl}/billing?checkout=success&test_mode=1&plan=${planTier}`,
+    mode: "test"
+  };
+}
+
 export async function createCheckoutSessionForFirm({
   firmId,
   email,
-  priceId,
+  priceId
 }) {
+  if (isBillingTestMode()) {
+    return createTestModeCheckoutSessionForFirm({ firmId, priceId });
+  }
+
   await ensureBillingColumns();
 
   if (!firmId) {
@@ -130,8 +212,8 @@ export async function createCheckoutSessionForFirm({
       email: email || undefined,
       name: firm.name || `Firm ${firmId}`,
       metadata: {
-        firm_id: String(firmId),
-      },
+        firm_id: String(firmId)
+      }
     });
 
     customerId = customer.id;
@@ -156,16 +238,16 @@ export async function createCheckoutSessionForFirm({
     line_items: [
       {
         price: priceId,
-        quantity: 1,
-      },
+        quantity: 1
+      }
     ],
     success_url: `${baseUrl}/billing?checkout=success`,
     cancel_url: `${baseUrl}/pricing?checkout=cancelled`,
     metadata: {
       firm_id: String(firmId),
-      price_id: String(priceId),
+      price_id: String(priceId)
     },
-    allow_promotion_codes: true,
+    allow_promotion_codes: true
   });
 
   await pool.query(
@@ -182,10 +264,23 @@ export async function createCheckoutSessionForFirm({
   return {
     id: session.id,
     url: session.url,
+    mode: "stripe"
   };
 }
 
 export async function createPortalSessionForFirm({ firmId }) {
+  if (isBillingTestMode()) {
+    const firm = await getBillingDebugForFirm(firmId);
+
+    if (!firm) {
+      throw new Error("Firm not found");
+    }
+
+    return {
+      url: `${getAppBaseUrl()}/billing?portal=success&test_mode=1&plan=${firm.plan_tier || "starter"}`
+    };
+  }
+
   await ensureBillingColumns();
 
   if (!firmId) {
@@ -215,18 +310,15 @@ export async function createPortalSessionForFirm({ firmId }) {
 
   const session = await stripe.billingPortal.sessions.create({
     customer: firm.stripe_customer_id,
-    return_url: `${getAppBaseUrl()}/billing`,
+    return_url: `${getAppBaseUrl()}/billing`
   });
 
   return {
-    url: session.url,
+    url: session.url
   };
 }
 
-export async function handleStripeWebhook({
-  rawBody,
-  signature,
-}) {
+export async function handleStripeWebhook({ rawBody, signature }) {
   await ensureBillingColumns();
 
   const webhookSecret = getEnv("STRIPE_WEBHOOK_SECRET");
@@ -281,8 +373,8 @@ export async function handleStripeWebhook({
   }
 
   if (
-    eventType === "customer.subscription.created" ||
-    eventType === "customer.subscription.updated"
+    event.type === "customer.subscription.created" ||
+    event.type === "customer.subscription.updated"
   ) {
     const subscription = event.data.object;
     const customerId = subscription?.customer || null;
@@ -312,7 +404,7 @@ export async function handleStripeWebhook({
         where stripe_customer_id = $4
         returning id
       `,
-      [null, subscriptionId, priceId, customerId, planTier, status, eventType, eventId]
+      [null, subscriptionId, priceId, customerId, planTier, status, event.type, event.id]
     );
 
     const firmId = result.rows?.[0]?.id || null;
@@ -322,8 +414,8 @@ export async function handleStripeWebhook({
   }
 
   if (
-    eventType === "customer.subscription.deleted" ||
-    eventType === "invoice.payment_failed"
+    event.type === "customer.subscription.deleted" ||
+    event.type === "invoice.payment_failed"
   ) {
     const obj = event.data.object;
     const customerId = obj?.customer || null;
@@ -340,7 +432,7 @@ export async function handleStripeWebhook({
         where stripe_customer_id = $1
         returning id
       `,
-      [customerId, eventType, eventId]
+      [customerId, event.type, event.id]
     );
 
     const firmId = result.rows?.[0]?.id || null;
