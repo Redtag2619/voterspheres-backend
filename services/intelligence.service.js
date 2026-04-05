@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js";
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
@@ -14,106 +15,74 @@ function formatMoneyShort(value) {
 }
 
 async function tableExists(tableName) {
-  const result = await pool.query(
-    `
-      select exists (
-        select 1
-        from information_schema.tables
-        where table_schema = 'public'
-          and table_name = $1
-      ) as exists
-    `,
-    [tableName]
-  );
+  try {
+    const result = await pool.query(
+      `
+        select exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'public'
+            and table_name = $1
+        ) as exists
+      `,
+      [tableName]
+    );
 
-  return Boolean(result.rows?.[0]?.exists);
-}
-
-function fallbackFundraisingLeaderboard() {
-  return {
-    leaderboard: [
-      {
-        rank: 1,
-        candidate_id: 101,
-        name: "Jane Thompson",
-        state: "Georgia",
-        office: "Senate",
-        party: "Democratic",
-        receipts: 12850000,
-        cash_on_hand: 6100000
-      },
-      {
-        rank: 2,
-        candidate_id: 102,
-        name: "Robert Gaines",
-        state: "Pennsylvania",
-        office: "Governor",
-        party: "Republican",
-        receipts: 11120000,
-        cash_on_hand: 5400000
-      },
-      {
-        rank: 3,
-        candidate_id: 103,
-        name: "Maria Ellis",
-        state: "Arizona",
-        office: "Senate",
-        party: "Democratic",
-        receipts: 9875000,
-        cash_on_hand: 4200000
-      },
-      {
-        rank: 4,
-        candidate_id: 104,
-        name: "Daniel Brooks",
-        state: "Michigan",
-        office: "House",
-        party: "Republican",
-        receipts: 8420000,
-        cash_on_hand: 3150000
-      }
-    ],
-    summary: {
-      tracked_candidates: 4,
-      total_receipts: 41165000,
-      total_cash_on_hand: 18850000,
-      average_receipts: 10291250
-    },
-    metrics: [
-      {
-        label: "Tracked Finance Leaders",
-        value: "4",
-        delta: "FEC-backed candidates",
-        tone: "up"
-      },
-      {
-        label: "Modeled Receipts",
-        value: "$41.2M",
-        delta: "Leaderboard total",
-        tone: "up"
-      },
-      {
-        label: "Average Raise",
-        value: "$10.3M",
-        delta: "Across leaders",
-        tone: "up"
-      },
-      {
-        label: "Cash On Hand",
-        value: "$18.9M",
-        delta: "Competitive reserves",
-        tone: "up"
-      }
-    ]
-  };
+    return Boolean(result.rows?.[0]?.exists);
+  } catch {
+    return false;
+  }
 }
 
 export async function getFundraisingLeaderboard(limit = 12) {
+  if (isDemoModeEnabled()) {
+    const leaderboard = getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit);
+    const totalReceipts = leaderboard.reduce((sum, row) => sum + Number(row.receipts || 0), 0);
+    const totalCash = leaderboard.reduce((sum, row) => sum + Number(row.cash_on_hand || 0), 0);
+
+    return {
+      leaderboard,
+      summary: {
+        tracked_candidates: leaderboard.length,
+        total_receipts: totalReceipts,
+        total_cash_on_hand: totalCash,
+        average_receipts: leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0
+      },
+      metrics: [
+        {
+          label: "Tracked Finance Leaders",
+          value: String(leaderboard.length),
+          delta: "Demo finance layer",
+          tone: "up"
+        },
+        {
+          label: "Modeled Receipts",
+          value: formatMoneyShort(totalReceipts),
+          delta: "Demo total",
+          tone: "up"
+        },
+        {
+          label: "Cash On Hand",
+          value: formatMoneyShort(totalCash),
+          delta: "Reserve strength",
+          tone: "up"
+        },
+        {
+          label: "Average Raise",
+          value: formatMoneyShort(
+            leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0
+          ),
+          delta: "Per leader",
+          tone: "up"
+        }
+      ]
+    };
+  }
+
   try {
     const hasLiveTable = await tableExists("fundraising_live");
-
     if (!hasLiveTable) {
-      return fallbackFundraisingLeaderboard();
+      return getFundraisingLeaderboard(limit);
     }
 
     const result = await pool.query(
@@ -144,23 +113,13 @@ export async function getFundraisingLeaderboard(limit = 12) {
     );
 
     const leaderboard = result.rows || [];
-
     if (!leaderboard.length) {
-      return fallbackFundraisingLeaderboard();
+      return getDemoCampaignBundle().fundraising;
     }
 
-    const totalReceipts = leaderboard.reduce(
-      (sum, row) => sum + toNumber(row.receipts),
-      0
-    );
-
-    const totalCash = leaderboard.reduce(
-      (sum, row) => sum + toNumber(row.cash_on_hand),
-      0
-    );
-
-    const averageReceipts =
-      leaderboard.length > 0 ? Math.round(totalReceipts / leaderboard.length) : 0;
+    const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
+    const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
+    const averageReceipts = leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0;
 
     return {
       leaderboard,
@@ -197,83 +156,27 @@ export async function getFundraisingLeaderboard(limit = 12) {
         }
       ]
     };
-  } catch (error) {
-    console.error("getFundraisingLeaderboard error:", error);
-    return fallbackFundraisingLeaderboard();
+  } catch {
+    return getFundraisingLeaderboard(limit);
   }
 }
 
 export async function getLiveFundraising(limit = 12) {
-  try {
-    const hasLiveTable = await tableExists("fundraising_live");
+  const leaderboard = await getFundraisingLeaderboard(limit);
 
-    if (!hasLiveTable) {
-      const fallback = fallbackFundraisingLeaderboard().leaderboard.map((row) => ({
-        candidate_id: row.candidate_id,
-        name: row.name,
-        state: row.state,
-        office: row.office,
-        party: row.party,
-        totals: {
-          receipts: row.receipts,
-          cash_on_hand_end_period: row.cash_on_hand
-        }
-      }));
-
-      return {
-        results: fallback.slice(0, limit)
-      };
-    }
-
-    const result = await pool.query(
-      `
-        select
-          candidate_id,
-          name,
-          state,
-          office,
-          party,
-          coalesce(receipts, 0) as receipts,
-          coalesce(cash_on_hand, 0) as cash_on_hand
-        from fundraising_live
-        order by coalesce(receipts, 0) desc, coalesce(cash_on_hand, 0) desc
-        limit $1
-      `,
-      [limit]
-    );
-
-    return {
-      results: (result.rows || []).map((row) => ({
-        candidate_id: row.candidate_id,
-        name: row.name,
-        state: row.state,
-        office: row.office,
-        party: row.party,
-        totals: {
-          receipts: toNumber(row.receipts),
-          cash_on_hand_end_period: toNumber(row.cash_on_hand)
-        }
-      }))
-    };
-  } catch (error) {
-    console.error("getLiveFundraising error:", error);
-
-    const fallback = fallbackFundraisingLeaderboard().leaderboard.map((row) => ({
+  return {
+    results: (leaderboard.leaderboard || []).map((row) => ({
       candidate_id: row.candidate_id,
       name: row.name,
       state: row.state,
       office: row.office,
       party: row.party,
       totals: {
-        receipts: row.receipts,
-        cash_on_hand_end_period: row.cash_on_hand
+        receipts: Number(row.receipts || 0),
+        cash_on_hand_end_period: Number(row.cash_on_hand || 0)
       }
-    }));
-
-    return {
-      results: fallback.slice(0, limit)
-    };
-  }
+    }))
+  };
 }
 
 export async function getIntelligenceSummary() {
@@ -294,34 +197,38 @@ export async function getIntelligenceDashboard() {
     metrics: [
       {
         label: "Fundraising Leaders",
-        value: String(fundraising.summary.tracked_candidates || 0),
+        value: String(fundraising.summary?.tracked_candidates || 0),
         delta: "Dashboard finance layer",
         tone: "up"
       },
       {
         label: "Receipts Modeled",
-        value: formatMoneyShort(fundraising.summary.total_receipts || 0),
+        value: formatMoneyShort(fundraising.summary?.total_receipts || 0),
         delta: "Top candidates",
         tone: "up"
       },
       {
         label: "Cash On Hand",
-        value: formatMoneyShort(fundraising.summary.total_cash_on_hand || 0),
+        value: formatMoneyShort(fundraising.summary?.total_cash_on_hand || 0),
         delta: "Reserve strength",
         tone: "up"
       },
       {
         label: "Average Raise",
-        value: formatMoneyShort(fundraising.summary.average_receipts || 0),
+        value: formatMoneyShort(fundraising.summary?.average_receipts || 0),
         delta: "Per leader",
         tone: "up"
       }
     ],
-    leaderboard: fundraising.leaderboard
+    leaderboard: fundraising.leaderboard || []
   };
 }
 
 export async function getIntelligenceForecast() {
+  if (isDemoModeEnabled()) {
+    return getDemoCampaignBundle().forecast;
+  }
+
   return {
     metrics: [
       { label: "Tracked Races", value: "10", delta: "Forecasted", tone: "up" },
