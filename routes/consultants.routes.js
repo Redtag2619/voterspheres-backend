@@ -1,12 +1,13 @@
 import express from "express";
 import {
   getConsultants,
-  getConsultantStates
-} from "../services/consultants.service.js";
+  getConsultantStates,
+} from "../controllers/consultants.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/", getConsultants);
-router.get("/dropdowns/states", getConsultantStates);
+router.get("/", requireAuth, getConsultants);
+router.get("/states", requireAuth, getConsultantStates);
 
 export default router;
