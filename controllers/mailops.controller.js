@@ -119,6 +119,42 @@ function buildMetricsFromLiveData(drops, alerts) {
   ];
 }
 
+function normalizeSeverity(value) {
+  const severity = String(value || "Medium").trim();
+  const allowed = new Set(["Low", "Medium", "High"]);
+  return allowed.has(severity) ? severity : "Medium";
+}
+
+function normalizeStatus(value) {
+  const status = String(value || "Pending").trim();
+  const allowed = new Set([
+    "Pending",
+    "Scheduled",
+    "In Transit",
+    "On Track",
+    "Elevated",
+    "Delivered",
+    "Delayed",
+    "Resolved",
+  ]);
+  return allowed.has(status) ? status : "Pending";
+}
+
+function normalizeEventType(value) {
+  const eventType = String(value || "mail_update").trim();
+  const allowed = new Set([
+    "mail_update",
+    "drop_created",
+    "scan_update",
+    "delay_alert",
+    "delivery_update",
+    "vendor_update",
+    "issue_opened",
+    "issue_resolved",
+  ]);
+  return allowed.has(eventType) ? eventType : "mail_update";
+}
+
 export async function getMailOpsDashboard(req, res) {
   try {
     const dropsResult = await pool.query(`
@@ -180,6 +216,313 @@ export async function getMailOpsDashboard(req, res) {
       drops: filteredDrops,
       alerts: filteredAlerts,
       demo: true,
+    });
+  }
+}
+
+export async function listMailOpsEvents(req, res) {
+  try {
+    const values = [];
+    const conditions = [];
+
+    if (req.query.state) {
+      values.push(req.query.state);
+      conditions.push(`state = $${values.length}`);
+    }
+
+    if (req.query.office) {
+      values.push(req.query.office);
+      conditions.push(`office = $${values.length}`);
+    }
+
+    if (req.query.risk) {
+      values.push(req.query.risk);
+      conditions.push(`risk = $${values.length}`);
+    }
+
+    if (req.query.event_type) {
+      values.push(req.query.event_type);
+      conditions.push(`event_type = $${values.length}`);
+    }
+
+    if (req.query.status) {
+      values.push(req.query.status);
+      conditions.push(`status = $${values.length}`);
+    }
+
+    const whereClause = conditions.length
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
+
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          campaign,
+          state,
+          office,
+          risk,
+          location,
+          vendor_name,
+          event_type,
+          status,
+          severity,
+          event_time,
+          in_home,
+          note,
+          created_by_user_id,
+          created_at,
+          updated_at
+        FROM mailops_events
+        ${whereClause}
+        ORDER BY event_time DESC NULLS LAST, id DESC
+      `,
+      values
+    );
+
+    return res.json({
+      results: result.rows || [],
+      demo: false,
+    });
+  } catch (error) {
+    console.error("listMailOpsEvents error:", error.message);
+    return res.status(500).json({
+      error: "Failed to load MailOps events",
+    });
+  }
+}
+
+export async function createMailOpsEvent(req, res) {
+  try {
+    const {
+      campaign,
+      state,
+      office,
+      risk,
+      location,
+      vendor_name,
+      event_type,
+      status,
+      severity,
+      event_time,
+      in_home,
+      note,
+    } = req.body || {};
+
+    if (!campaign || !state || !office || !location) {
+      return res.status(400).json({
+        error: "campaign, state, office, and location are required",
+      });
+    }
+
+    const normalizedEventType = normalizeEventType(event_type);
+    const normalizedStatus = normalizeStatus(status);
+    const normalizedSeverity = normalizeSeverity(severity);
+
+    const result = await pool.query(
+      `
+        INSERT INTO mailops_events (
+          campaign,
+          state,
+          office,
+          risk,
+          location,
+          vendor_name,
+          event_type,
+          status,
+          severity,
+          event_time,
+          in_home,
+          note,
+          created_by_user_id
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9,
+          COALESCE($10, NOW()),
+          $11,
+          $12,
+          $13
+        )
+        RETURNING
+          id,
+          campaign,
+          state,
+          office,
+          risk,
+          location,
+          vendor_name,
+          event_type,
+          status,
+          severity,
+          event_time,
+          in_home,
+          note,
+          created_by_user_id,
+          created_at,
+          updated_at
+      `,
+      [
+        campaign,
+        state,
+        office,
+        risk || null,
+        location,
+        vendor_name || null,
+        normalizedEventType,
+        normalizedStatus,
+        normalizedSeverity,
+        event_time || null,
+        in_home || null,
+        note || null,
+        req.auth?.userId || null,
+      ]
+    );
+
+    const inserted = result.rows[0];
+
+    try {
+      if (
+        ["Elevated", "Delayed"].includes(inserted.status) ||
+        inserted.severity === "High"
+      ) {
+        await pool.query(
+          `
+            INSERT INTO mailops_alerts (
+              title,
+              severity,
+              source,
+              detail,
+              state,
+              office,
+              risk
+            )
+            VALUES ($1, $2, 'MailOps Event', $3, $4, $5, $6)
+          `,
+          [
+            `${inserted.campaign} • ${inserted.location}`,
+            inserted.severity,
+            inserted.note || `${inserted.event_type} created`,
+            inserted.state,
+            inserted.office,
+            inserted.risk || null,
+          ]
+        );
+      }
+    } catch (alertError) {
+      console.error("createMailOpsEvent alert sync warning:", alertError.message);
+    }
+
+    return res.status(201).json({
+      ok: true,
+      event: inserted,
+    });
+  } catch (error) {
+    console.error("createMailOpsEvent error:", error.message);
+    return res.status(500).json({
+      error: "Failed to create MailOps event",
+    });
+  }
+}
+
+export async function updateMailOpsEvent(req, res) {
+  try {
+    const { eventId } = req.params;
+    const payload = req.body || {};
+
+    if (!eventId) {
+      return res.status(400).json({
+        error: "eventId is required",
+      });
+    }
+
+    const allowedFields = {
+      campaign: payload.campaign,
+      state: payload.state,
+      office: payload.office,
+      risk: payload.risk,
+      location: payload.location,
+      vendor_name: payload.vendor_name,
+      event_type:
+        payload.event_type !== undefined
+          ? normalizeEventType(payload.event_type)
+          : undefined,
+      status:
+        payload.status !== undefined
+          ? normalizeStatus(payload.status)
+          : undefined,
+      severity:
+        payload.severity !== undefined
+          ? normalizeSeverity(payload.severity)
+          : undefined,
+      event_time: payload.event_time,
+      in_home: payload.in_home,
+      note: payload.note,
+    };
+
+    const entries = Object.entries(allowedFields).filter(
+      ([, value]) => value !== undefined
+    );
+
+    if (!entries.length) {
+      return res.status(400).json({
+        error: "No updatable fields were provided",
+      });
+    }
+
+    const setParts = [];
+    const values = [];
+
+    entries.forEach(([column, value], index) => {
+      values.push(value);
+      setParts.push(`${column} = $${index + 1}`);
+    });
+
+    values.push(eventId);
+
+    const result = await pool.query(
+      `
+        UPDATE mailops_events
+        SET
+          ${setParts.join(", ")},
+          updated_at = NOW()
+        WHERE id = $${values.length}
+        RETURNING
+          id,
+          campaign,
+          state,
+          office,
+          risk,
+          location,
+          vendor_name,
+          event_type,
+          status,
+          severity,
+          event_time,
+          in_home,
+          note,
+          created_by_user_id,
+          created_at,
+          updated_at
+      `,
+      values
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({
+        error: "MailOps event not found",
+      });
+    }
+
+    const updated = result.rows[0];
+
+    return res.json({
+      ok: true,
+      event: updated,
+    });
+  } catch (error) {
+    console.error("updateMailOpsEvent error:", error.message);
+    return res.status(500).json({
+      error: "Failed to update MailOps event",
     });
   }
 }
