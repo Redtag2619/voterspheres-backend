@@ -20,6 +20,8 @@ import fecRoutes from "./routes/fec.routes.js";
 import candidatesRoutes from "./routes/candidates.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
 import statesRoutes from "./routes/states.routes.js";
+import donorsRoutes from "./routes/donors.routes.js";
+import consultantsRoutes from "./routes/consultants.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -116,6 +118,8 @@ app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", candidatesRoutes);
 app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", statesRoutes);
+app.use("/api/donors", donorsRoutes);
+app.use("/api/consultants", consultantsRoutes);
 
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
