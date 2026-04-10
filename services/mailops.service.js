@@ -1,4 +1,4 @@
-import pool from "../config/db.js";
+import pool from "../config/database.js";
 
 async function resolveFirmId(user) {
   const directFirmId =
