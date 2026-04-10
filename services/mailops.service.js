@@ -38,302 +38,317 @@ async function resolveFirmId(user) {
   return Number(firmId);
 }
 
-function normalizeInteger(value, fallback = 0) {
-  if (value === undefined || value === null || value === "") return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function normalizeNullableString(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
 }
 
-function buildUpdateQuery(table, idField, idValue, firmId, payload) {
+function normalizeRequiredString(value, fieldName) {
+  const normalized = normalizeNullableString(value);
+  if (!normalized) {
+    const error = new Error(`${fieldName} is required`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
+}
+
+function buildUpdateQuery(eventId, firmId, payload) {
   const allowedFields = [
-    "campaign_name",
-    "client_name",
-    "office_sought",
-    "election_date",
+    "campaign",
     "state",
-    "district",
-    "mail_class",
-    "format",
-    "drop_date",
-    "in_home_date",
-    "quantity",
-    "pieces_mailed",
+    "office",
+    "risk",
+    "location",
+    "vendor_name",
+    "event_type",
     "status",
-    "tracking_number",
-    "postage_method",
-    "production_vendor",
-    "consultant_name",
-    "notes",
-    "updated_by",
+    "severity",
+    "event_time",
+    "in_home",
+    "note",
   ];
 
   const keys = Object.keys(payload).filter((key) => allowedFields.includes(key));
 
   if (!keys.length) {
-    return {
-      text: "",
-      values: [],
-    };
+    return { text: "", values: [] };
   }
 
-  const sets = keys.map((key, index) => `${key} = $${index + 1}`);
+  const setClauses = keys.map((key, index) => `${key} = $${index + 1}`);
   const values = keys.map((key) => payload[key]);
 
-  values.push(idValue);
+  values.push(eventId);
   values.push(firmId);
 
-  const text = `
-    UPDATE ${table}
-    SET
-      ${sets.join(", ")},
-      updated_at = NOW()
-    WHERE ${idField} = $${values.length - 1}
-      AND firm_id = $${values.length}
-    RETURNING *
-  `;
+  return {
+    text: `
+      UPDATE mailops_events
+      SET
+        ${setClauses.join(", ")},
+        updated_at = NOW()
+      WHERE id = $${values.length - 1}
+        AND firm_id = $${values.length}
+      RETURNING *
+    `,
+    values,
+  };
+}
 
-  return { text, values };
+function toMetric(label, value, delta, tone = "up") {
+  return { label, value: String(value), delta, tone };
 }
 
 export async function getMailOpsDashboard(user) {
   const firmId = await resolveFirmId(user);
 
-  const summaryQuery = `
-    SELECT
-      COUNT(*)::int AS total_events,
-      COUNT(*) FILTER (WHERE status = 'Draft')::int AS draft_count,
-      COUNT(*) FILTER (WHERE status = 'Scheduled')::int AS scheduled_count,
-      COUNT(*) FILTER (WHERE status = 'In Production')::int AS in_production_count,
-      COUNT(*) FILTER (WHERE status = 'Dropped')::int AS dropped_count,
-      COUNT(*) FILTER (WHERE status = 'In Home')::int AS in_home_count,
-      COALESCE(SUM(quantity), 0)::int AS total_quantity,
-      COALESCE(SUM(pieces_mailed), 0)::int AS total_pieces_mailed
-    FROM mail_events
-    WHERE firm_id = $1
-  `;
-
-  const upcomingQuery = `
+  const eventsQuery = `
     SELECT
       id,
-      campaign_name,
-      client_name,
-      office_sought,
-      election_date,
+      campaign,
       state,
-      district,
-      mail_class,
-      format,
-      drop_date,
-      in_home_date,
-      quantity,
-      pieces_mailed,
+      office,
+      risk,
+      location,
+      vendor_name,
+      event_type,
       status,
-      tracking_number,
-      postage_method,
-      production_vendor,
-      consultant_name,
-      notes,
-      created_by,
-      updated_by,
+      severity,
+      event_time,
+      in_home,
+      note,
+      created_by_user_id,
       created_at,
       updated_at
-    FROM mail_events
+    FROM mailops_events
     WHERE firm_id = $1
+    ORDER BY COALESCE(in_home, event_time, created_at) ASC, id DESC
+  `;
+
+  const alertsQuery = `
+    SELECT
+      id,
+      campaign,
+      state,
+      office,
+      risk,
+      location,
+      severity,
+      status,
+      note,
+      event_time
+    FROM mailops_events
+    WHERE firm_id = $1
+      AND (
+        LOWER(COALESCE(severity, '')) IN ('high', 'medium')
+        OR LOWER(COALESCE(risk, '')) IN ('elevated', 'watch')
+        OR LOWER(COALESCE(status, '')) IN ('elevated', 'delayed', 'watch')
+      )
     ORDER BY
-      COALESCE(in_home_date, drop_date, election_date, created_at) ASC,
+      CASE
+        WHEN LOWER(COALESCE(severity, '')) = 'high' THEN 3
+        WHEN LOWER(COALESCE(severity, '')) = 'medium' THEN 2
+        WHEN LOWER(COALESCE(severity, '')) = 'low' THEN 1
+        ELSE 0
+      END DESC,
       id DESC
     LIMIT 10
   `;
 
-  const statusBreakdownQuery = `
-    SELECT
-      status,
-      COUNT(*)::int AS count
-    FROM mail_events
-    WHERE firm_id = $1
-    GROUP BY status
-    ORDER BY count DESC, status ASC
-  `;
+  const [eventsResult, alertsResult] = await Promise.all([
+    pool.query(eventsQuery, [firmId]),
+    pool.query(alertsQuery, [firmId]),
+  ]);
 
-  const recentActivityQuery = `
-    SELECT
-      id,
-      campaign_name,
-      status,
-      drop_date,
-      in_home_date,
-      quantity,
-      pieces_mailed,
-      updated_at
-    FROM mail_events
-    WHERE firm_id = $1
-    ORDER BY updated_at DESC
-    LIMIT 8
-  `;
+  const events = eventsResult.rows || [];
+  const alertRows = alertsResult.rows || [];
 
-  const [summaryResult, upcomingResult, statusBreakdownResult, recentActivityResult] =
-    await Promise.all([
-      pool.query(summaryQuery, [firmId]),
-      pool.query(upcomingQuery, [firmId]),
-      pool.query(statusBreakdownQuery, [firmId]),
-      pool.query(recentActivityQuery, [firmId]),
-    ]);
+  const totalDrops = events.length;
+  const elevatedCount = events.filter((row) =>
+    ["elevated", "watch"].includes(String(row.risk || "").toLowerCase()) ||
+    ["elevated", "delayed", "watch"].includes(String(row.status || "").toLowerCase())
+  ).length;
+
+  const highSeverityCount = events.filter(
+    (row) => String(row.severity || "").toLowerCase() === "high"
+  ).length;
+
+  const onTrackCount = events.filter(
+    (row) => String(row.status || "").toLowerCase() === "on track"
+  ).length;
+
+  const onTimeRate =
+    totalDrops > 0 ? `${Math.round((onTrackCount / totalDrops) * 100)}%` : "0%";
+
+  const metrics = [
+    toMetric(
+      "Mail Drops",
+      totalDrops,
+      totalDrops ? `${totalDrops} active today` : "No active drops",
+      "up"
+    ),
+    toMetric(
+      "Delivery Risk",
+      elevatedCount,
+      elevatedCount ? `${elevatedCount} elevated` : "No elevated risks",
+      elevatedCount ? "down" : "up"
+    ),
+    toMetric(
+      "Postal Alerts",
+      alertRows.length,
+      highSeverityCount ? `${highSeverityCount} high severity` : "No high severity",
+      "up"
+    ),
+    toMetric(
+      "On-Time Rate",
+      onTimeRate,
+      onTrackCount ? `${onTrackCount} on track` : "No on-track drops yet",
+      "up"
+    ),
+  ];
+
+  const drops = events.slice(0, 25).map((row) => ({
+    id: row.id,
+    campaign: row.campaign,
+    state: row.state,
+    office: row.office,
+    risk: row.risk,
+    location: row.location,
+    status: row.status,
+    in_home: row.in_home,
+    note: row.note,
+  }));
+
+  const alerts = alertRows.map((row) => ({
+    id: row.id,
+    title: `${row.campaign} • ${row.location}`,
+    severity: row.severity || "Medium",
+    source: "MailOps Event",
+    detail: row.note || "No additional detail provided.",
+    state: row.state,
+    office: row.office,
+    risk: row.risk,
+  }));
 
   return {
-    summary: summaryResult.rows[0] || {
-      total_events: 0,
-      draft_count: 0,
-      scheduled_count: 0,
-      in_production_count: 0,
-      dropped_count: 0,
-      in_home_count: 0,
-      total_quantity: 0,
-      total_pieces_mailed: 0,
-    },
-    upcoming_events: upcomingResult.rows || [],
-    status_breakdown: statusBreakdownResult.rows || [],
-    recent_activity: recentActivityResult.rows || [],
+    metrics,
+    drops,
+    alerts,
     demo: false,
   };
 }
 
-export async function createMailEvent(user, body) {
+export async function createMailOpsEvent(user, body) {
   const firmId = await resolveFirmId(user);
 
-  const campaignName = body?.campaign_name?.trim();
+  const campaign = normalizeRequiredString(body?.campaign, "campaign");
+  const state = normalizeRequiredString(body?.state, "state");
+  const office = normalizeRequiredString(body?.office, "office");
+  const location = normalizeRequiredString(body?.location, "location");
 
-  if (!campaignName) {
-    const error = new Error("campaign_name is required.");
-    error.statusCode = 400;
-    throw error;
-  }
+  const risk = normalizeNullableString(body?.risk);
+  const vendorName = normalizeNullableString(body?.vendor_name);
+  const eventType = normalizeNullableString(body?.event_type) || "mail_update";
+  const status = normalizeNullableString(body?.status) || "Pending";
+  const severity = normalizeNullableString(body?.severity) || "Medium";
+  const eventTime = body?.event_time || null;
+  const inHome = body?.in_home || null;
+  const note = normalizeNullableString(body?.note);
 
-  const quantity = normalizeInteger(body.quantity, 0);
-  const piecesMailed = normalizeInteger(body.pieces_mailed, 0);
-
-  const insertQuery = `
-    INSERT INTO mail_events (
-      firm_id,
-      campaign_name,
-      client_name,
-      office_sought,
-      election_date,
+  const result = await pool.query(
+    `
+      INSERT INTO mailops_events (
+        firm_id,
+        campaign,
+        state,
+        office,
+        risk,
+        location,
+        vendor_name,
+        event_type,
+        status,
+        severity,
+        event_time,
+        in_home,
+        note,
+        created_by_user_id
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10,
+        COALESCE($11, NOW()),
+        $12,
+        $13,
+        $14
+      )
+      RETURNING *
+    `,
+    [
+      firmId,
+      campaign,
       state,
-      district,
-      mail_class,
-      format,
-      drop_date,
-      in_home_date,
-      quantity,
-      pieces_mailed,
+      office,
+      risk,
+      location,
+      vendorName,
+      eventType,
       status,
-      tracking_number,
-      postage_method,
-      production_vendor,
-      consultant_name,
-      notes,
-      created_by,
-      updated_by
-    )
-    VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-      $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
-    )
-    RETURNING *
-  `;
+      severity,
+      eventTime,
+      inHome,
+      note,
+      user?.id || null,
+    ]
+  );
 
-  const values = [
-    firmId,
-    campaignName,
-    body.client_name || null,
-    body.office_sought || null,
-    body.election_date || null,
-    body.state || null,
-    body.district || null,
-    body.mail_class || "Standard",
-    body.format || null,
-    body.drop_date || null,
-    body.in_home_date || null,
-    quantity,
-    piecesMailed,
-    body.status || "Draft",
-    body.tracking_number || null,
-    body.postage_method || null,
-    body.production_vendor || null,
-    body.consultant_name || null,
-    body.notes || null,
-    user?.id || null,
-    user?.id || null,
-  ];
-
-  const result = await pool.query(insertQuery, values);
-  return result.rows[0];
+  return {
+    ok: true,
+    event: result.rows[0],
+  };
 }
 
-export async function updateMailEvent(user, eventId, body) {
+export async function updateMailOpsEvent(user, eventId, body) {
   const firmId = await resolveFirmId(user);
-
   const parsedId = Number(eventId);
 
   if (!Number.isInteger(parsedId) || parsedId <= 0) {
-    const error = new Error("Invalid event id.");
+    const error = new Error("Invalid event id");
     error.statusCode = 400;
     throw error;
   }
 
-  const updatePayload = {};
+  const payload = {};
 
-  const fields = [
-    "campaign_name",
-    "client_name",
-    "office_sought",
-    "election_date",
+  const fieldMap = [
+    "campaign",
     "state",
-    "district",
-    "mail_class",
-    "format",
-    "drop_date",
-    "in_home_date",
+    "office",
+    "risk",
+    "location",
+    "vendor_name",
+    "event_type",
     "status",
-    "tracking_number",
-    "postage_method",
-    "production_vendor",
-    "consultant_name",
-    "notes",
+    "severity",
+    "event_time",
+    "in_home",
+    "note",
   ];
 
-  for (const field of fields) {
+  for (const field of fieldMap) {
     if (body[field] !== undefined) {
-      updatePayload[field] = body[field] === "" ? null : body[field];
+      if (["campaign", "state", "office", "location"].includes(field)) {
+        payload[field] = normalizeRequiredString(body[field], field);
+      } else {
+        payload[field] = normalizeNullableString(body[field]);
+      }
     }
   }
 
-  if (body.quantity !== undefined) {
-    updatePayload.quantity = normalizeInteger(body.quantity, 0);
-  }
-
-  if (body.pieces_mailed !== undefined) {
-    updatePayload.pieces_mailed = normalizeInteger(body.pieces_mailed, 0);
-  }
-
-  if (body.campaign_name !== undefined && !String(body.campaign_name).trim()) {
-    const error = new Error("campaign_name cannot be empty.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  updatePayload.updated_by = user?.id || null;
-
-  const query = buildUpdateQuery(
-    "mail_events",
-    "id",
-    parsedId,
-    firmId,
-    updatePayload
-  );
+  const query = buildUpdateQuery(parsedId, firmId, payload);
 
   if (!query.text) {
-    const error = new Error("No valid fields provided for update.");
+    const error = new Error("No valid fields provided for update");
     error.statusCode = 400;
     throw error;
   }
@@ -341,10 +356,13 @@ export async function updateMailEvent(user, eventId, body) {
   const result = await pool.query(query.text, query.values);
 
   if (!result.rows.length) {
-    const error = new Error("Mail event not found.");
+    const error = new Error("MailOps event not found");
     error.statusCode = 404;
     throw error;
   }
 
-  return result.rows[0];
+  return {
+    ok: true,
+    event: result.rows[0],
+  };
 }
