@@ -83,7 +83,6 @@ function buildMetricsFromLiveData(drops, alerts) {
   const highAlerts = alerts.filter(
     (row) => String(row.severity || "").toLowerCase() === "high"
   ).length;
-
   const onTrackDrops = drops.filter(
     (row) => String(row.status || "").toLowerCase() === "on track"
   ).length;
@@ -305,6 +304,8 @@ export async function listMailOpsEvents(req, res) {
 }
 
 export async function createMailOpsEvent(req, res) {
+  let inserted = null;
+
   try {
     const {
       campaign,
@@ -350,7 +351,7 @@ export async function createMailOpsEvent(req, res) {
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
-          COALESCE($10, NOW()),
+          COALESCE($10::timestamptz, NOW()),
           $11,
           $12,
           $13
@@ -386,44 +387,61 @@ export async function createMailOpsEvent(req, res) {
         event_time || null,
         in_home || null,
         note || null,
-        req.auth?.userId || null,
+        req.auth?.userId ?? req.user?.id ?? null,
       ]
     );
 
-    const inserted = result.rows[0];
+    inserted = result.rows[0];
+  } catch (error) {
+    console.error("createMailOpsEvent INSERT error:", {
+      message: error.message,
+      detail: error.detail,
+      code: error.code,
+      constraint: error.constraint,
+    });
 
-    try {
-      if (
-        ["Elevated", "Delayed"].includes(inserted.status) ||
-        inserted.severity === "High"
-      ) {
-        await pool.query(
-          `
-            INSERT INTO mailops_alerts (
-              title,
-              severity,
-              source,
-              detail,
-              state,
-              office,
-              risk
-            )
-            VALUES ($1, $2, 'MailOps Event', $3, $4, $5, $6)
-          `,
-          [
-            `${inserted.campaign} • ${inserted.location}`,
-            inserted.severity,
-            inserted.note || `${inserted.event_type} created`,
-            inserted.state,
-            inserted.office,
-            inserted.risk || null,
-          ]
-        );
-      }
-    } catch (alertError) {
-      console.error("createMailOpsEvent alert sync warning:", alertError.message);
+    return res.status(500).json({
+      error: error.detail || error.message || "Failed to create MailOps event",
+    });
+  }
+
+  try {
+    if (
+      ["Elevated", "Delayed"].includes(inserted.status) ||
+      inserted.severity === "High"
+    ) {
+      await pool.query(
+        `
+          INSERT INTO mailops_alerts (
+            title,
+            severity,
+            source,
+            detail,
+            state,
+            office,
+            risk
+          )
+          VALUES ($1, $2, 'MailOps Event', $3, $4, $5, $6)
+        `,
+        [
+          `${inserted.campaign} • ${inserted.location}`,
+          inserted.severity,
+          inserted.note || `${inserted.event_type} created`,
+          inserted.state,
+          inserted.office,
+          inserted.risk || null,
+        ]
+      );
     }
+  } catch (alertError) {
+    console.error("createMailOpsEvent alert sync warning:", {
+      message: alertError.message,
+      detail: alertError.detail,
+      code: alertError.code,
+    });
+  }
 
+  try {
     publishEvent({
       type: "mailops.event_created",
       channel: "intelligence:mailops",
@@ -437,17 +455,14 @@ export async function createMailOpsEvent(req, res) {
             : null,
       },
     });
-
-    return res.status(201).json({
-      ok: true,
-      event: inserted,
-    });
-  } catch (error) {
-    console.error("createMailOpsEvent error:", error.message);
-    return res.status(500).json({
-      error: "Failed to create MailOps event",
-    });
+  } catch (publishErr) {
+    console.error("createMailOpsEvent publish warning:", publishErr.message);
   }
+
+  return res.status(201).json({
+    ok: true,
+    event: inserted,
+  });
 }
 
 export async function updateMailOpsEvent(req, res) {
@@ -541,19 +556,23 @@ export async function updateMailOpsEvent(req, res) {
 
     const updated = result.rows[0];
 
-    publishEvent({
-      type: "mailops.event_updated",
-      channel: "intelligence:mailops",
-      timestamp: new Date().toISOString(),
-      payload: {
-        event: updated,
-        alert:
-          ["Elevated", "Delayed"].includes(updated.status) ||
-          updated.severity === "High"
-            ? buildLiveAlertFromEvent(updated)
-            : null,
-      },
-    });
+    try {
+      publishEvent({
+        type: "mailops.event_updated",
+        channel: "intelligence:mailops",
+        timestamp: new Date().toISOString(),
+        payload: {
+          event: updated,
+          alert:
+            ["Elevated", "Delayed"].includes(updated.status) ||
+            updated.severity === "High"
+              ? buildLiveAlertFromEvent(updated)
+              : null,
+        },
+      });
+    } catch (publishErr) {
+      console.error("updateMailOpsEvent publish warning:", publishErr.message);
+    }
 
     return res.json({
       ok: true,
