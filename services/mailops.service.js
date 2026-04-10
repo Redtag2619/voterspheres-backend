@@ -1,12 +1,41 @@
 import pool from "../db.js";
 
-function getFirmIdFromUser(user) {
-  return (
+async function resolveFirmId(user) {
+  const directFirmId =
     user?.firm_id ||
     user?.firmId ||
     user?.firm?.id ||
-    null
+    null;
+
+  if (directFirmId) {
+    return Number(directFirmId);
+  }
+
+  if (!user?.id) {
+    const error = new Error("No authenticated user found.");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `
+      SELECT firm_id
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [user.id]
   );
+
+  const firmId = result.rows?.[0]?.firm_id || null;
+
+  if (!firmId) {
+    const error = new Error("No firm_id found for authenticated user.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return Number(firmId);
 }
 
 function normalizeInteger(value, fallback = 0) {
@@ -67,11 +96,7 @@ function buildUpdateQuery(table, idField, idValue, firmId, payload) {
 }
 
 export async function getMailOpsDashboard(user) {
-  const firmId = getFirmIdFromUser(user);
-
-  if (!firmId) {
-    throw new Error("No firm_id found on authenticated user.");
-  }
+  const firmId = await resolveFirmId(user);
 
   const summaryQuery = `
     SELECT
@@ -173,11 +198,7 @@ export async function getMailOpsDashboard(user) {
 }
 
 export async function createMailEvent(user, body) {
-  const firmId = getFirmIdFromUser(user);
-
-  if (!firmId) {
-    throw new Error("No firm_id found on authenticated user.");
-  }
+  const firmId = await resolveFirmId(user);
 
   const campaignName = body?.campaign_name?.trim();
 
@@ -250,11 +271,7 @@ export async function createMailEvent(user, body) {
 }
 
 export async function updateMailEvent(user, eventId, body) {
-  const firmId = getFirmIdFromUser(user);
-
-  if (!firmId) {
-    throw new Error("No firm_id found on authenticated user.");
-  }
+  const firmId = await resolveFirmId(user);
 
   const parsedId = Number(eventId);
 
