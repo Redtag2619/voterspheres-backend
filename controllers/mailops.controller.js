@@ -1,5 +1,6 @@
 import {
-  getMailOpsDashboard, 
+  getMailOpsDashboard,
+  listMailOpsEvents, 
   createMailOpsEvent,
   updateMailOpsEvent,
 } from "../services/mailops.service.js";
