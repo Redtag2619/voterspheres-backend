@@ -4,7 +4,7 @@ async function resolveFirmId(user) {
   const directFirmId =
     user?.firm_id ||
     user?.firmId ||
-    user?.firm?.id ||
+    user?.firm?.id || 
     null;
 
   if (directFirmId) return Number(directFirmId);
