@@ -7,9 +7,7 @@ async function resolveFirmId(user) {
     user?.firm?.id ||
     null;
 
-  if (directFirmId) {
-    return Number(directFirmId);
-  }
+  if (directFirmId) return Number(directFirmId);
 
   if (!user?.id) {
     const error = new Error("No authenticated user found.");
@@ -54,6 +52,10 @@ function normalizeRequiredString(value, fieldName) {
   return normalized;
 }
 
+function toMetric(label, value, delta, tone = "up") {
+  return { label, value: String(value), delta, tone };
+}
+
 function buildUpdateQuery(eventId, firmId, payload) {
   const allowedFields = [
     "campaign",
@@ -96,79 +98,55 @@ function buildUpdateQuery(eventId, firmId, payload) {
   };
 }
 
-function toMetric(label, value, delta, tone = "up") {
-  return { label, value: String(value), delta, tone };
-}
-
 export async function getMailOpsDashboard(user) {
   const firmId = await resolveFirmId(user);
 
-  const eventsQuery = `
-    SELECT
-      id,
-      campaign,
-      state,
-      office,
-      risk,
-      location,
-      vendor_name,
-      event_type,
-      status,
-      severity,
-      event_time,
-      in_home,
-      note,
-      created_by_user_id,
-      created_at,
-      updated_at
-    FROM mailops_events
-    WHERE firm_id = $1
-    ORDER BY COALESCE(in_home, event_time, created_at) ASC, id DESC
-  `;
-
-  const alertsQuery = `
-    SELECT
-      id,
-      campaign,
-      state,
-      office,
-      risk,
-      location,
-      severity,
-      status,
-      note,
-      event_time
-    FROM mailops_events
-    WHERE firm_id = $1
-      AND (
-        LOWER(COALESCE(severity, '')) IN ('high', 'medium')
-        OR LOWER(COALESCE(risk, '')) IN ('elevated', 'watch')
-        OR LOWER(COALESCE(status, '')) IN ('elevated', 'delayed', 'watch')
-      )
-    ORDER BY
-      CASE
-        WHEN LOWER(COALESCE(severity, '')) = 'high' THEN 3
-        WHEN LOWER(COALESCE(severity, '')) = 'medium' THEN 2
-        WHEN LOWER(COALESCE(severity, '')) = 'low' THEN 1
-        ELSE 0
-      END DESC,
-      id DESC
-    LIMIT 10
-  `;
-
-  const [eventsResult, alertsResult] = await Promise.all([
-    pool.query(eventsQuery, [firmId]),
-    pool.query(alertsQuery, [firmId]),
-  ]);
+  const eventsResult = await pool.query(
+    `
+      SELECT
+        id,
+        campaign,
+        state,
+        office,
+        risk,
+        location,
+        vendor_name,
+        event_type,
+        status,
+        severity,
+        event_time,
+        in_home,
+        note,
+        created_by_user_id,
+        created_at,
+        updated_at
+      FROM mailops_events
+      WHERE firm_id = $1
+      ORDER BY COALESCE(in_home, event_time, created_at) ASC, id DESC
+    `,
+    [firmId]
+  );
 
   const events = eventsResult.rows || [];
-  const alertRows = alertsResult.rows || [];
+
+  const alertRows = events.filter((row) => {
+    const severity = String(row.severity || "").toLowerCase();
+    const risk = String(row.risk || "").toLowerCase();
+    const status = String(row.status || "").toLowerCase();
+
+    return (
+      ["high", "medium"].includes(severity) ||
+      ["elevated", "watch"].includes(risk) ||
+      ["elevated", "delayed", "watch"].includes(status)
+    );
+  });
 
   const totalDrops = events.length;
-  const elevatedCount = events.filter((row) =>
-    ["elevated", "watch"].includes(String(row.risk || "").toLowerCase()) ||
-    ["elevated", "delayed", "watch"].includes(String(row.status || "").toLowerCase())
-  ).length;
+  const elevatedCount = events.filter((row) => {
+    const risk = String(row.risk || "").toLowerCase();
+    const status = String(row.status || "").toLowerCase();
+    return ["elevated", "watch"].includes(risk) || ["elevated", "delayed", "watch"].includes(status);
+  }).length;
 
   const highSeverityCount = events.filter(
     (row) => String(row.severity || "").toLowerCase() === "high"
@@ -220,7 +198,7 @@ export async function getMailOpsDashboard(user) {
     note: row.note,
   }));
 
-  const alerts = alertRows.map((row) => ({
+  const alerts = alertRows.slice(0, 10).map((row) => ({
     id: row.id,
     title: `${row.campaign} • ${row.location}`,
     severity: row.severity || "Medium",
