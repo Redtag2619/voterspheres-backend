@@ -22,7 +22,7 @@ import vendorsRoutes from "./routes/vendors.routes.js";
 import statesRoutes from "./routes/states.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
-import mailOpsRoutes from "./routes/mailops.routes.js";
+import mailOpsRoutes from "./routes/mailops.routes.js"; 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
