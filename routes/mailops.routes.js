@@ -1,18 +1,15 @@
 import express from "express";
 import {
-  getMailOpsDashboard,
-  listMailOpsEvents,
-  createMailOpsEvent,
-  updateMailOpsEvent,
+  getDashboard,
+  createEvent,
+  updateEvent,
 } from "../controllers/mailops.controller.js";
-import { requireAuth } from "../middleware/auth.middleware.js";
+import authenticateToken from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/dashboard", requireAuth, getMailOpsDashboard);
-
-router.get("/events", requireAuth, listMailOpsEvents);
-router.post("/events", requireAuth, createMailOpsEvent);
-router.patch("/events/:eventId", requireAuth, updateMailOpsEvent);
+router.get("/dashboard", authenticateToken, getDashboard);
+router.post("/events", authenticateToken, createEvent);
+router.put("/events/:id", authenticateToken, updateEvent);
 
 export default router;
