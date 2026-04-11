@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import pool from "../config/database.js"; 
+import pool from "../config/database.js";
 
 export async function requireAuth(req, res, next) {
   try {
@@ -31,21 +31,23 @@ export async function requireAuth(req, res, next) {
       null;
 
     if (!userId) {
-      return res.status(401).json({ error: "Unable to determine authenticated user" });
+      return res.status(401).json({
+        error: "Unable to determine authenticated user",
+      });
     }
 
     const userResult = await pool.query(
       `
-        select
+        SELECT
           u.id,
           u.first_name,
           u.last_name,
           u.email,
           u.role,
           u.firm_id
-        from users u
-        where u.id = $1
-        limit 1
+        FROM users u
+        WHERE u.id = $1
+        LIMIT 1
       `,
       [userId]
     );
@@ -62,7 +64,7 @@ export async function requireAuth(req, res, next) {
     if (resolvedFirmId) {
       const firmResult = await pool.query(
         `
-          select
+          SELECT
             id,
             name,
             slug,
@@ -70,9 +72,9 @@ export async function requireAuth(req, res, next) {
             status,
             stripe_customer_id,
             stripe_subscription_id
-          from firms
-          where id = $1
-          limit 1
+          FROM firms
+          WHERE id = $1
+          LIMIT 1
         `,
         [resolvedFirmId]
       );
@@ -92,7 +94,7 @@ export async function requireAuth(req, res, next) {
       plan_tier: firm?.plan_tier || "starter",
       firm_status: firm?.status || "active",
       stripe_customer_id: firm?.stripe_customer_id || null,
-      stripe_subscription_id: firm?.stripe_subscription_id || null
+      stripe_subscription_id: firm?.stripe_subscription_id || null,
     };
 
     req.auth = {
@@ -102,13 +104,13 @@ export async function requireAuth(req, res, next) {
       userId: req.user.id,
       firmId: req.user.firm_id,
       planTier: String(req.user.plan_tier || "starter").toLowerCase(),
-      role: req.user.role
+      role: req.user.role,
     };
 
     next();
   } catch (error) {
     return res.status(401).json({
-      error: error.message || "Unauthorized"
+      error: error.message || "Unauthorized",
     });
   }
 }
