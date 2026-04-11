@@ -283,7 +283,8 @@ export async function listMailOpsEvents(req, res) {
           note,
           created_by_user_id,
           created_at,
-          updated_at
+          updated_at,
+          firm_id
         FROM mailops_events
         ${whereClause}
         ORDER BY event_time DESC NULLS LAST, id DESC
@@ -328,6 +329,14 @@ export async function createMailOpsEvent(req, res) {
       });
     }
 
+    const resolvedFirmId = req.auth?.firmId ?? req.user?.firm_id ?? null;
+
+    if (!resolvedFirmId) {
+      return res.status(400).json({
+        error: "User is not associated with a firm",
+      });
+    }
+
     const normalizedEventType = normalizeEventType(event_type);
     const normalizedStatus = normalizeStatus(status);
     const normalizedSeverity = normalizeSeverity(severity);
@@ -347,14 +356,16 @@ export async function createMailOpsEvent(req, res) {
           event_time,
           in_home,
           note,
-          created_by_user_id
+          created_by_user_id,
+          firm_id
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
           COALESCE($10::timestamptz, NOW()),
           $11,
           $12,
-          $13
+          $13,
+          $14
         )
         RETURNING
           id,
@@ -372,7 +383,8 @@ export async function createMailOpsEvent(req, res) {
           note,
           created_by_user_id,
           created_at,
-          updated_at
+          updated_at,
+          firm_id
       `,
       [
         campaign,
@@ -388,6 +400,7 @@ export async function createMailOpsEvent(req, res) {
         in_home || null,
         note || null,
         req.auth?.userId ?? req.user?.id ?? null,
+        resolvedFirmId,
       ]
     );
 
@@ -543,7 +556,8 @@ export async function updateMailOpsEvent(req, res) {
           note,
           created_by_user_id,
           created_at,
-          updated_at
+          updated_at,
+          firm_id
       `,
       values
     );
