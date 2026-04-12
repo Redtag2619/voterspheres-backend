@@ -22,7 +22,8 @@ import vendorsRoutes from "./routes/vendors.routes.js";
 import statesRoutes from "./routes/states.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
-import mailOpsRoutes from "./routes/mailops.routes.js"; 
+import mailOpsRoutes from "./routes/mailops.routes.js";
+import publicRoutes from "./routes/public.routes.js"; 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -122,6 +123,7 @@ app.use("/api/states", statesRoutes);
 app.use("/api/donors", donorsRoutes);
 app.use("/api/consultants", consultantsRoutes);
 app.use("/api/mailops", mailOpsRoutes);
+app.use("/api/public", publicRoutes);
 
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
