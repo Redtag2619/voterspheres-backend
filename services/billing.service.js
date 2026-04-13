@@ -17,11 +17,7 @@ function isBillingTestMode() {
 }
 
 function getAppBaseUrl() {
-  return (
-    getEnv("FRONTEND_URL") ||
-    getEnv("VERCEL_FRONTEND_URL") ||
-    "https://www.voterspheres.org"
-  );
+  return getEnv("FRONTEND_URL", "https://www.voterspheres.org");
 }
 
 function getPriceMap() {
