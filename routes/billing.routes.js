@@ -4,29 +4,10 @@ import {
   createPortalSessionForFirm,
   getBillingConfig,
   getBillingDebugForFirm,
-  handleStripeWebhook
 } from "../services/billing.service.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
-
-router.post("/webhook", async (req, res) => {
-  try {
-    const signature = req.headers["stripe-signature"];
-    const rawBody = req.body;
-
-    const result = await handleStripeWebhook({
-      rawBody,
-      signature
-    });
-
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(400).json({
-      error: error.message || "Webhook failed"
-    });
-  }
-});
 
 router.get("/config", async (_req, res) => {
   try {
@@ -34,7 +15,7 @@ router.get("/config", async (_req, res) => {
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({
-      error: error.message || "Failed to load billing config"
+      error: error.message || "Failed to load billing config",
     });
   }
 });
@@ -48,13 +29,13 @@ router.get("/debug/me", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Firm not found" });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       ...data,
-      email: req.user?.email || null
+      email: req.user?.email || data.email || null,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load billing debug info"
+    return res.status(500).json({
+      error: error.message || "Failed to load billing debug info",
     });
   }
 });
@@ -65,16 +46,22 @@ async function checkoutHandler(req, res) {
     const email = req.user?.email || null;
     const { priceId } = req.body || {};
 
+    if (!priceId) {
+      return res.status(400).json({
+        error: "priceId is required",
+      });
+    }
+
     const data = await createCheckoutSessionForFirm({
       firmId,
       email,
-      priceId
+      priceId,
     });
 
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to create checkout session"
+    return res.status(500).json({
+      error: error.message || "Failed to create checkout session",
     });
   }
 }
@@ -82,13 +69,12 @@ async function checkoutHandler(req, res) {
 async function portalHandler(req, res) {
   try {
     const firmId = req.auth?.firmId || req.user?.firm_id;
-
     const data = await createPortalSessionForFirm({ firmId });
 
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to create portal session"
+    return res.status(500).json({
+      error: error.message || "Failed to create portal session",
     });
   }
 }
@@ -103,10 +89,10 @@ router.get("/status", requireAuth, async (req, res) => {
   try {
     const firmId = req.auth?.firmId || req.user?.firm_id;
     const data = await getBillingDebugForFirm(firmId);
-    res.status(200).json(data || {});
+    return res.status(200).json(data || {});
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load billing status"
+    return res.status(500).json({
+      error: error.message || "Failed to load billing status",
     });
   }
 });
