@@ -1,9 +1,9 @@
-import "dotenv/config"; 
-import express from "express"; 
-import http from "http"; 
+import "dotenv/config";
+import express from "express";
+import http from "http";
 import cors from "cors";
-import helmet from "helmet"; 
-import morgan from "morgan"; 
+import helmet from "helmet";
+import morgan from "morgan";
 
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
@@ -23,14 +23,14 @@ import statesRoutes from "./routes/states.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
 import mailOpsRoutes from "./routes/mailops.routes.js";
-import publicRoutes from "./routes/public.routes.js"; 
+import publicRoutes from "./routes/public.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
 import { publishEvent } from "./lib/intelligence.events.js";
+import { handleStripeWebhook } from "./services/billing.service.js";
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 10000);
 
 const ALLOWED_ORIGINS = [
@@ -74,11 +74,43 @@ app.use(
   morgan(process.env.NODE_ENV === "production" ? "combined" : "dev")
 );
 
-app.use(
+/**
+ * STRIPE WEBHOOK
+ * IMPORTANT:
+ * This must be mounted BEFORE express.json()
+ * so Stripe signature verification gets the raw request body.
+ */
+app.post(
   "/api/billing/webhook",
-  express.raw({ type: "application/json" })
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      const signature = req.headers["stripe-signature"];
+
+      if (!signature) {
+        return res.status(400).json({
+          error: "Missing stripe-signature header",
+        });
+      }
+
+      const result = await handleStripeWebhook({
+        rawBody: req.body,
+        signature,
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Stripe webhook error:", error);
+      return res.status(400).json({
+        error: error.message || "Webhook failed",
+      });
+    }
+  }
 );
 
+/**
+ * Standard body parsers for all non-Stripe routes
+ */
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -232,4 +264,5 @@ initSocket(server, ALLOWED_ORIGINS);
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
   console.log(`✅ Live intelligence layer enabled`);
+  console.log(`✅ Stripe webhook mounted at /api/billing/webhook`);
 });
