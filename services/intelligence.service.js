@@ -1,5 +1,6 @@
 import { pool } from "../db/pool.js";
 import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js";
+import { ensureFundraisingLiveTable } from "./fec.service.js";
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
@@ -34,55 +35,63 @@ async function tableExists(tableName) {
   }
 }
 
+function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidates") {
+  const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
+  const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
+  const averageReceipts = leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0;
+
+  return {
+    leaderboard,
+    summary: {
+      tracked_candidates: leaderboard.length,
+      total_receipts: totalReceipts,
+      total_cash_on_hand: totalCash,
+      average_receipts: averageReceipts
+    },
+    metrics: [
+      {
+        label: "Tracked Finance Leaders",
+        value: String(leaderboard.length),
+        delta: deltaLabel,
+        tone: "up"
+      },
+      {
+        label: "Modeled Receipts",
+        value: formatMoneyShort(totalReceipts),
+        delta: "Leaderboard total",
+        tone: "up"
+      },
+      {
+        label: "Average Raise",
+        value: formatMoneyShort(averageReceipts),
+        delta: "Across leaders",
+        tone: "up"
+      },
+      {
+        label: "Cash On Hand",
+        value: formatMoneyShort(totalCash),
+        delta: "Competitive reserves",
+        tone: "up"
+      }
+    ]
+  };
+}
+
 export async function getFundraisingLeaderboard(limit = 12) {
   if (isDemoModeEnabled()) {
     const leaderboard = getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit);
-    const totalReceipts = leaderboard.reduce((sum, row) => sum + Number(row.receipts || 0), 0);
-    const totalCash = leaderboard.reduce((sum, row) => sum + Number(row.cash_on_hand || 0), 0);
-
-    return {
-      leaderboard,
-      summary: {
-        tracked_candidates: leaderboard.length,
-        total_receipts: totalReceipts,
-        total_cash_on_hand: totalCash,
-        average_receipts: leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0
-      },
-      metrics: [
-        {
-          label: "Tracked Finance Leaders",
-          value: String(leaderboard.length),
-          delta: "Demo finance layer",
-          tone: "up"
-        },
-        {
-          label: "Modeled Receipts",
-          value: formatMoneyShort(totalReceipts),
-          delta: "Demo total",
-          tone: "up"
-        },
-        {
-          label: "Cash On Hand",
-          value: formatMoneyShort(totalCash),
-          delta: "Reserve strength",
-          tone: "up"
-        },
-        {
-          label: "Average Raise",
-          value: formatMoneyShort(
-            leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0
-          ),
-          delta: "Per leader",
-          tone: "up"
-        }
-      ]
-    };
+    return buildLeaderboardResponse(leaderboard, "Demo finance layer");
   }
 
   try {
+    await ensureFundraisingLiveTable();
+
     const hasLiveTable = await tableExists("fundraising_live");
     if (!hasLiveTable) {
-      return getFundraisingLeaderboard(limit);
+      return buildLeaderboardResponse(
+        getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
+        "Demo finance layer"
+      );
     }
 
     const result = await pool.query(
@@ -113,51 +122,20 @@ export async function getFundraisingLeaderboard(limit = 12) {
     );
 
     const leaderboard = result.rows || [];
+
     if (!leaderboard.length) {
-      return getDemoCampaignBundle().fundraising;
+      return buildLeaderboardResponse(
+        getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
+        "Demo finance layer"
+      );
     }
 
-    const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
-    const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
-    const averageReceipts = leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0;
-
-    return {
-      leaderboard,
-      summary: {
-        tracked_candidates: leaderboard.length,
-        total_receipts: totalReceipts,
-        total_cash_on_hand: totalCash,
-        average_receipts: averageReceipts
-      },
-      metrics: [
-        {
-          label: "Tracked Finance Leaders",
-          value: String(leaderboard.length),
-          delta: "FEC-backed candidates",
-          tone: "up"
-        },
-        {
-          label: "Modeled Receipts",
-          value: formatMoneyShort(totalReceipts),
-          delta: "Leaderboard total",
-          tone: "up"
-        },
-        {
-          label: "Average Raise",
-          value: formatMoneyShort(averageReceipts),
-          delta: "Across leaders",
-          tone: "up"
-        },
-        {
-          label: "Cash On Hand",
-          value: formatMoneyShort(totalCash),
-          delta: "Competitive reserves",
-          tone: "up"
-        }
-      ]
-    };
+    return buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
   } catch {
-    return getFundraisingLeaderboard(limit);
+    return buildLeaderboardResponse(
+      getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
+      "Demo finance layer"
+    );
   }
 }
 
