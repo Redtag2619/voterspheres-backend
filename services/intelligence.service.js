@@ -1,5 +1,5 @@
 import { pool } from "../db/pool.js";
-import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js"; 
+import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js";
 
 function toNumber(value, fallback = 0) {
@@ -13,26 +13,6 @@ function formatMoneyShort(value) {
   if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `$${(num / 1_000).toFixed(1)}K`;
   return `$${num.toLocaleString()}`;
-}
-
-async function tableExists(tableName) {
-  try {
-    const result = await pool.query(
-      `
-        select exists (
-          select 1
-          from information_schema.tables
-          where table_schema = 'public'
-            and table_name = $1
-        ) as exists
-      `,
-      [tableName]
-    );
-
-    return Boolean(result.rows?.[0]?.exists);
-  } catch {
-    return false;
-  }
 }
 
 function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidates") {
@@ -77,66 +57,81 @@ function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidat
   };
 }
 
+function buildEmptyLeaderboardResponse() {
+  return {
+    leaderboard: [],
+    summary: {
+      tracked_candidates: 0,
+      total_receipts: 0,
+      total_cash_on_hand: 0,
+      average_receipts: 0
+    },
+    metrics: [
+      {
+        label: "Tracked Finance Leaders",
+        value: "0",
+        delta: "No live rows loaded",
+        tone: "down"
+      },
+      {
+        label: "Modeled Receipts",
+        value: "$0",
+        delta: "No live rows loaded",
+        tone: "down"
+      },
+      {
+        label: "Average Raise",
+        value: "$0",
+        delta: "No live rows loaded",
+        tone: "down"
+      },
+      {
+        label: "Cash On Hand",
+        value: "$0",
+        delta: "No live rows loaded",
+        tone: "down"
+      }
+    ]
+  };
+}
+
 export async function getFundraisingLeaderboard(limit = 12) {
-  if (isDemoModeEnabled()) {
-    const leaderboard = getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit);
-    return buildLeaderboardResponse(leaderboard, "Demo finance layer");
+  await ensureFundraisingLiveTable();
+
+  const result = await pool.query(
+    `
+      with ranked as (
+        select
+          row_number() over (
+            order by
+              coalesce(receipts, 0) desc,
+              coalesce(cash_on_hand, 0) desc,
+              coalesce(name, '') asc
+          ) as rank,
+          candidate_id,
+          name,
+          state,
+          office,
+          party,
+          coalesce(receipts, 0) as receipts,
+          coalesce(cash_on_hand, 0) as cash_on_hand
+        from fundraising_live
+      )
+      select *
+      from ranked
+      order by rank asc
+      limit $1
+    `,
+    [limit]
+  );
+
+  const leaderboard = result.rows || [];
+
+  if (!leaderboard.length) {
+    return buildEmptyLeaderboardResponse();
   }
 
-  try {
-    await ensureFundraisingLiveTable();
-
-    const hasLiveTable = await tableExists("fundraising_live");
-    if (!hasLiveTable) {
-      return buildLeaderboardResponse(
-        getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
-        "Demo finance layer"
-      );
-    }
-
-    const result = await pool.query(
-      `
-        with ranked as (
-          select
-            row_number() over (
-              order by
-                coalesce(receipts, 0) desc,
-                coalesce(cash_on_hand, 0) desc,
-                coalesce(name, '') asc
-            ) as rank,
-            candidate_id,
-            name,
-            state,
-            office,
-            party,
-            coalesce(receipts, 0) as receipts,
-            coalesce(cash_on_hand, 0) as cash_on_hand
-          from fundraising_live
-        )
-        select *
-        from ranked
-        order by rank asc
-        limit $1
-      `,
-      [limit]
-    );
-
-    const leaderboard = result.rows || [];
-
-    if (!leaderboard.length) {
-      return buildLeaderboardResponse(
-        getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
-        "Demo finance layer"
-      );
-    }
-
-    return buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
-  } catch {
-    return buildLeaderboardResponse(
-      getDemoCampaignBundle().fundraising.leaderboard.slice(0, limit),
-      "Demo finance layer"
-    );
-  }
+  return buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
 }
 
 export async function getLiveFundraising(limit = 12) {
@@ -158,12 +153,34 @@ export async function getLiveFundraising(limit = 12) {
 }
 
 export async function getIntelligenceSummary() {
+  const fundraising = await getFundraisingLeaderboard(12);
+
   return {
     metrics: [
-      { label: "Signals Tracked", value: "24", delta: "Live intelligence", tone: "up" },
-      { label: "Forecast States", value: "12", delta: "Modeled map", tone: "up" },
-      { label: "Finance Leaders", value: "12", delta: "Leaderboard ready", tone: "up" },
-      { label: "Threat Pressure", value: "Elevated", delta: "War Room aware", tone: "down" }
+      {
+        label: "Signals Tracked",
+        value: "24",
+        delta: "Live intelligence",
+        tone: "up"
+      },
+      {
+        label: "Forecast States",
+        value: "12",
+        delta: "Modeled map",
+        tone: "up"
+      },
+      {
+        label: "Finance Leaders",
+        value: String(fundraising.summary?.tracked_candidates || 0),
+        delta: "Live fundraising table",
+        tone: "up"
+      },
+      {
+        label: "Threat Pressure",
+        value: "Elevated",
+        delta: "War Room aware",
+        tone: "down"
+      }
     ]
   };
 }
@@ -219,14 +236,16 @@ export async function getIntelligenceForecast() {
 }
 
 export async function getIntelligenceRankings() {
+  const fundraising = await getFundraisingLeaderboard(10);
+
   return {
     metrics: [
-      { label: "Tracked Leaders", value: "10", delta: "Ranked races", tone: "up" },
-      { label: "Top Probability", value: "61%", delta: "Strongest edge", tone: "up" },
-      { label: "Median Probability", value: "53%", delta: "Balanced field", tone: "up" },
+      { label: "Tracked Leaders", value: String(fundraising.summary?.tracked_candidates || 0), delta: "Ranked finance field", tone: "up" },
+      { label: "Top Raise", value: formatMoneyShort(fundraising.summary?.total_receipts || 0), delta: "Aggregate receipts", tone: "up" },
+      { label: "Median Signal", value: "53%", delta: "Balanced field", tone: "up" },
       { label: "Volatility", value: "Moderate", delta: "Watch list", tone: "down" }
     ],
-    campaigns: []
+    campaigns: fundraising.leaderboard || []
   };
 }
 
