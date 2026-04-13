@@ -9,69 +9,6 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeOffice(value) {
-  const v = String(value || "").toLowerCase();
-
-  if (v === "h" || v === "house") return "House";
-  if (v === "s" || v === "senate") return "Senate";
-  if (v === "p" || v === "president" || v === "presidential") return "President";
-
-  return value || "Unknown";
-}
-
-function normalizeParty(value) {
-  const v = String(value || "").trim();
-  if (!v) return "N/A";
-  return v;
-}
-
-function normalizeName(row) {
-  return (
-    row.name ||
-    row.candidate_name ||
-    row.candidate ||
-    row.committee_name ||
-    "Unknown Candidate"
-  );
-}
-
-function normalizeReceipts(row) {
-  return toNumber(
-    row.receipts ??
-      row.total_receipts ??
-      row.receipts_total ??
-      row.total_raised ??
-      0
-  );
-}
-
-function normalizeCashOnHand(row) {
-  return toNumber(
-    row.cash_on_hand ??
-      row.cash_on_hand_end_period ??
-      row.total_cash_on_hand ??
-      row.cash ??
-      0
-  );
-}
-
-function normalizeState(row) {
-  return row.state || row.candidate_state || "N/A";
-}
-
-function normalizeDistrict(row) {
-  return row.district || null;
-}
-
-function normalizeCoverageEndDate(row) {
-  return (
-    row.coverage_end_date ||
-    row.coverage_to_date ||
-    row.report_end_date ||
-    null
-  );
-}
-
 function createHttpError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -88,6 +25,65 @@ function getFecApiConfig() {
   };
 }
 
+function normalizeOffice(value) {
+  const v = String(value || "").toLowerCase().trim();
+
+  if (v === "h" || v === "house") return "House";
+  if (v === "s" || v === "senate") return "Senate";
+  if (v === "p" || v === "president" || v === "presidential") return "President";
+
+  return value || "Unknown";
+}
+
+function normalizeParty(value) {
+  return String(value || "").trim() || "N/A";
+}
+
+function normalizeName(row) {
+  return (
+    row.name ||
+    row.candidate_name ||
+    row.candidate ||
+    "Unknown Candidate"
+  );
+}
+
+function normalizeReceipts(row) {
+  return toNumber(
+    row.receipts ??
+      row.total_receipts ??
+      row.receipts_total ??
+      0
+  );
+}
+
+function normalizeCashOnHand(row) {
+  return toNumber(
+    row.cash_on_hand ??
+      row.cash_on_hand_end_period ??
+      row.total_cash_on_hand ??
+      0
+  );
+}
+
+function normalizeState(row) {
+  return row.state || row.candidate_state || "N/A";
+}
+
+function normalizeDistrict(row) {
+  const district = row.district ?? row.seat_number ?? null;
+  return district === undefined ? null : district;
+}
+
+function normalizeCoverageEndDate(row) {
+  return (
+    row.coverage_end_date ||
+    row.coverage_to_date ||
+    row.report_end_date ||
+    null
+  );
+}
+
 async function fecGet(path, params = {}) {
   const { apiKey, baseUrl } = getFecApiConfig();
 
@@ -96,7 +92,6 @@ async function fecGet(path, params = {}) {
   }
 
   const url = new URL(`${baseUrl.replace(/\/$/, "")}${path}`);
-
   url.searchParams.set("api_key", apiKey);
 
   for (const [key, value] of Object.entries(params)) {
@@ -108,8 +103,8 @@ async function fecGet(path, params = {}) {
     method: "GET",
     headers: {
       Accept: "application/json",
-      "User-Agent": "VoterSpheres/1.0",
-    },
+      "User-Agent": "VoterSpheres/1.0"
+    }
   });
 
   if (!response.ok) {
@@ -150,6 +145,11 @@ export async function ensureFundraisingLiveTable() {
   `);
 
   await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_fundraising_live_cash_on_hand
+    ON fundraising_live (cash_on_hand DESC)
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_fundraising_live_state
     ON fundraising_live (state)
   `);
@@ -171,7 +171,7 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
     page,
     per_page: perPage,
     sort: "-receipts",
-    sort_hide_null: "false",
+    sort_hide_null: "false"
   });
 
   return payload;
@@ -179,24 +179,25 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
 
 export async function fetchAllCandidateTotals({ cycle }) {
   const { perPage, maxPages } = getFecApiConfig();
-  const all = [];
+  const allRows = [];
 
   for (let page = 1; page <= maxPages; page += 1) {
     const payload = await fetchCandidateTotalsPage({
       cycle,
       page,
-      perPage,
+      perPage
     });
 
     const results = Array.isArray(payload?.results) ? payload.results : [];
-    all.push(...results);
+    allRows.push(...results);
 
     const totalPages = Number(payload?.pagination?.pages || 0);
+
     if (!results.length) break;
     if (totalPages && page >= totalPages) break;
   }
 
-  return all;
+  return allRows;
 }
 
 export function normalizeFundraisingRows(rows, cycle) {
@@ -218,7 +219,7 @@ export function normalizeFundraisingRows(rows, cycle) {
         election_year: Number(cycle),
         source: "FEC",
         source_updated_at: new Date().toISOString(),
-        source_payload: row,
+        source_payload: row
       };
     })
     .filter(Boolean)
@@ -293,7 +294,7 @@ export async function replaceFundraisingLive(rows, cycle) {
           row.election_year,
           row.source,
           row.source_updated_at,
-          JSON.stringify(row.source_payload),
+          JSON.stringify(row.source_payload)
         ]
       );
     }
@@ -320,6 +321,6 @@ export async function syncFundraisingFromFec({ cycle } = {}) {
     ok: true,
     cycle: targetCycle,
     fetched: rawRows.length,
-    stored: normalizedRows.length,
+    stored: normalizedRows.length
   };
 }
