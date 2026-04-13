@@ -12,9 +12,9 @@ const router = express.Router();
 router.get("/config", async (_req, res) => {
   try {
     const data = await getBillingConfig();
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load billing config",
     });
   }
@@ -34,7 +34,7 @@ router.get("/debug/me", requireAuth, async (req, res) => {
       email: req.user?.email || data.email || null,
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load billing debug info",
     });
   }
@@ -60,7 +60,7 @@ async function checkoutHandler(req, res) {
 
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to create checkout session",
     });
   }
@@ -73,7 +73,7 @@ async function portalHandler(req, res) {
 
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to create portal session",
     });
   }
@@ -91,7 +91,7 @@ router.get("/status", requireAuth, async (req, res) => {
     const data = await getBillingDebugForFirm(firmId);
     return res.status(200).json(data || {});
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load billing status",
     });
   }
