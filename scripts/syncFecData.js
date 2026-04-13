@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { syncFundraisingFromFec } from "../services/fec.service.js";
+import { syncFundraisingFromFec } from "../services/fec.service.js"; 
 
 async function main() {
   const cycleArg = process.argv[2];
