@@ -146,7 +146,7 @@ app.use("/api/firms", requireAuth, firmWorkspaceRoutes);
 app.use("/api/campaigns", requireAuth, campaignCommandRoutes);
 app.use("/api/mail", requireAuth, mailRoutes);
 app.use("/api/platform", requireAuth, platformRoutes);
-app.use("/api/intelligence", requireAuth, intelligenceRoutes);
+app.use("/api/intelligence", intelligenceRoutes);
 app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", candidatesRoutes);
