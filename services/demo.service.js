@@ -2,7 +2,7 @@ export function getDemoCampaignBundle() {
   return {
     campaign: {
       id: 1,
-      campaign_name: "Stephens for Senate", 
+      campaign_name: "Stephens for Senate",
       candidate_name: "Mark Stephens",
       state: "Georgia",
       office: "U.S. Senate",
@@ -216,5 +216,5 @@ export function getDemoCampaignBundle() {
 }
 
 export function isDemoModeEnabled() {
-  return String(process.env.BILLING_TEST_MODE || "false").toLowerCase() === "true";
+  return false;
 }
