@@ -6,6 +6,12 @@ function getEnv(name, fallback = "") {
   return process.env[name] || fallback;
 }
 
+function createHttpError(message, statusCode = 500) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
 function isBillingTestMode() {
   return String(getEnv("BILLING_TEST_MODE", "false")).toLowerCase() === "true";
 }
@@ -66,7 +72,7 @@ async function getStripe() {
 
   const secretKey = getEnv("STRIPE_SECRET_KEY");
   if (!secretKey) {
-    throw new Error("Missing STRIPE_SECRET_KEY");
+    throw createHttpError("Missing STRIPE_SECRET_KEY", 500);
   }
 
   const mod = await import("stripe");
@@ -76,7 +82,6 @@ async function getStripe() {
 }
 
 async function ensureBillingColumns() {
-  async function ensureBillingColumns() {
   await pool.query(`
     ALTER TABLE firms
       ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'starter',
@@ -98,7 +103,10 @@ async function ensureBillingColumns() {
       updated_at = COALESCE(updated_at, NOW())
   `);
 }
+
 async function findFirmById(firmId) {
+  if (!firmId) return null;
+
   const result = await pool.query(
     `
       SELECT
@@ -141,29 +149,12 @@ async function findFirmByCustomerId(customerId) {
   return result.rows[0] || null;
 }
 
-async function writeWebhookAudit(firmId, eventType, eventId) {
-  if (!firmId) return;
-
-  await pool.query(
-    `
-      UPDATE firms
-      SET
-        last_webhook_event_type = $2,
-        last_webhook_event_id = $3,
-        last_webhook_event_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $1
-    `,
-    [firmId, eventType, eventId]
-  );
-}
-
 async function upsertCustomerForFirm({ firmId, email }) {
   const stripe = await getStripe();
   const firm = await findFirmById(firmId);
 
   if (!firm) {
-    throw new Error("Firm not found");
+    throw createHttpError("Firm not found", 404);
   }
 
   if (firm.stripe_customer_id) {
@@ -239,6 +230,10 @@ export async function getBillingConfig() {
 export async function getBillingDebugForFirm(firmId) {
   await ensureBillingColumns();
 
+  if (!firmId) {
+    throw createHttpError("Missing firm id", 400);
+  }
+
   const firm = await findFirmById(firmId);
   if (!firm) return null;
 
@@ -262,12 +257,12 @@ async function createTestModeCheckoutSessionForFirm({ firmId, priceId }) {
   await ensureBillingColumns();
 
   if (!firmId) {
-    throw new Error("Missing firm id");
+    throw createHttpError("Missing firm id", 400);
   }
 
   const firm = await findFirmById(firmId);
   if (!firm) {
-    throw new Error("Firm not found");
+    throw createHttpError("Firm not found", 404);
   }
 
   const planTier = inferPlanTierFromPriceId(priceId);
@@ -305,16 +300,16 @@ export async function createCheckoutSessionForFirm({ firmId, email, priceId }) {
   }
 
   if (!firmId) {
-    throw new Error("Missing firm id");
+    throw createHttpError("Missing firm id", 400);
   }
 
   if (!priceId) {
-    throw new Error("Missing priceId");
+    throw createHttpError("Missing priceId", 400);
   }
 
   const firm = await findFirmById(firmId);
   if (!firm) {
-    throw new Error("Firm not found");
+    throw createHttpError("Firm not found", 404);
   }
 
   const stripe = await getStripe();
@@ -364,7 +359,7 @@ export async function createPortalSessionForFirm({ firmId }) {
     const firm = await getBillingDebugForFirm(firmId);
 
     if (!firm) {
-      throw new Error("Firm not found");
+      throw createHttpError("Firm not found", 404);
     }
 
     return {
@@ -373,16 +368,16 @@ export async function createPortalSessionForFirm({ firmId }) {
   }
 
   if (!firmId) {
-    throw new Error("Missing firm id");
+    throw createHttpError("Missing firm id", 400);
   }
 
   const firm = await findFirmById(firmId);
   if (!firm) {
-    throw new Error("Firm not found");
+    throw createHttpError("Firm not found", 404);
   }
 
   if (!firm.stripe_customer_id) {
-    throw new Error("No Stripe customer linked to this firm");
+    throw createHttpError("No Stripe customer linked to this firm", 400);
   }
 
   const stripe = await getStripe();
@@ -598,11 +593,11 @@ export async function handleStripeWebhook({ rawBody, signature }) {
 
   const webhookSecret = getEnv("STRIPE_WEBHOOK_SECRET");
   if (!webhookSecret) {
-    throw new Error("Missing STRIPE_WEBHOOK_SECRET");
+    throw createHttpError("Missing STRIPE_WEBHOOK_SECRET", 500);
   }
 
   if (!signature) {
-    throw new Error("Missing stripe-signature header");
+    throw createHttpError("Missing stripe-signature header", 400);
   }
 
   const stripe = await getStripe();
@@ -638,5 +633,9 @@ export async function handleStripeWebhook({ rawBody, signature }) {
       break;
   }
 
-  return { received: true, eventType, eventId };
+  return {
+    received: true,
+    eventType,
+    eventId,
+  };
 }
