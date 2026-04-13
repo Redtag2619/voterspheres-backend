@@ -112,7 +112,6 @@ async function findFirmById(firmId) {
       SELECT
         id,
         name,
-        email,
         plan_tier,
         status,
         stripe_customer_id,
@@ -161,7 +160,7 @@ async function upsertCustomerForFirm({ firmId, email }) {
   }
 
   const customer = await stripe.customers.create({
-    email: email || firm.email || undefined,
+    email: email || undefined,
     name: firm.name || `Firm ${firmId}`,
     metadata: {
       firm_id: String(firmId),
@@ -239,7 +238,7 @@ export async function getBillingDebugForFirm(firmId) {
   return {
     firm_id: firm.id,
     firm_name: firm.name || null,
-    email: firm.email || null,
+    email: null,
     plan_tier: normalizePlanTier(firm.plan_tier),
     status: firm.status || "inactive",
     stripe_customer_id: firm.stripe_customer_id || null,
