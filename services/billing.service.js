@@ -76,8 +76,11 @@ async function getStripe() {
 }
 
 async function ensureBillingColumns() {
+  async function ensureBillingColumns() {
   await pool.query(`
     ALTER TABLE firms
+      ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'starter',
+      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT,
       ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
       ADD COLUMN IF NOT EXISTS stripe_price_id TEXT,
@@ -95,7 +98,6 @@ async function ensureBillingColumns() {
       updated_at = COALESCE(updated_at, NOW())
   `);
 }
-
 async function findFirmById(firmId) {
   const result = await pool.query(
     `
