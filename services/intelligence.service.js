@@ -96,6 +96,13 @@ function buildEmptyLeaderboardResponse(lastSyncedAt = null) {
   };
 }
 
+function getOverlayTier(score) {
+  if (score >= 80) return "critical";
+  if (score >= 60) return "elevated";
+  if (score >= 40) return "watch";
+  return "monitor";
+}
+
 export async function getFundraisingLeaderboard(limit = 12) {
   await ensureFundraisingLiveTable();
 
@@ -288,24 +295,101 @@ export async function getIntelligenceRankings() {
 }
 
 export async function getIntelligenceMap() {
+  await ensureFundraisingLiveTable();
+
+  const latestSyncResult = await pool.query(`
+    select max(source_updated_at) as last_synced_at
+    from fundraising_live
+  `);
+
+  const lastSyncedAt = latestSyncResult.rows?.[0]?.last_synced_at || null;
+
+  const result = await pool.query(`
+    with ranked as (
+      select
+        candidate_id,
+        name,
+        state,
+        office,
+        party,
+        coalesce(receipts, 0) as receipts,
+        coalesce(cash_on_hand, 0) as cash_on_hand,
+        row_number() over (
+          partition by state, office
+          order by
+            coalesce(receipts, 0) desc,
+            coalesce(cash_on_hand, 0) desc,
+            coalesce(name, '') asc
+        ) as state_office_rank
+      from fundraising_live
+      where state is not null
+        and state <> ''
+        and office is not null
+        and office <> ''
+    )
+    select *
+    from ranked
+    order by state asc, office asc, state_office_rank asc
+  `);
+
+  const rows = result.rows || [];
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const key = `${row.state}__${row.office}`;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        state: row.state,
+        office: row.office,
+        candidates: [],
+        totalReceipts: 0,
+        totalCash: 0
+      });
+    }
+
+    const entry = grouped.get(key);
+
+    entry.candidates.push({
+      candidate_id: row.candidate_id,
+      name: row.name,
+      party: row.party || "N/A",
+      receipts: Number(row.receipts || 0),
+      cash_on_hand: Number(row.cash_on_hand || 0),
+      rank: Number(row.state_office_rank || 0)
+    });
+
+    entry.totalReceipts += Number(row.receipts || 0);
+    entry.totalCash += Number(row.cash_on_hand || 0);
+  }
+
+  const battlegrounds = Array.from(grouped.values())
+    .map((entry) => {
+      const overlayScore = Math.min(
+        100,
+        Math.round((entry.totalReceipts / 1_000_000) * 3 + (entry.candidates.length * 8))
+      );
+
+      return {
+        state: entry.state,
+        office: entry.office,
+        overlayScore,
+        overlayTier: getOverlayTier(overlayScore),
+        candidates: entry.candidates.slice(0, 5),
+        totalReceipts: entry.totalReceipts,
+        totalCashOnHand: entry.totalCash
+      };
+    })
+    .sort((a, b) => b.overlayScore - a.overlayScore);
+
+  const trackedStates = new Set(battlegrounds.map((item) => item.state)).size;
+
   return {
     summary: {
-      trackedStates: 2,
-      overlays: 2
+      trackedStates,
+      overlays: battlegrounds.length,
+      last_synced_at: lastSyncedAt
     },
-    battlegrounds: [
-      {
-        state: "Georgia",
-        office: "Senate",
-        overlayScore: 82,
-        overlayTier: "critical"
-      },
-      {
-        state: "Pennsylvania",
-        office: "Governor",
-        overlayScore: 74,
-        overlayTier: "watch"
-      }
-    ]
+    battlegrounds
   };
 }
