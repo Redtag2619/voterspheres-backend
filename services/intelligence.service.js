@@ -57,14 +57,15 @@ function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidat
   };
 }
 
-function buildEmptyLeaderboardResponse() {
+function buildEmptyLeaderboardResponse(lastSyncedAt = null) {
   return {
     leaderboard: [],
     summary: {
       tracked_candidates: 0,
       total_receipts: 0,
       total_cash_on_hand: 0,
-      average_receipts: 0
+      average_receipts: 0,
+      last_synced_at: lastSyncedAt
     },
     metrics: [
       {
@@ -98,6 +99,13 @@ function buildEmptyLeaderboardResponse() {
 export async function getFundraisingLeaderboard(limit = 12) {
   await ensureFundraisingLiveTable();
 
+  const latestSyncResult = await pool.query(`
+    select max(source_updated_at) as last_synced_at
+    from fundraising_live
+  `);
+
+  const lastSyncedAt = latestSyncResult.rows?.[0]?.last_synced_at || null;
+
   const result = await pool.query(
     `
       with ranked as (
@@ -128,10 +136,18 @@ export async function getFundraisingLeaderboard(limit = 12) {
   const leaderboard = result.rows || [];
 
   if (!leaderboard.length) {
-    return buildEmptyLeaderboardResponse();
+    return buildEmptyLeaderboardResponse(lastSyncedAt);
   }
 
-  return buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
+  const response = buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
+
+  return {
+    ...response,
+    summary: {
+      ...response.summary,
+      last_synced_at: lastSyncedAt
+    }
+  };
 }
 
 export async function getLiveFundraising(limit = 12) {
@@ -148,7 +164,8 @@ export async function getLiveFundraising(limit = 12) {
         receipts: Number(row.receipts || 0),
         cash_on_hand_end_period: Number(row.cash_on_hand || 0)
       }
-    }))
+    })),
+    summary: leaderboard.summary || {}
   };
 }
 
@@ -215,7 +232,8 @@ export async function getIntelligenceDashboard() {
         tone: "up"
       }
     ],
-    leaderboard: fundraising.leaderboard || []
+    leaderboard: fundraising.leaderboard || [],
+    fundraisingSummary: fundraising.summary || {}
   };
 }
 
@@ -240,10 +258,30 @@ export async function getIntelligenceRankings() {
 
   return {
     metrics: [
-      { label: "Tracked Leaders", value: String(fundraising.summary?.tracked_candidates || 0), delta: "Ranked finance field", tone: "up" },
-      { label: "Top Raise", value: formatMoneyShort(fundraising.summary?.total_receipts || 0), delta: "Aggregate receipts", tone: "up" },
-      { label: "Median Signal", value: "53%", delta: "Balanced field", tone: "up" },
-      { label: "Volatility", value: "Moderate", delta: "Watch list", tone: "down" }
+      {
+        label: "Tracked Leaders",
+        value: String(fundraising.summary?.tracked_candidates || 0),
+        delta: "Ranked finance field",
+        tone: "up"
+      },
+      {
+        label: "Top Raise",
+        value: formatMoneyShort(fundraising.summary?.total_receipts || 0),
+        delta: "Aggregate receipts",
+        tone: "up"
+      },
+      {
+        label: "Median Signal",
+        value: "53%",
+        delta: "Balanced field",
+        tone: "up"
+      },
+      {
+        label: "Volatility",
+        value: "Moderate",
+        delta: "Watch list",
+        tone: "down"
+      }
     ],
     campaigns: fundraising.leaderboard || []
   };
