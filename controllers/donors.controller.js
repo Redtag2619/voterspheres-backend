@@ -9,6 +9,7 @@ const demoDonorNetwork = {
       state: "Georgia",
       amount: 250000,
       relationship_strength: "High",
+      candidate_id: null
     },
     {
       id: 2,
@@ -17,6 +18,7 @@ const demoDonorNetwork = {
       state: "Pennsylvania",
       amount: 175000,
       relationship_strength: "Medium",
+      candidate_id: null
     },
     {
       id: 3,
@@ -25,19 +27,25 @@ const demoDonorNetwork = {
       state: "Michigan",
       amount: 120000,
       relationship_strength: "Growing",
-    },
+      candidate_id: null
+    }
   ],
   summary: {
     total_donors: 3,
     total_amount: 545000,
-    top_state: "Georgia",
+    top_state: "Georgia"
   },
-  demo: true,
+  demo: true
 };
 
 function buildWhereClause(query = {}) {
   const conditions = [];
   const values = [];
+
+  if (query.candidate_id) {
+    values.push(query.candidate_id);
+    conditions.push(`candidate_id = $${values.length}`);
+  }
 
   if (query.state) {
     values.push(query.state);
@@ -64,6 +72,7 @@ function buildWhereClause(query = {}) {
 export async function getDonorNetwork(req, res) {
   try {
     const { whereClause, values } = buildWhereClause(req.query);
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
 
     const donorsQuery = `
       SELECT
@@ -72,14 +81,15 @@ export async function getDonorNetwork(req, res) {
         donor_type,
         state,
         amount,
-        relationship_strength
+        relationship_strength,
+        candidate_id
       FROM donor_network
       ${whereClause}
       ORDER BY amount DESC NULLS LAST, donor_name ASC
+      LIMIT ${limit}
     `;
 
     const result = await pool.query(donorsQuery, values);
-
     const rows = result.rows || [];
 
     const totalAmount = rows.reduce(
@@ -101,9 +111,9 @@ export async function getDonorNetwork(req, res) {
       summary: {
         total_donors: rows.length,
         total_amount: totalAmount,
-        top_state: topState,
+        top_state: topState
       },
-      demo: false,
+      demo: false
     });
   } catch (error) {
     console.error("getDonorNetwork fallback:", error.message);
