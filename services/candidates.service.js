@@ -1,13 +1,10 @@
 import pool from "../config/database.js";
 
-let schemaCache = {
-  candidates: null,
-  candidate_profiles: null
-};
+function quoteIdent(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
 
-async function getTableColumns(tableName) {
-  if (schemaCache[tableName]) return schemaCache[tableName];
-
+async function getColumns(tableName) {
   const result = await pool.query(
     `
       SELECT column_name
@@ -18,154 +15,144 @@ async function getTableColumns(tableName) {
     [tableName]
   );
 
-  const columns = new Set(result.rows.map((row) => row.column_name));
-  schemaCache[tableName] = columns;
-  return columns;
+  return new Set(result.rows.map((row) => row.column_name));
 }
 
 function has(columns, name) {
   return columns.has(name);
 }
 
-function qcol(name) {
-  return `"${name}"`;
-}
-
-function pickFirstExisting(columns, names = []) {
+function pick(columns, names = []) {
   for (const name of names) {
     if (has(columns, name)) return name;
   }
   return null;
 }
 
-function textExpr(columns, names = [], fallback = "''") {
-  const col = pickFirstExisting(columns, names);
-  return col ? `COALESCE(c.${qcol(col)}::text, '')` : fallback;
+function textColumnExpr(alias, columns, names = [], fallback = "''") {
+  const col = pick(columns, names);
+  if (!col) return fallback;
+  return `COALESCE(${alias}.${quoteIdent(col)}::text, '')`;
 }
 
-function boolExpr(columns, names = [], fallback = "false") {
-  const col = pickFirstExisting(columns, names);
-  return col ? `COALESCE(c.${qcol(col)}, false)` : fallback;
+function boolColumnExpr(alias, columns, names = [], fallback = "false") {
+  const col = pick(columns, names);
+  if (!col) return fallback;
+  return `COALESCE(${alias}.${quoteIdent(col)}, false)`;
 }
 
-function buildFullNameExpr(columns) {
-  if (has(columns, "full_name")) return `COALESCE(c."full_name"::text, '')`;
-  if (has(columns, "name")) return `COALESCE(c."name"::text, '')`;
+function nameExpr(alias, columns) {
+  if (has(columns, "full_name")) return `COALESCE(${alias}."full_name"::text, '')`;
+  if (has(columns, "name")) return `COALESCE(${alias}."name"::text, '')`;
 
   const first = has(columns, "first_name")
-    ? `COALESCE(c."first_name"::text, '')`
+    ? `COALESCE(${alias}."first_name"::text, '')`
     : `''`;
   const last = has(columns, "last_name")
-    ? `COALESCE(c."last_name"::text, '')`
+    ? `COALESCE(${alias}."last_name"::text, '')`
     : `''`;
 
   return `TRIM(CONCAT(${first}, ' ', ${last}))`;
 }
 
-function buildCandidateSelect(columns) {
-  const idCol = pickFirstExisting(columns, ["id"]) || "id";
-
+function buildCandidateProjection(columns) {
   return {
-    id: `c.${qcol(idCol)} AS id`,
-    full_name: `${buildFullNameExpr(columns)} AS full_name`,
-    first_name: `${textExpr(columns, ["first_name"])} AS first_name`,
-    last_name: `${textExpr(columns, ["last_name"])} AS last_name`,
-    state: `${textExpr(columns, ["state", "state_code"])} AS state`,
-    office: `${textExpr(columns, ["office", "office_name"])} AS office`,
-    party: `${textExpr(columns, ["party", "party_name"])} AS party`,
-    incumbent: `${boolExpr(columns, ["incumbent"])} AS incumbent`,
-    website: `${textExpr(columns, ["website", "campaign_website", "url"])} AS website`,
-    status: `${textExpr(columns, ["status"], "'active'")} AS status`,
-    election_name: `${textExpr(columns, ["election_name", "title", "race_name"])} AS election_name`
+    id: has(columns, "id") ? `c."id"` : `NULL`,
+    full_name: `${nameExpr("c", columns)} AS full_name`,
+    first_name: `${textColumnExpr("c", columns, ["first_name"])} AS first_name`,
+    last_name: `${textColumnExpr("c", columns, ["last_name"])} AS last_name`,
+    state: `${textColumnExpr("c", columns, ["state", "state_code"])} AS state`,
+    office: `${textColumnExpr("c", columns, ["office", "office_name"])} AS office`,
+    party: `${textColumnExpr("c", columns, ["party", "party_name"])} AS party`,
+    incumbent: `${boolColumnExpr("c", columns, ["incumbent"])} AS incumbent`,
+    website: `${textColumnExpr("c", columns, ["website", "campaign_website", "url"])} AS website`,
+    status: `${textColumnExpr("c", columns, ["status"], "'active'")} AS status`,
+    election_name: `${textColumnExpr("c", columns, ["election_name", "title", "race_name"])} AS election_name`
   };
 }
 
-function buildSearchConditions(columns, query = {}) {
-  const conditions = [];
+function buildWhere(columns, query = {}) {
+  const parts = [];
   const values = [];
 
-  const fullNameExpr = buildFullNameExpr(columns);
-  const stateExpr = textExpr(columns, ["state", "state_code"]);
-  const officeExpr = textExpr(columns, ["office", "office_name"]);
-  const partyExpr = textExpr(columns, ["party", "party_name"]);
-  const websiteExpr = textExpr(columns, ["website", "campaign_website", "url"]);
-  const electionExpr = textExpr(columns, ["election_name", "title", "race_name"]);
+  const fullName = nameExpr("c", columns);
+  const state = textColumnExpr("c", columns, ["state", "state_code"]);
+  const office = textColumnExpr("c", columns, ["office", "office_name"]);
+  const party = textColumnExpr("c", columns, ["party", "party_name"]);
+  const website = textColumnExpr("c", columns, ["website", "campaign_website", "url"]);
+  const electionName = textColumnExpr("c", columns, ["election_name", "title", "race_name"]);
 
   if (query.q) {
     values.push(`%${String(query.q).trim()}%`);
-    const idx = values.length;
+    const i = values.length;
 
-    conditions.push(`
+    parts.push(`
       (
-        ${fullNameExpr} ILIKE $${idx}
-        OR ${stateExpr} ILIKE $${idx}
-        OR ${officeExpr} ILIKE $${idx}
-        OR ${partyExpr} ILIKE $${idx}
-        OR ${websiteExpr} ILIKE $${idx}
-        OR ${electionExpr} ILIKE $${idx}
+        ${fullName} ILIKE $${i}
+        OR ${state} ILIKE $${i}
+        OR ${office} ILIKE $${i}
+        OR ${party} ILIKE $${i}
+        OR ${website} ILIKE $${i}
+        OR ${electionName} ILIKE $${i}
       )
     `);
   }
 
   if (query.state) {
     values.push(String(query.state).trim());
-    conditions.push(`${stateExpr} = $${values.length}`);
+    parts.push(`${state} = $${values.length}`);
   }
 
   if (query.office) {
     values.push(String(query.office).trim());
-    conditions.push(`${officeExpr} = $${values.length}`);
+    parts.push(`${office} = $${values.length}`);
   }
 
   if (query.party) {
     values.push(String(query.party).trim());
-    conditions.push(`${partyExpr} = $${values.length}`);
+    parts.push(`${party} = $${values.length}`);
   }
 
   return {
-    whereClause: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    whereClause: parts.length ? `WHERE ${parts.join(" AND ")}` : "",
     values
   };
 }
 
 export async function fetchCandidates(query = {}) {
-  const columns = await getTableColumns("candidates");
+  const columns = await getColumns("candidates");
 
   if (!columns.size) {
-    throw new Error('Table "candidates" was not found in public schema');
+    return { total: 0, results: [] };
   }
 
-  const select = buildCandidateSelect(columns);
-  const { whereClause, values } = buildSearchConditions(columns, query);
+  const projection = buildCandidateProjection(columns);
+  const { whereClause, values } = buildWhere(columns, query);
 
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(query.limit) || 24, 1), 100);
   const offset = (page - 1) * limit;
 
-  const stateOrderExpr = textExpr(columns, ["state", "state_code"]);
-  const officeOrderExpr = textExpr(columns, ["office", "office_name"]);
-  const lastNameOrderExpr = textExpr(columns, ["last_name", "name", "full_name"]);
+  const stateOrder = textColumnExpr("c", columns, ["state", "state_code"]);
+  const officeOrder = textColumnExpr("c", columns, ["office", "office_name"]);
+  const nameOrder = nameExpr("c", columns);
 
   const sql = `
     SELECT
-      ${select.id},
-      ${select.full_name},
-      ${select.first_name},
-      ${select.last_name},
-      ${select.state},
-      ${select.office},
-      ${select.party},
-      ${select.incumbent},
-      ${select.website},
-      ${select.status},
-      ${select.election_name}
+      ${projection.id} AS id,
+      ${projection.full_name},
+      ${projection.first_name},
+      ${projection.last_name},
+      ${projection.state},
+      ${projection.office},
+      ${projection.party},
+      ${projection.incumbent},
+      ${projection.website},
+      ${projection.status},
+      ${projection.election_name}
     FROM candidates c
     ${whereClause}
-    ORDER BY
-      ${stateOrderExpr} ASC,
-      ${officeOrderExpr} ASC,
-      ${lastNameOrderExpr} ASC,
-      id DESC
+    ORDER BY ${stateOrder} ASC, ${officeOrder} ASC, ${nameOrder} ASC
     LIMIT $${values.length + 1}
     OFFSET $${values.length + 2}
   `;
@@ -188,27 +175,27 @@ export async function fetchCandidates(query = {}) {
 }
 
 export async function fetchCandidateById(id) {
-  const candidateColumns = await getTableColumns("candidates");
+  const candidateColumns = await getColumns("candidates");
 
-  if (!candidateColumns.size) {
-    throw new Error('Table "candidates" was not found in public schema');
+  if (!candidateColumns.size || !has(candidateColumns, "id")) {
+    return null;
   }
 
-  const select = buildCandidateSelect(candidateColumns);
+  const projection = buildCandidateProjection(candidateColumns);
 
   const candidateSql = `
     SELECT
-      ${select.id},
-      ${select.full_name},
-      ${select.first_name},
-      ${select.last_name},
-      ${select.state},
-      ${select.office},
-      ${select.party},
-      ${select.incumbent},
-      ${select.website},
-      ${select.status},
-      ${select.election_name}
+      ${projection.id} AS id,
+      ${projection.full_name},
+      ${projection.first_name},
+      ${projection.last_name},
+      ${projection.state},
+      ${projection.office},
+      ${projection.party},
+      ${projection.incumbent},
+      ${projection.website},
+      ${projection.status},
+      ${projection.election_name}
     FROM candidates c
     WHERE c."id" = $1
     LIMIT 1
@@ -221,30 +208,32 @@ export async function fetchCandidateById(id) {
   }
 
   const candidate = candidateResult.rows[0];
-  const profileColumns = await getTableColumns("candidate_profiles");
+  const profileColumns = await getColumns("candidate_profiles");
 
   let profile = null;
 
-  if (profileColumns.size) {
-    const profileField = (name) =>
-      has(profileColumns, name) ? `cp.${qcol(name)}` : `NULL`;
+  if (profileColumns.size && has(profileColumns, "candidate_id")) {
+    const field = (name) =>
+      has(profileColumns, name) ? `cp.${quoteIdent(name)}` : `NULL`;
 
     const profileSql = `
       SELECT
-        ${profileField("campaign_website")} AS campaign_website,
-        ${profileField("official_website")} AS official_website,
-        ${profileField("office_address")} AS office_address,
-        ${profileField("campaign_address")} AS campaign_address,
-        ${profileField("phone")} AS phone,
-        ${profileField("email")} AS email,
-        ${profileField("chief_of_staff_name")} AS chief_of_staff_name,
-        ${profileField("campaign_manager_name")} AS campaign_manager_name,
-        ${profileField("finance_director_name")} AS finance_director_name,
-        ${profileField("political_director_name")} AS political_director_name,
-        ${profileField("press_contact_name")} AS press_contact_name,
-        ${profileField("press_contact_email")} AS press_contact_email,
-        ${profileField("source_label")} AS source_label,
-        ${profileField("updated_at")} AS updated_at
+        ${field("campaign_website")} AS campaign_website,
+        ${field("official_website")} AS official_website,
+        ${field("office_address")} AS office_address,
+        ${field("campaign_address")} AS campaign_address,
+        ${field("phone")} AS phone,
+        ${field("email")} AS email,
+        ${field("chief_of_staff_name")} AS chief_of_staff_name,
+        ${field("campaign_manager_name")} AS campaign_manager_name,
+        ${field("finance_director_name")} AS finance_director_name,
+        ${field("political_director_name")} AS political_director_name,
+        ${field("press_contact_name")} AS press_contact_name,
+        ${field("press_contact_email")} AS press_contact_email,
+        ${field("source_label")} AS source_label,
+        ${field("updated_at")} AS updated_at,
+        ${field("admin_locked")} AS admin_locked,
+        ${field("locked_fields")} AS locked_fields
       FROM candidate_profiles cp
       WHERE cp."candidate_id" = $1
       LIMIT 1
@@ -254,8 +243,7 @@ export async function fetchCandidateById(id) {
       const profileResult = await pool.query(profileSql, [id]);
       profile = profileResult.rows[0] || null;
     } catch (error) {
-      console.warn("candidate_profiles read skipped:", error.message);
-      profile = null;
+      console.warn("candidate profile read skipped:", error.message);
     }
   }
 
@@ -266,16 +254,15 @@ export async function fetchCandidateById(id) {
 }
 
 export async function fetchCandidateStates() {
-  const columns = await getTableColumns("candidates");
-  const stateCol = pickFirstExisting(columns, ["state", "state_code"]);
-
-  if (!stateCol) return [];
+  const columns = await getColumns("candidates");
+  const col = pick(columns, ["state", "state_code"]);
+  if (!col) return [];
 
   const sql = `
-    SELECT DISTINCT c.${qcol(stateCol)}::text AS value
+    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
     FROM candidates c
-    WHERE c.${qcol(stateCol)} IS NOT NULL
-      AND c.${qcol(stateCol)}::text <> ''
+    WHERE c.${quoteIdent(col)} IS NOT NULL
+      AND c.${quoteIdent(col)}::text <> ''
     ORDER BY value ASC
   `;
 
@@ -284,16 +271,15 @@ export async function fetchCandidateStates() {
 }
 
 export async function fetchCandidateOffices() {
-  const columns = await getTableColumns("candidates");
-  const officeCol = pickFirstExisting(columns, ["office", "office_name"]);
-
-  if (!officeCol) return [];
+  const columns = await getColumns("candidates");
+  const col = pick(columns, ["office", "office_name"]);
+  if (!col) return [];
 
   const sql = `
-    SELECT DISTINCT c.${qcol(officeCol)}::text AS value
+    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
     FROM candidates c
-    WHERE c.${qcol(officeCol)} IS NOT NULL
-      AND c.${qcol(officeCol)}::text <> ''
+    WHERE c.${quoteIdent(col)} IS NOT NULL
+      AND c.${quoteIdent(col)}::text <> ''
     ORDER BY value ASC
   `;
 
@@ -302,16 +288,15 @@ export async function fetchCandidateOffices() {
 }
 
 export async function fetchCandidateParties() {
-  const columns = await getTableColumns("candidates");
-  const partyCol = pickFirstExisting(columns, ["party", "party_name"]);
-
-  if (!partyCol) return [];
+  const columns = await getColumns("candidates");
+  const col = pick(columns, ["party", "party_name"]);
+  if (!col) return [];
 
   const sql = `
-    SELECT DISTINCT c.${qcol(partyCol)}::text AS value
+    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
     FROM candidates c
-    WHERE c.${qcol(partyCol)} IS NOT NULL
-      AND c.${qcol(partyCol)}::text <> ''
+    WHERE c.${quoteIdent(col)} IS NOT NULL
+      AND c.${quoteIdent(col)}::text <> ''
     ORDER BY value ASC
   `;
 
