@@ -151,32 +151,27 @@ export async function fetchCandidateById(id) {
 
     const profileResult = await pool.query(profileSql, [id]);
     profile = profileResult.rows[0] || null;
-  } catch (error) {
+  } catch {
     profile = null;
   }
 
   if (!profile) {
+    const fallbackAddress =
+      [
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.state_code,
+        candidate.postal_code
+      ]
+        .filter(Boolean)
+        .join(", ") || null;
+
     profile = {
       campaign_website: candidate.website || null,
       official_website: null,
-      office_address: [
-        candidate.address_line1,
-        candidate.address_line2,
-        candidate.city,
-        candidate.state_code,
-        candidate.postal_code
-      ]
-        .filter(Boolean)
-        .join(", ") || null,
-      campaign_address: [
-        candidate.address_line1,
-        candidate.address_line2,
-        candidate.city,
-        candidate.state_code,
-        candidate.postal_code
-      ]
-        .filter(Boolean)
-        .join(", ") || null,
+      office_address: fallbackAddress,
+      campaign_address: fallbackAddress,
       phone: candidate.phone || null,
       email: candidate.contact_email || null,
       chief_of_staff_name: null,
