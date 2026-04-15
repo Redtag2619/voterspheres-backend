@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js"; 
+import { pool } from "../db/pool.js";
 
 function getEnv(name, fallback = "") {
   return process.env[name] || fallback;
@@ -21,7 +21,7 @@ function getFecApiConfig() {
     baseUrl: getEnv("FEC_API_BASE_URL", "https://api.open.fec.gov/v1"),
     defaultCycle: Number(getEnv("FEC_DEFAULT_CYCLE", "2026")),
     perPage: Math.min(Number(getEnv("FEC_SYNC_PER_PAGE", "100")), 100),
-    maxPages: Math.max(Number(getEnv("FEC_SYNC_MAX_PAGES", "10")), 1),
+    maxPages: Math.max(Number(getEnv("FEC_SYNC_MAX_PAGES", "10")), 1)
   };
 }
 
@@ -40,12 +40,7 @@ function normalizeParty(value) {
 }
 
 function normalizeName(row) {
-  return (
-    row.name ||
-    row.candidate_name ||
-    row.candidate ||
-    "Unknown Candidate"
-  );
+  return row.name || row.candidate_name || row.candidate || "Unknown Candidate";
 }
 
 function normalizeReceipts(row) {
@@ -72,16 +67,82 @@ function normalizeState(row) {
 
 function normalizeDistrict(row) {
   const district = row.district ?? row.seat_number ?? null;
-  return district === undefined ? null : district;
+  if (district === undefined || district === null || district === "") return "Statewide";
+  if (String(district) === "00") return "Statewide";
+  return String(district);
 }
 
 function normalizeCoverageEndDate(row) {
-  return (
-    row.coverage_end_date ||
-    row.coverage_to_date ||
-    row.report_end_date ||
-    null
-  );
+  return row.coverage_end_date || row.coverage_to_date || row.report_end_date || null;
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 180);
+}
+
+function normalizeIncumbent(row) {
+  const raw = String(row.incumbent_challenge_full || row.incumbent_challenge || "")
+    .toLowerCase()
+    .trim();
+
+  return raw.includes("incumbent") || raw === "i";
+}
+
+function buildElectionLabel(row, cycle) {
+  const state = normalizeState(row);
+  const office = normalizeOffice(row.office_full || row.office || row.office_type);
+  return `${cycle} ${state} ${office}`;
+}
+
+function buildCandidateRecord(row, cycle) {
+  const fullName = normalizeName(row);
+  const office = normalizeOffice(row.office_full || row.office || row.office_type);
+  const stateCode = row.state || row.candidate_state || null;
+  const state = normalizeState(row);
+  const district = normalizeDistrict(row);
+  const fecCandidateId = String(row.candidate_id || row.fec_candidate_id || "").trim();
+
+  return {
+    fec_candidate_id: fecCandidateId || null,
+    full_name: fullName,
+    name: fullName,
+    slug: slugify(`${fullName}-${stateCode || state}-${office}-${cycle}-${fecCandidateId}`),
+    party: normalizeParty(row.party_full || row.party),
+    office,
+    district,
+    state,
+    state_code: stateCode,
+    election: buildElectionLabel(row, cycle),
+    election_date: null,
+    election_year: Number(cycle),
+    election_type: "general",
+    campaign_status: "active",
+    website: null,
+    incumbent: normalizeIncumbent(row),
+    bio: null,
+    photo: null,
+    photo_url: null,
+    contact_email: null,
+    press_email: null,
+    phone: null,
+    address_line1: null,
+    address_line2: null,
+    city: null,
+    postal_code: null,
+    facebook_url: null,
+    x_url: null,
+    instagram_url: null,
+    youtube_url: null,
+    linkedin_url: null,
+    contact_source: "fec_sync",
+    contact_verified: false,
+    last_contact_update: null
+  };
 }
 
 async function fecGet(path, params = {}) {
@@ -162,6 +223,19 @@ export async function ensureFundraisingLiveTable() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_fundraising_live_election_year
     ON fundraising_live (election_year)
+  `);
+}
+
+export async function ensureCandidatesSyncSchema() {
+  await pool.query(`
+    ALTER TABLE candidates
+    ADD COLUMN IF NOT EXISTS fec_candidate_id TEXT
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_candidates_fec_candidate_id
+    ON candidates (fec_candidate_id)
+    WHERE fec_candidate_id IS NOT NULL
   `);
 }
 
@@ -308,6 +382,121 @@ export async function replaceFundraisingLive(rows, cycle) {
   }
 }
 
+export async function upsertCandidatesFromFec(rows, cycle) {
+  await ensureCandidatesSyncSchema();
+
+  let stored = 0;
+
+  for (const row of rows) {
+    const candidate = buildCandidateRecord(row.source_payload || row, cycle);
+    if (!candidate.fec_candidate_id) continue;
+
+    await pool.query(
+      `
+        INSERT INTO candidates (
+          fec_candidate_id,
+          full_name,
+          name,
+          slug,
+          party,
+          office,
+          district,
+          state,
+          state_code,
+          election,
+          election_date,
+          election_year,
+          election_type,
+          campaign_status,
+          website,
+          incumbent,
+          bio,
+          photo,
+          photo_url,
+          contact_email,
+          press_email,
+          phone,
+          address_line1,
+          address_line2,
+          city,
+          postal_code,
+          facebook_url,
+          x_url,
+          instagram_url,
+          youtube_url,
+          linkedin_url,
+          contact_source,
+          contact_verified,
+          last_contact_update,
+          updated_at,
+          created_at
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+          $20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,NOW(),NOW()
+        )
+        ON CONFLICT (fec_candidate_id)
+        DO UPDATE SET
+          full_name = COALESCE(EXCLUDED.full_name, candidates.full_name),
+          name = COALESCE(EXCLUDED.name, candidates.name),
+          slug = COALESCE(EXCLUDED.slug, candidates.slug),
+          party = COALESCE(EXCLUDED.party, candidates.party),
+          office = COALESCE(EXCLUDED.office, candidates.office),
+          district = COALESCE(EXCLUDED.district, candidates.district),
+          state = COALESCE(EXCLUDED.state, candidates.state),
+          state_code = COALESCE(EXCLUDED.state_code, candidates.state_code),
+          election = COALESCE(EXCLUDED.election, candidates.election),
+          election_year = COALESCE(EXCLUDED.election_year, candidates.election_year),
+          election_type = COALESCE(EXCLUDED.election_type, candidates.election_type),
+          campaign_status = COALESCE(EXCLUDED.campaign_status, candidates.campaign_status),
+          incumbent = COALESCE(EXCLUDED.incumbent, candidates.incumbent),
+          contact_source = 'fec_sync',
+          updated_at = NOW()
+      `,
+      [
+        candidate.fec_candidate_id,
+        candidate.full_name,
+        candidate.name,
+        candidate.slug,
+        candidate.party,
+        candidate.office,
+        candidate.district,
+        candidate.state,
+        candidate.state_code,
+        candidate.election,
+        candidate.election_date,
+        candidate.election_year,
+        candidate.election_type,
+        candidate.campaign_status,
+        candidate.website,
+        candidate.incumbent,
+        candidate.bio,
+        candidate.photo,
+        candidate.photo_url,
+        candidate.contact_email,
+        candidate.press_email,
+        candidate.phone,
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.postal_code,
+        candidate.facebook_url,
+        candidate.x_url,
+        candidate.instagram_url,
+        candidate.youtube_url,
+        candidate.linkedin_url,
+        candidate.contact_source,
+        candidate.contact_verified,
+        candidate.last_contact_update
+      ]
+    );
+
+    stored += 1;
+  }
+
+  return stored;
+}
+
 export async function syncFundraisingFromFec({ cycle } = {}) {
   const { defaultCycle } = getFecApiConfig();
   const targetCycle = Number(cycle || defaultCycle);
@@ -316,11 +505,13 @@ export async function syncFundraisingFromFec({ cycle } = {}) {
   const normalizedRows = normalizeFundraisingRows(rawRows, targetCycle);
 
   await replaceFundraisingLive(normalizedRows, targetCycle);
+  const candidateStored = await upsertCandidatesFromFec(normalizedRows, targetCycle);
 
   return {
     ok: true,
     cycle: targetCycle,
     fetched: rawRows.length,
-    stored: normalizedRows.length
+    fundraising_stored: normalizedRows.length,
+    candidates_stored: candidateStored
   };
 }
