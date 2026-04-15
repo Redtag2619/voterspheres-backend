@@ -1,104 +1,83 @@
 import {
-  countCandidates,
-  findCandidateById,
-  findCandidateProfileById,
-  findCandidates,
-  findDistinctCandidateStates,
-  findDistinctCandidateOffices,
-  findDistinctCandidateParties
-} from "../repositories/candidates.repository.js";
+  getCandidates,
+  getCandidateBySlug,
+  updateCandidateContact,
+} from "../services/candidates.service.js";
 
-export async function getCandidates(req, res, next) {
+export async function listCandidates(req, res) {
   try {
-    const {
-      q = "",
-      state = "",
-      office = "",
-      party = "",
-      page = 1,
-      limit = 12
-    } = req.query;
-
     const filters = {
-      q: String(q).trim(),
-      state: String(state).trim(),
-      office: String(office).trim(),
-      party: String(party).trim(),
-      page: Number(page) > 0 ? Number(page) : 1,
-      limit: Number(limit) > 0 ? Math.min(Number(limit), 100) : 12
+      state: req.query.state || "",
+      office: req.query.office || "",
+      party: req.query.party || "",
+      election_year: req.query.election_year || "",
+      search: req.query.search || "",
     };
 
-    const [total, results] = await Promise.all([
-      countCandidates(filters),
-      findCandidates(filters)
-    ]);
+    const candidates = await getCandidates(filters);
 
-    res.json({
-      total,
-      page: filters.page,
-      limit: filters.limit,
-      results
+    return res.status(200).json({
+      success: true,
+      count: candidates.length,
+      candidates,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error("listCandidates error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch candidates.",
+    });
   }
 }
 
-export async function getCandidateById(req, res, next) {
+export async function getCandidateProfile(req, res) {
   try {
-    const { id } = req.params;
-
-    const [candidate, profile] = await Promise.all([
-      findCandidateById(id),
-      findCandidateProfileById(id)
-    ]);
+    const { slug } = req.params;
+    const candidate = await getCandidateBySlug(slug);
 
     if (!candidate) {
       return res.status(404).json({
-        error: "Candidate not found"
+        success: false,
+        error: "Candidate not found.",
       });
     }
 
-    res.json({
+    return res.status(200).json({
+      success: true,
       candidate,
-      profile
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error("getCandidateProfile error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch candidate profile.",
+    });
   }
 }
 
-export async function getCandidateStates(_req, res, next) {
+export async function patchCandidateContact(req, res) {
   try {
-    const states = await findDistinctCandidateStates();
-    res.json(states);
-  } catch (err) {
-    next(err);
-  }
-}
+    const { id } = req.params;
 
-export async function getCandidateOffices(_req, res, next) {
-  try {
-    const offices = await findDistinctCandidateOffices();
-    res.json(offices);
-  } catch (err) {
-    next(err);
-  }
-}
+    const updated = await updateCandidateContact(id, req.body || {});
 
-export async function getCandidateParties(_req, res, next) {
-  try {
-    const parties = await findDistinctCandidateParties();
-    res.json(parties);
-  } catch (err) {
-    next(err);
-  }
-}
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        error: "Candidate not found.",
+      });
+    }
 
-export async function getCandidateCounties(_req, res, next) {
-  try {
-    res.json([]);
-  } catch (err) {
-    next(err);
+    return res.status(200).json({
+      success: true,
+      candidate: updated,
+      message: "Candidate contact information updated successfully.",
+    });
+  } catch (error) {
+    console.error("patchCandidateContact error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to update candidate contact information.",
+    });
   }
 }
