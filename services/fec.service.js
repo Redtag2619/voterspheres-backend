@@ -485,7 +485,7 @@ export async function upsertCandidatesFromFec(rows, cycle) {
 
   return stored;
 }
-
+console.log("DB CHECK:", await pool.query("SELECT COUNT(*) FROM candidates"));
 export async function syncFundraisingFromFec({ cycle } = {}) {
   const { defaultCycle } = getFecApiConfig();
   const targetCycle = Number(cycle || defaultCycle);
