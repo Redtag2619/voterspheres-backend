@@ -16,9 +16,9 @@ router.get("/states", getCandidateStates);
 router.get("/offices", getCandidateOffices);
 router.get("/parties", getCandidateParties);
 
+// 🔥 NEW (these were missing)
 router.post("/refresh-profiles", refreshAllCandidateProfiles);
 router.post("/:id/refresh-profile", refreshCandidateProfile);
-
 router.get("/:id", getCandidateById);
 
 export default router;
