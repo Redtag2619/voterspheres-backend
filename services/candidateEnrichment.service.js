@@ -27,7 +27,7 @@ function safeWebsite(value) {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function stripTags(html = "") {
@@ -51,14 +51,12 @@ function unique(values) {
 
 function normalizePhone(value) {
   const raw = clean(value);
-  if (!raw) return null;
-  return raw.replace(/\s+/g, " ").trim();
+  return raw ? raw.replace(/\s+/g, " ").trim() : null;
 }
 
 function normalizeEmail(value) {
   const raw = clean(value);
-  if (!raw) return null;
-  return raw.toLowerCase();
+  return raw ? raw.toLowerCase() : null;
 }
 
 function chooseBestEmail(emails = [], preferredKeywords = []) {
@@ -70,36 +68,33 @@ function chooseBestEmail(emails = [], preferredKeywords = []) {
     if (hit) return hit;
   }
 
-  const publicHit = list.find(
-    (item) =>
-      !item.includes("noreply") &&
-      !item.includes("no-reply") &&
-      !item.includes("donotreply")
+  return (
+    list.find(
+      (item) =>
+        !item.includes("noreply") &&
+        !item.includes("no-reply") &&
+        !item.includes("donotreply")
+    ) || list[0]
   );
-
-  return publicHit || list[0];
 }
 
 function chooseBestPhone(phones = []) {
-  const list = unique(phones.map(normalizePhone));
-  return list[0] || null;
+  return unique(phones.map(normalizePhone))[0] || null;
 }
 
 function chooseBestAddress(addresses = []) {
-  const list = unique(addresses.map(clean));
-  return list[0] || null;
+  return unique(addresses.map(clean))[0] || null;
 }
 
 function chooseOfficialWebsite(urls = []) {
   const list = unique(urls.map(safeWebsite));
-  const gov = list.find((url) => /\.gov(\/|$)/i.test(url));
-  if (gov) return gov;
-
-  const edu = list.find((url) => /\.us(\/|$)/i.test(url));
-  if (edu) return edu;
-
-  const officialWord = list.find((url) => /official/i.test(url));
-  return officialWord || list[0] || null;
+  return (
+    list.find((url) => /\.gov(\/|$)/i.test(url)) ||
+    list.find((url) => /\.us(\/|$)/i.test(url)) ||
+    list.find((url) => /official/i.test(url)) ||
+    list[0] ||
+    null
+  );
 }
 
 function extractMetaContent(html, names = []) {
@@ -127,9 +122,7 @@ function extractEmails(html) {
   ].map((m) => normalizeEmail(m[1]));
 
   const textMatches = [
-    ...html.matchAll(
-      /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})\b/gi
-    )
+    ...html.matchAll(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})\b/gi)
   ].map((m) => normalizeEmail(m[1]));
 
   return unique([...mailtoMatches, ...textMatches]);
@@ -145,13 +138,6 @@ function extractPhones(text) {
   return unique(matches);
 }
 
-function extractCandidateName(candidate) {
-  return firstNonEmpty(
-    candidate?.full_name,
-    [candidate?.first_name, candidate?.last_name].filter(Boolean).join(" ")
-  );
-}
-
 function extractAddresses(text) {
   const matches = [
     ...text.matchAll(
@@ -162,8 +148,8 @@ function extractAddresses(text) {
   return unique(matches);
 }
 
-function extractNamedContact(text, labelPatterns = []) {
-  for (const label of labelPatterns) {
+function extractNamedContact(text, labels = []) {
+  for (const label of labels) {
     const re = new RegExp(
       `${label}\\s*[:\\-–]?\\s*([A-Z][a-z]+(?:\\s+[A-Z][a-z.'-]+){0,3})`,
       "i"
@@ -176,9 +162,9 @@ function extractNamedContact(text, labelPatterns = []) {
 
 function extractLinks(html, baseUrl) {
   const links = [];
-  const hrefRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const regex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
-  for (const match of html.matchAll(hrefRegex)) {
+  for (const match of html.matchAll(regex)) {
     const href = clean(match[1]);
     const label = clean(stripTags(match[2] || ""));
 
@@ -188,34 +174,14 @@ function extractLinks(html, baseUrl) {
       const url = new URL(href, baseUrl);
       links.push({
         href: url.toString(),
-        label: label || "",
-        raw: href
+        label: label || ""
       });
     } catch {
-      // ignore bad URLs
+      // ignore
     }
   }
 
   return links;
-}
-
-function scoreContactPage(link) {
-  const haystack = `${link.href} ${link.label}`.toLowerCase();
-
-  let score = 0;
-  if (haystack.includes("contact")) score += 6;
-  if (haystack.includes("about")) score += 4;
-  if (haystack.includes("team")) score += 4;
-  if (haystack.includes("staff")) score += 4;
-  if (haystack.includes("press")) score += 5;
-  if (haystack.includes("media")) score += 5;
-  if (haystack.includes("leadership")) score += 3;
-  if (haystack.includes("meet")) score += 2;
-  if (haystack.includes("official")) score += 3;
-  if (haystack.includes("mailto:")) score -= 10;
-  if (haystack.includes("donate")) score -= 6;
-  if (haystack.includes("volunteer")) score -= 3;
-  return score;
 }
 
 function sameHost(urlA, urlB) {
@@ -224,6 +190,23 @@ function sameHost(urlA, urlB) {
   } catch {
     return false;
   }
+}
+
+function scoreContactPage(link) {
+  const text = `${link.href} ${link.label}`.toLowerCase();
+
+  let score = 0;
+  if (text.includes("contact")) score += 6;
+  if (text.includes("about")) score += 4;
+  if (text.includes("team")) score += 4;
+  if (text.includes("staff")) score += 4;
+  if (text.includes("press")) score += 5;
+  if (text.includes("media")) score += 5;
+  if (text.includes("leadership")) score += 3;
+  if (text.includes("official")) score += 3;
+  if (text.includes("donate")) score -= 6;
+  if (text.includes("volunteer")) score -= 3;
+  return score;
 }
 
 async function fetchHtml(url) {
@@ -237,8 +220,7 @@ async function fetchHtml(url) {
       signal: controller.signal,
       headers: {
         "User-Agent": USER_AGENT,
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache"
       }
@@ -250,10 +232,7 @@ async function fetchHtml(url) {
     }
 
     const html = await response.text();
-    return {
-      url: response.url || url,
-      html
-    };
+    return { url: response.url || url, html };
   } catch {
     return null;
   } finally {
@@ -261,112 +240,65 @@ async function fetchHtml(url) {
   }
 }
 
-function extractSiteSignals(html, pageUrl, candidate) {
+function extractSignals(html, pageUrl) {
   const text = stripTags(html);
   const links = extractLinks(html, pageUrl);
   const emails = extractEmails(html);
   const phones = extractPhones(text);
   const addresses = extractAddresses(text);
 
-  const officialWebsiteCandidates = [
-    ...links
+  return {
+    page_url: pageUrl,
+    page_title: extractTitle(html),
+    description: extractMetaContent(html, ["description", "og:description"]),
+    emails,
+    phones,
+    addresses,
+    links,
+    officialWebsiteCandidates: links
       .filter(
         (link) =>
           /\.gov(\/|$)/i.test(link.href) ||
           /\.us(\/|$)/i.test(link.href) ||
           /official/i.test(`${link.label} ${link.href}`)
       )
-      .map((link) => link.href)
-  ];
-
-  const title = extractTitle(html);
-  const ogSite = extractMetaContent(html, ["og:site_name"]);
-  const description = extractMetaContent(html, ["description", "og:description"]);
-
-  const chiefOfStaff =
-    extractNamedContact(text, [
-      "chief of staff",
-      "chief\\s+of\\s+staff"
-    ]) || null;
-
-  const campaignManager =
-    extractNamedContact(text, [
-      "campaign manager"
-    ]) || null;
-
-  const financeDirector =
-    extractNamedContact(text, [
-      "finance director"
-    ]) || null;
-
-  const politicalDirector =
-    extractNamedContact(text, [
-      "political director"
-    ]) || null;
-
-  const pressContactName =
-    extractNamedContact(text, [
+      .map((link) => link.href),
+    campaign_address: chooseBestAddress(addresses),
+    phone: chooseBestPhone(phones),
+    email: chooseBestEmail(emails, ["info@", "contact@", "hello@", "team@"]),
+    press_contact_email: chooseBestEmail(emails, [
+      "press@",
+      "media@",
+      "communications@",
+      "comms@"
+    ]),
+    chief_of_staff_name: extractNamedContact(text, ["chief of staff"]),
+    campaign_manager_name: extractNamedContact(text, ["campaign manager"]),
+    finance_director_name: extractNamedContact(text, ["finance director"]),
+    political_director_name: extractNamedContact(text, ["political director"]),
+    press_contact_name: extractNamedContact(text, [
       "press contact",
       "media contact",
       "communications director",
       "press secretary"
-    ]) || null;
-
-  const pressContactEmail = chooseBestEmail(emails, [
-    "press@",
-    "media@",
-    "communications@",
-    "comms@"
-  ]);
-
-  const generalEmail = chooseBestEmail(emails, [
-    "info@",
-    "contact@",
-    "hello@",
-    "team@"
-  ]);
-
-  const candidateName = extractCandidateName(candidate);
-  const campaignAddress = chooseBestAddress(addresses);
-
-  return {
-    page_url: pageUrl,
-    page_title: title,
-    site_name: ogSite,
-    description,
-    emails,
-    phones,
-    addresses,
-    links,
-    officialWebsiteCandidates,
-    contact_email: generalEmail,
-    press_contact_email: pressContactEmail,
-    press_contact_name: pressContactName,
-    chief_of_staff_name: chiefOfStaff,
-    campaign_manager_name: campaignManager,
-    finance_director_name: financeDirector,
-    political_director_name: politicalDirector,
-    campaign_address: campaignAddress,
-    phone: chooseBestPhone(phones),
-    candidate_name: candidateName
+    ])
   };
 }
 
-async function crawlRelevantPages(startUrl, candidate) {
+async function crawlRelevantPages(startUrl) {
   const visited = new Set();
   const pages = [];
-  const firstPage = await fetchHtml(startUrl);
+  const first = await fetchHtml(startUrl);
+  if (!first) return pages;
 
-  if (!firstPage) return pages;
-
-  const queue = [firstPage];
+  const queue = [first];
 
   while (queue.length && pages.length < MAX_FOLLOW_PAGES) {
     const current = queue.shift();
     if (!current?.url || visited.has(current.url)) continue;
 
     visited.add(current.url);
-    pages.push(extractSiteSignals(current.html, current.url, candidate));
+    pages.push(extractSignals(current.html, current.url));
 
     const links = extractLinks(current.html, current.url)
       .filter((link) => sameHost(link.href, current.url))
@@ -377,8 +309,8 @@ async function crawlRelevantPages(startUrl, candidate) {
 
     for (const link of links) {
       if (visited.has(link.href)) continue;
-      const nextPage = await fetchHtml(link.href);
-      if (nextPage) queue.push(nextPage);
+      const next = await fetchHtml(link.href);
+      if (next) queue.push(next);
       if (pages.length + queue.length >= MAX_FOLLOW_PAGES) break;
     }
   }
@@ -386,9 +318,31 @@ async function crawlRelevantPages(startUrl, candidate) {
   return pages;
 }
 
-function mergeExtractedSignals(candidate, existing = {}, pages = [], officialPages = []) {
-  const allPages = [...pages, ...officialPages];
+function parseLockedFields(value) {
+  if (!value) return {};
+  if (typeof value === "object" && !Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
 
+function isFieldLocked(existingProfile, fieldName) {
+  if (existingProfile?.admin_locked) return true;
+  const lockedFields = parseLockedFields(existingProfile?.locked_fields);
+  return Boolean(lockedFields?.[fieldName]);
+}
+
+function applyLockAwareValue(existingProfile, fieldName, incomingValue, existingValue) {
+  if (isFieldLocked(existingProfile, fieldName)) {
+    return existingValue ?? null;
+  }
+  return clean(incomingValue) ?? clean(existingValue) ?? null;
+}
+
+function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages = [], candidate = {}) {
+  const allPages = [...campaignPages, ...officialPages];
   const allEmails = unique(allPages.flatMap((page) => page.emails || []));
   const allPhones = unique(allPages.flatMap((page) => page.phones || []));
   const allAddresses = unique(allPages.flatMap((page) => page.addresses || []));
@@ -396,61 +350,123 @@ function mergeExtractedSignals(candidate, existing = {}, pages = [], officialPag
     allPages.flatMap((page) => page.officialWebsiteCandidates || [])
   );
 
-  const officialWebsite = firstNonEmpty(
-    existing.official_website,
-    chooseOfficialWebsite(officialCandidates)
-  );
-
-  const sourceParts = [];
-  if (pages.length) sourceParts.push("campaign_site_live");
-  if (officialPages.length) sourceParts.push("official_site_live");
-  if (!sourceParts.length) sourceParts.push("candidate_record_seed");
-
-  const officialAddress = chooseBestAddress(
-    officialPages.map((page) => page.campaign_address).filter(Boolean)
-  );
-
-  return {
-    campaign_website: firstNonEmpty(
-      existing.campaign_website,
-      safeWebsite(candidate.website)
+  const derived = {
+    campaign_website: firstNonEmpty(existing.campaign_website, safeWebsite(candidate.website)),
+    official_website: firstNonEmpty(existing.official_website, chooseOfficialWebsite(officialCandidates)),
+    office_address: firstNonEmpty(
+      chooseBestAddress(officialPages.map((page) => page.campaign_address)),
+      existing.office_address
     ),
-    official_website: officialWebsite,
-    office_address: firstNonEmpty(existing.office_address, officialAddress),
     campaign_address: firstNonEmpty(
-      existing.campaign_address,
-      chooseBestAddress(allPages.map((page) => page.campaign_address))
+      chooseBestAddress(allPages.map((page) => page.campaign_address)),
+      existing.campaign_address
     ),
-    phone: firstNonEmpty(existing.phone, chooseBestPhone(allPhones)),
+    phone: firstNonEmpty(chooseBestPhone(allPhones), existing.phone),
     email: firstNonEmpty(
-      existing.email,
-      chooseBestEmail(allEmails, ["info@", "contact@", "hello@", "team@"])
+      chooseBestEmail(allEmails, ["info@", "contact@", "hello@", "team@"]),
+      existing.email
     ),
     chief_of_staff_name: firstNonEmpty(
-      existing.chief_of_staff_name,
-      ...allPages.map((page) => page.chief_of_staff_name)
+      ...allPages.map((page) => page.chief_of_staff_name),
+      existing.chief_of_staff_name
     ),
     campaign_manager_name: firstNonEmpty(
-      existing.campaign_manager_name,
-      ...allPages.map((page) => page.campaign_manager_name)
+      ...allPages.map((page) => page.campaign_manager_name),
+      existing.campaign_manager_name
     ),
     finance_director_name: firstNonEmpty(
-      existing.finance_director_name,
-      ...allPages.map((page) => page.finance_director_name)
+      ...allPages.map((page) => page.finance_director_name),
+      existing.finance_director_name
     ),
     political_director_name: firstNonEmpty(
-      existing.political_director_name,
-      ...allPages.map((page) => page.political_director_name)
+      ...allPages.map((page) => page.political_director_name),
+      existing.political_director_name
     ),
     press_contact_name: firstNonEmpty(
-      existing.press_contact_name,
-      ...allPages.map((page) => page.press_contact_name)
+      ...allPages.map((page) => page.press_contact_name),
+      existing.press_contact_name
     ),
     press_contact_email: firstNonEmpty(
-      existing.press_contact_email,
-      chooseBestEmail(allEmails, ["press@", "media@", "communications@", "comms@"])
+      chooseBestEmail(allEmails, ["press@", "media@", "communications@", "comms@"]),
+      existing.press_contact_email
     ),
-    source_label: sourceParts.join("+")
+    source_label:
+      campaignPages.length || officialPages.length
+        ? [
+            campaignPages.length ? "campaign_site_live" : null,
+            officialPages.length ? "official_site_live" : null
+          ]
+            .filter(Boolean)
+            .join("+")
+        : firstNonEmpty(existing.source_label, "candidate_record_seed")
+  };
+
+  return {
+    campaign_website: applyLockAwareValue(
+      existing,
+      "campaign_website",
+      derived.campaign_website,
+      existing.campaign_website
+    ),
+    official_website: applyLockAwareValue(
+      existing,
+      "official_website",
+      derived.official_website,
+      existing.official_website
+    ),
+    office_address: applyLockAwareValue(
+      existing,
+      "office_address",
+      derived.office_address,
+      existing.office_address
+    ),
+    campaign_address: applyLockAwareValue(
+      existing,
+      "campaign_address",
+      derived.campaign_address,
+      existing.campaign_address
+    ),
+    phone: applyLockAwareValue(existing, "phone", derived.phone, existing.phone),
+    email: applyLockAwareValue(existing, "email", derived.email, existing.email),
+    chief_of_staff_name: applyLockAwareValue(
+      existing,
+      "chief_of_staff_name",
+      derived.chief_of_staff_name,
+      existing.chief_of_staff_name
+    ),
+    campaign_manager_name: applyLockAwareValue(
+      existing,
+      "campaign_manager_name",
+      derived.campaign_manager_name,
+      existing.campaign_manager_name
+    ),
+    finance_director_name: applyLockAwareValue(
+      existing,
+      "finance_director_name",
+      derived.finance_director_name,
+      existing.finance_director_name
+    ),
+    political_director_name: applyLockAwareValue(
+      existing,
+      "political_director_name",
+      derived.political_director_name,
+      existing.political_director_name
+    ),
+    press_contact_name: applyLockAwareValue(
+      existing,
+      "press_contact_name",
+      derived.press_contact_name,
+      existing.press_contact_name
+    ),
+    press_contact_email: applyLockAwareValue(
+      existing,
+      "press_contact_email",
+      derived.press_contact_email,
+      existing.press_contact_email
+    ),
+    source_label: clean(derived.source_label) || clean(existing.source_label) || "candidate_record_seed",
+    admin_locked: Boolean(existing.admin_locked),
+    locked_fields: parseLockedFields(existing.locked_fields)
   };
 }
 
@@ -472,9 +488,17 @@ async function ensureCandidateProfilesTable() {
       press_contact_name TEXT,
       press_contact_email TEXT,
       source_label TEXT DEFAULT 'manual_enrichment',
+      admin_locked BOOLEAN DEFAULT false,
+      locked_fields JSONB DEFAULT '{}'::jsonb,
       updated_at TIMESTAMP DEFAULT NOW(),
       created_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE candidate_profiles
+    ADD COLUMN IF NOT EXISTS admin_locked BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS locked_fields JSONB DEFAULT '{}'::jsonb
   `);
 }
 
@@ -521,6 +545,8 @@ async function getExistingProfile(candidateId) {
         press_contact_name,
         press_contact_email,
         source_label,
+        admin_locked,
+        locked_fields,
         updated_at,
         created_at
       FROM candidate_profiles
@@ -551,26 +577,30 @@ async function upsertProfile(candidateId, profile) {
         press_contact_name,
         press_contact_email,
         source_label,
+        admin_locked,
+        locked_fields,
         updated_at
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW()
       )
       ON CONFLICT (candidate_id)
       DO UPDATE SET
-        campaign_website = COALESCE(EXCLUDED.campaign_website, candidate_profiles.campaign_website),
-        official_website = COALESCE(EXCLUDED.official_website, candidate_profiles.official_website),
-        office_address = COALESCE(EXCLUDED.office_address, candidate_profiles.office_address),
-        campaign_address = COALESCE(EXCLUDED.campaign_address, candidate_profiles.campaign_address),
-        phone = COALESCE(EXCLUDED.phone, candidate_profiles.phone),
-        email = COALESCE(EXCLUDED.email, candidate_profiles.email),
-        chief_of_staff_name = COALESCE(EXCLUDED.chief_of_staff_name, candidate_profiles.chief_of_staff_name),
-        campaign_manager_name = COALESCE(EXCLUDED.campaign_manager_name, candidate_profiles.campaign_manager_name),
-        finance_director_name = COALESCE(EXCLUDED.finance_director_name, candidate_profiles.finance_director_name),
-        political_director_name = COALESCE(EXCLUDED.political_director_name, candidate_profiles.political_director_name),
-        press_contact_name = COALESCE(EXCLUDED.press_contact_name, candidate_profiles.press_contact_name),
-        press_contact_email = COALESCE(EXCLUDED.press_contact_email, candidate_profiles.press_contact_email),
-        source_label = COALESCE(EXCLUDED.source_label, candidate_profiles.source_label),
+        campaign_website = EXCLUDED.campaign_website,
+        official_website = EXCLUDED.official_website,
+        office_address = EXCLUDED.office_address,
+        campaign_address = EXCLUDED.campaign_address,
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        chief_of_staff_name = EXCLUDED.chief_of_staff_name,
+        campaign_manager_name = EXCLUDED.campaign_manager_name,
+        finance_director_name = EXCLUDED.finance_director_name,
+        political_director_name = EXCLUDED.political_director_name,
+        press_contact_name = EXCLUDED.press_contact_name,
+        press_contact_email = EXCLUDED.press_contact_email,
+        source_label = EXCLUDED.source_label,
+        admin_locked = COALESCE(EXCLUDED.admin_locked, candidate_profiles.admin_locked),
+        locked_fields = COALESCE(EXCLUDED.locked_fields, candidate_profiles.locked_fields),
         updated_at = NOW()
       RETURNING
         candidate_id,
@@ -587,6 +617,8 @@ async function upsertProfile(candidateId, profile) {
         press_contact_name,
         press_contact_email,
         source_label,
+        admin_locked,
+        locked_fields,
         updated_at,
         created_at
     `,
@@ -604,7 +636,9 @@ async function upsertProfile(candidateId, profile) {
       clean(profile.political_director_name),
       clean(profile.press_contact_name),
       clean(profile.press_contact_email),
-      clean(profile.source_label)
+      clean(profile.source_label),
+      Boolean(profile.admin_locked),
+      JSON.stringify(profile.locked_fields || {})
     ]
   );
 
@@ -626,33 +660,24 @@ export async function enrichCandidateProfile(candidateId) {
 
   let campaignPages = [];
   if (campaignWebsite) {
-    campaignPages = await crawlRelevantPages(campaignWebsite, candidate);
+    campaignPages = await crawlRelevantPages(campaignWebsite);
   }
 
   const derivedOfficialWebsite = chooseOfficialWebsite(
     campaignPages.flatMap((page) => page.officialWebsiteCandidates || [])
   );
 
-  const officialWebsite = firstNonEmpty(
-    existing.official_website,
-    derivedOfficialWebsite
-  );
+  const officialWebsite = firstNonEmpty(existing.official_website, derivedOfficialWebsite);
 
   let officialPages = [];
   if (officialWebsite && officialWebsite !== campaignWebsite) {
-    officialPages = await crawlRelevantPages(officialWebsite, candidate);
+    officialPages = await crawlRelevantPages(officialWebsite);
   }
 
-  const merged = mergeExtractedSignals(candidate, existing, campaignPages, officialPages);
-  merged.campaign_website = firstNonEmpty(merged.campaign_website, campaignWebsite);
-  merged.official_website = firstNonEmpty(merged.official_website, officialWebsite);
-
+  const merged = mergeExtractedSignals(existing, campaignPages, officialPages, candidate);
   const profile = await upsertProfile(candidateId, merged);
 
-  return {
-    candidate,
-    profile
-  };
+  return { candidate, profile };
 }
 
 export async function enrichAllCandidateProfiles(limit = 100) {
