@@ -67,12 +67,12 @@ function fallbackProfile(candidateId) {
 async function tableExists(tableName) {
   const result = await pool.query(
     `
-      select exists (
-        select 1
-        from information_schema.tables
-        where table_schema = 'public'
-          and table_name = $1
-      ) as exists
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = $1
+      ) AS exists
     `,
     [tableName]
   );
@@ -83,11 +83,11 @@ async function tableExists(tableName) {
 async function getTableColumns(tableName) {
   const result = await pool.query(
     `
-      select column_name
-      from information_schema.columns
-      where table_schema = 'public'
-        and table_name = $1
-      order by ordinal_position asc
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+      ORDER BY ordinal_position ASC
     `,
     [tableName]
   );
@@ -127,6 +127,7 @@ function paginate(items, page, limit) {
 export async function findCandidates(filters) {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return paginate(
         fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)),
@@ -137,7 +138,7 @@ export async function findCandidates(filters) {
 
     const result = await pool.query(
       `
-        select
+        SELECT
           id,
           full_name,
           first_name,
@@ -148,19 +149,19 @@ export async function findCandidates(filters) {
           website,
           election_name,
           status,
-          coalesce(incumbent, false) as incumbent
-        from candidates
-        where ($1 = '' or (
-          coalesce(full_name, '') ilike '%' || $1 || '%'
-          or coalesce(first_name, '') ilike '%' || $1 || '%'
-          or coalesce(last_name, '') ilike '%' || $1 || '%'
-          or coalesce(election_name, '') ilike '%' || $1 || '%'
+          COALESCE(incumbent, false) AS incumbent
+        FROM candidates
+        WHERE ($1 = '' OR (
+          COALESCE(full_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(first_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(last_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(election_name, '') ILIKE '%' || $1 || '%'
         ))
-          and ($2 = '' or coalesce(state, '') = $2)
-          and ($3 = '' or coalesce(office, '') = $3)
-          and ($4 = '' or coalesce(party, '') = $4)
-        order by coalesce(last_name, full_name, 'zzz') asc
-        limit $5 offset $6
+          AND ($2 = '' OR COALESCE(state, '') = $2)
+          AND ($3 = '' OR COALESCE(office, '') = $3)
+          AND ($4 = '' OR COALESCE(party, '') = $4)
+        ORDER BY COALESCE(last_name, full_name, 'zzz') ASC
+        LIMIT $5 OFFSET $6
       `,
       [
         filters.q,
@@ -173,7 +174,9 @@ export async function findCandidates(filters) {
     );
 
     return result.rows || [];
-  } catch {
+  } catch (error) {
+    console.error("findCandidates fallback:", error.message);
+
     return paginate(
       fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)),
       filters.page,
@@ -185,29 +188,32 @@ export async function findCandidates(filters) {
 export async function countCandidates(filters) {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)).length;
     }
 
     const result = await pool.query(
       `
-        select count(*)::int as total
-        from candidates
-        where ($1 = '' or (
-          coalesce(full_name, '') ilike '%' || $1 || '%'
-          or coalesce(first_name, '') ilike '%' || $1 || '%'
-          or coalesce(last_name, '') ilike '%' || $1 || '%'
-          or coalesce(election_name, '') ilike '%' || $1 || '%'
+        SELECT COUNT(*)::int AS total
+        FROM candidates
+        WHERE ($1 = '' OR (
+          COALESCE(full_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(first_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(last_name, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(election_name, '') ILIKE '%' || $1 || '%'
         ))
-          and ($2 = '' or coalesce(state, '') = $2)
-          and ($3 = '' or coalesce(office, '') = $3)
-          and ($4 = '' or coalesce(party, '') = $4)
+          AND ($2 = '' OR COALESCE(state, '') = $2)
+          AND ($3 = '' OR COALESCE(office, '') = $3)
+          AND ($4 = '' OR COALESCE(party, '') = $4)
       `,
       [filters.q, filters.state, filters.office, filters.party]
     );
 
     return Number(result.rows?.[0]?.total || 0);
-  } catch {
+  } catch (error) {
+    console.error("countCandidates fallback:", error.message);
+
     return fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)).length;
   }
 }
@@ -215,13 +221,14 @@ export async function countCandidates(filters) {
 export async function findCandidateById(id) {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return fallbackCandidates().find((item) => String(item.id) === String(id)) || null;
     }
 
     const result = await pool.query(
       `
-        select
+        SELECT
           id,
           full_name,
           first_name,
@@ -232,16 +239,18 @@ export async function findCandidateById(id) {
           website,
           election_name,
           status,
-          coalesce(incumbent, false) as incumbent
-        from candidates
-        where id = $1
-        limit 1
+          COALESCE(incumbent, false) AS incumbent
+        FROM candidates
+        WHERE id = $1
+        LIMIT 1
       `,
       [id]
     );
 
     return result.rows?.[0] || null;
-  } catch {
+  } catch (error) {
+    console.error("findCandidateById fallback:", error.message);
+
     return fallbackCandidates().find((item) => String(item.id) === String(id)) || null;
   }
 }
@@ -249,11 +258,13 @@ export async function findCandidateById(id) {
 export async function findCandidateProfileById(candidateId) {
   try {
     const exists = await tableExists("candidate_profiles");
+
     if (!exists) {
       return fallbackProfile(candidateId);
     }
 
     const columns = await getTableColumns("candidate_profiles");
+
     const desiredColumns = [
       "candidate_id",
       "campaign_website",
@@ -269,6 +280,7 @@ export async function findCandidateProfileById(candidateId) {
       "press_contact_name",
       "press_contact_email",
       "source_label",
+      "notes",
       "updated_at"
     ].filter((column) => columns.has(column));
 
@@ -278,16 +290,17 @@ export async function findCandidateProfileById(candidateId) {
 
     const result = await pool.query(
       `
-        select ${desiredColumns.join(", ")}
-        from candidate_profiles
-        where candidate_id = $1
-        limit 1
+        SELECT ${desiredColumns.join(", ")}
+        FROM candidate_profiles
+        WHERE candidate_id = $1
+        LIMIT 1
       `,
       [candidateId]
     );
 
     return result.rows?.[0] || fallbackProfile(candidateId);
-  } catch {
+  } catch (error) {
+    console.error("findCandidateProfileById fallback:", error.message);
     return fallbackProfile(candidateId);
   }
 }
@@ -295,21 +308,24 @@ export async function findCandidateProfileById(candidateId) {
 export async function findDistinctCandidateStates() {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return [...new Set(fallbackCandidates().map((item) => item.state))].sort();
     }
 
     const result = await pool.query(
       `
-        select distinct state
-        from candidates
-        where state is not null and state <> ''
-        order by state asc
+        SELECT DISTINCT state
+        FROM candidates
+        WHERE state IS NOT NULL
+          AND state <> ''
+        ORDER BY state ASC
       `
     );
 
     return (result.rows || []).map((row) => row.state);
-  } catch {
+  } catch (error) {
+    console.error("findDistinctCandidateStates fallback:", error.message);
     return [...new Set(fallbackCandidates().map((item) => item.state))].sort();
   }
 }
@@ -317,21 +333,24 @@ export async function findDistinctCandidateStates() {
 export async function findDistinctCandidateOffices() {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return [...new Set(fallbackCandidates().map((item) => item.office))].sort();
     }
 
     const result = await pool.query(
       `
-        select distinct office
-        from candidates
-        where office is not null and office <> ''
-        order by office asc
+        SELECT DISTINCT office
+        FROM candidates
+        WHERE office IS NOT NULL
+          AND office <> ''
+        ORDER BY office ASC
       `
     );
 
     return (result.rows || []).map((row) => row.office);
-  } catch {
+  } catch (error) {
+    console.error("findDistinctCandidateOffices fallback:", error.message);
     return [...new Set(fallbackCandidates().map((item) => item.office))].sort();
   }
 }
@@ -339,21 +358,24 @@ export async function findDistinctCandidateOffices() {
 export async function findDistinctCandidateParties() {
   try {
     const exists = await tableExists("candidates");
+
     if (!exists) {
       return [...new Set(fallbackCandidates().map((item) => item.party))].sort();
     }
 
     const result = await pool.query(
       `
-        select distinct party
-        from candidates
-        where party is not null and party <> ''
-        order by party asc
+        SELECT DISTINCT party
+        FROM candidates
+        WHERE party IS NOT NULL
+          AND party <> ''
+        ORDER BY party ASC
       `
     );
 
     return (result.rows || []).map((row) => row.party);
-  } catch {
+  } catch (error) {
+    console.error("findDistinctCandidateParties fallback:", error.message);
     return [...new Set(fallbackCandidates().map((item) => item.party))].sort();
   }
 }
