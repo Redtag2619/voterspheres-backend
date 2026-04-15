@@ -1,158 +1,69 @@
 import pool from "../config/database.js";
 
-function quoteIdent(value) {
-  return `"${String(value).replace(/"/g, '""')}"`;
-}
+export async function fetchCandidates(query = {}) {
+  const page = Math.max(Number(query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(query.limit) || 24, 1), 100);
+  const offset = (page - 1) * limit;
 
-async function getColumns(tableName) {
-  const result = await pool.query(
-    `
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = $1
-    `,
-    [tableName]
-  );
-
-  return new Set(result.rows.map((row) => row.column_name));
-}
-
-function has(columns, name) {
-  return columns.has(name);
-}
-
-function pick(columns, names = []) {
-  for (const name of names) {
-    if (has(columns, name)) return name;
-  }
-  return null;
-}
-
-function textColumnExpr(alias, columns, names = [], fallback = "''") {
-  const col = pick(columns, names);
-  if (!col) return fallback;
-  return `COALESCE(${alias}.${quoteIdent(col)}::text, '')`;
-}
-
-function boolColumnExpr(alias, columns, names = [], fallback = "false") {
-  const col = pick(columns, names);
-  if (!col) return fallback;
-  return `COALESCE(${alias}.${quoteIdent(col)}, false)`;
-}
-
-function nameExpr(alias, columns) {
-  if (has(columns, "full_name")) return `COALESCE(${alias}."full_name"::text, '')`;
-  if (has(columns, "name")) return `COALESCE(${alias}."name"::text, '')`;
-
-  const first = has(columns, "first_name")
-    ? `COALESCE(${alias}."first_name"::text, '')`
-    : `''`;
-  const last = has(columns, "last_name")
-    ? `COALESCE(${alias}."last_name"::text, '')`
-    : `''`;
-
-  return `TRIM(CONCAT(${first}, ' ', ${last}))`;
-}
-
-function buildCandidateProjection(columns) {
-  return {
-    id: has(columns, "id") ? `c."id"` : `NULL`,
-    full_name: `${nameExpr("c", columns)} AS full_name`,
-    first_name: `${textColumnExpr("c", columns, ["first_name"])} AS first_name`,
-    last_name: `${textColumnExpr("c", columns, ["last_name"])} AS last_name`,
-    state: `${textColumnExpr("c", columns, ["state", "state_code"])} AS state`,
-    office: `${textColumnExpr("c", columns, ["office", "office_name"])} AS office`,
-    party: `${textColumnExpr("c", columns, ["party", "party_name"])} AS party`,
-    incumbent: `${boolColumnExpr("c", columns, ["incumbent"])} AS incumbent`,
-    website: `${textColumnExpr("c", columns, ["website", "campaign_website", "url"])} AS website`,
-    status: `${textColumnExpr("c", columns, ["status"], "'active'")} AS status`,
-    election_name: `${textColumnExpr("c", columns, ["election_name", "title", "race_name"])} AS election_name`
-  };
-}
-
-function buildWhere(columns, query = {}) {
-  const parts = [];
+  const conditions = [];
   const values = [];
-
-  const fullName = nameExpr("c", columns);
-  const state = textColumnExpr("c", columns, ["state", "state_code"]);
-  const office = textColumnExpr("c", columns, ["office", "office_name"]);
-  const party = textColumnExpr("c", columns, ["party", "party_name"]);
-  const website = textColumnExpr("c", columns, ["website", "campaign_website", "url"]);
-  const electionName = textColumnExpr("c", columns, ["election_name", "title", "race_name"]);
 
   if (query.q) {
     values.push(`%${String(query.q).trim()}%`);
     const i = values.length;
-
-    parts.push(`
+    conditions.push(`
       (
-        ${fullName} ILIKE $${i}
-        OR ${state} ILIKE $${i}
-        OR ${office} ILIKE $${i}
-        OR ${party} ILIKE $${i}
-        OR ${website} ILIKE $${i}
-        OR ${electionName} ILIKE $${i}
+        COALESCE(c.full_name, c.name, '') ILIKE $${i}
+        OR COALESCE(c.office, '') ILIKE $${i}
+        OR COALESCE(c.state, c.state_code, '') ILIKE $${i}
+        OR COALESCE(c.party, '') ILIKE $${i}
+        OR COALESCE(c.election, '') ILIKE $${i}
       )
     `);
   }
 
   if (query.state) {
     values.push(String(query.state).trim());
-    parts.push(`${state} = $${values.length}`);
+    const i = values.length;
+    conditions.push(`
+      (
+        COALESCE(c.state, '') = $${i}
+        OR COALESCE(c.state_code, '') = $${i}
+      )
+    `);
   }
 
   if (query.office) {
     values.push(String(query.office).trim());
-    parts.push(`${office} = $${values.length}`);
+    conditions.push(`COALESCE(c.office, '') = $${values.length}`);
   }
 
   if (query.party) {
     values.push(String(query.party).trim());
-    parts.push(`${party} = $${values.length}`);
+    conditions.push(`COALESCE(c.party, '') = $${values.length}`);
   }
 
-  return {
-    whereClause: parts.length ? `WHERE ${parts.join(" AND ")}` : "",
-    values
-  };
-}
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-export async function fetchCandidates(query = {}) {
-  const columns = await getColumns("candidates");
-
-  if (!columns.size) {
-    return { total: 0, results: [] };
-  }
-
-  const projection = buildCandidateProjection(columns);
-  const { whereClause, values } = buildWhere(columns, query);
-
-  const page = Math.max(Number(query.page) || 1, 1);
-  const limit = Math.min(Math.max(Number(query.limit) || 24, 1), 100);
-  const offset = (page - 1) * limit;
-
-  const stateOrder = textColumnExpr("c", columns, ["state", "state_code"]);
-  const officeOrder = textColumnExpr("c", columns, ["office", "office_name"]);
-  const nameOrder = nameExpr("c", columns);
-
-  const sql = `
+  const listSql = `
     SELECT
-      ${projection.id} AS id,
-      ${projection.full_name},
-      ${projection.first_name},
-      ${projection.last_name},
-      ${projection.state},
-      ${projection.office},
-      ${projection.party},
-      ${projection.incumbent},
-      ${projection.website},
-      ${projection.status},
-      ${projection.election_name}
+      c.id,
+      COALESCE(c.full_name, c.name, 'Candidate') AS full_name,
+      NULL::text AS first_name,
+      NULL::text AS last_name,
+      COALESCE(c.state, c.state_code, '') AS state,
+      COALESCE(c.office, '') AS office,
+      COALESCE(c.party, '') AS party,
+      COALESCE(c.incumbent, false) AS incumbent,
+      COALESCE(c.website, '') AS website,
+      COALESCE(c.campaign_status, 'active') AS status,
+      COALESCE(c.election, '') AS election_name
     FROM candidates c
     ${whereClause}
-    ORDER BY ${stateOrder} ASC, ${officeOrder} ASC, ${nameOrder} ASC
+    ORDER BY
+      COALESCE(c.state, c.state_code, '') ASC,
+      COALESCE(c.office, '') ASC,
+      COALESCE(c.full_name, c.name, '') ASC
     LIMIT $${values.length + 1}
     OFFSET $${values.length + 2}
   `;
@@ -164,7 +75,7 @@ export async function fetchCandidates(query = {}) {
   `;
 
   const [listResult, countResult] = await Promise.all([
-    pool.query(sql, [...values, limit, offset]),
+    pool.query(listSql, [...values, limit, offset]),
     pool.query(countSql, values)
   ]);
 
@@ -175,29 +86,32 @@ export async function fetchCandidates(query = {}) {
 }
 
 export async function fetchCandidateById(id) {
-  const candidateColumns = await getColumns("candidates");
-
-  if (!candidateColumns.size || !has(candidateColumns, "id")) {
-    return null;
-  }
-
-  const projection = buildCandidateProjection(candidateColumns);
-
   const candidateSql = `
     SELECT
-      ${projection.id} AS id,
-      ${projection.full_name},
-      ${projection.first_name},
-      ${projection.last_name},
-      ${projection.state},
-      ${projection.office},
-      ${projection.party},
-      ${projection.incumbent},
-      ${projection.website},
-      ${projection.status},
-      ${projection.election_name}
+      c.id,
+      COALESCE(c.full_name, c.name, 'Candidate') AS full_name,
+      NULL::text AS first_name,
+      NULL::text AS last_name,
+      COALESCE(c.state, c.state_code, '') AS state,
+      COALESCE(c.office, '') AS office,
+      COALESCE(c.party, '') AS party,
+      COALESCE(c.incumbent, false) AS incumbent,
+      COALESCE(c.website, '') AS website,
+      COALESCE(c.campaign_status, 'active') AS status,
+      COALESCE(c.election, '') AS election_name,
+      c.contact_email,
+      c.press_email,
+      c.phone,
+      c.address_line1,
+      c.address_line2,
+      c.city,
+      c.state_code,
+      c.postal_code,
+      c.contact_source,
+      c.contact_verified,
+      c.last_contact_update
     FROM candidates c
-    WHERE c."id" = $1
+    WHERE c.id = $1
     LIMIT 1
   `;
 
@@ -208,43 +122,74 @@ export async function fetchCandidateById(id) {
   }
 
   const candidate = candidateResult.rows[0];
-  const profileColumns = await getColumns("candidate_profiles");
 
   let profile = null;
 
-  if (profileColumns.size && has(profileColumns, "candidate_id")) {
-    const field = (name) =>
-      has(profileColumns, name) ? `cp.${quoteIdent(name)}` : `NULL`;
-
+  try {
     const profileSql = `
       SELECT
-        ${field("campaign_website")} AS campaign_website,
-        ${field("official_website")} AS official_website,
-        ${field("office_address")} AS office_address,
-        ${field("campaign_address")} AS campaign_address,
-        ${field("phone")} AS phone,
-        ${field("email")} AS email,
-        ${field("chief_of_staff_name")} AS chief_of_staff_name,
-        ${field("campaign_manager_name")} AS campaign_manager_name,
-        ${field("finance_director_name")} AS finance_director_name,
-        ${field("political_director_name")} AS political_director_name,
-        ${field("press_contact_name")} AS press_contact_name,
-        ${field("press_contact_email")} AS press_contact_email,
-        ${field("source_label")} AS source_label,
-        ${field("updated_at")} AS updated_at,
-        ${field("admin_locked")} AS admin_locked,
-        ${field("locked_fields")} AS locked_fields
-      FROM candidate_profiles cp
-      WHERE cp."candidate_id" = $1
+        campaign_website,
+        official_website,
+        office_address,
+        campaign_address,
+        phone,
+        email,
+        chief_of_staff_name,
+        campaign_manager_name,
+        finance_director_name,
+        political_director_name,
+        press_contact_name,
+        press_contact_email,
+        source_label,
+        admin_locked,
+        locked_fields,
+        updated_at
+      FROM candidate_profiles
+      WHERE candidate_id = $1
       LIMIT 1
     `;
 
-    try {
-      const profileResult = await pool.query(profileSql, [id]);
-      profile = profileResult.rows[0] || null;
-    } catch (error) {
-      console.warn("candidate profile read skipped:", error.message);
-    }
+    const profileResult = await pool.query(profileSql, [id]);
+    profile = profileResult.rows[0] || null;
+  } catch (error) {
+    profile = null;
+  }
+
+  if (!profile) {
+    profile = {
+      campaign_website: candidate.website || null,
+      official_website: null,
+      office_address: [
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.state_code,
+        candidate.postal_code
+      ]
+        .filter(Boolean)
+        .join(", ") || null,
+      campaign_address: [
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.state_code,
+        candidate.postal_code
+      ]
+        .filter(Boolean)
+        .join(", ") || null,
+      phone: candidate.phone || null,
+      email: candidate.contact_email || null,
+      chief_of_staff_name: null,
+      campaign_manager_name: null,
+      finance_director_name: null,
+      political_director_name: null,
+      press_contact_name: null,
+      press_contact_email: candidate.press_email || null,
+      source_label: candidate.contact_source || "candidate_table",
+      admin_locked: false,
+      locked_fields: {},
+      updated_at: candidate.last_contact_update || null
+    };
   }
 
   return {
@@ -254,52 +199,37 @@ export async function fetchCandidateById(id) {
 }
 
 export async function fetchCandidateStates() {
-  const columns = await getColumns("candidates");
-  const col = pick(columns, ["state", "state_code"]);
-  if (!col) return [];
-
-  const sql = `
-    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
-    FROM candidates c
-    WHERE c.${quoteIdent(col)} IS NOT NULL
-      AND c.${quoteIdent(col)}::text <> ''
+  const result = await pool.query(`
+    SELECT DISTINCT COALESCE(state, state_code) AS value
+    FROM candidates
+    WHERE COALESCE(state, state_code) IS NOT NULL
+      AND COALESCE(state, state_code) <> ''
     ORDER BY value ASC
-  `;
+  `);
 
-  const result = await pool.query(sql);
   return result.rows.map((row) => row.value);
 }
 
 export async function fetchCandidateOffices() {
-  const columns = await getColumns("candidates");
-  const col = pick(columns, ["office", "office_name"]);
-  if (!col) return [];
-
-  const sql = `
-    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
-    FROM candidates c
-    WHERE c.${quoteIdent(col)} IS NOT NULL
-      AND c.${quoteIdent(col)}::text <> ''
+  const result = await pool.query(`
+    SELECT DISTINCT office AS value
+    FROM candidates
+    WHERE office IS NOT NULL
+      AND office <> ''
     ORDER BY value ASC
-  `;
+  `);
 
-  const result = await pool.query(sql);
   return result.rows.map((row) => row.value);
 }
 
 export async function fetchCandidateParties() {
-  const columns = await getColumns("candidates");
-  const col = pick(columns, ["party", "party_name"]);
-  if (!col) return [];
-
-  const sql = `
-    SELECT DISTINCT c.${quoteIdent(col)}::text AS value
-    FROM candidates c
-    WHERE c.${quoteIdent(col)} IS NOT NULL
-      AND c.${quoteIdent(col)}::text <> ''
+  const result = await pool.query(`
+    SELECT DISTINCT party AS value
+    FROM candidates
+    WHERE party IS NOT NULL
+      AND party <> ''
     ORDER BY value ASC
-  `;
+  `);
 
-  const result = await pool.query(sql);
   return result.rows.map((row) => row.value);
 }
