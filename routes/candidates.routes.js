@@ -1,20 +1,14 @@
-import express from "express"; 
+import express from "express";
 import {
-  getCandidateById,
-  getCandidateCounties,
-  getCandidateOffices,
-  getCandidateParties,
-  getCandidates,
-  getCandidateStates
+  listCandidates,
+  getCandidateProfile,
+  patchCandidateContact,
 } from "../controllers/candidates.controller.js";
 
 const router = express.Router();
 
-router.get("/", getCandidates);
-router.get("/states", getCandidateStates);
-router.get("/offices", getCandidateOffices);
-router.get("/parties", getCandidateParties);
-router.get("/counties", getCandidateCounties);
-router.get("/:id", getCandidateById);
+router.get("/", listCandidates);
+router.get("/:slug", getCandidateProfile);
+router.patch("/:id/contact", patchCandidateContact);
 
 export default router;
