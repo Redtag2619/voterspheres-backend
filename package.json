@@ -8,7 +8,7 @@
     "start": "node index.js",
     "start:clean": "kill-port 10000 && node index.js",
     "dev": "nodemon index.js",
-    "import:fec:candidates": "node scripts/import-fec-candidates.js",
+    "import:fec:candidates": "node scripts/import-fec-candidates.js", 
     "db:test": "node scripts/db-test.js",
     "lint": "echo \"No lint configured\"",
     "build": "echo \"No build step required\""
