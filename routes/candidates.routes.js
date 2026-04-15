@@ -21,4 +21,15 @@ router.post("/refresh-profiles", refreshAllCandidateProfiles);
 router.post("/:id/refresh-profile", refreshCandidateProfile);
 router.get("/:id", getCandidateById);
 
+console.log("✅ candidates.routes.js loaded");
+console.log("✅ candidates routes:", [
+  "/",
+  "/states",
+  "/offices",
+  "/parties",
+  "/refresh-profiles",
+  "/:id/refresh-profile",
+  "/:id"
+]);
+
 export default router;
