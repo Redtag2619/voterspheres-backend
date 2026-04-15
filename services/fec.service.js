@@ -501,6 +501,6 @@ export async function syncFundraisingFromFec({ cycle } = {}) {
     cycle: targetCycle,
     fetched: rawRows.length,
     fundraising_stored: normalizedRows.length,
-    candidates_stored: candidateStored
+    candidates_stored: candidateStored 
   };
 }
