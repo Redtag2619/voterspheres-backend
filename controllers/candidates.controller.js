@@ -4,7 +4,11 @@ import {
   fetchCandidateStates,
   fetchCandidateOffices,
   fetchCandidateParties
-} from "../services/candidates.service.js"; 
+} from "../services/candidates.service.js";
+import {
+  enrichCandidateProfile,
+  enrichAllCandidateProfiles
+} from "../services/candidateEnrichment.service.js";
 
 export async function getCandidates(req, res) {
   try {
@@ -69,6 +73,46 @@ export async function getCandidateParties(req, res) {
     console.error("getCandidateParties error:", error);
     return res.status(500).json({
       error: "Failed to load candidate parties"
+    });
+  }
+}
+
+export async function refreshCandidateProfile(req, res) {
+  try {
+    const data = await enrichCandidateProfile(req.params.id);
+
+    if (!data) {
+      return res.status(404).json({
+        error: "Candidate not found"
+      });
+    }
+
+    return res.json({
+      success: true,
+      candidate: data.candidate,
+      profile: data.profile
+    });
+  } catch (error) {
+    console.error("refreshCandidateProfile error:", error);
+    return res.status(500).json({
+      error: "Failed to refresh candidate profile"
+    });
+  }
+}
+
+export async function refreshAllCandidateProfiles(req, res) {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 500));
+    const data = await enrichAllCandidateProfiles(limit);
+
+    return res.json({
+      success: true,
+      ...data
+    });
+  } catch (error) {
+    console.error("refreshAllCandidateProfiles error:", error);
+    return res.status(500).json({
+      error: "Failed to refresh candidate profiles"
     });
   }
 }
