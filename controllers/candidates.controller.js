@@ -1,3 +1,4 @@
+console.log("✅ candidates.controller.js loaded");
 import {
   fetchCandidates,
   fetchCandidateById,
