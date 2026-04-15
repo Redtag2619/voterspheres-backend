@@ -7,7 +7,7 @@ import {
   getCandidateParties,
   refreshCandidateProfile,
   refreshAllCandidateProfiles
-} from "../controllers/candidates.controller.js";
+} from "../controllers/candidates.controller.js"; 
 
 const router = express.Router();
 
