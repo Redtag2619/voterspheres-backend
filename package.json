@@ -22,7 +22,8 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "kill-port": "^2.0.1",
