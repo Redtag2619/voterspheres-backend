@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js";
-import { ensureFundraisingLiveTable } from "./fec.service.js";
+import { ensureFundraisingLiveTable } from "./fec.service.js"; 
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
