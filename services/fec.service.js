@@ -497,68 +497,6 @@ export async function upsertCandidatesFromFec(rows, cycle) {
   return stored;
 }
 
-async function upsertCandidatesFromFec(rows, cycle) {
-  for (const row of rows) {
-    const id = row.candidate_id;
-    if (!id) continue;
-
-    const fullName = row.name || "Unknown Candidate";
-    const state = row.state || "N/A";
-    const office = row.office || "Unknown";
-    const party = row.party || "N/A";
-    const district = row.district || "Statewide";
-
-    const slug = `${fullName}-${state}-${office}-${cycle}-${id}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-");
-
-    await pool.query(
-      `
-      INSERT INTO candidates (
-        fec_candidate_id,
-        full_name,
-        name,
-        slug,
-        party,
-        office,
-        district,
-        state,
-        election,
-        election_year,
-        campaign_status,
-        contact_source,
-        updated_at,
-        created_at
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()
-      )
-      ON CONFLICT (fec_candidate_id)
-      DO UPDATE SET
-        full_name = EXCLUDED.full_name,
-        party = EXCLUDED.party,
-        office = EXCLUDED.office,
-        state = EXCLUDED.state,
-        updated_at = NOW()
-      `,
-      [
-        id,
-        fullName,
-        fullName,
-        slug,
-        party,
-        office,
-        district,
-        state,
-        `${cycle} ${state} ${office}`,
-        cycle,
-        "active",
-        "fec_sync"
-      ]
-    );
-  }
-}
-
 export async function syncFundraisingFromFec({ cycle } = {}) {
   const { defaultCycle } = getFecApiConfig();
   const targetCycle = Number(cycle || defaultCycle);
