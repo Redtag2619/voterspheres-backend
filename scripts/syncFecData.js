@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { syncFundraisingFromFec } from "../services/fec.service.js"; 
+import { syncFundraisingFromFec } from "../services/fec.service.js";
 
 async function main() {
   const cycleArg = process.argv[2];
-  const cycle = cycleArg ? Number(cycleArg) : undefined; 
+  const cycle = cycleArg ? Number(cycleArg) : undefined;
 
   const result = await syncFundraisingFromFec({ cycle });
 
