@@ -5,6 +5,7 @@ import {
   fetchCandidateOffices,
   fetchCandidateParties
 } from "../services/candidates.service.js";
+
 import {
   enrichCandidateProfile,
   enrichAllCandidateProfiles
@@ -16,9 +17,7 @@ export async function getCandidates(req, res) {
     return res.json(data);
   } catch (error) {
     console.error("getCandidates error:", error);
-    return res.status(500).json({
-      error: "Failed to load candidates"
-    });
+    return res.status(500).json({ error: "Failed to load candidates" });
   }
 }
 
@@ -27,53 +26,43 @@ export async function getCandidateById(req, res) {
     const data = await fetchCandidateById(req.params.id);
 
     if (!data) {
-      return res.status(404).json({
-        error: "Candidate not found"
-      });
+      return res.status(404).json({ error: "Candidate not found" });
     }
 
     return res.json(data);
   } catch (error) {
     console.error("getCandidateById error:", error);
-    return res.status(500).json({
-      error: "Failed to load candidate profile"
-    });
+    return res.status(500).json({ error: "Failed to load candidate profile" });
   }
 }
 
-export async function getCandidateStates(req, res) {
+export async function getCandidateStates(_req, res) {
   try {
     const data = await fetchCandidateStates();
     return res.json(data);
   } catch (error) {
     console.error("getCandidateStates error:", error);
-    return res.status(500).json({
-      error: "Failed to load candidate states"
-    });
+    return res.status(500).json({ error: "Failed to load candidate states" });
   }
 }
 
-export async function getCandidateOffices(req, res) {
+export async function getCandidateOffices(_req, res) {
   try {
     const data = await fetchCandidateOffices();
     return res.json(data);
   } catch (error) {
     console.error("getCandidateOffices error:", error);
-    return res.status(500).json({
-      error: "Failed to load candidate offices"
-    });
+    return res.status(500).json({ error: "Failed to load candidate offices" });
   }
 }
 
-export async function getCandidateParties(req, res) {
+export async function getCandidateParties(_req, res) {
   try {
     const data = await fetchCandidateParties();
     return res.json(data);
   } catch (error) {
     console.error("getCandidateParties error:", error);
-    return res.status(500).json({
-      error: "Failed to load candidate parties"
-    });
+    return res.status(500).json({ error: "Failed to load candidate parties" });
   }
 }
 
@@ -82,9 +71,7 @@ export async function refreshCandidateProfile(req, res) {
     const data = await enrichCandidateProfile(req.params.id);
 
     if (!data) {
-      return res.status(404).json({
-        error: "Candidate not found"
-      });
+      return res.status(404).json({ error: "Candidate not found" });
     }
 
     return res.json({
@@ -94,9 +81,7 @@ export async function refreshCandidateProfile(req, res) {
     });
   } catch (error) {
     console.error("refreshCandidateProfile error:", error);
-    return res.status(500).json({
-      error: "Failed to refresh candidate profile"
-    });
+    return res.status(500).json({ error: "Failed to refresh candidate profile" });
   }
 }
 
@@ -111,8 +96,6 @@ export async function refreshAllCandidateProfiles(req, res) {
     });
   } catch (error) {
     console.error("refreshAllCandidateProfiles error:", error);
-    return res.status(500).json({
-      error: "Failed to refresh candidate profiles"
-    });
+    return res.status(500).json({ error: "Failed to refresh candidate profiles" });
   }
 }
