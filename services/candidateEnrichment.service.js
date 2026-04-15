@@ -177,7 +177,7 @@ function extractLinks(html, baseUrl) {
         label: label || ""
       });
     } catch {
-      // ignore
+      // ignore bad links
     }
   }
 
@@ -336,7 +336,7 @@ function isFieldLocked(existingProfile, fieldName) {
 
 function applyLockAwareValue(existingProfile, fieldName, incomingValue, existingValue) {
   if (isFieldLocked(existingProfile, fieldName)) {
-    return existingValue ?? null;
+    return clean(existingValue) ?? null;
   }
   return clean(incomingValue) ?? clean(existingValue) ?? null;
 }
@@ -345,7 +345,6 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
   const allPages = [...campaignPages, ...officialPages];
   const allEmails = unique(allPages.flatMap((page) => page.emails || []));
   const allPhones = unique(allPages.flatMap((page) => page.phones || []));
-  const allAddresses = unique(allPages.flatMap((page) => page.addresses || []));
   const officialCandidates = unique(
     allPages.flatMap((page) => page.officialWebsiteCandidates || [])
   );
@@ -354,17 +353,40 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
     campaign_website: firstNonEmpty(existing.campaign_website, safeWebsite(candidate.website)),
     official_website: firstNonEmpty(existing.official_website, chooseOfficialWebsite(officialCandidates)),
     office_address: firstNonEmpty(
-      chooseBestAddress(officialPages.map((page) => page.campaign_address)),
-      existing.office_address
+      ...officialPages.map((page) => page.campaign_address),
+      existing.office_address,
+      [
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.state_code,
+        candidate.postal_code
+      ]
+        .filter(Boolean)
+        .join(", ")
     ),
     campaign_address: firstNonEmpty(
-      chooseBestAddress(allPages.map((page) => page.campaign_address)),
-      existing.campaign_address
+      ...allPages.map((page) => page.campaign_address),
+      existing.campaign_address,
+      [
+        candidate.address_line1,
+        candidate.address_line2,
+        candidate.city,
+        candidate.state_code,
+        candidate.postal_code
+      ]
+        .filter(Boolean)
+        .join(", ")
     ),
-    phone: firstNonEmpty(chooseBestPhone(allPhones), existing.phone),
+    phone: firstNonEmpty(
+      chooseBestPhone(allPhones),
+      existing.phone,
+      candidate.phone
+    ),
     email: firstNonEmpty(
       chooseBestEmail(allEmails, ["info@", "contact@", "hello@", "team@"]),
-      existing.email
+      existing.email,
+      candidate.contact_email
     ),
     chief_of_staff_name: firstNonEmpty(
       ...allPages.map((page) => page.chief_of_staff_name),
@@ -388,7 +410,8 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
     ),
     press_contact_email: firstNonEmpty(
       chooseBestEmail(allEmails, ["press@", "media@", "communications@", "comms@"]),
-      existing.press_contact_email
+      existing.press_contact_email,
+      candidate.press_email
     ),
     source_label:
       campaignPages.length || officialPages.length
@@ -398,7 +421,7 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
           ]
             .filter(Boolean)
             .join("+")
-        : firstNonEmpty(existing.source_label, "candidate_record_seed")
+        : firstNonEmpty(existing.source_label, candidate.contact_source, "candidate_record_seed")
   };
 
   return {
@@ -406,7 +429,7 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
       existing,
       "campaign_website",
       derived.campaign_website,
-      existing.campaign_website
+      existing.campaign_website || candidate.website
     ),
     official_website: applyLockAwareValue(
       existing,
@@ -426,8 +449,18 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
       derived.campaign_address,
       existing.campaign_address
     ),
-    phone: applyLockAwareValue(existing, "phone", derived.phone, existing.phone),
-    email: applyLockAwareValue(existing, "email", derived.email, existing.email),
+    phone: applyLockAwareValue(
+      existing,
+      "phone",
+      derived.phone,
+      existing.phone || candidate.phone
+    ),
+    email: applyLockAwareValue(
+      existing,
+      "email",
+      derived.email,
+      existing.email || candidate.contact_email
+    ),
     chief_of_staff_name: applyLockAwareValue(
       existing,
       "chief_of_staff_name",
@@ -462,7 +495,7 @@ function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages 
       existing,
       "press_contact_email",
       derived.press_contact_email,
-      existing.press_contact_email
+      existing.press_contact_email || candidate.press_email
     ),
     source_label: clean(derived.source_label) || clean(existing.source_label) || "candidate_record_seed",
     admin_locked: Boolean(existing.admin_locked),
@@ -508,15 +541,26 @@ async function getCandidate(candidateId) {
       SELECT
         id,
         full_name,
-        first_name,
-        last_name,
+        name,
         state,
+        state_code,
         office,
+        district,
         party,
         incumbent,
         website,
-        status,
-        election_name
+        campaign_status,
+        election,
+        contact_email,
+        press_email,
+        phone,
+        address_line1,
+        address_line2,
+        city,
+        postal_code,
+        contact_source,
+        contact_verified,
+        last_contact_update
       FROM candidates
       WHERE id = $1
       LIMIT 1
