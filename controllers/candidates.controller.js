@@ -1,83 +1,74 @@
 import {
-  getCandidates,
-  getCandidateBySlug,
-  updateCandidateContact,
+  fetchCandidates,
+  fetchCandidateById,
+  fetchCandidateStates,
+  fetchCandidateOffices,
+  fetchCandidateParties
 } from "../services/candidates.service.js";
 
-export async function listCandidates(req, res) {
+export async function getCandidates(req, res) {
   try {
-    const filters = {
-      state: req.query.state || "",
-      office: req.query.office || "",
-      party: req.query.party || "",
-      election_year: req.query.election_year || "",
-      search: req.query.search || "",
-    };
-
-    const candidates = await getCandidates(filters);
-
-    return res.status(200).json({
-      success: true,
-      count: candidates.length,
-      candidates,
-    });
+    const data = await fetchCandidates(req.query);
+    return res.json(data);
   } catch (error) {
-    console.error("listCandidates error:", error);
+    console.error("getCandidates error:", error);
     return res.status(500).json({
-      success: false,
-      error: "Failed to fetch candidates.",
+      error: "Failed to load candidates"
     });
   }
 }
 
-export async function getCandidateProfile(req, res) {
+export async function getCandidateById(req, res) {
   try {
-    const { slug } = req.params;
-    const candidate = await getCandidateBySlug(slug);
+    const data = await fetchCandidateById(req.params.id);
 
-    if (!candidate) {
+    if (!data) {
       return res.status(404).json({
-        success: false,
-        error: "Candidate not found.",
+        error: "Candidate not found"
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      candidate,
-    });
+    return res.json(data);
   } catch (error) {
-    console.error("getCandidateProfile error:", error);
+    console.error("getCandidateById error:", error);
     return res.status(500).json({
-      success: false,
-      error: "Failed to fetch candidate profile.",
+      error: "Failed to load candidate profile"
     });
   }
 }
 
-export async function patchCandidateContact(req, res) {
+export async function getCandidateStates(req, res) {
   try {
-    const { id } = req.params;
-
-    const updated = await updateCandidateContact(id, req.body || {});
-
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        error: "Candidate not found.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      candidate: updated,
-      message: "Candidate contact information updated successfully.",
-    });
+    const data = await fetchCandidateStates();
+    return res.json(data);
   } catch (error) {
-    console.error("patchCandidateContact error:", error);
+    console.error("getCandidateStates error:", error);
     return res.status(500).json({
-      success: false,
-      error: "Failed to update candidate contact information.",
+      error: "Failed to load candidate states"
+    });
+  }
+}
+
+export async function getCandidateOffices(req, res) {
+  try {
+    const data = await fetchCandidateOffices();
+    return res.json(data);
+  } catch (error) {
+    console.error("getCandidateOffices error:", error);
+    return res.status(500).json({
+      error: "Failed to load candidate offices"
+    });
+  }
+}
+
+export async function getCandidateParties(req, res) {
+  try {
+    const data = await fetchCandidateParties();
+    return res.json(data);
+  } catch (error) {
+    console.error("getCandidateParties error:", error);
+    return res.status(500).json({
+      error: "Failed to load candidate parties"
     });
   }
 }
