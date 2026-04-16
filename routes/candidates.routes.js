@@ -7,7 +7,8 @@ import {
   getCandidateParties,
   refreshCandidateProfile,
   refreshAllCandidateProfiles,
-  saveCandidateProfileLocks
+  saveCandidateProfileLocks,
+  saveCandidateProfileEdits
 } from "../controllers/candidates.controller.js";
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.get("/parties", getCandidateParties);
 router.post("/refresh-profiles", refreshAllCandidateProfiles);
 router.post("/:id/refresh-profile", refreshCandidateProfile);
 router.patch("/:id/profile-locks", saveCandidateProfileLocks);
+router.patch("/:id/profile", saveCandidateProfileEdits);
 router.get("/:id", getCandidateById);
 
 export default router;
