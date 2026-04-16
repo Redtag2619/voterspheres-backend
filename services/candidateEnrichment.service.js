@@ -1,4 +1,4 @@
-import pool from "../config/database.js"; 
+import pool from "../config/database.js";
 
 const REQUEST_TIMEOUT_MS = 12000;
 const MAX_FOLLOW_PAGES = 5;
@@ -111,6 +111,14 @@ function safeWebsite(value) {
   if (!website) return null;
   if (/^https?:\/\//i.test(website)) return website;
   return `https://${website}`;
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
 }
 
 function stripTags(html = "") {
@@ -255,6 +263,106 @@ async function fetchHtml(url) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function headCheckUrl(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": USER_AGENT
+      }
+    });
+
+    const finalUrl = response.url || url;
+    const host = (() => {
+      try {
+        return new URL(finalUrl).hostname.toLowerCase();
+      } catch {
+        return "";
+      }
+    })();
+
+    if (!response.ok) return null;
+    if (
+      host.includes("google.") ||
+      host.includes("facebook.com") ||
+      host.includes("instagram.com") ||
+      host.includes("x.com") ||
+      host.includes("twitter.com") ||
+      host.includes("linkedin.com") ||
+      host.includes("youtube.com") ||
+      host.includes("ballotpedia.org") ||
+      host.includes("wikipedia.org")
+    ) {
+      return null;
+    }
+
+    return finalUrl;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function generateWebsiteGuesses(candidate) {
+  const name = clean(candidate.full_name || candidate.name);
+  if (!name) return [];
+
+  const compact = slugify(name);
+  const firstLast = slugify(
+    name
+      .split(",")
+      .reverse()
+      .join(" ")
+      .replace(/\b(jr|sr|ii|iii|iv|dr|mr|mrs|ms)\b/gi, "")
+  );
+
+  const state = String(candidate.state_code || candidate.state || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  const office = String(candidate.office || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  const guesses = [
+    `https://${compact}.com`,
+    `https://www.${compact}.com`,
+    `https://${firstLast}.com`,
+    `https://www.${firstLast}.com`,
+    state ? `https://${compact}for${state}.com` : null,
+    state ? `https://www.${compact}for${state}.com` : null,
+    office ? `https://${compact}for${office}.com` : null,
+    office ? `https://www.${compact}for${office}.com` : null,
+    state && office ? `https://${compact}for${state}${office}.com` : null,
+    state && office ? `https://www.${compact}for${state}${office}.com` : null
+  ];
+
+  return unique(guesses.filter(Boolean));
+}
+
+async function discoverCandidateWebsite(candidate, existingProfile = {}) {
+  const existing = firstNonEmpty(
+    existingProfile.campaign_website,
+    candidate.website
+  );
+  if (existing) return safeWebsite(existing);
+
+  const guesses = generateWebsiteGuesses(candidate);
+
+  for (const guess of guesses) {
+    const found = await headCheckUrl(guess);
+    if (found) return found;
+  }
+
+  return null;
 }
 
 function pickBestEmail(emails = [], preferred = []) {
@@ -534,9 +642,10 @@ export async function enrichCandidateProfile(candidateId) {
   const existing = await getExistingProfile(candidateId);
   const fallbackAddress = buildAddress(candidate);
 
-  const campaignWebsite = firstNonEmpty(existing.campaign_website, safeWebsite(candidate.website));
-  let pages = [];
+  const discoveredWebsite = await discoverCandidateWebsite(candidate, existing);
+  const campaignWebsite = firstNonEmpty(existing.campaign_website, discoveredWebsite, safeWebsite(candidate.website));
 
+  let pages = [];
   if (campaignWebsite) {
     pages = await crawlRelevantPages(campaignWebsite);
   }
@@ -625,7 +734,9 @@ export async function enrichCandidateProfile(candidateId) {
     ),
     source_label: pages.length
       ? "campaign_site_live"
-      : clean(existing.source_label) || clean(candidate.contact_source) || "candidate_table",
+      : discoveredWebsite
+        ? "website_discovery"
+        : clean(existing.source_label) || clean(candidate.contact_source) || "candidate_table",
     admin_locked: Boolean(existing.admin_locked),
     locked_fields: parseLockedFields(existing.locked_fields),
     scraped_pages: pages.map((page) => ({
@@ -682,4 +793,3 @@ export async function enrichAllCandidateProfiles(limit = 100) {
     failures
   };
 }
-
