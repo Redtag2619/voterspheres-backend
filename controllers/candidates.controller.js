@@ -3,7 +3,8 @@ import {
   fetchCandidateById,
   fetchCandidateStates,
   fetchCandidateOffices,
-  fetchCandidateParties
+  fetchCandidateParties,
+  updateCandidateProfileLocks
 } from "../services/candidates.service.js";
 import {
   enrichCandidateProfile,
@@ -113,6 +114,33 @@ export async function refreshAllCandidateProfiles(req, res) {
     console.error("refreshAllCandidateProfiles error:", error);
     return res.status(500).json({
       error: "Failed to refresh candidate profiles"
+    });
+  }
+}
+
+export async function patchCandidateProfileLocks(req, res) {
+  try {
+    const { admin_locked, locked_fields } = req.body || {};
+
+    const data = await updateCandidateProfileLocks(req.params.id, {
+      admin_locked,
+      locked_fields
+    });
+
+    if (!data) {
+      return res.status(404).json({
+        error: "Candidate not found"
+      });
+    }
+
+    return res.json({
+      success: true,
+      profile: data
+    });
+  } catch (error) {
+    console.error("patchCandidateProfileLocks error:", error);
+    return res.status(500).json({
+      error: "Failed to update profile locks"
     });
   }
 }
