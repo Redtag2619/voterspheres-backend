@@ -1,4 +1,4 @@
-import express from "express";
+import express from "express"; 
 import {
   getCandidates,
   getCandidateById,
@@ -14,12 +14,12 @@ import {
 const router = express.Router();
 
 router.get("/", getCandidates);
-router.get("/states", getCandidateStates);
+router.get("/states", getCandidateStates); 
 router.get("/offices", getCandidateOffices);
 router.get("/parties", getCandidateParties);
 
 router.post("/refresh-profiles", refreshAllCandidateProfiles);
-router.post("/:id/refresh-profile", refreshCandidateProfile);
+router.post("/:id/refresh-profile", refreshCandidateProfile); 
 router.patch("/:id/profile-locks", saveCandidateProfileLocks);
 router.patch("/:id/profile", saveCandidateProfileEdits);
 router.get("/:id", getCandidateById);
