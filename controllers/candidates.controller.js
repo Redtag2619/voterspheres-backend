@@ -3,12 +3,12 @@ import {
   fetchCandidateById,
   fetchCandidateStates,
   fetchCandidateOffices,
-  fetchCandidateParties,
-  updateCandidateProfileLocks
+  fetchCandidateParties
 } from "../services/candidates.service.js";
 import {
   enrichCandidateProfile,
-  enrichAllCandidateProfiles
+  enrichAllCandidateProfiles,
+  updateCandidateProfileLocks
 } from "../services/candidateEnrichment.service.js";
 
 export async function getCandidates(req, res) {
@@ -103,7 +103,7 @@ export async function refreshCandidateProfile(req, res) {
 
 export async function refreshAllCandidateProfiles(req, res) {
   try {
-    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 500));
+    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 1000));
     const data = await enrichAllCandidateProfiles(limit);
 
     return res.json({
@@ -118,14 +118,9 @@ export async function refreshAllCandidateProfiles(req, res) {
   }
 }
 
-export async function patchCandidateProfileLocks(req, res) {
+export async function saveCandidateProfileLocks(req, res) {
   try {
-    const { admin_locked, locked_fields } = req.body || {};
-
-    const data = await updateCandidateProfileLocks(req.params.id, {
-      admin_locked,
-      locked_fields
-    });
+    const data = await updateCandidateProfileLocks(req.params.id, req.body || {});
 
     if (!data) {
       return res.status(404).json({
@@ -138,9 +133,9 @@ export async function patchCandidateProfileLocks(req, res) {
       profile: data
     });
   } catch (error) {
-    console.error("patchCandidateProfileLocks error:", error);
+    console.error("saveCandidateProfileLocks error:", error);
     return res.status(500).json({
-      error: "Failed to update profile locks"
+      error: "Failed to save candidate profile locks"
     });
   }
 }
