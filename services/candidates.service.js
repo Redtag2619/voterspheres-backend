@@ -1,5 +1,41 @@
 import pool from "../config/database.js";
 
+async function ensureCandidateProfilesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS candidate_profiles (
+      id SERIAL PRIMARY KEY,
+      candidate_id INTEGER NOT NULL UNIQUE REFERENCES candidates(id) ON DELETE CASCADE,
+      campaign_website TEXT,
+      official_website TEXT,
+      office_address TEXT,
+      campaign_address TEXT,
+      phone TEXT,
+      email TEXT,
+      chief_of_staff_name TEXT,
+      campaign_manager_name TEXT,
+      finance_director_name TEXT,
+      political_director_name TEXT,
+      press_contact_name TEXT,
+      press_contact_email TEXT,
+      source_label TEXT DEFAULT 'manual_enrichment',
+      admin_locked BOOLEAN DEFAULT false,
+      locked_fields JSONB DEFAULT '{}'::jsonb,
+      contact_confidence NUMERIC DEFAULT 0,
+      scraped_pages JSONB DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE candidate_profiles
+    ADD COLUMN IF NOT EXISTS admin_locked BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS locked_fields JSONB DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS contact_confidence NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS scraped_pages JSONB DEFAULT '[]'::jsonb
+  `);
+}
+
 export async function fetchCandidates(query = {}) {
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(query.limit) || 24, 1), 100);
@@ -143,6 +179,8 @@ export async function fetchCandidateById(id) {
         source_label,
         admin_locked,
         locked_fields,
+        contact_confidence,
+        scraped_pages,
         updated_at
       FROM candidate_profiles
       WHERE candidate_id = $1
@@ -183,6 +221,8 @@ export async function fetchCandidateById(id) {
       source_label: candidate.contact_source || "candidate_table",
       admin_locked: false,
       locked_fields: {},
+      contact_confidence: 0,
+      scraped_pages: [],
       updated_at: candidate.last_contact_update || null
     };
   }
@@ -227,4 +267,67 @@ export async function fetchCandidateParties() {
   `);
 
   return result.rows.map((row) => row.value);
+}
+
+export async function updateCandidateProfileLocks(candidateId, payload = {}) {
+  await ensureCandidateProfilesTable();
+
+  const candidateCheck = await pool.query(
+    `SELECT id FROM candidates WHERE id = $1 LIMIT 1`,
+    [candidateId]
+  );
+
+  if (!candidateCheck.rows.length) {
+    return null;
+  }
+
+  const existing = await pool.query(
+    `
+      SELECT admin_locked, locked_fields
+      FROM candidate_profiles
+      WHERE candidate_id = $1
+      LIMIT 1
+    `,
+    [candidateId]
+  );
+
+  const current = existing.rows[0] || {
+    admin_locked: false,
+    locked_fields: {}
+  };
+
+  const nextAdminLocked =
+    typeof payload.admin_locked === "boolean"
+      ? payload.admin_locked
+      : Boolean(current.admin_locked);
+
+  const nextLockedFields =
+    payload.locked_fields && typeof payload.locked_fields === "object"
+      ? payload.locked_fields
+      : current.locked_fields || {};
+
+  const result = await pool.query(
+    `
+      INSERT INTO candidate_profiles (
+        candidate_id,
+        admin_locked,
+        locked_fields,
+        updated_at
+      )
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (candidate_id)
+      DO UPDATE SET
+        admin_locked = EXCLUDED.admin_locked,
+        locked_fields = EXCLUDED.locked_fields,
+        updated_at = NOW()
+      RETURNING
+        candidate_id,
+        admin_locked,
+        locked_fields,
+        updated_at
+    `,
+    [candidateId, nextAdminLocked, JSON.stringify(nextLockedFields)]
+  );
+
+  return result.rows[0] || null;
 }
