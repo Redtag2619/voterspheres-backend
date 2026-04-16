@@ -164,4 +164,4 @@ export async function saveCandidateProfileEdits(req, res) {
       error: "Failed to save candidate profile edits"
     });
   }
-}
+} 
