@@ -4,7 +4,7 @@ import {
   fetchCandidateStates,
   fetchCandidateOffices,
   fetchCandidateParties
-} from "../services/candidates.service.js";
+} from "../services/candidates.service.js"; 
 import {
   enrichCandidateProfile,
   enrichAllCandidateProfiles,
