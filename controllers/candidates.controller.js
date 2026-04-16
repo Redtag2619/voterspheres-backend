@@ -8,7 +8,8 @@ import {
 import {
   enrichCandidateProfile,
   enrichAllCandidateProfiles,
-  updateCandidateProfileLocks
+  updateCandidateProfileLocks,
+  updateCandidateProfileManual
 } from "../services/candidateEnrichment.service.js";
 
 export async function getCandidates(req, res) {
@@ -136,6 +137,31 @@ export async function saveCandidateProfileLocks(req, res) {
     console.error("saveCandidateProfileLocks error:", error);
     return res.status(500).json({
       error: "Failed to save candidate profile locks"
+    });
+  }
+}
+
+export async function saveCandidateProfileEdits(req, res) {
+  try {
+    const data = await updateCandidateProfileManual(req.params.id, req.body || {}, {
+      lock_edited_fields: Boolean(req.body?.lock_edited_fields)
+    });
+
+    if (!data) {
+      return res.status(404).json({
+        error: "Candidate not found"
+      });
+    }
+
+    return res.json({
+      success: true,
+      candidate: data.candidate,
+      profile: data.profile
+    });
+  } catch (error) {
+    console.error("saveCandidateProfileEdits error:", error);
+    return res.status(500).json({
+      error: "Failed to save candidate profile edits"
     });
   }
 }
