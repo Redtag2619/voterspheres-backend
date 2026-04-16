@@ -1,508 +1,5 @@
 import pool from "../config/database.js";
 
-const REQUEST_TIMEOUT_MS = 12000;
-const MAX_FOLLOW_PAGES = 4;
-const USER_AGENT =
-  "Mozilla/5.0 (compatible; VoterSpheresBot/1.0; +https://voterspheres.org)";
-
-function clean(value) {
-  if (value === undefined || value === null) return null;
-  const str = String(value).replace(/\s+/g, " ").trim();
-  return str ? str : null;
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    const cleaned = clean(value);
-    if (cleaned) return cleaned;
-  }
-  return null;
-}
-
-function safeWebsite(value) {
-  const website = clean(value);
-  if (!website) return null;
-  if (/^https?:\/\//i.test(website)) return website;
-  return `https://${website}`;
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function stripTags(html = "") {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&#39;/gi, "'")
-    .replace(/&quot;/gi, '"')
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function unique(values) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function normalizePhone(value) {
-  const raw = clean(value);
-  return raw ? raw.replace(/\s+/g, " ").trim() : null;
-}
-
-function normalizeEmail(value) {
-  const raw = clean(value);
-  return raw ? raw.toLowerCase() : null;
-}
-
-function chooseBestEmail(emails = [], preferredKeywords = []) {
-  const list = unique(emails.map(normalizeEmail));
-  if (!list.length) return null;
-
-  for (const keyword of preferredKeywords) {
-    const hit = list.find((item) => item.includes(keyword));
-    if (hit) return hit;
-  }
-
-  return (
-    list.find(
-      (item) =>
-        !item.includes("noreply") &&
-        !item.includes("no-reply") &&
-        !item.includes("donotreply")
-    ) || list[0]
-  );
-}
-
-function chooseBestPhone(phones = []) {
-  return unique(phones.map(normalizePhone))[0] || null;
-}
-
-function chooseBestAddress(addresses = []) {
-  return unique(addresses.map(clean))[0] || null;
-}
-
-function chooseOfficialWebsite(urls = []) {
-  const list = unique(urls.map(safeWebsite));
-  return (
-    list.find((url) => /\.gov(\/|$)/i.test(url)) ||
-    list.find((url) => /\.us(\/|$)/i.test(url)) ||
-    list.find((url) => /official/i.test(url)) ||
-    list[0] ||
-    null
-  );
-}
-
-function extractMetaContent(html, names = []) {
-  for (const name of names) {
-    const re = new RegExp(
-      `<meta[^>]+(?:name|property)=["']${escapeRegExp(
-        name
-      )}["'][^>]+content=["']([^"']+)["']`,
-      "i"
-    );
-    const match = html.match(re);
-    if (match?.[1]) return clean(match[1]);
-  }
-  return null;
-}
-
-function extractTitle(html) {
-  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return clean(stripTags(match?.[1] || ""));
-}
-
-function extractEmails(html) {
-  const mailtoMatches = [
-    ...html.matchAll(/mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})/gi)
-  ].map((m) => normalizeEmail(m[1]));
-
-  const textMatches = [
-    ...html.matchAll(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,})\b/gi)
-  ].map((m) => normalizeEmail(m[1]));
-
-  return unique([...mailtoMatches, ...textMatches]);
-}
-
-function extractPhones(text) {
-  const matches = [
-    ...text.matchAll(
-      /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g
-    )
-  ].map((m) => normalizePhone(m[0]));
-
-  return unique(matches);
-}
-
-function extractAddresses(text) {
-  const matches = [
-    ...text.matchAll(
-      /\b\d{1,6}\s+[A-Za-z0-9.#'\- ]+\s(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Highway|Hwy|Parkway|Pkwy|Suite|Ste|Unit)\b[\s,.\-A-Za-z0-9#]*?(?:,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?)?/gi
-    )
-  ].map((m) => clean(m[0]));
-
-  return unique(matches);
-}
-
-function extractNamedContact(text, labels = []) {
-  for (const label of labels) {
-    const re = new RegExp(
-      `${label}\\s*[:\\-–]?\\s*([A-Z][a-z]+(?:\\s+[A-Z][a-z.'-]+){0,3})`,
-      "i"
-    );
-    const match = text.match(re);
-    if (match?.[1]) return clean(match[1]);
-  }
-  return null;
-}
-
-function extractLinks(html, baseUrl) {
-  const links = [];
-  const regex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-
-  for (const match of html.matchAll(regex)) {
-    const href = clean(match[1]);
-    const label = clean(stripTags(match[2] || ""));
-
-    if (!href) continue;
-
-    try {
-      const url = new URL(href, baseUrl);
-      links.push({
-        href: url.toString(),
-        label: label || ""
-      });
-    } catch {
-      // ignore bad links
-    }
-  }
-
-  return links;
-}
-
-function sameHost(urlA, urlB) {
-  try {
-    return new URL(urlA).hostname === new URL(urlB).hostname;
-  } catch {
-    return false;
-  }
-}
-
-function scoreContactPage(link) {
-  const text = `${link.href} ${link.label}`.toLowerCase();
-
-  let score = 0;
-  if (text.includes("contact")) score += 6;
-  if (text.includes("about")) score += 4;
-  if (text.includes("team")) score += 4;
-  if (text.includes("staff")) score += 4;
-  if (text.includes("press")) score += 5;
-  if (text.includes("media")) score += 5;
-  if (text.includes("leadership")) score += 3;
-  if (text.includes("official")) score += 3;
-  if (text.includes("donate")) score -= 6;
-  if (text.includes("volunteer")) score -= 3;
-  return score;
-}
-
-async function fetchHtml(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache"
-      }
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !contentType.toLowerCase().includes("text/html")) {
-      return null;
-    }
-
-    const html = await response.text();
-    return { url: response.url || url, html };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function extractSignals(html, pageUrl) {
-  const text = stripTags(html);
-  const links = extractLinks(html, pageUrl);
-  const emails = extractEmails(html);
-  const phones = extractPhones(text);
-  const addresses = extractAddresses(text);
-
-  return {
-    page_url: pageUrl,
-    page_title: extractTitle(html),
-    description: extractMetaContent(html, ["description", "og:description"]),
-    emails,
-    phones,
-    addresses,
-    links,
-    officialWebsiteCandidates: links
-      .filter(
-        (link) =>
-          /\.gov(\/|$)/i.test(link.href) ||
-          /\.us(\/|$)/i.test(link.href) ||
-          /official/i.test(`${link.label} ${link.href}`)
-      )
-      .map((link) => link.href),
-    campaign_address: chooseBestAddress(addresses),
-    phone: chooseBestPhone(phones),
-    email: chooseBestEmail(emails, ["info@", "contact@", "hello@", "team@"]),
-    press_contact_email: chooseBestEmail(emails, [
-      "press@",
-      "media@",
-      "communications@",
-      "comms@"
-    ]),
-    chief_of_staff_name: extractNamedContact(text, ["chief of staff"]),
-    campaign_manager_name: extractNamedContact(text, ["campaign manager"]),
-    finance_director_name: extractNamedContact(text, ["finance director"]),
-    political_director_name: extractNamedContact(text, ["political director"]),
-    press_contact_name: extractNamedContact(text, [
-      "press contact",
-      "media contact",
-      "communications director",
-      "press secretary"
-    ])
-  };
-}
-
-async function crawlRelevantPages(startUrl) {
-  const visited = new Set();
-  const pages = [];
-  const first = await fetchHtml(startUrl);
-  if (!first) return pages;
-
-  const queue = [first];
-
-  while (queue.length && pages.length < MAX_FOLLOW_PAGES) {
-    const current = queue.shift();
-    if (!current?.url || visited.has(current.url)) continue;
-
-    visited.add(current.url);
-    pages.push(extractSignals(current.html, current.url));
-
-    const links = extractLinks(current.html, current.url)
-      .filter((link) => sameHost(link.href, current.url))
-      .map((link) => ({ ...link, score: scoreContactPage(link) }))
-      .filter((link) => link.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6);
-
-    for (const link of links) {
-      if (visited.has(link.href)) continue;
-      const next = await fetchHtml(link.href);
-      if (next) queue.push(next);
-      if (pages.length + queue.length >= MAX_FOLLOW_PAGES) break;
-    }
-  }
-
-  return pages;
-}
-
-function parseLockedFields(value) {
-  if (!value) return {};
-  if (typeof value === "object" && !Array.isArray(value)) return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
-}
-
-function isFieldLocked(existingProfile, fieldName) {
-  if (existingProfile?.admin_locked) return true;
-  const lockedFields = parseLockedFields(existingProfile?.locked_fields);
-  return Boolean(lockedFields?.[fieldName]);
-}
-
-function applyLockAwareValue(existingProfile, fieldName, incomingValue, existingValue) {
-  if (isFieldLocked(existingProfile, fieldName)) {
-    return clean(existingValue) ?? null;
-  }
-  return clean(incomingValue) ?? clean(existingValue) ?? null;
-}
-
-function mergeExtractedSignals(existing = {}, campaignPages = [], officialPages = [], candidate = {}) {
-  const allPages = [...campaignPages, ...officialPages];
-  const allEmails = unique(allPages.flatMap((page) => page.emails || []));
-  const allPhones = unique(allPages.flatMap((page) => page.phones || []));
-  const officialCandidates = unique(
-    allPages.flatMap((page) => page.officialWebsiteCandidates || [])
-  );
-
-  const derived = {
-    campaign_website: firstNonEmpty(existing.campaign_website, safeWebsite(candidate.website)),
-    official_website: firstNonEmpty(existing.official_website, chooseOfficialWebsite(officialCandidates)),
-    office_address: firstNonEmpty(
-      ...officialPages.map((page) => page.campaign_address),
-      existing.office_address,
-      [
-        candidate.address_line1,
-        candidate.address_line2,
-        candidate.city,
-        candidate.state_code,
-        candidate.postal_code
-      ]
-        .filter(Boolean)
-        .join(", ")
-    ),
-    campaign_address: firstNonEmpty(
-      ...allPages.map((page) => page.campaign_address),
-      existing.campaign_address,
-      [
-        candidate.address_line1,
-        candidate.address_line2,
-        candidate.city,
-        candidate.state_code,
-        candidate.postal_code
-      ]
-        .filter(Boolean)
-        .join(", ")
-    ),
-    phone: firstNonEmpty(
-      chooseBestPhone(allPhones),
-      existing.phone,
-      candidate.phone
-    ),
-    email: firstNonEmpty(
-      chooseBestEmail(allEmails, ["info@", "contact@", "hello@", "team@"]),
-      existing.email,
-      candidate.contact_email
-    ),
-    chief_of_staff_name: firstNonEmpty(
-      ...allPages.map((page) => page.chief_of_staff_name),
-      existing.chief_of_staff_name
-    ),
-    campaign_manager_name: firstNonEmpty(
-      ...allPages.map((page) => page.campaign_manager_name),
-      existing.campaign_manager_name
-    ),
-    finance_director_name: firstNonEmpty(
-      ...allPages.map((page) => page.finance_director_name),
-      existing.finance_director_name
-    ),
-    political_director_name: firstNonEmpty(
-      ...allPages.map((page) => page.political_director_name),
-      existing.political_director_name
-    ),
-    press_contact_name: firstNonEmpty(
-      ...allPages.map((page) => page.press_contact_name),
-      existing.press_contact_name
-    ),
-    press_contact_email: firstNonEmpty(
-      chooseBestEmail(allEmails, ["press@", "media@", "communications@", "comms@"]),
-      existing.press_contact_email,
-      candidate.press_email
-    ),
-    source_label:
-      campaignPages.length || officialPages.length
-        ? [
-            campaignPages.length ? "campaign_site_live" : null,
-            officialPages.length ? "official_site_live" : null
-          ]
-            .filter(Boolean)
-            .join("+")
-        : firstNonEmpty(existing.source_label, candidate.contact_source, "candidate_record_seed")
-  };
-
-  return {
-    campaign_website: applyLockAwareValue(
-      existing,
-      "campaign_website",
-      derived.campaign_website,
-      existing.campaign_website || candidate.website
-    ),
-    official_website: applyLockAwareValue(
-      existing,
-      "official_website",
-      derived.official_website,
-      existing.official_website
-    ),
-    office_address: applyLockAwareValue(
-      existing,
-      "office_address",
-      derived.office_address,
-      existing.office_address
-    ),
-    campaign_address: applyLockAwareValue(
-      existing,
-      "campaign_address",
-      derived.campaign_address,
-      existing.campaign_address
-    ),
-    phone: applyLockAwareValue(
-      existing,
-      "phone",
-      derived.phone,
-      existing.phone || candidate.phone
-    ),
-    email: applyLockAwareValue(
-      existing,
-      "email",
-      derived.email,
-      existing.email || candidate.contact_email
-    ),
-    chief_of_staff_name: applyLockAwareValue(
-      existing,
-      "chief_of_staff_name",
-      derived.chief_of_staff_name,
-      existing.chief_of_staff_name
-    ),
-    campaign_manager_name: applyLockAwareValue(
-      existing,
-      "campaign_manager_name",
-      derived.campaign_manager_name,
-      existing.campaign_manager_name
-    ),
-    finance_director_name: applyLockAwareValue(
-      existing,
-      "finance_director_name",
-      derived.finance_director_name,
-      existing.finance_director_name
-    ),
-    political_director_name: applyLockAwareValue(
-      existing,
-      "political_director_name",
-      derived.political_director_name,
-      existing.political_director_name
-    ),
-    press_contact_name: applyLockAwareValue(
-      existing,
-      "press_contact_name",
-      derived.press_contact_name,
-      existing.press_contact_name
-    ),
-    press_contact_email: applyLockAwareValue(
-      existing,
-      "press_contact_email",
-      derived.press_contact_email,
-      existing.press_contact_email || candidate.press_email
-    ),
-    source_label: clean(derived.source_label) || clean(existing.source_label) || "candidate_record_seed",
-    admin_locked: Boolean(existing.admin_locked),
-    locked_fields: parseLockedFields(existing.locked_fields)
-  };
-}
-
 async function ensureCandidateProfilesTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -533,6 +30,49 @@ async function ensureCandidateProfilesTable() {
     ADD COLUMN IF NOT EXISTS admin_locked BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS locked_fields JSONB DEFAULT '{}'::jsonb
   `);
+}
+
+function clean(value) {
+  if (value === undefined || value === null) return null;
+  const str = String(value).replace(/\s+/g, " ").trim();
+  return str ? str : null;
+}
+
+function parseLockedFields(value) {
+  if (!value) return {};
+  if (typeof value === "object" && !Array.isArray(value)) return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function isLocked(existing, fieldName) {
+  if (existing?.admin_locked) return true;
+  const lockedFields = parseLockedFields(existing?.locked_fields);
+  return Boolean(lockedFields?.[fieldName]);
+}
+
+function preserveLocked(existing, fieldName, incoming, fallback = null) {
+  if (isLocked(existing, fieldName)) {
+    return clean(existing?.[fieldName]) ?? clean(fallback);
+  }
+  return clean(incoming) ?? clean(existing?.[fieldName]) ?? clean(fallback);
+}
+
+function buildAddress(candidate) {
+  return (
+    [
+      candidate?.address_line1,
+      candidate?.address_line2,
+      candidate?.city,
+      candidate?.state_code,
+      candidate?.postal_code
+    ]
+      .filter(Boolean)
+      .join(", ") || null
+  );
 }
 
 async function getCandidate(candidateId) {
@@ -646,25 +186,7 @@ async function upsertProfile(candidateId, profile) {
         admin_locked = COALESCE(EXCLUDED.admin_locked, candidate_profiles.admin_locked),
         locked_fields = COALESCE(EXCLUDED.locked_fields, candidate_profiles.locked_fields),
         updated_at = NOW()
-      RETURNING
-        candidate_id,
-        campaign_website,
-        official_website,
-        office_address,
-        campaign_address,
-        phone,
-        email,
-        chief_of_staff_name,
-        campaign_manager_name,
-        finance_director_name,
-        political_director_name,
-        press_contact_name,
-        press_contact_email,
-        source_label,
-        admin_locked,
-        locked_fields,
-        updated_at,
-        created_at
+      RETURNING *
     `,
     [
       candidateId,
@@ -696,32 +218,52 @@ export async function enrichCandidateProfile(candidateId) {
   if (!candidate) return null;
 
   const existing = await getExistingProfile(candidateId);
+  const fallbackAddress = buildAddress(candidate);
 
-  const campaignWebsite = firstNonEmpty(
-    existing.campaign_website,
-    safeWebsite(candidate.website)
-  );
+  const merged = {
+    campaign_website: preserveLocked(
+      existing,
+      "campaign_website",
+      candidate.website,
+      candidate.website
+    ),
+    official_website: preserveLocked(existing, "official_website", null),
+    office_address: preserveLocked(
+      existing,
+      "office_address",
+      fallbackAddress,
+      fallbackAddress
+    ),
+    campaign_address: preserveLocked(
+      existing,
+      "campaign_address",
+      fallbackAddress,
+      fallbackAddress
+    ),
+    phone: preserveLocked(existing, "phone", candidate.phone, candidate.phone),
+    email: preserveLocked(existing, "email", candidate.contact_email, candidate.contact_email),
+    chief_of_staff_name: preserveLocked(existing, "chief_of_staff_name", null),
+    campaign_manager_name: preserveLocked(existing, "campaign_manager_name", null),
+    finance_director_name: preserveLocked(existing, "finance_director_name", null),
+    political_director_name: preserveLocked(existing, "political_director_name", null),
+    press_contact_name: preserveLocked(existing, "press_contact_name", null),
+    press_contact_email: preserveLocked(
+      existing,
+      "press_contact_email",
+      candidate.press_email,
+      candidate.press_email
+    ),
+    source_label: clean(existing.source_label) || clean(candidate.contact_source) || "candidate_table",
+    admin_locked: Boolean(existing.admin_locked),
+    locked_fields: parseLockedFields(existing.locked_fields)
+  };
 
-  let campaignPages = [];
-  if (campaignWebsite) {
-    campaignPages = await crawlRelevantPages(campaignWebsite);
-  }
-
-  const derivedOfficialWebsite = chooseOfficialWebsite(
-    campaignPages.flatMap((page) => page.officialWebsiteCandidates || [])
-  );
-
-  const officialWebsite = firstNonEmpty(existing.official_website, derivedOfficialWebsite);
-
-  let officialPages = [];
-  if (officialWebsite && officialWebsite !== campaignWebsite) {
-    officialPages = await crawlRelevantPages(officialWebsite);
-  }
-
-  const merged = mergeExtractedSignals(existing, campaignPages, officialPages, candidate);
   const profile = await upsertProfile(candidateId, merged);
 
-  return { candidate, profile };
+  return {
+    candidate,
+    profile
+  };
 }
 
 export async function enrichAllCandidateProfiles(limit = 100) {
