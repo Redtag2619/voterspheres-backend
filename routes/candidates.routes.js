@@ -1,4 +1,4 @@
-import express from "express"; 
+import express from "express";
 import {
   getCandidates,
   getCandidateById,
@@ -6,7 +6,8 @@ import {
   getCandidateOffices,
   getCandidateParties,
   refreshCandidateProfile,
-  refreshAllCandidateProfiles
+  refreshAllCandidateProfiles,
+  patchCandidateProfileLocks
 } from "../controllers/candidates.controller.js";
 
 const router = express.Router();
@@ -16,20 +17,9 @@ router.get("/states", getCandidateStates);
 router.get("/offices", getCandidateOffices);
 router.get("/parties", getCandidateParties);
 
-// 🔥 critical routes
 router.post("/refresh-profiles", refreshAllCandidateProfiles);
 router.post("/:id/refresh-profile", refreshCandidateProfile);
+router.patch("/:id/profile-locks", patchCandidateProfileLocks);
 router.get("/:id", getCandidateById);
-
-console.log("✅ candidates.routes.js loaded");
-console.log("✅ candidates routes:", [
-  "/",
-  "/states",
-  "/offices",
-  "/parties",
-  "/refresh-profiles",
-  "/:id/refresh-profile",
-  "/:id"
-]);
 
 export default router;
