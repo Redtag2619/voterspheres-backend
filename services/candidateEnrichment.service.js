@@ -1,4 +1,4 @@
-import pool from "../config/database.js";
+import pool from "../config/database.js"; 
 
 const REQUEST_TIMEOUT_MS = 12000;
 const MAX_FOLLOW_PAGES = 5;
