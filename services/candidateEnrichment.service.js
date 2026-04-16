@@ -45,6 +45,10 @@ async function ensureCandidateProfilesTable() {
       locked_fields JSONB DEFAULT '{}'::jsonb,
       contact_confidence NUMERIC DEFAULT 0,
       scraped_pages JSONB DEFAULT '[]'::jsonb,
+      is_verified BOOLEAN DEFAULT false,
+      verified_by TEXT,
+      verified_at TIMESTAMP,
+      internal_notes TEXT,
       updated_at TIMESTAMP DEFAULT NOW(),
       created_at TIMESTAMP DEFAULT NOW()
     )
@@ -55,7 +59,11 @@ async function ensureCandidateProfilesTable() {
     ADD COLUMN IF NOT EXISTS admin_locked BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS locked_fields JSONB DEFAULT '{}'::jsonb,
     ADD COLUMN IF NOT EXISTS contact_confidence NUMERIC DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS scraped_pages JSONB DEFAULT '[]'::jsonb
+    ADD COLUMN IF NOT EXISTS scraped_pages JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS verified_by TEXT,
+    ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS internal_notes TEXT
   `);
 }
 
@@ -706,6 +714,10 @@ async function getExistingProfile(candidateId) {
         locked_fields,
         contact_confidence,
         scraped_pages,
+        is_verified,
+        verified_by,
+        verified_at,
+        internal_notes,
         updated_at,
         created_at
       FROM candidate_profiles
@@ -740,10 +752,14 @@ async function upsertProfile(candidateId, profile) {
         locked_fields,
         contact_confidence,
         scraped_pages,
+        is_verified,
+        verified_by,
+        verified_at,
+        internal_notes,
         updated_at
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW()
       )
       ON CONFLICT (candidate_id)
       DO UPDATE SET
@@ -764,6 +780,10 @@ async function upsertProfile(candidateId, profile) {
         locked_fields = COALESCE(EXCLUDED.locked_fields, candidate_profiles.locked_fields),
         contact_confidence = EXCLUDED.contact_confidence,
         scraped_pages = EXCLUDED.scraped_pages,
+        is_verified = EXCLUDED.is_verified,
+        verified_by = EXCLUDED.verified_by,
+        verified_at = EXCLUDED.verified_at,
+        internal_notes = EXCLUDED.internal_notes,
         updated_at = NOW()
       RETURNING *
     `,
@@ -785,7 +805,11 @@ async function upsertProfile(candidateId, profile) {
       Boolean(profile.admin_locked),
       JSON.stringify(profile.locked_fields || {}),
       Number(profile.contact_confidence || 0),
-      JSON.stringify(profile.scraped_pages || [])
+      JSON.stringify(profile.scraped_pages || []),
+      Boolean(profile.is_verified),
+      clean(profile.verified_by),
+      profile.verified_at || null,
+      clean(profile.internal_notes)
     ]
   );
 
@@ -833,10 +857,14 @@ export async function updateCandidateProfileLocks(candidateId, payload = {}) {
         locked_fields,
         contact_confidence,
         scraped_pages,
+        is_verified,
+        verified_by,
+        verified_at,
+        internal_notes,
         updated_at
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW()
       )
       ON CONFLICT (candidate_id)
       DO UPDATE SET
@@ -863,7 +891,11 @@ export async function updateCandidateProfileLocks(candidateId, payload = {}) {
       adminLocked,
       JSON.stringify(lockedFields),
       Number(existing.contact_confidence || 0),
-      JSON.stringify(existing.scraped_pages || [])
+      JSON.stringify(existing.scraped_pages || []),
+      Boolean(existing.is_verified),
+      clean(existing.verified_by),
+      existing.verified_at || null,
+      clean(existing.internal_notes)
     ]
   );
 
@@ -904,7 +936,11 @@ export async function updateCandidateProfileManual(
     admin_locked: Boolean(existing.admin_locked),
     locked_fields: existingLockedFields,
     contact_confidence: Number(existing.contact_confidence || 0),
-    scraped_pages: existing.scraped_pages || []
+    scraped_pages: existing.scraped_pages || [],
+    is_verified: Boolean(existing.is_verified),
+    verified_by: clean(existing.verified_by),
+    verified_at: existing.verified_at || null,
+    internal_notes: clean(existing.internal_notes)
   };
 
   for (const field of MANUAL_EDITABLE_FIELDS) {
@@ -917,6 +953,51 @@ export async function updateCandidateProfileManual(
 
   merged.locked_fields = nextLockedFields;
   merged.contact_confidence = calculateConfidence(merged);
+
+  const profile = await upsertProfile(candidateId, merged);
+
+  return {
+    candidate,
+    profile
+  };
+}
+
+export async function updateCandidateVerification(candidateId, payload = {}) {
+  await ensureCandidateProfilesTable();
+
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) {
+    return null;
+  }
+
+  const existing = await getExistingProfile(candidateId);
+  const isVerified = Boolean(payload.is_verified);
+  const verifiedBy = clean(payload.verified_by);
+  const internalNotes = clean(payload.internal_notes);
+
+  const merged = {
+    campaign_website: clean(existing.campaign_website),
+    official_website: clean(existing.official_website),
+    office_address: clean(existing.office_address),
+    campaign_address: clean(existing.campaign_address),
+    phone: clean(existing.phone),
+    email: clean(existing.email),
+    chief_of_staff_name: clean(existing.chief_of_staff_name),
+    campaign_manager_name: clean(existing.campaign_manager_name),
+    finance_director_name: clean(existing.finance_director_name),
+    political_director_name: clean(existing.political_director_name),
+    press_contact_name: clean(existing.press_contact_name),
+    press_contact_email: clean(existing.press_contact_email),
+    source_label: clean(existing.source_label) || "manual_enrichment",
+    admin_locked: Boolean(existing.admin_locked),
+    locked_fields: parseLockedFields(existing.locked_fields),
+    contact_confidence: Number(existing.contact_confidence || 0),
+    scraped_pages: existing.scraped_pages || [],
+    is_verified: isVerified,
+    verified_by: isVerified ? verifiedBy : null,
+    verified_at: isVerified ? new Date() : null,
+    internal_notes: internalNotes
+  };
 
   const profile = await upsertProfile(candidateId, merged);
 
@@ -1041,7 +1122,11 @@ export async function enrichCandidateProfile(candidateId) {
       emails: page.emails || [],
       phones: page.phones || [],
       addresses: page.addresses || []
-    }))
+    })),
+    is_verified: Boolean(existing.is_verified),
+    verified_by: clean(existing.verified_by),
+    verified_at: existing.verified_at || null,
+    internal_notes: clean(existing.internal_notes)
   };
 
   merged.contact_confidence = calculateConfidence(merged);
