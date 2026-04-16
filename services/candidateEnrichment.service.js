@@ -8,6 +8,21 @@ const USER_AGENT =
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
 const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
 
+const MANUAL_EDITABLE_FIELDS = [
+  "campaign_website",
+  "official_website",
+  "office_address",
+  "campaign_address",
+  "phone",
+  "email",
+  "chief_of_staff_name",
+  "campaign_manager_name",
+  "finance_director_name",
+  "political_director_name",
+  "press_contact_name",
+  "press_contact_email"
+];
+
 async function ensureCandidateProfilesTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -853,6 +868,62 @@ export async function updateCandidateProfileLocks(candidateId, payload = {}) {
   );
 
   return result.rows[0] || null;
+}
+
+export async function updateCandidateProfileManual(
+  candidateId,
+  payload = {},
+  options = {}
+) {
+  await ensureCandidateProfilesTable();
+
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) {
+    return null;
+  }
+
+  const existing = await getExistingProfile(candidateId);
+  const existingLockedFields = parseLockedFields(existing.locked_fields);
+  const lockEditedFields = Boolean(options.lock_edited_fields);
+
+  const nextLockedFields = { ...existingLockedFields };
+  const merged = {
+    campaign_website: clean(existing.campaign_website),
+    official_website: clean(existing.official_website),
+    office_address: clean(existing.office_address),
+    campaign_address: clean(existing.campaign_address),
+    phone: clean(existing.phone),
+    email: clean(existing.email),
+    chief_of_staff_name: clean(existing.chief_of_staff_name),
+    campaign_manager_name: clean(existing.campaign_manager_name),
+    finance_director_name: clean(existing.finance_director_name),
+    political_director_name: clean(existing.political_director_name),
+    press_contact_name: clean(existing.press_contact_name),
+    press_contact_email: clean(existing.press_contact_email),
+    source_label: "manual_edit",
+    admin_locked: Boolean(existing.admin_locked),
+    locked_fields: existingLockedFields,
+    contact_confidence: Number(existing.contact_confidence || 0),
+    scraped_pages: existing.scraped_pages || []
+  };
+
+  for (const field of MANUAL_EDITABLE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue;
+    merged[field] = clean(payload[field]);
+    if (lockEditedFields) {
+      nextLockedFields[field] = true;
+    }
+  }
+
+  merged.locked_fields = nextLockedFields;
+  merged.contact_confidence = calculateConfidence(merged);
+
+  const profile = await upsertProfile(candidateId, merged);
+
+  return {
+    candidate,
+    profile
+  };
 }
 
 export async function enrichCandidateProfile(candidateId) {
