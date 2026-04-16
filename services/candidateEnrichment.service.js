@@ -5,6 +5,9 @@ const MAX_FOLLOW_PAGES = 5;
 const USER_AGENT =
   "Mozilla/5.0 (compatible; VoterSpheresBot/1.0; +https://voterspheres.org)";
 
+const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
+const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
+
 async function ensureCandidateProfilesTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -231,6 +234,45 @@ function scorePage(link) {
   return score;
 }
 
+function scoreSearchResult(candidate, url, title = "", description = "") {
+  const text = `${url} ${title} ${description}`.toLowerCase();
+  const name = String(candidate.full_name || candidate.name || "").toLowerCase();
+  const office = String(candidate.office || "").toLowerCase();
+  const state = String(candidate.state || candidate.state_code || "").toLowerCase();
+
+  let score = 0;
+
+  if (name && text.includes(name.split(",")[0].trim())) score += 8;
+  if (office && text.includes(office)) score += 4;
+  if (state && text.includes(state)) score += 4;
+
+  if (text.includes("for congress")) score += 5;
+  if (text.includes("for senate")) score += 5;
+  if (text.includes("for governor")) score += 5;
+  if (text.includes("campaign")) score += 5;
+  if (text.includes("official")) score += 4;
+  if (text.includes("vote")) score += 3;
+  if (text.includes("elect")) score += 3;
+
+  if (/\.gov(\/|$)/i.test(url)) score += 4;
+  if (/\.us(\/|$)/i.test(url)) score += 3;
+
+  if (
+    text.includes("facebook.com") ||
+    text.includes("instagram.com") ||
+    text.includes("x.com") ||
+    text.includes("twitter.com") ||
+    text.includes("linkedin.com") ||
+    text.includes("youtube.com") ||
+    text.includes("ballotpedia.org") ||
+    text.includes("wikipedia.org")
+  ) {
+    score -= 10;
+  }
+
+  return score;
+}
+
 async function fetchHtml(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -348,21 +390,132 @@ function generateWebsiteGuesses(candidate) {
   return unique(guesses.filter(Boolean));
 }
 
+function buildDiscoveryQuery(candidate) {
+  const name = clean(candidate.full_name || candidate.name) || "";
+  const office = clean(candidate.office) || "";
+  const state = clean(candidate.state || candidate.state_code) || "";
+  return [name, office, state, "campaign website"].filter(Boolean).join(" ");
+}
+
+async function braveSearchDiscovery(query) {
+  if (!BRAVE_SEARCH_API_KEY) return [];
+
+  try {
+    const url = new URL("https://api.search.brave.com/res/v1/web/search");
+    url.searchParams.set("q", query);
+    url.searchParams.set("count", "10");
+    url.searchParams.set("country", "us");
+    url.searchParams.set("search_lang", "en");
+    url.searchParams.set("safesearch", "moderate");
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
+        Accept: "application/json",
+        "User-Agent": USER_AGENT
+      }
+    });
+
+    if (!response.ok) return [];
+    const data = await response.json();
+
+    const results = Array.isArray(data?.web?.results) ? data.web.results : [];
+    return results.map((item) => ({
+      url: clean(item.url),
+      title: clean(item.title),
+      description: clean(item.description),
+      source: "brave_search"
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function serpApiDiscovery(query) {
+  if (!SERPAPI_API_KEY) return [];
+
+  try {
+    const url = new URL("https://serpapi.com/search.json");
+    url.searchParams.set("engine", "google");
+    url.searchParams.set("q", query);
+    url.searchParams.set("api_key", SERPAPI_API_KEY);
+    url.searchParams.set("num", "10");
+    url.searchParams.set("hl", "en");
+    url.searchParams.set("gl", "us");
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": USER_AGENT
+      }
+    });
+
+    if (!response.ok) return [];
+    const data = await response.json();
+
+    const results = Array.isArray(data?.organic_results) ? data.organic_results : [];
+    return results.map((item) => ({
+      url: clean(item.link),
+      title: clean(item.title),
+      description: clean(item.snippet),
+      source: "serpapi"
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function discoverCandidateWebsite(candidate, existingProfile = {}) {
   const existing = firstNonEmpty(
     existingProfile.campaign_website,
     candidate.website
   );
-  if (existing) return safeWebsite(existing);
-
-  const guesses = generateWebsiteGuesses(candidate);
-
-  for (const guess of guesses) {
-    const found = await headCheckUrl(guess);
-    if (found) return found;
+  if (existing) {
+    return {
+      website: safeWebsite(existing),
+      source: "candidate_record"
+    };
   }
 
-  return null;
+  const query = buildDiscoveryQuery(candidate);
+  const searchResults = [
+    ...(await braveSearchDiscovery(query)),
+    ...(await serpApiDiscovery(query))
+  ];
+
+  const scored = searchResults
+    .filter((item) => item.url)
+    .map((item) => ({
+      ...item,
+      score: scoreSearchResult(candidate, item.url, item.title, item.description)
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  for (const item of scored) {
+    const checked = await headCheckUrl(item.url);
+    if (checked) {
+      return {
+        website: checked,
+        source: item.source
+      };
+    }
+  }
+
+  const guesses = generateWebsiteGuesses(candidate);
+  for (const guess of guesses) {
+    const found = await headCheckUrl(guess);
+    if (found) {
+      return {
+        website: found,
+        source: "domain_guess"
+      };
+    }
+  }
+
+  return {
+    website: null,
+    source: null
+  };
 }
 
 function pickBestEmail(emails = [], preferred = []) {
@@ -642,8 +795,12 @@ export async function enrichCandidateProfile(candidateId) {
   const existing = await getExistingProfile(candidateId);
   const fallbackAddress = buildAddress(candidate);
 
-  const discoveredWebsite = await discoverCandidateWebsite(candidate, existing);
-  const campaignWebsite = firstNonEmpty(existing.campaign_website, discoveredWebsite, safeWebsite(candidate.website));
+  const discovery = await discoverCandidateWebsite(candidate, existing);
+  const campaignWebsite = firstNonEmpty(
+    existing.campaign_website,
+    discovery.website,
+    safeWebsite(candidate.website)
+  );
 
   let pages = [];
   if (campaignWebsite) {
@@ -734,8 +891,8 @@ export async function enrichCandidateProfile(candidateId) {
     ),
     source_label: pages.length
       ? "campaign_site_live"
-      : discoveredWebsite
-        ? "website_discovery"
+      : discovery.website
+        ? discovery.source || "website_discovery"
         : clean(existing.source_label) || clean(candidate.contact_source) || "candidate_table",
     admin_locked: Boolean(existing.admin_locked),
     locked_fields: parseLockedFields(existing.locked_fields),
