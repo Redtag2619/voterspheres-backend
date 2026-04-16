@@ -327,7 +327,7 @@ export async function updateCandidateProfileLocks(candidateId, payload = {}) {
         updated_at
     `,
     [candidateId, nextAdminLocked, JSON.stringify(nextLockedFields)]
-  );
+  ); 
 
   return result.rows[0] || null;
 }
