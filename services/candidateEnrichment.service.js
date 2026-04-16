@@ -245,15 +245,10 @@ function scoreSearchResult(candidate, url, title = "", description = "") {
   if (name && text.includes(name.split(",")[0].trim())) score += 8;
   if (office && text.includes(office)) score += 4;
   if (state && text.includes(state)) score += 4;
-
-  if (text.includes("for congress")) score += 5;
-  if (text.includes("for senate")) score += 5;
-  if (text.includes("for governor")) score += 5;
   if (text.includes("campaign")) score += 5;
   if (text.includes("official")) score += 4;
   if (text.includes("vote")) score += 3;
   if (text.includes("elect")) score += 3;
-
   if (/\.gov(\/|$)/i.test(url)) score += 4;
   if (/\.us(\/|$)/i.test(url)) score += 3;
 
@@ -374,20 +369,20 @@ function generateWebsiteGuesses(candidate) {
     .toLowerCase()
     .replace(/[^a-z]/g, "");
 
-  const guesses = [
-    `https://${compact}.com`,
-    `https://www.${compact}.com`,
-    `https://${firstLast}.com`,
-    `https://www.${firstLast}.com`,
-    state ? `https://${compact}for${state}.com` : null,
-    state ? `https://www.${compact}for${state}.com` : null,
-    office ? `https://${compact}for${office}.com` : null,
-    office ? `https://www.${compact}for${office}.com` : null,
-    state && office ? `https://${compact}for${state}${office}.com` : null,
-    state && office ? `https://www.${compact}for${state}${office}.com` : null
-  ];
-
-  return unique(guesses.filter(Boolean));
+  return unique(
+    [
+      `https://${compact}.com`,
+      `https://www.${compact}.com`,
+      `https://${firstLast}.com`,
+      `https://www.${firstLast}.com`,
+      state ? `https://${compact}for${state}.com` : null,
+      state ? `https://www.${compact}for${state}.com` : null,
+      office ? `https://${compact}for${office}.com` : null,
+      office ? `https://www.${compact}for${office}.com` : null,
+      state && office ? `https://${compact}for${state}${office}.com` : null,
+      state && office ? `https://www.${compact}for${state}${office}.com` : null
+    ].filter(Boolean)
+  );
 }
 
 function buildDiscoveryQuery(candidate) {
@@ -466,10 +461,7 @@ async function serpApiDiscovery(query) {
 }
 
 async function discoverCandidateWebsite(candidate, existingProfile = {}) {
-  const existing = firstNonEmpty(
-    existingProfile.campaign_website,
-    candidate.website
-  );
+  const existing = firstNonEmpty(existingProfile.campaign_website, candidate.website);
   if (existing) {
     return {
       website: safeWebsite(existing),
@@ -501,8 +493,7 @@ async function discoverCandidateWebsite(candidate, existingProfile = {}) {
     }
   }
 
-  const guesses = generateWebsiteGuesses(candidate);
-  for (const guess of guesses) {
+  for (const guess of generateWebsiteGuesses(candidate)) {
     const found = await headCheckUrl(guess);
     if (found) {
       return {
@@ -780,6 +771,84 @@ async function upsertProfile(candidateId, profile) {
       JSON.stringify(profile.locked_fields || {}),
       Number(profile.contact_confidence || 0),
       JSON.stringify(profile.scraped_pages || [])
+    ]
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function updateCandidateProfileLocks(candidateId, payload = {}) {
+  await ensureCandidateProfilesTable();
+
+  const candidateResult = await pool.query(
+    `SELECT id FROM candidates WHERE id = $1 LIMIT 1`,
+    [candidateId]
+  );
+
+  if (!candidateResult.rows.length) {
+    return null;
+  }
+
+  const existing = await getExistingProfile(candidateId);
+
+  const adminLocked = Boolean(payload.admin_locked);
+  const lockedFields =
+    payload.locked_fields && typeof payload.locked_fields === "object"
+      ? payload.locked_fields
+      : parseLockedFields(existing.locked_fields);
+
+  const result = await pool.query(
+    `
+      INSERT INTO candidate_profiles (
+        candidate_id,
+        campaign_website,
+        official_website,
+        office_address,
+        campaign_address,
+        phone,
+        email,
+        chief_of_staff_name,
+        campaign_manager_name,
+        finance_director_name,
+        political_director_name,
+        press_contact_name,
+        press_contact_email,
+        source_label,
+        admin_locked,
+        locked_fields,
+        contact_confidence,
+        scraped_pages,
+        updated_at
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()
+      )
+      ON CONFLICT (candidate_id)
+      DO UPDATE SET
+        admin_locked = EXCLUDED.admin_locked,
+        locked_fields = EXCLUDED.locked_fields,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      candidateId,
+      clean(existing.campaign_website),
+      clean(existing.official_website),
+      clean(existing.office_address),
+      clean(existing.campaign_address),
+      clean(existing.phone),
+      clean(existing.email),
+      clean(existing.chief_of_staff_name),
+      clean(existing.campaign_manager_name),
+      clean(existing.finance_director_name),
+      clean(existing.political_director_name),
+      clean(existing.press_contact_name),
+      clean(existing.press_contact_email),
+      clean(existing.source_label) || "manual_lock_update",
+      adminLocked,
+      JSON.stringify(lockedFields),
+      Number(existing.contact_confidence || 0),
+      JSON.stringify(existing.scraped_pages || [])
     ]
   );
 
