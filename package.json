@@ -1,7 +1,7 @@
 {
   "name": "voterspheres-backend",
   "version": "1.0.0",
-  "description": "VoterSpheres Backend API",
+  "description": "VoterSpheres Backend API", 
   "type": "module",
   "main": "index.js",
   "scripts": {
