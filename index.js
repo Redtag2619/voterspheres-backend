@@ -26,6 +26,7 @@ import consultantsRoutes from "./routes/consultants.routes.js";
 import mailOpsRoutes from "./routes/mailops.routes.js";
 import publicRoutes from "./routes/public.routes.js";
 import betaAdminRoutes from "./routes/betaAdmin.routes.js";
+import firmUsersRoutes from "./routes/firmUsers.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -160,6 +161,7 @@ app.use("/api/consultants", consultantsRoutes);
 app.use("/api/mailops", mailOpsRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/beta-admin", betaAdminRoutes);
+app.use("/api/firm-users", firmUsersRoutes);
 
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
