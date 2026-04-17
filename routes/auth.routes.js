@@ -32,52 +32,6 @@ function getBetaConfig() {
   };
 }
 
-function isEmailApproved(email) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return false;
-
-  const config = getBetaConfig();
-  if (!config.enabled) return true;
-  if (config.publicSignupEnabled) return true;
-  if (config.allowedEmails.includes(normalized)) return true;
-
-  const domain = normalized.split("@")[1] || "";
-  if (domain && config.allowedDomains.includes(domain)) return true;
-
-  return false;
-}
-
-function isInviteCodeApproved(inviteCode) {
-  const config = getBetaConfig();
-  if (!config.enabled) return true;
-  if (!config.inviteCode) return false;
-  return String(inviteCode || "").trim() === config.inviteCode;
-}
-
-function assertBetaSignupAccess(email, inviteCode = "") {
-  const config = getBetaConfig();
-
-  if (!config.enabled) return;
-  if (config.publicSignupEnabled) return;
-  if (isEmailApproved(email)) return;
-  if (isInviteCodeApproved(inviteCode)) return;
-
-  const error = new Error(config.message);
-  error.status = 403;
-  throw error;
-}
-
-function assertBetaLoginAccess(email) {
-  const config = getBetaConfig();
-
-  if (!config.enabled) return;
-  if (isEmailApproved(email)) return;
-
-  const error = new Error(config.message);
-  error.status = 403;
-  throw error;
-}
-
 async function getDb() {
   if (cachedDb) {
     return { db: cachedDb, source: cachedDbSource };
@@ -132,6 +86,125 @@ async function safeQuery(sql, params = []) {
   }
 
   throw new Error(`Unsupported DB driver from source: ${source}`);
+}
+
+async function ensureBetaTables() {
+  await safeQuery(`
+    CREATE TABLE IF NOT EXISTS beta_access_requests (
+      id SERIAL PRIMARY KEY,
+      full_name TEXT,
+      firm_name TEXT,
+      email TEXT NOT NULL,
+      role TEXT,
+      notes TEXT,
+      source TEXT DEFAULT 'landing_page',
+      status TEXT DEFAULT 'pending',
+      reviewed_by_user_id INTEGER,
+      reviewed_by_email TEXT,
+      reviewed_at TIMESTAMP,
+      review_notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await safeQuery(`
+    CREATE TABLE IF NOT EXISTS beta_access_approvals (
+      id SERIAL PRIMARY KEY,
+      email TEXT,
+      domain TEXT,
+      access_type TEXT NOT NULL DEFAULT 'email',
+      is_active BOOLEAN DEFAULT true,
+      approved_by_user_id INTEGER,
+      approved_by_email TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await safeQuery(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_beta_access_approvals_email
+      ON beta_access_approvals (LOWER(email))
+      WHERE email IS NOT NULL
+  `);
+
+  await safeQuery(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_beta_access_approvals_domain
+      ON beta_access_approvals (LOWER(domain))
+      WHERE domain IS NOT NULL
+  `);
+}
+
+async function isApprovedInDb(email) {
+  await ensureBetaTables();
+
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  const domain = normalized.split("@")[1] || "";
+
+  const result = await safeQuery(
+    `
+      SELECT id
+      FROM beta_access_approvals
+      WHERE is_active = true
+        AND (
+          LOWER(email) = LOWER($1)
+          OR (LOWER(domain) = LOWER($2) AND access_type = 'domain')
+        )
+      LIMIT 1
+    `,
+    [normalized, domain]
+  );
+
+  return Boolean(result.rows?.length);
+}
+
+async function isEmailApproved(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  const config = getBetaConfig();
+  if (!config.enabled) return true;
+  if (config.publicSignupEnabled) return true;
+  if (config.allowedEmails.includes(normalized)) return true;
+
+  const domain = normalized.split("@")[1] || "";
+  if (domain && config.allowedDomains.includes(domain)) return true;
+
+  return await isApprovedInDb(normalized);
+}
+
+function isInviteCodeApproved(inviteCode) {
+  const config = getBetaConfig();
+  if (!config.enabled) return true;
+  if (!config.inviteCode) return false;
+  return String(inviteCode || "").trim() === config.inviteCode;
+}
+
+async function assertBetaSignupAccess(email, inviteCode = "") {
+  const config = getBetaConfig();
+
+  if (!config.enabled) return;
+  if (config.publicSignupEnabled) return;
+  if (await isEmailApproved(email)) return;
+  if (isInviteCodeApproved(inviteCode)) return;
+
+  const error = new Error(config.message);
+  error.status = 403;
+  throw error;
+}
+
+async function assertBetaLoginAccess(email) {
+  const config = getBetaConfig();
+
+  if (!config.enabled) return;
+  if (await isEmailApproved(email)) return;
+
+  const error = new Error(config.message);
+  error.status = 403;
+  throw error;
 }
 
 function slugify(value = "") {
@@ -217,7 +290,7 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Missing required signup fields" });
     }
 
-    assertBetaSignupAccess(email, invite_code);
+    await assertBetaSignupAccess(email, invite_code);
 
     const existingUser = await safeQuery(
       `select id from users where lower(email) = lower($1) limit 1`,
@@ -289,7 +362,7 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    assertBetaLoginAccess(email);
+    await assertBetaLoginAccess(email);
 
     const result = await safeQuery(
       `
