@@ -79,9 +79,15 @@ async function ensureInviteTable() {
       accepted_at TIMESTAMP,
       revoked_at TIMESTAMP,
       notes TEXT,
+      source_lead_id INTEGER,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+
+  await safeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_firm_user_invites_source_lead_id
+      ON firm_user_invites (source_lead_id)
   `);
 }
 
@@ -147,7 +153,7 @@ async function sendInviteEmail({ email, first_name, firm_name, invite_link, role
   await transporter.sendMail({
     from: fromEmail,
     to: email,
-    subject: `You're invited to join VoterSpheres`,
+    subject: "You're invited to join VoterSpheres",
     text: [
       `Hi ${first_name || "there"},`,
       ``,
@@ -203,6 +209,7 @@ router.get("/", async (req, res) => {
           accepted_at,
           revoked_at,
           notes,
+          source_lead_id,
           created_at,
           updated_at
         FROM firm_user_invites
@@ -236,7 +243,8 @@ router.post("/", async (req, res) => {
       last_name = "",
       email = "",
       role = "user",
-      notes = ""
+      notes = "",
+      source_lead_id = null
     } = req.body || {};
 
     if (!email || !first_name || !last_name) {
@@ -283,10 +291,11 @@ router.post("/", async (req, res) => {
           invited_by_user_id,
           expires_at,
           notes,
+          source_lead_id,
           created_at,
           updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,NOW(),NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,NOW(),NOW())
         RETURNING *
       `,
       [
@@ -298,7 +307,8 @@ router.post("/", async (req, res) => {
         inviteToken,
         adminUser.id,
         expiresAt,
-        notes
+        notes,
+        source_lead_id
       ]
     );
 
