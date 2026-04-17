@@ -60,8 +60,34 @@ async function safeQuery(sql, params = []) {
   throw new Error(`Unsupported DB driver from source: ${source}`);
 }
 
+async function ensureInviteTable() {
+  await safeQuery(`
+    CREATE TABLE IF NOT EXISTS firm_user_invites (
+      id SERIAL PRIMARY KEY,
+      firm_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      first_name TEXT,
+      last_name TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      invite_token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      invited_by_user_id INTEGER,
+      accepted_user_id INTEGER,
+      expires_at TIMESTAMP NOT NULL,
+      accepted_at TIMESTAMP,
+      revoked_at TIMESTAMP,
+      notes TEXT,
+      source_lead_id INTEGER,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+
 router.get("/invite", async (req, res) => {
   try {
+    await ensureInviteTable();
+
     const token = String(req.query?.token || "").trim();
     if (!token) {
       return res.status(400).json({ error: "Invite token is required" });
@@ -78,6 +104,7 @@ router.get("/invite", async (req, res) => {
           i.role,
           i.status,
           i.expires_at,
+          i.source_lead_id,
           f.name AS firm_name
         FROM firm_user_invites i
         LEFT JOIN firms f ON f.id = i.firm_id
@@ -112,6 +139,8 @@ router.get("/invite", async (req, res) => {
 
 router.post("/invite/accept", async (req, res) => {
   try {
+    await ensureInviteTable();
+
     const token = String(req.body?.token || "").trim();
     const password = String(req.body?.password || "");
 
@@ -212,9 +241,28 @@ router.post("/invite/accept", async (req, res) => {
       [user.id, invite.id]
     );
 
+    if (invite.source_lead_id) {
+      await safeQuery(
+        `
+          UPDATE enterprise_leads
+          SET
+            status = 'won',
+            review_notes = COALESCE(review_notes, '') || CASE WHEN COALESCE(review_notes, '') = '' THEN '' ELSE E'\n' END || $1,
+            reviewed_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $2
+        `,
+        [
+          `Lead automatically marked won after invite acceptance by ${invite.email}`,
+          invite.source_lead_id
+        ]
+      );
+    }
+
     return res.status(201).json({
       success: true,
-      user
+      user,
+      converted_lead_id: invite.source_lead_id || null
     });
   } catch (error) {
     return res.status(500).json({
