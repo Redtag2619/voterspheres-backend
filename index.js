@@ -24,10 +24,11 @@ import statesRoutes from "./routes/states.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
 import mailOpsRoutes from "./routes/mailops.routes.js";
-import publicRoutes from "./routes/public.routes.js/publicInvites.routes.js";
-
+import publicRoutes from "./routes/public.routes.js";
+import publicInvitesRoutes from "./routes/publicInvites.routes.js";
 import betaAdminRoutes from "./routes/betaAdmin.routes.js";
-import firmUsersRoutes from "./routes/firmUsers.routes.js/firmInvites.routes.js";
+import firmUsersRoutes from "./routes/firmUsers.routes.js";
+import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -40,9 +41,10 @@ const PORT = Number(process.env.PORT || 10000);
 const ALLOWED_ORIGINS = [
   "https://voterspheres.org",
   "https://www.voterspheres.org",
+  "https://voterspheres-frontend.vercel.app",
   "https://voterspheres-frontend-git-main-mark-j-stephens-projects.vercel.app",
   "http://localhost:5173",
-  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5173"
 ].filter(Boolean);
 
 function isAllowedOrigin(origin) {
@@ -54,7 +56,7 @@ app.disable("x-powered-by");
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginResourcePolicy: { policy: "cross-origin" }
   })
 );
 
@@ -68,7 +70,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "stripe-signature"],
+    allowedHeaders: ["Content-Type", "Authorization", "stripe-signature"]
   })
 );
 
@@ -93,20 +95,20 @@ app.post(
 
       if (!signature) {
         return res.status(400).json({
-          error: "Missing stripe-signature header",
+          error: "Missing stripe-signature header"
         });
       }
 
       const result = await handleStripeWebhook({
         rawBody: req.body,
-        signature,
+        signature
       });
 
       return res.status(200).json(result);
     } catch (error) {
       console.error("Stripe webhook error:", error);
       return res.status(400).json({
-        error: error.message || "Webhook failed",
+        error: error.message || "Webhook failed"
       });
     }
   }
@@ -128,7 +130,7 @@ app.get("/", (_req, res) => {
     status: "ok",
     service: "VoterSpheres Backend",
     live_intelligence: true,
-    port: PORT,
+    port: PORT
   });
 });
 
@@ -136,13 +138,21 @@ app.get("/api/health", (_req, res) => {
   res.status(200).json({
     ok: true,
     uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   });
 });
 
+/**
+ * Public / auth routes
+ */
 app.use("/api/auth", authRoutes);
+app.use("/api/public", publicRoutes);
+app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 
+/**
+ * Protected app routes
+ */
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
 app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
@@ -150,34 +160,40 @@ app.use("/api/firms", requireAuth, firmWorkspaceRoutes);
 app.use("/api/campaigns", requireAuth, campaignCommandRoutes);
 app.use("/api/mail", requireAuth, mailRoutes);
 app.use("/api/platform", requireAuth, platformRoutes);
-app.use("/api/intelligence", intelligenceRoutes);
+app.use("/api/intelligence", requireAuth, intelligenceRoutes);
 app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
-app.use("/api/candidates", candidatesRoutes);
-app.use("/api/candidate-profiles", candidateProfilesRoutes);
-app.use("/api/vendors", vendorsRoutes);
-app.use("/api/states", statesRoutes);
-app.use("/api/donors", donorsRoutes);
-app.use("/api/consultants", consultantsRoutes);
-app.use("/api/mailops", mailOpsRoutes);
-app.use("/api/public", publicRoutes/publicInvitesRoutes);
-app.use("/api/firm-invites", firmInvitesRoutes);
-app.use("/api/beta-admin", betaAdminRoutes);
-app.use("/api/firm-users", firmUsersRoutes);
+app.use("/api/candidates", requireAuth, candidatesRoutes);
+app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
+app.use("/api/vendors", requireAuth, vendorsRoutes);
+app.use("/api/states", requireAuth, statesRoutes);
+app.use("/api/donors", requireAuth, donorsRoutes);
+app.use("/api/consultants", requireAuth, consultantsRoutes);
+app.use("/api/mailops", requireAuth, mailOpsRoutes);
 
+/**
+ * Admin / firm management routes
+ */
+app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
+app.use("/api/firm-users", requireAuth, firmUsersRoutes);
+app.use("/api/firm-invites", requireAuth, firmInvitesRoutes);
+
+/**
+ * Live test event routes
+ */
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
     state: req.body?.state || "Arizona",
     office: req.body?.office || "Senate",
     winProbability: req.body?.winProbability ?? 54,
-    change: req.body?.change || "+2.1",
+    change: req.body?.change || "+2.1"
   };
 
   publishEvent({
     type: "forecast.updated",
     channel: "intelligence:forecast",
     timestamp: new Date().toISOString(),
-    payload,
+    payload
   });
 
   res.status(200).json({ ok: true, published: payload });
@@ -192,14 +208,14 @@ app.post("/api/live/test/warroom", requireAuth, (req, res) => {
     source: req.body?.source || "Media monitoring",
     velocity: req.body?.velocity || "+21%",
     recommendation:
-      req.body?.recommendation || "Push validator-driven local messaging.",
+      req.body?.recommendation || "Push validator-driven local messaging."
   };
 
   publishEvent({
     type: "warroom.threat_detected",
     channel: "intelligence:warroom",
     timestamp: new Date().toISOString(),
-    payload,
+    payload
   });
 
   res.status(200).json({ ok: true, published: payload });
@@ -213,14 +229,14 @@ app.post("/api/live/test/mail-delay", requireAuth, (req, res) => {
     mailDropId: req.body?.mailDropId || 1,
     location: req.body?.location || "Atlanta NDC",
     status: "delayed",
-    note: req.body?.note || "Mail delay detected by live intelligence layer",
+    note: req.body?.note || "Mail delay detected by live intelligence layer"
   };
 
   publishEvent({
     type: "mail.delay_detected",
     channel: `campaign:${campaignId}`,
     timestamp: new Date().toISOString(),
-    payload,
+    payload
   });
 
   res.status(200).json({ ok: true, published: payload });
@@ -232,14 +248,14 @@ app.post("/api/live/test/billing", requireAuth, (req, res) => {
   const payload = {
     firmId,
     planTier: req.body?.planTier || "pro",
-    status: req.body?.status || "active",
+    status: req.body?.status || "active"
   };
 
   publishEvent({
     type: "billing.plan_updated",
     channel: `firm:${firmId}`,
     timestamp: new Date().toISOString(),
-    payload,
+    payload
   });
 
   res.status(200).json({ ok: true, published: payload });
@@ -248,7 +264,7 @@ app.post("/api/live/test/billing", requireAuth, (req, res) => {
 app.use((req, res) => {
   res.status(404).json({
     error: "Route not found",
-    path: req.originalUrl,
+    path: req.originalUrl
   });
 });
 
@@ -261,7 +277,7 @@ app.use((err, _req, res, _next) => {
     (String(err?.message || "").includes("CORS blocked") ? 403 : 500);
 
   res.status(status).json({
-    error: err?.message || "Internal server error",
+    error: err?.message || "Internal server error"
   });
 });
 
@@ -271,6 +287,6 @@ initSocket(server, ALLOWED_ORIGINS);
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
-  console.log(`✅ Live intelligence layer enabled`);
-  console.log(`✅ Stripe webhook mounted at /api/billing/webhook`);
+  console.log("✅ Live intelligence layer enabled");
+  console.log("✅ Stripe webhook mounted at /api/billing/webhook");
 });
