@@ -1,11 +1,82 @@
-import express from "express"; 
+import express from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken"; 
+import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
 let cachedDb = null;
 let cachedDbSource = null;
+
+function parseCsv(value = "") {
+  return String(value)
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizeEmail(email = "") {
+  return String(email || "").trim().toLowerCase();
+}
+
+function getBetaConfig() {
+  return {
+    enabled: String(process.env.BETA_ACCESS_ENABLED || "true").toLowerCase() === "true",
+    publicSignupEnabled:
+      String(process.env.BETA_PUBLIC_SIGNUP_ENABLED || "false").toLowerCase() === "true",
+    allowedEmails: parseCsv(process.env.BETA_ALLOWLIST_EMAILS || ""),
+    allowedDomains: parseCsv(process.env.BETA_ALLOWLIST_DOMAINS || ""),
+    inviteCode: String(process.env.BETA_INVITE_CODE || "").trim(),
+    message:
+      process.env.BETA_ACCESS_MESSAGE ||
+      "VoterSpheres is currently in a private beta. Your email is not yet approved for access."
+  };
+}
+
+function isEmailApproved(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  const config = getBetaConfig();
+  if (!config.enabled) return true;
+  if (config.publicSignupEnabled) return true;
+  if (config.allowedEmails.includes(normalized)) return true;
+
+  const domain = normalized.split("@")[1] || "";
+  if (domain && config.allowedDomains.includes(domain)) return true;
+
+  return false;
+}
+
+function isInviteCodeApproved(inviteCode) {
+  const config = getBetaConfig();
+  if (!config.enabled) return true;
+  if (!config.inviteCode) return false;
+  return String(inviteCode || "").trim() === config.inviteCode;
+}
+
+function assertBetaSignupAccess(email, inviteCode = "") {
+  const config = getBetaConfig();
+
+  if (!config.enabled) return;
+  if (config.publicSignupEnabled) return;
+  if (isEmailApproved(email)) return;
+  if (isInviteCodeApproved(inviteCode)) return;
+
+  const error = new Error(config.message);
+  error.status = 403;
+  throw error;
+}
+
+function assertBetaLoginAccess(email) {
+  const config = getBetaConfig();
+
+  if (!config.enabled) return;
+  if (isEmailApproved(email)) return;
+
+  const error = new Error(config.message);
+  error.status = 403;
+  throw error;
+}
 
 async function getDb() {
   if (cachedDb) {
@@ -138,12 +209,15 @@ router.post("/signup", async (req, res) => {
       firm_name,
       email,
       password,
-      role = "admin"
+      role = "admin",
+      invite_code = ""
     } = req.body || {};
 
     if (!first_name || !last_name || !firm_name || !email || !password) {
       return res.status(400).json({ error: "Missing required signup fields" });
     }
+
+    assertBetaSignupAccess(email, invite_code);
 
     const existingUser = await safeQuery(
       `select id from users where lower(email) = lower($1) limit 1`,
@@ -201,7 +275,7 @@ router.post("/signup", async (req, res) => {
       firm
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: error.message || "Signup failed"
     });
   }
@@ -214,6 +288,8 @@ router.post("/login", async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
+
+    assertBetaLoginAccess(email);
 
     const result = await safeQuery(
       `
@@ -258,7 +334,7 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: error.message || "Login failed"
     });
   }
