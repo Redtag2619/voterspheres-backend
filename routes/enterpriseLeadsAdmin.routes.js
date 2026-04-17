@@ -125,6 +125,7 @@ async function ensureTables() {
       accepted_at TIMESTAMP,
       revoked_at TIMESTAMP,
       notes TEXT,
+      source_lead_id INTEGER,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -270,31 +271,53 @@ router.get("/", async (req, res) => {
     const result = await safeQuery(
       `
         SELECT
-          id,
-          full_name,
-          firm_name,
-          email,
-          role,
-          notes,
-          source,
-          status,
-          reviewed_by_user_id,
-          reviewed_by_email,
-          reviewed_at,
-          review_notes,
-          created_at,
-          updated_at
-        FROM enterprise_leads
-        WHERE ($1 = '' OR status = $1)
+          l.id,
+          l.full_name,
+          l.firm_name,
+          l.email,
+          l.role,
+          l.notes,
+          l.source,
+          l.status,
+          l.reviewed_by_user_id,
+          l.reviewed_by_email,
+          l.reviewed_at,
+          l.review_notes,
+          l.created_at,
+          l.updated_at,
+
+          EXISTS (
+            SELECT 1
+            FROM beta_access_approvals baa
+            WHERE baa.is_active = true
+              AND baa.email IS NOT NULL
+              AND LOWER(baa.email) = LOWER(l.email)
+          ) AS is_beta_approved,
+
+          EXISTS (
+            SELECT 1
+            FROM firm_user_invites fui
+            WHERE LOWER(fui.email) = LOWER(l.email)
+              AND fui.status = 'pending'
+          ) AS has_pending_invite,
+
+          EXISTS (
+            SELECT 1
+            FROM users u
+            WHERE LOWER(u.email) = LOWER(l.email)
+          ) AS has_converted_user
+
+        FROM enterprise_leads l
+        WHERE ($1 = '' OR l.status = $1)
           AND (
             $2 = ''
-            OR COALESCE(full_name, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(firm_name, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(email, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(role, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(l.full_name, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(l.firm_name, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(l.email, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(l.role, '') ILIKE '%' || $2 || '%'
           )
         ORDER BY
-          CASE status
+          CASE l.status
             WHEN 'new' THEN 0
             WHEN 'contacted' THEN 1
             WHEN 'qualified' THEN 2
@@ -302,7 +325,7 @@ router.get("/", async (req, res) => {
             WHEN 'archived' THEN 4
             ELSE 5
           END,
-          created_at DESC
+          l.created_at DESC
       `,
       [status, q]
     );
@@ -514,10 +537,11 @@ router.post("/:id/invite", async (req, res) => {
           invited_by_user_id,
           expires_at,
           notes,
+          source_lead_id,
           created_at,
           updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,NOW(),NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,NOW(),NOW())
         RETURNING *
       `,
       [
@@ -529,7 +553,8 @@ router.post("/:id/invite", async (req, res) => {
         inviteToken,
         req.adminUser.id,
         expiresAt,
-        `Created from enterprise lead #${lead.id}`
+        `Created from enterprise lead #${lead.id}`,
+        lead.id
       ]
     );
 
@@ -685,10 +710,11 @@ router.post("/:id/approve-and-invite", async (req, res) => {
             invited_by_user_id,
             expires_at,
             notes,
+            source_lead_id,
             created_at,
             updated_at
           )
-          VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,NOW(),NOW())
+          VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,NOW(),NOW())
           RETURNING *
         `,
         [
@@ -700,7 +726,8 @@ router.post("/:id/approve-and-invite", async (req, res) => {
           inviteToken,
           req.adminUser.id,
           expiresAt,
-          `Created from enterprise lead #${lead.id}`
+          `Created from enterprise lead #${lead.id}`,
+          lead.id
         ]
       );
 
