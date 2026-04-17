@@ -1,8 +1,8 @@
 import "dotenv/config";
-import express from "express"; 
+import express from "express";
 import http from "http";
 import cors from "cors";
-import helmet from "helmet"; 
+import helmet from "helmet";
 import morgan from "morgan";
 
 import authRoutes from "./routes/auth.routes.js";
@@ -29,6 +29,7 @@ import publicInvitesRoutes from "./routes/publicInvites.routes.js";
 import betaAdminRoutes from "./routes/betaAdmin.routes.js";
 import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
+import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -46,10 +47,11 @@ const ALLOWED_ORIGINS = [
   "https://voterspheres-frontend-os73qaqvn-mark-j-stephens-projects.vercel.app",
   "http://localhost:5173",
   "http://127.0.0.1:5173"
-];
+].filter(Boolean);
 
 function isAllowedOrigin(origin) {
   if (!origin) return true;
+  if (origin.includes("vercel.app")) return true;
   return ALLOWED_ORIGINS.includes(origin);
 }
 
@@ -81,12 +83,6 @@ app.use(
   morgan(process.env.NODE_ENV === "production" ? "combined" : "dev")
 );
 
-/**
- * STRIPE WEBHOOK
- * IMPORTANT:
- * This must be mounted BEFORE express.json()
- * so Stripe signature verification gets the raw request body.
- */
 app.post(
   "/api/billing/webhook",
   express.raw({ type: "application/json" }),
@@ -115,9 +111,6 @@ app.post(
   }
 );
 
-/**
- * Standard body parsers for all non-Stripe routes
- */
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -143,17 +136,11 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-/**
- * Public / auth routes
- */
 app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 
-/**
- * Protected app routes
- */
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
 app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
@@ -172,16 +159,11 @@ app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 
-/**
- * Admin / firm management routes
- */
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
 app.use("/api/firm-invites", requireAuth, firmInvitesRoutes);
+app.use("/api/enterprise-leads-admin", requireAuth, enterpriseLeadsAdminRoutes);
 
-/**
- * Live test event routes
- */
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   const payload = {
     state: req.body?.state || "Arizona",
