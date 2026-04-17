@@ -43,9 +43,10 @@ const ALLOWED_ORIGINS = [
   "https://www.voterspheres.org",
   "https://voterspheres-frontend.vercel.app",
   "https://voterspheres-frontend-git-main-mark-j-stephens-projects.vercel.app",
+  "https://voterspheres-frontend-os73qaqvn-mark-j-stephens-projects.vercel.app",
   "http://localhost:5173",
   "http://127.0.0.1:5173"
-].filter(Boolean);
+];
 
 function isAllowedOrigin(origin) {
   if (!origin) return true;
