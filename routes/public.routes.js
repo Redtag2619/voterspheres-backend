@@ -59,17 +59,17 @@ async function safeQuery(sql, params = []) {
   throw new Error(`Unsupported DB driver from source: ${source}`);
 }
 
-async function ensureBetaTables() {
+async function ensureEnterpriseLeadsTable() {
   await safeQuery(`
-    CREATE TABLE IF NOT EXISTS beta_access_requests (
+    CREATE TABLE IF NOT EXISTS enterprise_leads (
       id SERIAL PRIMARY KEY,
-      full_name TEXT,
-      firm_name TEXT,
+      full_name TEXT NOT NULL,
+      firm_name TEXT NOT NULL,
       email TEXT NOT NULL,
-      role TEXT,
+      role TEXT NOT NULL,
       notes TEXT,
       source TEXT DEFAULT 'landing_page',
-      status TEXT DEFAULT 'pending',
+      status TEXT DEFAULT 'new',
       reviewed_by_user_id INTEGER,
       reviewed_by_email TEXT,
       reviewed_at TIMESTAMP,
@@ -82,7 +82,7 @@ async function ensureBetaTables() {
 
 router.post("/enterprise-leads", async (req, res) => {
   try {
-    await ensureBetaTables();
+    await ensureEnterpriseLeadsTable();
 
     const {
       full_name = "",
@@ -100,7 +100,7 @@ router.post("/enterprise-leads", async (req, res) => {
 
     const result = await safeQuery(
       `
-        INSERT INTO beta_access_requests (
+        INSERT INTO enterprise_leads (
           full_name,
           firm_name,
           email,
@@ -111,19 +111,19 @@ router.post("/enterprise-leads", async (req, res) => {
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'landing_page', 'pending', NOW(), NOW())
-        RETURNING id, email, status, created_at
+        VALUES ($1, $2, $3, $4, $5, 'landing_page', 'new', NOW(), NOW())
+        RETURNING id, full_name, firm_name, email, role, status, created_at
       `,
       [full_name, firm_name, email, role, notes]
     );
 
     return res.status(201).json({
       success: true,
-      request: result.rows?.[0] || null
+      lead: result.rows?.[0] || null
     });
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "Failed to submit access request"
+      error: error.message || "Failed to submit enterprise lead"
     });
   }
 });
