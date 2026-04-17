@@ -1,5 +1,5 @@
 import express from "express";
-import jwt from "jsonwebtoken";
+import { requireRoles } from "../middleware/roles.middleware.js";
 
 const router = express.Router();
 
@@ -108,19 +108,9 @@ async function ensureBetaTables() {
   `);
 }
 
-async function requireAdmin(req, res, next) {
+async function hydrateAdminUser(req, _res, next) {
   try {
     await ensureBetaTables();
-
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ error: "Missing bearer token" });
-    }
-
-    const secret = process.env.JWT_SECRET || "dev-secret";
-    const decoded = jwt.verify(token, secret);
 
     const userResult = await safeQuery(
       `
@@ -129,29 +119,20 @@ async function requireAdmin(req, res, next) {
         WHERE id = $1
         LIMIT 1
       `,
-      [decoded.id]
+      [req.authUser.id]
     );
 
-    const user = userResult.rows?.[0];
-
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
-    }
-
-    if (String(user.role || "").toLowerCase() !== "admin") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-
-    req.adminUser = user;
+    req.adminUser = userResult.rows?.[0] || null;
     return next();
   } catch (error) {
-    return res.status(401).json({
-      error: error.message || "Unauthorized"
-    });
+    return next(error);
   }
 }
 
-router.get("/requests", requireAdmin, async (req, res) => {
+router.use(requireRoles("admin"));
+router.use(hydrateAdminUser);
+
+router.get("/requests", async (req, res) => {
   try {
     const { status = "", q = "" } = req.query;
 
@@ -203,7 +184,7 @@ router.get("/requests", requireAdmin, async (req, res) => {
   }
 });
 
-router.get("/approvals", requireAdmin, async (_req, res) => {
+router.get("/approvals", async (_req, res) => {
   try {
     const result = await safeQuery(
       `
@@ -233,7 +214,7 @@ router.get("/approvals", requireAdmin, async (_req, res) => {
   }
 });
 
-router.post("/approvals", requireAdmin, async (req, res) => {
+router.post("/approvals", async (req, res) => {
   try {
     const { email = "", domain = "", access_type = "email", notes = "" } = req.body || {};
 
@@ -315,7 +296,7 @@ router.post("/approvals", requireAdmin, async (req, res) => {
   }
 });
 
-router.patch("/requests/:id", requireAdmin, async (req, res) => {
+router.patch("/requests/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status = "", review_notes = "", auto_approve = false } = req.body || {};
@@ -397,7 +378,7 @@ router.patch("/requests/:id", requireAdmin, async (req, res) => {
   }
 });
 
-router.delete("/approvals/:id", requireAdmin, async (req, res) => {
+router.delete("/approvals/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
 
