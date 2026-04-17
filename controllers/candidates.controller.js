@@ -139,3 +139,29 @@ export async function saveCandidateVerification(req, res) {
     return res.status(500).json({ error: "Failed to save candidate verification" });
   }
 }
+import {
+  updateCandidateVerification
+} from "../services/candidateEnrichment.service.js";
+
+export async function saveCandidateVerification(req, res) {
+  try {
+    const data = await updateCandidateVerification(req.params.id, req.body || {});
+
+    if (!data) {
+      return res.status(404).json({
+        error: "Candidate not found"
+      });
+    }
+
+    return res.json({
+      success: true,
+      candidate: data.candidate,
+      profile: data.profile
+    });
+  } catch (error) {
+    console.error("saveCandidateVerification error:", error);
+    return res.status(500).json({
+      error: "Failed to save candidate verification"
+    });
+  }
+}
