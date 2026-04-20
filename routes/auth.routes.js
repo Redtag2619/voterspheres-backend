@@ -290,7 +290,64 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Missing required signup fields" });
     }
 
-    await assertBetaSignupAccess(email, invite_code);
+    try {
+  await assertBetaSignupAccess(email, invite_code);
+} catch (betaError) {
+  // 🚨 Capture blocked signup attempt
+  try {
+    await safeQuery(`
+      CREATE TABLE IF NOT EXISTS pending_signup_attempts (
+        id SERIAL PRIMARY KEY,
+        first_name TEXT,
+        last_name TEXT,
+        firm_name TEXT,
+        email TEXT NOT NULL,
+        requested_role TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        source TEXT DEFAULT 'signup_form',
+        approved_approval_id INTEGER,
+        reviewed_by_user_id INTEGER,
+        reviewed_by_email TEXT,
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await safeQuery(
+      `
+        INSERT INTO pending_signup_attempts (
+          first_name,
+          last_name,
+          firm_name,
+          email,
+          requested_role,
+          notes,
+          status,
+          source,
+          created_at,
+          updated_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,'pending','signup_form',NOW(),NOW())
+      `,
+      [
+        first_name || "",
+        last_name || "",
+        firm_name || "",
+        normalizeEmail(email),
+        role || "user",
+        "Blocked by private beta gate"
+      ]
+    );
+  } catch (logError) {
+    console.error("Failed to log pending signup:", logError);
+  }
+
+  return res.status(betaError.status || 403).json({
+    error: betaError.message
+  });
+}
 
     const existingUser = await safeQuery(
       `select id from users where lower(email) = lower($1) limit 1`,
