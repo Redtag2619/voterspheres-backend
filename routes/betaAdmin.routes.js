@@ -31,8 +31,8 @@ async function getDb() {
         return { db, source: path };
       }
     } catch {
-      // try next
-    }
+        // try next
+      }
   }
 
   return { db: null, source: null };
@@ -60,26 +60,7 @@ async function safeQuery(sql, params = []) {
   throw new Error(`Unsupported DB driver from source: ${source}`);
 }
 
-async function ensureBetaTables() {
-  await safeQuery(`
-    CREATE TABLE IF NOT EXISTS beta_access_requests (
-      id SERIAL PRIMARY KEY,
-      full_name TEXT,
-      firm_name TEXT,
-      email TEXT NOT NULL,
-      role TEXT,
-      notes TEXT,
-      source TEXT DEFAULT 'landing_page',
-      status TEXT DEFAULT 'pending',
-      reviewed_by_user_id INTEGER,
-      reviewed_by_email TEXT,
-      reviewed_at TIMESTAMP,
-      review_notes TEXT,
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-
+async function ensureTable() {
   await safeQuery(`
     CREATE TABLE IF NOT EXISTS beta_access_approvals (
       id SERIAL PRIMARY KEY,
@@ -108,13 +89,22 @@ async function ensureBetaTables() {
   `);
 }
 
+function normalizeEmail(email = "") {
+  return String(email || "").trim().toLowerCase();
+}
+
+function normalizeDomain(domain = "") {
+  return String(domain || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
+}
+
 async function hydrateAdminUser(req, _res, next) {
   try {
-    await ensureBetaTables();
-
-    const userResult = await safeQuery(
+    const result = await safeQuery(
       `
-        SELECT id, email, role
+        SELECT id, email, role, firm_id
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -122,7 +112,7 @@ async function hydrateAdminUser(req, _res, next) {
       [req.authUser.id]
     );
 
-    req.adminUser = userResult.rows?.[0] || null;
+    req.adminUser = result.rows?.[0] || null;
     return next();
   } catch (error) {
     return next(error);
@@ -132,60 +122,12 @@ async function hydrateAdminUser(req, _res, next) {
 router.use(requireRoles("admin"));
 router.use(hydrateAdminUser);
 
-router.get("/requests", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const { status = "", q = "" } = req.query;
+    await ensureTable();
 
-    const result = await safeQuery(
-      `
-        SELECT
-          id,
-          full_name,
-          firm_name,
-          email,
-          role,
-          notes,
-          source,
-          status,
-          reviewed_by_user_id,
-          reviewed_by_email,
-          reviewed_at,
-          review_notes,
-          created_at,
-          updated_at
-        FROM beta_access_requests
-        WHERE ($1 = '' OR status = $1)
-          AND (
-            $2 = ''
-            OR COALESCE(full_name, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(firm_name, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(email, '') ILIKE '%' || $2 || '%'
-            OR COALESCE(role, '') ILIKE '%' || $2 || '%'
-          )
-        ORDER BY
-          CASE status
-            WHEN 'pending' THEN 0
-            WHEN 'approved' THEN 1
-            WHEN 'denied' THEN 2
-            ELSE 3
-          END,
-          created_at DESC
-      `,
-      [status, q]
-    );
+    const q = String(req.query.q || "").trim();
 
-    return res.json({
-      results: result.rows || []
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: error.message || "Failed to load beta requests"
-    });
-  }
-});
-
-router.get("/approvals", async (_req, res) => {
-  try {
     const result = await safeQuery(
       `
         SELECT
@@ -200,8 +142,15 @@ router.get("/approvals", async (_req, res) => {
           created_at,
           updated_at
         FROM beta_access_approvals
-        ORDER BY updated_at DESC, created_at DESC
-      `
+        WHERE (
+          $1 = ''
+          OR COALESCE(email, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(domain, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(notes, '') ILIKE '%' || $1 || '%'
+        )
+        ORDER BY is_active DESC, created_at DESC
+      `,
+      [q]
     );
 
     return res.json({
@@ -209,56 +158,36 @@ router.get("/approvals", async (_req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "Failed to load approvals"
+      error: error.message || "Failed to load beta approvals"
     });
   }
 });
 
-router.post("/approvals", async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    const { email = "", domain = "", access_type = "email", notes = "" } = req.body || {};
+    await ensureTable();
 
-    if (access_type === "email" && !email) {
-      return res.status(400).json({ error: "Email is required for email approvals" });
+    const {
+      access_type = "email",
+      email = "",
+      domain = "",
+      notes = ""
+    } = req.body || {};
+
+    const normalizedType = String(access_type || "").trim().toLowerCase();
+
+    if (!["email", "domain"].includes(normalizedType)) {
+      return res.status(400).json({ error: "Invalid access_type" });
     }
 
-    if (access_type === "domain" && !domain) {
-      return res.status(400).json({ error: "Domain is required for domain approvals" });
-    }
+    if (normalizedType === "email") {
+      const normalizedEmail = normalizeEmail(email);
 
-    const normalizedEmail = String(email || "").trim().toLowerCase() || null;
-    const normalizedDomain = String(domain || "").trim().toLowerCase() || null;
+      if (!normalizedEmail) {
+        return res.status(400).json({ error: "Email is required" });
+      }
 
-    let result;
-
-    if (access_type === "domain") {
-      result = await safeQuery(
-        `
-          INSERT INTO beta_access_approvals (
-            email,
-            domain,
-            access_type,
-            is_active,
-            approved_by_user_id,
-            approved_by_email,
-            notes,
-            created_at,
-            updated_at
-          )
-          VALUES (NULL, $1, 'domain', true, $2, $3, $4, NOW(), NOW())
-          ON CONFLICT (LOWER(domain)) WHERE domain IS NOT NULL
-          DO UPDATE SET
-            is_active = true,
-            approved_by_user_id = EXCLUDED.approved_by_user_id,
-            approved_by_email = EXCLUDED.approved_by_email,
-            notes = EXCLUDED.notes,
-            updated_at = NOW()
-          RETURNING *
-        `,
-        [normalizedDomain, req.adminUser.id, req.adminUser.email, notes]
-      );
-    } else {
-      result = await safeQuery(
+      const result = await safeQuery(
         `
           INSERT INTO beta_access_approvals (
             email,
@@ -281,9 +210,56 @@ router.post("/approvals", async (req, res) => {
             updated_at = NOW()
           RETURNING *
         `,
-        [normalizedEmail, req.adminUser.id, req.adminUser.email, notes]
+        [
+          normalizedEmail,
+          req.adminUser?.id || null,
+          req.adminUser?.email || null,
+          notes || ""
+        ]
       );
+
+      return res.status(201).json({
+        success: true,
+        approval: result.rows?.[0] || null
+      });
     }
+
+    const normalizedDomain = normalizeDomain(domain);
+
+    if (!normalizedDomain) {
+      return res.status(400).json({ error: "Domain is required" });
+    }
+
+    const result = await safeQuery(
+      `
+        INSERT INTO beta_access_approvals (
+          email,
+          domain,
+          access_type,
+          is_active,
+          approved_by_user_id,
+          approved_by_email,
+          notes,
+          created_at,
+          updated_at
+        )
+        VALUES (NULL, $1, 'domain', true, $2, $3, $4, NOW(), NOW())
+        ON CONFLICT (LOWER(domain)) WHERE domain IS NOT NULL
+        DO UPDATE SET
+          is_active = true,
+          approved_by_user_id = EXCLUDED.approved_by_user_id,
+          approved_by_email = EXCLUDED.approved_by_email,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        normalizedDomain,
+        req.adminUser?.id || null,
+        req.adminUser?.email || null,
+        notes || ""
+      ]
+    );
 
     return res.status(201).json({
       success: true,
@@ -291,118 +267,69 @@ router.post("/approvals", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "Failed to save approval"
+      error: error.message || "Failed to create beta approval"
     });
   }
 });
 
-router.patch("/requests/:id", async (req, res) => {
+router.patch("/:id", async (req, res) => {
   try {
+    await ensureTable();
+
     const id = Number(req.params.id);
-    const { status = "", review_notes = "", auto_approve = false } = req.body || {};
+    const {
+      is_active,
+      notes
+    } = req.body || {};
 
     if (!Number.isFinite(id)) {
-      return res.status(400).json({ error: "Invalid request id" });
-    }
-
-    if (!["pending", "approved", "denied"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
+      return res.status(400).json({ error: "Invalid approval id" });
     }
 
     const existing = await safeQuery(
       `
         SELECT *
-        FROM beta_access_requests
+        FROM beta_access_approvals
         WHERE id = $1
         LIMIT 1
       `,
       [id]
     );
 
-    const request = existing.rows?.[0];
-    if (!request) {
-      return res.status(404).json({ error: "Request not found" });
+    if (!existing.rows?.length) {
+      return res.status(404).json({ error: "Approval not found" });
     }
 
-    const updated = await safeQuery(
+    const current = existing.rows[0];
+
+    const result = await safeQuery(
       `
-        UPDATE beta_access_requests
+        UPDATE beta_access_approvals
         SET
-          status = $1,
-          review_notes = $2,
-          reviewed_by_user_id = $3,
-          reviewed_by_email = $4,
-          reviewed_at = NOW(),
+          is_active = $1,
+          notes = $2,
+          approved_by_user_id = $3,
+          approved_by_email = $4,
           updated_at = NOW()
         WHERE id = $5
         RETURNING *
       `,
-      [status, review_notes, req.adminUser.id, req.adminUser.email, id]
+      [
+        typeof is_active === "boolean" ? is_active : current.is_active,
+        typeof notes === "string" ? notes : current.notes,
+        req.adminUser?.id || null,
+        req.adminUser?.email || null,
+        id
+      ]
     );
-
-    if (status === "approved" && auto_approve && request.email) {
-      await safeQuery(
-        `
-          INSERT INTO beta_access_approvals (
-            email,
-            domain,
-            access_type,
-            is_active,
-            approved_by_user_id,
-            approved_by_email,
-            notes,
-            created_at,
-            updated_at
-          )
-          VALUES ($1, NULL, 'email', true, $2, $3, $4, NOW(), NOW())
-          ON CONFLICT (LOWER(email)) WHERE email IS NOT NULL
-          DO UPDATE SET
-            is_active = true,
-            approved_by_user_id = EXCLUDED.approved_by_user_id,
-            approved_by_email = EXCLUDED.approved_by_email,
-            notes = EXCLUDED.notes,
-            updated_at = NOW()
-        `,
-        [String(request.email).trim().toLowerCase(), req.adminUser.id, req.adminUser.email, review_notes]
-      );
-    }
 
     return res.json({
       success: true,
-      request: updated.rows?.[0] || null
+      approval: result.rows?.[0] || null
     });
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "Failed to update request"
-    });
-  }
-});
-
-router.delete("/approvals/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ error: "Invalid approval id" });
-    }
-
-    await safeQuery(
-      `
-        UPDATE beta_access_approvals
-        SET
-          is_active = false,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [id]
-    );
-
-    return res.json({
-      success: true
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: error.message || "Failed to disable approval"
+      error: error.message || "Failed to update beta approval"
     });
   }
 });
