@@ -31,8 +31,8 @@ async function getDb() {
         return { db, source: path };
       }
     } catch {
-        // try next
-      }
+      // try next
+    }
   }
 
   return { db: null, source: null };
@@ -60,7 +60,7 @@ async function safeQuery(sql, params = []) {
   throw new Error(`Unsupported DB driver from source: ${source}`);
 }
 
-async function ensureTable() {
+async function ensureTables() {
   await safeQuery(`
     CREATE TABLE IF NOT EXISTS beta_access_approvals (
       id SERIAL PRIMARY KEY,
@@ -86,6 +86,36 @@ async function ensureTable() {
     CREATE UNIQUE INDEX IF NOT EXISTS ux_beta_access_approvals_domain
       ON beta_access_approvals (LOWER(domain))
       WHERE domain IS NOT NULL
+  `);
+
+  await safeQuery(`
+    CREATE TABLE IF NOT EXISTS pending_signup_attempts (
+      id SERIAL PRIMARY KEY,
+      first_name TEXT,
+      last_name TEXT,
+      firm_name TEXT,
+      email TEXT NOT NULL,
+      requested_role TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      source TEXT DEFAULT 'signup_form',
+      approved_approval_id INTEGER,
+      reviewed_by_user_id INTEGER,
+      reviewed_by_email TEXT,
+      reviewed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await safeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_pending_signup_attempts_email
+      ON pending_signup_attempts (LOWER(email))
+  `);
+
+  await safeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_pending_signup_attempts_status
+      ON pending_signup_attempts (status)
   `);
 }
 
@@ -124,7 +154,7 @@ router.use(hydrateAdminUser);
 
 router.get("/", async (req, res) => {
   try {
-    await ensureTable();
+    await ensureTables();
 
     const q = String(req.query.q || "").trim();
 
@@ -165,7 +195,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    await ensureTable();
+    await ensureTables();
 
     const {
       access_type = "email",
@@ -274,13 +304,10 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   try {
-    await ensureTable();
+    await ensureTables();
 
     const id = Number(req.params.id);
-    const {
-      is_active,
-      notes
-    } = req.body || {};
+    const { is_active, notes } = req.body || {};
 
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Invalid approval id" });
@@ -330,6 +357,206 @@ router.patch("/:id", async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: error.message || "Failed to update beta approval"
+    });
+  }
+});
+
+router.get("/pending-signups", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const q = String(req.query.q || "").trim();
+
+    const result = await safeQuery(
+      `
+        SELECT
+          psa.id,
+          psa.first_name,
+          psa.last_name,
+          psa.firm_name,
+          psa.email,
+          psa.requested_role,
+          psa.notes,
+          psa.status,
+          psa.source,
+          psa.approved_approval_id,
+          psa.reviewed_by_user_id,
+          psa.reviewed_by_email,
+          psa.reviewed_at,
+          psa.created_at,
+          psa.updated_at,
+          EXISTS (
+            SELECT 1
+            FROM beta_access_approvals baa
+            WHERE baa.is_active = true
+              AND baa.email IS NOT NULL
+              AND LOWER(baa.email) = LOWER(psa.email)
+          ) AS already_approved
+        FROM pending_signup_attempts psa
+        WHERE psa.status IN ('pending', 'approved', 'rejected')
+          AND (
+            $1 = ''
+            OR COALESCE(psa.email, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(psa.first_name, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(psa.last_name, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(psa.firm_name, '') ILIKE '%' || $1 || '%'
+          )
+        ORDER BY
+          CASE psa.status
+            WHEN 'pending' THEN 0
+            WHEN 'approved' THEN 1
+            WHEN 'rejected' THEN 2
+            ELSE 3
+          END,
+          psa.created_at DESC
+      `,
+      [q]
+    );
+
+    return res.json({
+      results: result.rows || []
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message || "Failed to load pending signup attempts"
+    });
+  }
+});
+
+router.post("/pending-signups/:id/approve", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Invalid pending signup id" });
+    }
+
+    const pendingResult = await safeQuery(
+      `
+        SELECT *
+        FROM pending_signup_attempts
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    const attempt = pendingResult.rows?.[0];
+    if (!attempt) {
+      return res.status(404).json({ error: "Pending signup not found" });
+    }
+
+    const normalizedEmail = normalizeEmail(attempt.email);
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: "Pending signup has no email" });
+    }
+
+    const approvalResult = await safeQuery(
+      `
+        INSERT INTO beta_access_approvals (
+          email,
+          domain,
+          access_type,
+          is_active,
+          approved_by_user_id,
+          approved_by_email,
+          notes,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, NULL, 'email', true, $2, $3, $4, NOW(), NOW())
+        ON CONFLICT (LOWER(email)) WHERE email IS NOT NULL
+        DO UPDATE SET
+          is_active = true,
+          approved_by_user_id = EXCLUDED.approved_by_user_id,
+          approved_by_email = EXCLUDED.approved_by_email,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        normalizedEmail,
+        req.adminUser?.id || null,
+        req.adminUser?.email || null,
+        `Approved from pending signup attempt #${attempt.id}`
+      ]
+    );
+
+    const approval = approvalResult.rows?.[0] || null;
+
+    const updatedPending = await safeQuery(
+      `
+        UPDATE pending_signup_attempts
+        SET
+          status = 'approved',
+          approved_approval_id = $1,
+          reviewed_by_user_id = $2,
+          reviewed_by_email = $3,
+          reviewed_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $4
+        RETURNING *
+      `,
+      [
+        approval?.id || null,
+        req.adminUser?.id || null,
+        req.adminUser?.email || null,
+        id
+      ]
+    );
+
+    return res.json({
+      success: true,
+      approval,
+      pending_signup: updatedPending.rows?.[0] || null
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message || "Failed to approve pending signup"
+    });
+  }
+});
+
+router.patch("/pending-signups/:id/reject", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Invalid pending signup id" });
+    }
+
+    const result = await safeQuery(
+      `
+        UPDATE pending_signup_attempts
+        SET
+          status = 'rejected',
+          reviewed_by_user_id = $1,
+          reviewed_by_email = $2,
+          reviewed_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $3
+        RETURNING *
+      `,
+      [
+        req.adminUser?.id || null,
+        req.adminUser?.email || null,
+        id
+      ]
+    );
+
+    if (!result.rows?.length) {
+      return res.status(404).json({ error: "Pending signup not found" });
+    }
+
+    return res.json({
+      success: true,
+      pending_signup: result.rows?.[0] || null
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message || "Failed to reject pending signup"
     });
   }
 });
