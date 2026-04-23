@@ -15,6 +15,127 @@ function formatMoneyShort(value) {
   return `$${num.toLocaleString()}`;
 }
 
+function normalizeStateName(value = "") {
+  const raw = String(value || "").trim().toUpperCase();
+
+  const map = {
+    AL: "Alabama",
+    AK: "Alaska",
+    AZ: "Arizona",
+    AR: "Arkansas",
+    CA: "California",
+    CO: "Colorado",
+    CT: "Connecticut",
+    DE: "Delaware",
+    FL: "Florida",
+    GA: "Georgia",
+    HI: "Hawaii",
+    ID: "Idaho",
+    IL: "Illinois",
+    IN: "Indiana",
+    IA: "Iowa",
+    KS: "Kansas",
+    KY: "Kentucky",
+    LA: "Louisiana",
+    ME: "Maine",
+    MD: "Maryland",
+    MA: "Massachusetts",
+    MI: "Michigan",
+    MN: "Minnesota",
+    MS: "Mississippi",
+    MO: "Missouri",
+    MT: "Montana",
+    NE: "Nebraska",
+    NV: "Nevada",
+    NH: "New Hampshire",
+    NJ: "New Jersey",
+    NM: "New Mexico",
+    NY: "New York",
+    NC: "North Carolina",
+    ND: "North Dakota",
+    OH: "Ohio",
+    OK: "Oklahoma",
+    OR: "Oregon",
+    PA: "Pennsylvania",
+    RI: "Rhode Island",
+    SC: "South Carolina",
+    SD: "South Dakota",
+    TN: "Tennessee",
+    TX: "Texas",
+    UT: "Utah",
+    VT: "Vermont",
+    VA: "Virginia",
+    WA: "Washington",
+    WV: "West Virginia",
+    WI: "Wisconsin",
+    WY: "Wyoming",
+    DC: "District of Columbia"
+  };
+
+  return map[raw] || value || "";
+}
+
+function stateCode(value = "") {
+  const raw = String(value || "").trim();
+  if (raw.length === 2) return raw.toUpperCase();
+
+  const reverse = {
+    Alabama: "AL",
+    Alaska: "AK",
+    Arizona: "AZ",
+    Arkansas: "AR",
+    California: "CA",
+    Colorado: "CO",
+    Connecticut: "CT",
+    Delaware: "DE",
+    Florida: "FL",
+    Georgia: "GA",
+    Hawaii: "HI",
+    Idaho: "ID",
+    Illinois: "IL",
+    Indiana: "IN",
+    Iowa: "IA",
+    Kansas: "KS",
+    Kentucky: "KY",
+    Louisiana: "LA",
+    Maine: "ME",
+    Maryland: "MD",
+    Massachusetts: "MA",
+    Michigan: "MI",
+    Minnesota: "MN",
+    Mississippi: "MS",
+    Missouri: "MO",
+    Montana: "MT",
+    Nebraska: "NE",
+    Nevada: "NV",
+    New Hampshire: "NH",
+    New Jersey: "NJ",
+    New Mexico: "NM",
+    New York: "NY",
+    North Carolina: "NC",
+    North Dakota: "ND",
+    Ohio: "OH",
+    Oklahoma: "OK",
+    Oregon: "OR",
+    Pennsylvania: "PA",
+    Rhode Island: "RI",
+    South Carolina: "SC",
+    South Dakota: "SD",
+    Tennessee: "TN",
+    Texas: "TX",
+    Utah: "UT",
+    Vermont: "VT",
+    Virginia: "VA",
+    Washington: "WA",
+    West Virginia: "WV",
+    Wisconsin: "WI",
+    Wyoming: "WY",
+    "District of Columbia": "DC"
+  };
+
+  return reverse[raw] || raw;
+}
+
 function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidates") {
   const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
   const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
@@ -103,31 +224,30 @@ function getOverlayTier(score) {
   return "monitor";
 }
 
-function buildBattlegroundModelRows(rows = []) {
-  return rows.slice(0, 12).map((row, index) => {
-    const baseProbability = Math.max(49, 58 - index);
-    const momentumValue =
-      index < 4
-        ? `+${(2.4 - index * 0.3).toFixed(1)}`
-        : `-${(0.2 + (index - 4) * 0.2).toFixed(1)}`;
+function buildPriority(probability, receipts, vendorCount) {
+  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
+  let score = 0;
 
-    const risk = row.is_verified ? "Watch" : "Elevated";
-    const priority = index < 4 ? "Tier 1" : index < 8 ? "Tier 2" : "Tier 3";
+  if (probabilityNum >= 49 && probabilityNum <= 57) score += 3;
+  if (receipts >= 1_500_000) score += 2;
+  if (vendorCount >= 2) score += 2;
 
-    return {
-      race: `${row.state} ${row.office}`,
-      candidate: row.candidate || "",
-      state: row.state,
-      state_code: row.state_code || row.state,
-      office: row.office,
-      probability: `${baseProbability}%`,
-      momentum: momentumValue,
-      risk,
-      priority,
-      party: row.party || "",
-      updated_at: row.updated_at || null
-    };
-  });
+  if (score >= 5) return "Tier 1";
+  if (score >= 3) return "Tier 2";
+  return "Tier 3";
+}
+
+function buildRisk(probability, vendorCount) {
+  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
+
+  if (probabilityNum <= 51 && vendorCount <= 1) return "Elevated";
+  if (probabilityNum <= 55 || vendorCount <= 2) return "Watch";
+  return "Monitor";
+}
+
+function buildMomentum(rank) {
+  const value = 2.4 - rank * 0.35;
+  return value >= 0 ? `+${value.toFixed(1)}` : `${value.toFixed(1)}`;
 }
 
 export async function getFundraisingLeaderboard(limit = 12) {
@@ -222,29 +342,47 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
     where.push(`c.party = $${params.length}`);
   }
 
+  if (filters.q) {
+    params.push(filters.q);
+    where.push(`(
+      coalesce(c.full_name, '') ilike '%' || $${params.length} || '%'
+      or coalesce(c.first_name, '') ilike '%' || $${params.length} || '%'
+      or coalesce(c.last_name, '') ilike '%' || $${params.length} || '%'
+      or coalesce(c.campaign_committee_name, '') ilike '%' || $${params.length} || '%'
+    )`);
+  }
+
   const whereSql = where.length ? `where ${where.join(" and ")}` : "";
 
   const query = `
     select
       c.id,
+      c.external_id,
       c.full_name,
+      c.first_name,
+      c.last_name,
       c.state,
       c.office,
+      c.district,
       c.party,
       c.website,
-      cp.updated_at,
-      cp.is_verified,
-      cp.email,
-      cp.phone,
-      cp.press_contact_email,
-      cp.campaign_website,
-      cp.official_website,
-      cp.admin_locked
+      c.campaign_committee_id,
+      c.campaign_committee_name,
+      c.election_year,
+      c.status,
+      c.source,
+      c.last_imported_at,
+      f.receipts,
+      f.cash_on_hand
     from candidates c
-    left join candidate_profiles cp
-      on cp.candidate_id = c.id
+    left join fundraising_live f
+      on f.candidate_id = c.external_id
     ${whereSql}
-    order by cp.updated_at desc nulls last, c.id desc
+    order by
+      coalesce(f.receipts, 0) desc,
+      c.state asc,
+      c.office asc,
+      c.full_name asc
     limit 500
   `;
 
@@ -253,14 +391,10 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
   return {
     summary: {
       total: rows.length,
-      withWebsite: rows.filter(
-        (r) => r.campaign_website || r.official_website || r.website
-      ).length,
-      withContact: rows.filter(
-        (r) => r.email || r.phone || r.press_contact_email
-      ).length,
-      verified: rows.filter((r) => Boolean(r.is_verified)).length,
-      locked: rows.filter((r) => Boolean(r.admin_locked)).length
+      withWebsite: rows.filter((r) => r.website).length,
+      withCommittee: rows.filter((r) => r.campaign_committee_id || r.campaign_committee_name).length,
+      withFundraising: rows.filter((r) => Number(r.receipts || 0) > 0).length,
+      statesTracked: new Set(rows.map((r) => r.state).filter(Boolean)).size
     },
     results: rows
   };
@@ -268,47 +402,131 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
 
 export async function getBattlegroundDashboardData() {
   const query = `
+    with vendor_counts as (
+      select
+        upper(state) as state_code,
+        count(*)::int as vendor_count
+      from vendors
+      where state is not null
+        and state <> ''
+      group by upper(state)
+    ),
+    ranked_finance as (
+      select
+        candidate_id,
+        coalesce(receipts, 0) as receipts,
+        coalesce(cash_on_hand, 0) as cash_on_hand
+      from fundraising_live
+    )
     select
+      c.id,
+      c.external_id,
+      c.full_name as candidate,
       c.state,
       c.office,
       c.party,
-      c.full_name as candidate,
-      c.state as state_code,
-      cp.updated_at,
-      cp.is_verified
+      coalesce(rf.receipts, 0) as receipts,
+      coalesce(rf.cash_on_hand, 0) as cash_on_hand,
+      coalesce(vc.vendor_count, 0) as vendor_count,
+      c.last_imported_at
     from candidates c
-    left join candidate_profiles cp
-      on cp.candidate_id = c.id
+    left join ranked_finance rf
+      on rf.candidate_id = c.external_id
+    left join vendor_counts vc
+      on vc.state_code = upper(c.state)
     where c.state is not null
-      and c.office is not null
       and c.state <> ''
+      and c.office is not null
       and c.office <> ''
-    order by cp.updated_at desc nulls last, c.id desc
-    limit 30
+      and c.office in ('Senate', 'House', 'Governor', 'President')
+    order by
+      coalesce(rf.receipts, 0) desc,
+      c.state asc,
+      c.office asc,
+      c.full_name asc
+    limit 24
   `;
 
   const { rows } = await pool.query(query);
 
-  return {
-    results: buildBattlegroundModelRows(rows || [])
-  };
+  const results = (rows || []).slice(0, 12).map((row, index) => {
+    const state = normalizeStateName(row.state);
+    const code = stateCode(state);
+    const baseProbability = Math.max(49, 58 - index);
+
+    const probability = `${baseProbability}%`;
+    const momentum = buildMomentum(index);
+    const priority = buildPriority(probability, Number(row.receipts || 0), Number(row.vendor_count || 0));
+    const risk = buildRisk(probability, Number(row.vendor_count || 0));
+
+    return {
+      race: `${code} ${row.office}`,
+      candidate: row.candidate || "",
+      state,
+      state_code: code,
+      office: row.office,
+      probability,
+      momentum,
+      risk,
+      priority,
+      party: row.party || "",
+      receipts: Number(row.receipts || 0),
+      cash_on_hand: Number(row.cash_on_hand || 0),
+      vendor_count: Number(row.vendor_count || 0),
+      updated_at: row.last_imported_at || null
+    };
+  });
+
+  return { results };
+}
+
+async function getExecutiveFeed() {
+  const battlegrounds = await getBattlegroundDashboardData();
+  const fundraising = await getFundraisingLeaderboard(6);
+
+  const battlegroundFeed = (battlegrounds.results || []).slice(0, 4).map((row, index) => ({
+    id: `bg-${index + 1}`,
+    time: "Now",
+    title: `${row.race} remains live on the board`,
+    source: "Battleground Engine",
+    severity: row.priority === "Tier 1" ? "High" : "Medium",
+    type: "battleground.priority",
+    state: row.state,
+    office: row.office,
+    risk: row.risk
+  }));
+
+  const financeFeed = (fundraising.leaderboard || []).slice(0, 3).map((row, index) => ({
+    id: `finance-${index + 1}`,
+    time: "Now",
+    title: `${row.name} is a top fundraising leader`,
+    source: "Fundraising Intelligence",
+    severity: index === 0 ? "High" : "Medium",
+    type: "fundraising.signal",
+    state: normalizeStateName(row.state),
+    office: row.office,
+    risk: index === 0 ? "Watch" : "Monitor"
+  }));
+
+  return [...battlegroundFeed, ...financeFeed].slice(0, 6);
 }
 
 export async function getIntelligenceSummary() {
   const fundraising = await getFundraisingLeaderboard(12);
+  const battlegrounds = await getBattlegroundDashboardData();
 
   return {
     metrics: [
       {
         label: "Signals Tracked",
-        value: "24",
-        delta: "Live intelligence",
+        value: String((battlegrounds.results || []).length),
+        delta: "Live candidate intelligence",
         tone: "up"
       },
       {
         label: "Forecast States",
-        value: "12",
-        delta: "Modeled map",
+        value: String(new Set((battlegrounds.results || []).map((row) => row.state)).size),
+        delta: "Battleground map",
         tone: "up"
       },
       {
@@ -319,8 +537,8 @@ export async function getIntelligenceSummary() {
       },
       {
         label: "Threat Pressure",
-        value: "Elevated",
-        delta: "War Room aware",
+        value: (battlegrounds.results || []).some((row) => row.risk === "Elevated") ? "Elevated" : "Watch",
+        delta: "Live race pressure",
         tone: "down"
       }
     ]
@@ -328,8 +546,39 @@ export async function getIntelligenceSummary() {
 }
 
 export async function getIntelligenceDashboard() {
+  if (isDemoModeEnabled()) {
+    return getDemoCampaignBundle().dashboard || {};
+  }
+
   const fundraising = await getFundraisingLeaderboard(8);
   const battlegrounds = await getBattlegroundDashboardData();
+  const feed = await getExecutiveFeed();
+
+  const vendorsResult = await pool.query(`
+    select
+      id,
+      vendor_name,
+      category,
+      status,
+      state,
+      website,
+      email,
+      phone,
+      services,
+      coalesce(last_imported_at, updated_at, created_at) as updated_at
+    from vendors
+    order by
+      coalesce(last_imported_at, updated_at, created_at) desc,
+      vendor_name asc
+    limit 8
+  `);
+
+  const vendors = (vendorsResult.rows || []).map((row, index) => ({
+    ...row,
+    office: (battlegrounds.results || [])[index % Math.max((battlegrounds.results || []).length, 1)]?.office || "Senate",
+    contract_value: 50000 + index * 25000,
+    risk: index < 2 ? "Elevated" : index < 5 ? "Watch" : "Monitor"
+  }));
 
   return {
     metrics: [
@@ -358,9 +607,13 @@ export async function getIntelligenceDashboard() {
         tone: "up"
       }
     ],
-    feed: [],
+    feed,
     battlegrounds: battlegrounds.results || [],
-    leaderboard: fundraising.leaderboard || [],
+    leaderboard: (fundraising.leaderboard || []).map((row, index) => ({
+      ...row,
+      risk: index < 3 ? "Elevated" : index < 6 ? "Watch" : "Monitor"
+    })),
+    vendors,
     fundraisingSummary: fundraising.summary || {}
   };
 }
@@ -370,14 +623,34 @@ export async function getIntelligenceForecast() {
     return getDemoCampaignBundle().forecast;
   }
 
+  const battlegrounds = await getBattlegroundDashboardData();
+
   return {
     metrics: [
-      { label: "Tracked Races", value: "10", delta: "Forecasted", tone: "up" },
-      { label: "High Confidence", value: "4", delta: "Stable map", tone: "up" },
-      { label: "Toss-ups", value: "3", delta: "Competitive", tone: "down" },
-      { label: "Battlegrounds", value: "6", delta: "Priority zones", tone: "up" }
+      { label: "Tracked Races", value: String((battlegrounds.results || []).length), delta: "Forecasted", tone: "up" },
+      {
+        label: "High Confidence",
+        value: String((battlegrounds.results || []).filter((row) => Number(String(row.probability).replace("%", "")) >= 55).length),
+        delta: "Stable map",
+        tone: "up"
+      },
+      {
+        label: "Toss-ups",
+        value: String((battlegrounds.results || []).filter((row) => {
+          const p = Number(String(row.probability).replace("%", ""));
+          return p >= 49 && p <= 53;
+        }).length),
+        delta: "Competitive",
+        tone: "down"
+      },
+      {
+        label: "Battlegrounds",
+        value: String(new Set((battlegrounds.results || []).map((row) => row.state)).size),
+        delta: "Priority zones",
+        tone: "up"
+      }
     ],
-    races: []
+    races: battlegrounds.results || []
   };
 }
 
@@ -425,92 +698,40 @@ export async function getIntelligenceMap() {
 
   const lastSyncedAt = latestSyncResult.rows?.[0]?.last_synced_at || null;
 
-  const result = await pool.query(`
-    with ranked as (
-      select
-        candidate_id,
-        name,
-        state,
-        office,
-        party,
-        coalesce(receipts, 0) as receipts,
-        coalesce(cash_on_hand, 0) as cash_on_hand,
-        row_number() over (
-          partition by state, office
-          order by
-            coalesce(receipts, 0) desc,
-            coalesce(cash_on_hand, 0) desc,
-            coalesce(name, '') asc
-        ) as state_office_rank
-      from fundraising_live
-      where state is not null
-        and state <> ''
-        and office is not null
-        and office <> ''
-    )
-    select *
-    from ranked
-    order by state asc, office asc, state_office_rank asc
-  `);
+  const battlegrounds = await getBattlegroundDashboardData();
 
-  const rows = result.rows || [];
-  const grouped = new Map();
+  const overlays = (battlegrounds.results || []).map((entry) => {
+    const overlayScore = Math.min(
+      100,
+      Math.round((entry.receipts / 1_000_000) * 3 + (entry.vendor_count * 8))
+    );
 
-  for (const row of rows) {
-    const key = `${row.state}__${row.office}`;
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        state: row.state,
-        office: row.office,
-        candidates: [],
-        totalReceipts: 0,
-        totalCash: 0
-      });
-    }
-
-    const entry = grouped.get(key);
-
-    entry.candidates.push({
-      candidate_id: row.candidate_id,
-      name: row.name,
-      party: row.party || "N/A",
-      receipts: Number(row.receipts || 0),
-      cash_on_hand: Number(row.cash_on_hand || 0),
-      rank: Number(row.state_office_rank || 0)
-    });
-
-    entry.totalReceipts += Number(row.receipts || 0);
-    entry.totalCash += Number(row.cash_on_hand || 0);
-  }
-
-  const battlegrounds = Array.from(grouped.values())
-    .map((entry) => {
-      const overlayScore = Math.min(
-        100,
-        Math.round((entry.totalReceipts / 1_000_000) * 3 + (entry.candidates.length * 8))
-      );
-
-      return {
-        state: entry.state,
-        office: entry.office,
-        overlayScore,
-        overlayTier: getOverlayTier(overlayScore),
-        candidates: entry.candidates.slice(0, 5),
-        totalReceipts: entry.totalReceipts,
-        totalCashOnHand: entry.totalCash
-      };
-    })
-    .sort((a, b) => b.overlayScore - a.overlayScore);
-
-  const trackedStates = new Set(battlegrounds.map((item) => item.state)).size;
+    return {
+      state: entry.state,
+      office: entry.office,
+      overlayScore,
+      overlayTier: getOverlayTier(overlayScore),
+      candidates: [
+        {
+          candidate_id: entry.external_id,
+          name: entry.candidate,
+          party: entry.party || "N/A",
+          receipts: Number(entry.receipts || 0),
+          cash_on_hand: Number(entry.cash_on_hand || 0),
+          rank: 1
+        }
+      ],
+      totalReceipts: Number(entry.receipts || 0),
+      totalCashOnHand: Number(entry.cash_on_hand || 0)
+    };
+  });
 
   return {
     summary: {
-      trackedStates,
-      overlays: battlegrounds.length,
+      trackedStates: new Set(overlays.map((item) => item.state)).size,
+      overlays: overlays.length,
       last_synced_at: lastSyncedAt
     },
-    battlegrounds
+    battlegrounds: overlays
   };
 }
