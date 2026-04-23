@@ -14,6 +14,7 @@ import {
   getLiveIntelligenceStatus,
   runLiveIntelligenceRefresh
 } from "../services/intelligenceRefresh.service.js";
+import { getRecentNewsSignals, ingestNewsSignals } from "../services/newsIngestion.service.js";
 import { requireRoles } from "../middleware/roles.middleware.js";
 
 const router = express.Router();
@@ -137,6 +138,29 @@ router.post("/refresh", requireRoles("admin"), async (_req, res) => {
   } catch (error) {
     res.status(500).json({
       error: error.message || "Failed to refresh live intelligence"
+    });
+  }
+});
+
+router.post("/ingest/news", requireRoles("admin"), async (_req, res) => {
+  try {
+    const data = await ingestNewsSignals(8, 4);
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to ingest news signals"
+    });
+  }
+});
+
+router.get("/news", requireRoles("admin"), async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 10), 50));
+    const data = await getRecentNewsSignals(limit);
+    res.status(200).json({ results: data });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load news signals"
     });
   }
 });
