@@ -10,6 +10,8 @@ import {
   getCandidateIntelligenceSummary,
   getBattlegroundDashboardData
 } from "../services/intelligence.service.js";
+import { runLiveIntelligenceRefresh } from "../services/intelligenceRefresh.service.js";
+import { requireRoles } from "../middleware/roles.middleware.js";
 
 const router = express.Router();
 
@@ -110,6 +112,17 @@ router.get("/battlegrounds", async (_req, res) => {
   } catch (error) {
     res.status(500).json({
       error: error.message || "Failed to load battleground dashboard data"
+    });
+  }
+});
+
+router.post("/refresh", requireRoles("admin"), async (_req, res) => {
+  try {
+    const data = await runLiveIntelligenceRefresh();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to refresh live intelligence"
     });
   }
 });
