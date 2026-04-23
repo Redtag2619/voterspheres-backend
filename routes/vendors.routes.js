@@ -55,8 +55,6 @@ async function ensureVendorTable() {
 async function importLiveVendors() {
   await ensureVendorTable();
 
-  // Replace this array later with real source fetch results.
-  // For now it gives you a stable live-import structure.
   const liveSourceRows = [
     {
       external_id: "vendor-precision-mail-group",
