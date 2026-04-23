@@ -430,7 +430,7 @@ export async function rebuildExecutiveFeedEvents() {
   };
 }
 
-export async function getExecutiveFeedEvents(limit = 6) {
+export async function getExecutiveFeedEvents(limit = 8) {
   await ensureExecutiveFeedEventsTable();
 
   const result = await pool.query(
@@ -479,15 +479,49 @@ export async function getExecutiveFeedEvents(limit = 6) {
   }));
 }
 
+export async function getLiveIntelligenceStatus() {
+  await ensureExecutiveFeedEventsTable();
+  await ensureFundraisingLiveTable();
+
+  const [
+    feedCountResult,
+    latestFeedResult,
+    latestFundraisingResult,
+    candidateCountResult,
+    vendorCountResult
+  ] = await Promise.all([
+    pool.query(`select count(*)::int as total from executive_feed_events`),
+    pool.query(`select max(created_at) as last_feed_event_at from executive_feed_events`),
+    pool.query(`select max(source_updated_at) as last_fundraising_sync_at from fundraising_live`),
+    pool.query(`select count(*)::int as total from candidates`),
+    pool.query(`select count(*)::int as total from vendors`)
+  ]);
+
+  const recentFeed = await getExecutiveFeedEvents(6);
+
+  return {
+    summary: {
+      feed_events: feedCountResult.rows?.[0]?.total || 0,
+      candidates: candidateCountResult.rows?.[0]?.total || 0,
+      vendors: vendorCountResult.rows?.[0]?.total || 0,
+      last_feed_event_at: latestFeedResult.rows?.[0]?.last_feed_event_at || null,
+      last_fundraising_sync_at: latestFundraisingResult.rows?.[0]?.last_fundraising_sync_at || null
+    },
+    recentFeed
+  };
+}
+
 export async function runLiveIntelligenceRefresh() {
   await ensureExecutiveFeedEventsTable();
   await ensureFundraisingLiveTable();
 
   const feedResult = await rebuildExecutiveFeedEvents();
+  const status = await getLiveIntelligenceStatus();
 
   return {
     success: true,
     fundraising_refreshed: true,
-    executive_feed: feedResult
+    executive_feed: feedResult,
+    status
   };
 }
