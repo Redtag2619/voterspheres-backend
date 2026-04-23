@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  getFundraisingLeaderboard,
+  getFundraisingLeaderboard, 
   getIntelligenceDashboard,
   getIntelligenceForecast,
   getIntelligenceMap,
