@@ -1,185 +1,317 @@
 import express from "express";
-import { getDemoCampaignBundle, isDemoModeEnabled } from "../services/demo.service.js";
+import { requireRoles } from "../middleware/roles.middleware.js";
 import { pool } from "../db/pool.js";
 
 const router = express.Router();
 
-const FALLBACK_VENDORS = [
-  {
-    id: 1,
-    vendor_name: "Precision Mail Group",
-    category: "Direct Mail",
-    status: "active",
-    state: "Georgia",
-    campaign_name: "Georgia Senate Race",
-    candidate_name: "Jane Thompson",
-    firm_name: "Red Tag Strategies",
-    contract_value: 85000
-  },
-  {
-    id: 2,
-    vendor_name: "Capitol Digital Media",
-    category: "Digital",
-    status: "prospect",
-    state: "Pennsylvania",
-    campaign_name: "Pennsylvania Governor Race",
-    candidate_name: "Robert Gaines",
-    firm_name: "Red Tag Strategies",
-    contract_value: 42000
-  }
-];
-
-const FALLBACK_CATEGORIES = [...new Set(FALLBACK_VENDORS.map((v) => v.category))];
-const FALLBACK_STATUSES = [...new Set(FALLBACK_VENDORS.map((v) => v.status))];
-
-function withTimeout(promise, ms = 2500) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve({ rows: [] }), ms))
-  ]);
+function normalizeText(value = "") {
+  return String(value || "").trim();
 }
 
-router.get("/dropdowns/categories", async (_req, res) => {
-  if (isDemoModeEnabled()) {
-    return res.status(200).json({ results: ["Direct Mail", "Digital"] });
-  }
+function normalizeState(value = "") {
+  return String(value || "").trim().toUpperCase();
+}
 
-  try {
-    const result = await withTimeout(
-      pool.query(
-        `
-          select distinct category
-          from campaign_vendors
-          where category is not null and category <> ''
-          order by category asc
-        `
-      ),
-      2000
+async function ensureVendorTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vendors (
+      id SERIAL PRIMARY KEY,
+      external_id TEXT,
+      source TEXT,
+      vendor_name TEXT NOT NULL,
+      category TEXT,
+      status TEXT DEFAULT 'active',
+      state TEXT,
+      city TEXT,
+      website TEXT,
+      email TEXT,
+      phone TEXT,
+      services TEXT,
+      notes TEXT,
+      source_updated_at TIMESTAMP,
+      last_imported_at TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_vendors_source_external
+    ON vendors (COALESCE(source, ''), COALESCE(external_id, ''))
+    WHERE external_id IS NOT NULL
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_vendors_state
+    ON vendors (state)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_vendors_category
+    ON vendors (category)
+  `);
+}
+
+async function importLiveVendors() {
+  await ensureVendorTable();
+
+  // Replace this array later with real source fetch results.
+  // For now it gives you a stable live-import structure.
+  const liveSourceRows = [
+    {
+      external_id: "vendor-precision-mail-group",
+      source: "manual_live_seed",
+      vendor_name: "Precision Mail Group",
+      category: "Direct Mail",
+      status: "active",
+      state: "GA",
+      city: "Atlanta",
+      website: "https://precisionmailgroup.example",
+      email: "ops@precisionmailgroup.example",
+      phone: "404-555-0101",
+      services: "Printing, Direct Mail, Postal Logistics",
+      notes: "Imported by live vendor pipeline",
+      source_updated_at: new Date().toISOString()
+    },
+    {
+      external_id: "vendor-capitol-digital-media",
+      source: "manual_live_seed",
+      vendor_name: "Capitol Digital Media",
+      category: "Digital",
+      status: "active",
+      state: "PA",
+      city: "Philadelphia",
+      website: "https://capitoldigitalmedia.example",
+      email: "hello@capitoldigitalmedia.example",
+      phone: "215-555-0102",
+      services: "Digital Ads, Creative, Analytics",
+      notes: "Imported by live vendor pipeline",
+      source_updated_at: new Date().toISOString()
+    }
+  ];
+
+  let inserted = 0;
+  let updated = 0;
+
+  for (const row of liveSourceRows) {
+    const existing = await pool.query(
+      `
+        SELECT id
+        FROM vendors
+        WHERE COALESCE(source, '') = COALESCE($1, '')
+          AND COALESCE(external_id, '') = COALESCE($2, '')
+        LIMIT 1
+      `,
+      [row.source, row.external_id]
     );
 
-    const results =
-      result.rows?.length > 0
-        ? result.rows.map((r) => r.category).filter(Boolean)
-        : FALLBACK_CATEGORIES;
+    const payload = [
+      row.external_id,
+      row.source,
+      normalizeText(row.vendor_name),
+      normalizeText(row.category),
+      normalizeText(row.status || "active"),
+      normalizeState(row.state),
+      normalizeText(row.city),
+      normalizeText(row.website),
+      normalizeText(row.email),
+      normalizeText(row.phone),
+      normalizeText(row.services),
+      normalizeText(row.notes),
+      row.source_updated_at ? new Date(row.source_updated_at) : null
+    ];
 
-    return res.status(200).json({ results });
-  } catch {
-    return res.status(200).json({ results: FALLBACK_CATEGORIES });
+    if (existing.rows.length) {
+      await pool.query(
+        `
+          UPDATE vendors
+          SET
+            vendor_name = $3,
+            category = $4,
+            status = $5,
+            state = $6,
+            city = $7,
+            website = $8,
+            email = $9,
+            phone = $10,
+            services = $11,
+            notes = $12,
+            source_updated_at = $13,
+            last_imported_at = NOW(),
+            updated_at = NOW()
+          WHERE COALESCE(source, '') = COALESCE($1, '')
+            AND COALESCE(external_id, '') = COALESCE($2, '')
+        `,
+        payload
+      );
+      updated += 1;
+    } else {
+      await pool.query(
+        `
+          INSERT INTO vendors (
+            external_id,
+            source,
+            vendor_name,
+            category,
+            status,
+            state,
+            city,
+            website,
+            email,
+            phone,
+            services,
+            notes,
+            source_updated_at,
+            last_imported_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW(),NOW()
+          )
+        `,
+        payload
+      );
+      inserted += 1;
+    }
   }
-});
 
-router.get("/dropdowns/statuses", async (_req, res) => {
-  if (isDemoModeEnabled()) {
-    return res.status(200).json({ results: ["active", "prospect"] });
-  }
+  return {
+    source: "manual_live_seed",
+    seen: liveSourceRows.length,
+    inserted,
+    updated
+  };
+}
 
+router.get("/states", async (_req, res) => {
   try {
-    const result = await withTimeout(
-      pool.query(
-        `
-          select distinct status
-          from campaign_vendors
-          where status is not null and status <> ''
-          order by status asc
-        `
-      ),
-      2000
-    );
+    await ensureVendorTable();
 
-    const results =
-      result.rows?.length > 0
-        ? result.rows.map((r) => r.status).filter(Boolean)
-        : FALLBACK_STATUSES;
+    const result = await pool.query(`
+      SELECT DISTINCT state
+      FROM vendors
+      WHERE state IS NOT NULL
+        AND state <> ''
+      ORDER BY state ASC
+    `);
 
-    return res.status(200).json({ results });
-  } catch {
-    return res.status(200).json({ results: FALLBACK_STATUSES });
+    res.status(200).json({
+      states: result.rows.map((row) => row.state).filter(Boolean)
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load vendor states"
+    });
   }
 });
 
 router.get("/", async (req, res) => {
-  if (isDemoModeEnabled()) {
-    const results = getDemoCampaignBundle().vendors.results;
-    const summary = {
-      total_vendors: results.length,
-      active_vendors: results.filter((r) => r.status === "active").length,
-      prospect_vendors: results.filter((r) => r.status === "prospect").length,
-      total_contract_value: results.reduce((sum, r) => sum + Number(r.contract_value || 0), 0)
-    };
-
-    return res.status(200).json({ results, summary });
-  }
-
   try {
+    await ensureVendorTable();
+
     const {
-      search = "",
+      q = "",
+      state = "",
       category = "",
-      status = "",
-      state = ""
+      page = 1,
+      limit = 12
     } = req.query;
 
-    const result = await withTimeout(
-      pool.query(
-        `
-          select
-            v.*,
-            c.campaign_name,
-            c.candidate_name,
-            f.name as firm_name
-          from campaign_vendors v
-          left join campaigns c on c.id = v.campaign_id
-          left join firms f on f.id = c.firm_id
-          where ($1 = '' or (
-            coalesce(v.vendor_name, '') ilike '%' || $1 || '%'
-            or coalesce(v.category, '') ilike '%' || $1 || '%'
-            or coalesce(c.campaign_name, '') ilike '%' || $1 || '%'
-            or coalesce(c.candidate_name, '') ilike '%' || $1 || '%'
-            or coalesce(f.name, '') ilike '%' || $1 || '%'
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 12));
+    const offset = (safePage - 1) * safeLimit;
+
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          external_id,
+          source,
+          vendor_name,
+          category,
+          status,
+          state,
+          city,
+          website,
+          email,
+          phone,
+          services,
+          notes,
+          source_updated_at,
+          last_imported_at,
+          created_at,
+          updated_at
+        FROM vendors
+        WHERE
+          ($1 = '' OR (
+            COALESCE(vendor_name, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(category, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(state, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(city, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(services, '') ILIKE '%' || $1 || '%'
           ))
-            and ($2 = '' or coalesce(v.category, '') = $2)
-            and ($3 = '' or coalesce(v.status, '') = $3)
-            and ($4 = '' or coalesce(v.state, '') = $4)
-          order by coalesce(v.vendor_name, 'zzz') asc
-        `,
-        [search, category, status, state]
-      ),
-      3000
+          AND ($2 = '' OR COALESCE(state, '') = $2)
+          AND ($3 = '' OR COALESCE(category, '') = $3)
+        ORDER BY COALESCE(vendor_name, 'zzz') ASC
+        LIMIT $4 OFFSET $5
+      `,
+      [
+        normalizeText(q),
+        normalizeState(state),
+        normalizeText(category),
+        safeLimit,
+        offset
+      ]
     );
 
-    const results =
-      result.rows?.length > 0
-        ? result.rows
-        : FALLBACK_VENDORS.filter((item) => {
-            const q = String(search).toLowerCase();
-            const searchMatch =
-              !search ||
-              `${item.vendor_name} ${item.category} ${item.campaign_name} ${item.candidate_name} ${item.firm_name}`
-                .toLowerCase()
-                .includes(q);
-            const categoryMatch = !category || item.category === category;
-            const statusMatch = !status || item.status === status;
-            const stateMatch = !state || item.state === state;
-            return searchMatch && categoryMatch && stateMatch && statusMatch;
-          });
+    const totalResult = await pool.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM vendors
+        WHERE
+          ($1 = '' OR (
+            COALESCE(vendor_name, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(category, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(state, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(city, '') ILIKE '%' || $1 || '%'
+            OR COALESCE(services, '') ILIKE '%' || $1 || '%'
+          ))
+          AND ($2 = '' OR COALESCE(state, '') = $2)
+          AND ($3 = '' OR COALESCE(category, '') = $3)
+      `,
+      [
+        normalizeText(q),
+        normalizeState(state),
+        normalizeText(category)
+      ]
+    );
 
-    const summary = {
-      total_vendors: results.length,
-      active_vendors: results.filter((r) => r.status === "active").length,
-      prospect_vendors: results.filter((r) => r.status === "prospect").length,
-      total_contract_value: results.reduce((sum, r) => sum + Number(r.contract_value || 0), 0)
-    };
+    res.status(200).json({
+      total: totalResult.rows[0]?.total || 0,
+      page: safePage,
+      limit: safeLimit,
+      results: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load vendors"
+    });
+  }
+});
 
-    return res.status(200).json({ results, summary });
-  } catch {
-    const results = FALLBACK_VENDORS;
-    const summary = {
-      total_vendors: results.length,
-      active_vendors: results.filter((r) => r.status === "active").length,
-      prospect_vendors: results.filter((r) => r.status === "prospect").length,
-      total_contract_value: results.reduce((sum, r) => sum + Number(r.contract_value || 0), 0)
-    };
+router.post("/import", requireRoles("admin"), async (_req, res) => {
+  try {
+    const summary = await importLiveVendors();
 
-    return res.status(200).json({ results, summary });
+    res.status(200).json({
+      success: true,
+      ...summary
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to import live vendors"
+    });
   }
 });
 
