@@ -30,6 +30,7 @@ import betaAdminRoutes from "./routes/betaAdmin.routes.js";
 import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
+import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -267,6 +268,28 @@ app.use((err, _req, res, _next) => {
 const server = http.createServer(app);
 
 initSocket(server, ALLOWED_ORIGINS);
+
+const LIVE_REFRESH_ENABLED = String(process.env.LIVE_REFRESH_ENABLED || "true") === "true";
+const LIVE_REFRESH_INTERVAL_MS = Math.max(
+  60_000,
+  Number(process.env.LIVE_REFRESH_INTERVAL_MS || 4 * 60 * 60 * 1000)
+);
+
+async function runScheduledIntelligenceRefresh(trigger = "startup") {
+  try {
+    const result = await runLiveIntelligenceRefresh();
+    console.log(`✅ Live intelligence refresh complete (${trigger})`, result);
+  } catch (error) {
+    console.error(`❌ Live intelligence refresh failed (${trigger})`, error.message);
+  }
+}
+
+if (LIVE_REFRESH_ENABLED) {
+  runScheduledIntelligenceRefresh("startup");
+  setInterval(() => {
+    runScheduledIntelligenceRefresh("interval");
+  }, LIVE_REFRESH_INTERVAL_MS);
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
