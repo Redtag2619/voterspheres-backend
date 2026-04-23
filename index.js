@@ -142,7 +142,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
-app.use("/api/alerts", alertsRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
@@ -161,6 +160,7 @@ app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
