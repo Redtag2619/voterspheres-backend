@@ -6,7 +6,7 @@ function normalizeText(value = "") {
 }
 
 function normalizeStateName(value = "") {
-  const raw = String(value || "").trim().toUpperCase();
+  const raw = String(value || "").trim().toUpperCase(); 
   const map = {
     AL: "Alabama",
     AK: "Alaska",
