@@ -30,6 +30,7 @@ import betaAdminRoutes from "./routes/betaAdmin.routes.js";
 import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
+import alertsRoutes from "./routes/alerts.routes.js";
 import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -141,6 +142,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
