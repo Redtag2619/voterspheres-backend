@@ -30,13 +30,12 @@ import betaAdminRoutes from "./routes/betaAdmin.routes.js";
 import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
-import alertsRoutes from "./routes/alerts.routes.js";
-import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
 import { publishEvent } from "./lib/intelligence.events.js";
 import { handleStripeWebhook } from "./services/billing.service.js";
+import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -48,7 +47,10 @@ const ALLOWED_ORIGINS = [
   "https://voterspheres-frontend-git-main-mark-j-stephens-projects.vercel.app",
   "https://voterspheres-frontend-os73qaqvn-mark-j-stephens-projects.vercel.app",
   "http://localhost:5173",
-  "http://127.0.0.1:5173"
+  "http://127.0.0.1:5173",
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_APP_URL,
+  process.env.VERCEL_FRONTEND_URL
 ].filter(Boolean);
 
 function isAllowedOrigin(origin) {
@@ -81,9 +83,7 @@ app.use(
 
 app.options("*", cors());
 
-app.use(
-  morgan(process.env.NODE_ENV === "production" ? "combined" : "dev")
-);
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 app.post(
   "/api/billing/webhook",
@@ -130,6 +130,14 @@ app.get("/", (_req, res) => {
   });
 });
 
+app.get("/api", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "VoterSpheres API",
+    live_intelligence: true
+  });
+});
+
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     ok: true,
@@ -160,7 +168,6 @@ app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
-app.use("/api/alerts", alertsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
@@ -271,7 +278,9 @@ const server = http.createServer(app);
 
 initSocket(server, ALLOWED_ORIGINS);
 
-const LIVE_REFRESH_ENABLED = String(process.env.LIVE_REFRESH_ENABLED || "true") === "true";
+const LIVE_REFRESH_ENABLED =
+  String(process.env.LIVE_REFRESH_ENABLED || "true").toLowerCase() === "true";
+
 const LIVE_REFRESH_INTERVAL_MS = Math.max(
   60_000,
   Number(process.env.LIVE_REFRESH_INTERVAL_MS || 4 * 60 * 60 * 1000)
@@ -280,21 +289,28 @@ const LIVE_REFRESH_INTERVAL_MS = Math.max(
 async function runScheduledIntelligenceRefresh(trigger = "startup") {
   try {
     const result = await runLiveIntelligenceRefresh();
-    console.log(`✅ Live intelligence refresh complete (${trigger})`, result);
+
+    console.log(`✅ Live intelligence refresh complete (${trigger})`, {
+      feed_inserted: result?.executive_feed?.inserted,
+      alerts_sent: result?.alerts?.sent,
+      alerts_failed: result?.alerts?.failed,
+      news_seen: result?.news?.seen,
+      polling_seen: result?.polling?.seen
+    });
   } catch (error) {
     console.error(`❌ Live intelligence refresh failed (${trigger})`, error.message);
   }
-}
-
-if (LIVE_REFRESH_ENABLED) {
-  runScheduledIntelligenceRefresh("startup");
-  setInterval(() => {
-    runScheduledIntelligenceRefresh("interval");
-  }, LIVE_REFRESH_INTERVAL_MS);
 }
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
   console.log("✅ Live intelligence layer enabled");
   console.log("✅ Stripe webhook mounted at /api/billing/webhook");
+
+  if (LIVE_REFRESH_ENABLED) {
+    runScheduledIntelligenceRefresh("startup");
+    setInterval(() => {
+      runScheduledIntelligenceRefresh("interval");
+    }, LIVE_REFRESH_INTERVAL_MS);
+  }
 });
