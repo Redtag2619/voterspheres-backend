@@ -1,5 +1,6 @@
 import { pool } from "../db/pool.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js";
+import { ensureNewsSignalsTable, getRecentNewsSignals, ingestNewsSignals } from "./newsIngestion.service.js";
 
 function normalizeStateName(value = "") {
   const raw = String(value || "").trim().toUpperCase();
@@ -297,9 +298,11 @@ export async function getFundraisingSignalRows(limit = 6) {
 export async function rebuildExecutiveFeedEvents() {
   await ensureExecutiveFeedEventsTable();
   await ensureFundraisingLiveTable();
+  await ensureNewsSignalsTable();
 
   const battlegrounds = await getBattlegroundSignalRows(8);
   const fundraising = await getFundraisingSignalRows(6);
+  const recentNews = await getRecentNewsSignals(6);
 
   await pool.query(`DELETE FROM executive_feed_events`);
 
@@ -377,6 +380,44 @@ export async function rebuildExecutiveFeedEvents() {
           receipts: Number(row.receipts || 0),
           cash_on_hand: Number(row.cash_on_hand || 0),
           party: row.party || ""
+        })
+      ]
+    );
+    inserted += 1;
+  }
+
+  for (const item of recentNews.slice(0, 3)) {
+    await pool.query(
+      `
+        INSERT INTO executive_feed_events (
+          event_type,
+          severity,
+          title,
+          source,
+          state,
+          office,
+          risk,
+          candidate_name,
+          candidate_id,
+          metadata
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+      `,
+      [
+        "news.signal",
+        "Medium",
+        item.title,
+        "News Intelligence",
+        item.state,
+        item.office,
+        "Watch",
+        item.candidate_name,
+        item.candidate_id,
+        JSON.stringify({
+          url: item.url,
+          description: item.description,
+          published_at: item.published_at,
+          query: item.query
         })
       ]
     );
@@ -482,19 +523,24 @@ export async function getExecutiveFeedEvents(limit = 8) {
 export async function getLiveIntelligenceStatus() {
   await ensureExecutiveFeedEventsTable();
   await ensureFundraisingLiveTable();
+  await ensureNewsSignalsTable();
 
   const [
     feedCountResult,
     latestFeedResult,
     latestFundraisingResult,
     candidateCountResult,
-    vendorCountResult
+    vendorCountResult,
+    newsCountResult,
+    latestNewsResult
   ] = await Promise.all([
     pool.query(`select count(*)::int as total from executive_feed_events`),
     pool.query(`select max(created_at) as last_feed_event_at from executive_feed_events`),
     pool.query(`select max(source_updated_at) as last_fundraising_sync_at from fundraising_live`),
     pool.query(`select count(*)::int as total from candidates`),
-    pool.query(`select count(*)::int as total from vendors`)
+    pool.query(`select count(*)::int as total from vendors`),
+    pool.query(`select count(*)::int as total from news_signals`),
+    pool.query(`select max(coalesce(published_at, updated_at, created_at)) as last_news_signal_at from news_signals`)
   ]);
 
   const recentFeed = await getExecutiveFeedEvents(6);
@@ -504,8 +550,10 @@ export async function getLiveIntelligenceStatus() {
       feed_events: feedCountResult.rows?.[0]?.total || 0,
       candidates: candidateCountResult.rows?.[0]?.total || 0,
       vendors: vendorCountResult.rows?.[0]?.total || 0,
+      news_signals: newsCountResult.rows?.[0]?.total || 0,
       last_feed_event_at: latestFeedResult.rows?.[0]?.last_feed_event_at || null,
-      last_fundraising_sync_at: latestFundraisingResult.rows?.[0]?.last_fundraising_sync_at || null
+      last_fundraising_sync_at: latestFundraisingResult.rows?.[0]?.last_fundraising_sync_at || null,
+      last_news_signal_at: latestNewsResult.rows?.[0]?.last_news_signal_at || null
     },
     recentFeed
   };
@@ -514,14 +562,17 @@ export async function getLiveIntelligenceStatus() {
 export async function runLiveIntelligenceRefresh() {
   await ensureExecutiveFeedEventsTable();
   await ensureFundraisingLiveTable();
+  await ensureNewsSignalsTable();
 
-  const feedResult = await rebuildExecutiveFeedEvents();
+  const news = await ingestNewsSignals(8, 4);
+  const executive_feed = await rebuildExecutiveFeedEvents();
   const status = await getLiveIntelligenceStatus();
 
   return {
     success: true,
     fundraising_refreshed: true,
-    executive_feed: feedResult,
+    news,
+    executive_feed,
     status
   };
 }
