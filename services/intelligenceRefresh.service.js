@@ -1,12 +1,8 @@
 import { pool } from "../db/pool.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js";
 
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
-
 function normalizeStateName(value = "") {
-  const raw = String(value || "").trim().toUpperCase(); 
+  const raw = String(value || "").trim().toUpperCase();
   const map = {
     AL: "Alabama",
     AK: "Alaska",
@@ -462,7 +458,12 @@ export async function getExecutiveFeedEvents(limit = 6) {
 
   return (result.rows || []).map((row) => ({
     id: row.id,
-    time: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Now",
+    time: row.created_at
+      ? new Date(row.created_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "Now",
     title: row.title,
     source: row.source,
     severity: row.severity,
