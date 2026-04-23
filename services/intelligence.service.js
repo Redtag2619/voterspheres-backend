@@ -1,6 +1,11 @@
 import { pool } from "../db/pool.js";
 import { getDemoCampaignBundle, isDemoModeEnabled } from "./demo.service.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js";
+import {
+  getBattlegroundSignalRows,
+  getExecutiveFeedEvents,
+  runLiveIntelligenceRefresh
+} from "./intelligenceRefresh.service.js";
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
@@ -15,208 +20,6 @@ function formatMoneyShort(value) {
   return `$${num.toLocaleString()}`;
 }
 
-function normalizeStateName(value = "") {
-  const raw = String(value || "").trim().toUpperCase();
-
- const reverse = {
-  Alabama: "AL",
-  Alaska: "AK",
-  Arizona: "AZ",
-  Arkansas: "AR",
-  California: "CA",
-  Colorado: "CO",
-  Connecticut: "CT",
-  Delaware: "DE",
-  Florida: "FL",
-  Georgia: "GA",
-  Hawaii: "HI",
-  Idaho: "ID",
-  Illinois: "IL",
-  Indiana: "IN",
-  Iowa: "IA",
-  Kansas: "KS",
-  Kentucky: "KY",
-  Louisiana: "LA",
-  Maine: "ME",
-  Maryland: "MD",
-  Massachusetts: "MA",
-  Michigan: "MI",
-  Minnesota: "MN",
-  Mississippi: "MS",
-  Missouri: "MO",
-  Montana: "MT",
-  Nebraska: "NE",
-  Nevada: "NV",
-  "New Hampshire": "NH",
-  "New Jersey": "NJ",
-  "New Mexico": "NM",
-  "New York": "NY",
-  "North Carolina": "NC",
-  "North Dakota": "ND",
-  Ohio: "OH",
-  Oklahoma: "OK",
-  Oregon: "OR",
-  Pennsylvania: "PA",
-  "Rhode Island": "RI",
-  "South Carolina": "SC",
-  "South Dakota": "SD",
-  Tennessee: "TN",
-  Texas: "TX",
-  Utah: "UT",
-  Vermont: "VT",
-  Virginia: "VA",
-  Washington: "WA",
-  "West Virginia": "WV",
-  Wisconsin: "WI",
-  Wyoming: "WY",
-  "District of Columbia": "DC"
-};
-  
-  return map[raw] || value || "";
-}
-
-function stateCode(value = "") {
-  const raw = String(value || "").trim();
-  if (raw.length === 2) return raw.toUpperCase();
-
- const reverse = {
-  Alabama: "AL",
-  Alaska: "AK",
-  Arizona: "AZ",
-  Arkansas: "AR",
-  California: "CA",
-  Colorado: "CO",
-  Connecticut: "CT",
-  Delaware: "DE",
-  Florida: "FL",
-  Georgia: "GA",
-  Hawaii: "HI",
-  Idaho: "ID",
-  Illinois: "IL",
-  Indiana: "IN",
-  Iowa: "IA",
-  Kansas: "KS",
-  Kentucky: "KY",
-  Louisiana: "LA",
-  Maine: "ME",
-  Maryland: "MD",
-  Massachusetts: "MA",
-  Michigan: "MI",
-  Minnesota: "MN",
-  Mississippi: "MS",
-  Missouri: "MO",
-  Montana: "MT",
-  Nebraska: "NE",
-  Nevada: "NV",
-  "New Hampshire": "NH",
-  "New Jersey": "NJ",
-  "New Mexico": "NM",
-  "New York": "NY",
-  "North Carolina": "NC",
-  "North Dakota": "ND",
-  Ohio: "OH",
-  Oklahoma: "OK",
-  Oregon: "OR",
-  Pennsylvania: "PA",
-  "Rhode Island": "RI",
-  "South Carolina": "SC",
-  "South Dakota": "SD",
-  Tennessee: "TN",
-  Texas: "TX",
-  Utah: "UT",
-  Vermont: "VT",
-  Virginia: "VA",
-  Washington: "WA",
-  "West Virginia": "WV",
-  Wisconsin: "WI",
-  Wyoming: "WY",
-  "District of Columbia": "DC"
-};
-
-  return reverse[raw] || raw;
-}
-
-function buildLeaderboardResponse(leaderboard, deltaLabel = "FEC-backed candidates") {
-  const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
-  const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
-  const averageReceipts = leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0;
-
-  return {
-    leaderboard,
-    summary: {
-      tracked_candidates: leaderboard.length,
-      total_receipts: totalReceipts,
-      total_cash_on_hand: totalCash,
-      average_receipts: averageReceipts
-    },
-    metrics: [
-      {
-        label: "Tracked Finance Leaders",
-        value: String(leaderboard.length),
-        delta: deltaLabel,
-        tone: "up"
-      },
-      {
-        label: "Modeled Receipts",
-        value: formatMoneyShort(totalReceipts),
-        delta: "Leaderboard total",
-        tone: "up"
-      },
-      {
-        label: "Average Raise",
-        value: formatMoneyShort(averageReceipts),
-        delta: "Across leaders",
-        tone: "up"
-      },
-      {
-        label: "Cash On Hand",
-        value: formatMoneyShort(totalCash),
-        delta: "Competitive reserves",
-        tone: "up"
-      }
-    ]
-  };
-}
-
-function buildEmptyLeaderboardResponse(lastSyncedAt = null) {
-  return {
-    leaderboard: [],
-    summary: {
-      tracked_candidates: 0,
-      total_receipts: 0,
-      total_cash_on_hand: 0,
-      average_receipts: 0,
-      last_synced_at: lastSyncedAt
-    },
-    metrics: [
-      {
-        label: "Tracked Finance Leaders",
-        value: "0",
-        delta: "No live rows loaded",
-        tone: "down"
-      },
-      {
-        label: "Modeled Receipts",
-        value: "$0",
-        delta: "No live rows loaded",
-        tone: "down"
-      },
-      {
-        label: "Average Raise",
-        value: "$0",
-        delta: "No live rows loaded",
-        tone: "down"
-      },
-      {
-        label: "Cash On Hand",
-        value: "$0",
-        delta: "No live rows loaded",
-        tone: "down"
-      }
-    ]
-  };
-}
-
 function getOverlayTier(score) {
   if (score >= 80) return "critical";
   if (score >= 60) return "elevated";
@@ -224,30 +27,63 @@ function getOverlayTier(score) {
   return "monitor";
 }
 
-function buildPriority(probability, receipts, vendorCount) {
-  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
-  let score = 0;
+function normalizeStateName(value = "") {
+  const raw = String(value || "").trim().toUpperCase();
+  const map = {
+    AL: "Alabama",
+    AK: "Alaska",
+    AZ: "Arizona",
+    AR: "Arkansas",
+    CA: "California",
+    CO: "Colorado",
+    CT: "Connecticut",
+    DE: "Delaware",
+    FL: "Florida",
+    GA: "Georgia",
+    HI: "Hawaii",
+    ID: "Idaho",
+    IL: "Illinois",
+    IN: "Indiana",
+    IA: "Iowa",
+    KS: "Kansas",
+    KY: "Kentucky",
+    LA: "Louisiana",
+    ME: "Maine",
+    MD: "Maryland",
+    MA: "Massachusetts",
+    MI: "Michigan",
+    MN: "Minnesota",
+    MS: "Mississippi",
+    MO: "Missouri",
+    MT: "Montana",
+    NE: "Nebraska",
+    NV: "Nevada",
+    NH: "New Hampshire",
+    NJ: "New Jersey",
+    NM: "New Mexico",
+    NY: "New York",
+    NC: "North Carolina",
+    ND: "North Dakota",
+    OH: "Ohio",
+    OK: "Oklahoma",
+    OR: "Oregon",
+    PA: "Pennsylvania",
+    RI: "Rhode Island",
+    SC: "South Carolina",
+    SD: "South Dakota",
+    TN: "Tennessee",
+    TX: "Texas",
+    UT: "Utah",
+    VT: "Vermont",
+    VA: "Virginia",
+    WA: "Washington",
+    WV: "West Virginia",
+    WI: "Wisconsin",
+    WY: "Wyoming",
+    DC: "District of Columbia"
+  };
 
-  if (probabilityNum >= 49 && probabilityNum <= 57) score += 3;
-  if (receipts >= 1_500_000) score += 2;
-  if (vendorCount >= 2) score += 2;
-
-  if (score >= 5) return "Tier 1";
-  if (score >= 3) return "Tier 2";
-  return "Tier 3";
-}
-
-function buildRisk(probability, vendorCount) {
-  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
-
-  if (probabilityNum <= 51 && vendorCount <= 1) return "Elevated";
-  if (probabilityNum <= 55 || vendorCount <= 2) return "Watch";
-  return "Monitor";
-}
-
-function buildMomentum(rank) {
-  const value = 2.4 - rank * 0.35;
-  return value >= 0 ? `+${value.toFixed(1)}` : `${value.toFixed(1)}`;
+  return map[raw] || value || "";
 }
 
 export async function getFundraisingLeaderboard(limit = 12) {
@@ -288,17 +124,17 @@ export async function getFundraisingLeaderboard(limit = 12) {
   );
 
   const leaderboard = result.rows || [];
-
-  if (!leaderboard.length) {
-    return buildEmptyLeaderboardResponse(lastSyncedAt);
-  }
-
-  const response = buildLeaderboardResponse(leaderboard, "FEC-backed candidates");
+  const totalReceipts = leaderboard.reduce((sum, row) => sum + toNumber(row.receipts), 0);
+  const totalCash = leaderboard.reduce((sum, row) => sum + toNumber(row.cash_on_hand), 0);
+  const averageReceipts = leaderboard.length ? Math.round(totalReceipts / leaderboard.length) : 0;
 
   return {
-    ...response,
+    leaderboard,
     summary: {
-      ...response.summary,
+      tracked_candidates: leaderboard.length,
+      total_receipts: totalReceipts,
+      total_cash_on_hand: totalCash,
+      average_receipts: averageReceipts,
       last_synced_at: lastSyncedAt
     }
   };
@@ -401,114 +237,8 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
 }
 
 export async function getBattlegroundDashboardData() {
-  const query = `
-    with vendor_counts as (
-      select
-        upper(state) as state_code,
-        count(*)::int as vendor_count
-      from vendors
-      where state is not null
-        and state <> ''
-      group by upper(state)
-    ),
-    ranked_finance as (
-      select
-        candidate_id,
-        coalesce(receipts, 0) as receipts,
-        coalesce(cash_on_hand, 0) as cash_on_hand
-      from fundraising_live
-    )
-    select
-      c.id,
-      c.external_id,
-      c.full_name as candidate,
-      c.state,
-      c.office,
-      c.party,
-      coalesce(rf.receipts, 0) as receipts,
-      coalesce(rf.cash_on_hand, 0) as cash_on_hand,
-      coalesce(vc.vendor_count, 0) as vendor_count,
-      c.last_imported_at
-    from candidates c
-    left join ranked_finance rf
-      on rf.candidate_id = c.external_id
-    left join vendor_counts vc
-      on vc.state_code = upper(c.state)
-    where c.state is not null
-      and c.state <> ''
-      and c.office is not null
-      and c.office <> ''
-      and c.office in ('Senate', 'House', 'Governor', 'President')
-    order by
-      coalesce(rf.receipts, 0) desc,
-      c.state asc,
-      c.office asc,
-      c.full_name asc
-    limit 24
-  `;
-
-  const { rows } = await pool.query(query);
-
-  const results = (rows || []).slice(0, 12).map((row, index) => {
-    const state = normalizeStateName(row.state);
-    const code = stateCode(state);
-    const baseProbability = Math.max(49, 58 - index);
-
-    const probability = `${baseProbability}%`;
-    const momentum = buildMomentum(index);
-    const priority = buildPriority(probability, Number(row.receipts || 0), Number(row.vendor_count || 0));
-    const risk = buildRisk(probability, Number(row.vendor_count || 0));
-
-    return {
-      race: `${code} ${row.office}`,
-      candidate: row.candidate || "",
-      state,
-      state_code: code,
-      office: row.office,
-      probability,
-      momentum,
-      risk,
-      priority,
-      party: row.party || "",
-      receipts: Number(row.receipts || 0),
-      cash_on_hand: Number(row.cash_on_hand || 0),
-      vendor_count: Number(row.vendor_count || 0),
-      updated_at: row.last_imported_at || null
-    };
-  });
-
+  const results = await getBattlegroundSignalRows(12);
   return { results };
-}
-
-async function getExecutiveFeed() {
-  const battlegrounds = await getBattlegroundDashboardData();
-  const fundraising = await getFundraisingLeaderboard(6);
-
-  const battlegroundFeed = (battlegrounds.results || []).slice(0, 4).map((row, index) => ({
-    id: `bg-${index + 1}`,
-    time: "Now",
-    title: `${row.race} remains live on the board`,
-    source: "Battleground Engine",
-    severity: row.priority === "Tier 1" ? "High" : "Medium",
-    type: "battleground.priority",
-    state: row.state,
-    office: row.office,
-    risk: row.risk
-  }));
-
-  const financeFeed = (fundraising.leaderboard || []).slice(0, 3).map((row, index) => ({
-    id: `finance-${index + 1}`,
-    time: "Now",
-    title: `${row.name} is a top fundraising leader`,
-    source: "Fundraising Intelligence",
-    severity: index === 0 ? "High" : "Medium",
-    type: "fundraising.signal",
-    state: normalizeStateName(row.state),
-    office: row.office,
-    risk: index === 0 ? "Watch" : "Monitor"
-  }));
-
-  return [...battlegroundFeed, ...financeFeed].slice(0, 6);
 }
 
 export async function getIntelligenceSummary() {
@@ -552,7 +282,13 @@ export async function getIntelligenceDashboard() {
 
   const fundraising = await getFundraisingLeaderboard(8);
   const battlegrounds = await getBattlegroundDashboardData();
-  const feed = await getExecutiveFeed();
+
+  let feed = await getExecutiveFeedEvents(6);
+
+  if (!feed.length) {
+    await runLiveIntelligenceRefresh();
+    feed = await getExecutiveFeedEvents(6);
+  }
 
   const vendorsResult = await pool.query(`
     select
@@ -611,7 +347,8 @@ export async function getIntelligenceDashboard() {
     battlegrounds: battlegrounds.results || [],
     leaderboard: (fundraising.leaderboard || []).map((row, index) => ({
       ...row,
-      risk: index < 3 ? "Elevated" : index < 6 ? "Watch" : "Monitor"
+      risk: index < 3 ? "Elevated" : index < 6 ? "Watch" : "Monitor",
+      state: normalizeStateName(row.state)
     })),
     vendors,
     fundraisingSummary: fundraising.summary || {}
@@ -697,7 +434,6 @@ export async function getIntelligenceMap() {
   `);
 
   const lastSyncedAt = latestSyncResult.rows?.[0]?.last_synced_at || null;
-
   const battlegrounds = await getBattlegroundDashboardData();
 
   const overlays = (battlegrounds.results || []).map((entry) => {
