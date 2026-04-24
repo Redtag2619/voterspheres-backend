@@ -1,399 +1,161 @@
-﻿import { pool } from "../db/pool.js"; 
+﻿import { pool } from "../db/pool.js";
 
-import { ensureFundraisingLiveTable } from "./fec.service.js"; 
+function n(value) {
+  return Number(value || 0);
+}
 
-import {
-  ensureNewsSignalsTable,
-  getRecentNewsSignals,
-  ingestNewsSignals
-} from "./newsIngestion.service.js";
-
-import {
-  ensurePollingSignalsTable,
-  getRecentPollingSignals,
-  ingestPollingSignals
-} from "./pollingIngestion.service.js";
+function fmtMoney(value) {
+  return `$${n(value).toLocaleString()}`;
+}
 
 function normalizeStateName(value = "") {
-  const raw = String(value || "").trim().toUpperCase();
-  const map = {
-    AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-    CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-    HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-    KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-    MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
-    MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
-    NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
-    ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
-    RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
-    TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
-    WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia"
-  };
-  return map[raw] || value || "";
-}
-
-function stateCode(value = "") {
   const raw = String(value || "").trim();
-  if (raw.length === 2) return raw.toUpperCase();
-
-  const reverse = {
-    Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
-    Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
-    Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN", Iowa: "IA",
-    Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD",
-    Massachusetts: "MA", Michigan: "MI", Minnesota: "MN", Mississippi: "MS",
-    Missouri: "MO", Montana: "MT", Nebraska: "NE", Nevada: "NV",
-    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
-    "North Carolina": "NC", "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK",
-    Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC",
-    "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT",
-    Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI",
-    Wyoming: "WY", "District of Columbia": "DC"
-  };
-
-  return reverse[raw] || raw;
+  return raw || "Unknown";
 }
 
-function buildPriority(probability, receipts, vendorCount) {
-  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
-  let score = 0;
-  if (probabilityNum >= 49 && probabilityNum <= 57) score += 3;
-  if (receipts >= 1_500_000) score += 2;
-  if (vendorCount >= 2) score += 2;
-  if (score >= 5) return "Tier 1";
-  if (score >= 3) return "Tier 2";
-  return "Tier 3";
-}
-
-function buildRisk(probability, vendorCount) {
-  const probabilityNum = Number(String(probability || "").replace("%", "")) || 0;
-  if (probabilityNum <= 51 && vendorCount <= 1) return "Elevated";
-  if (probabilityNum <= 55 || vendorCount <= 2) return "Watch";
+function makeRisk(score) {
+  if (score >= 80) return "Elevated";
+  if (score >= 60) return "Watch";
   return "Monitor";
 }
 
-function buildMomentum(rank) {
-  const value = 2.4 - rank * 0.35;
-  return value >= 0 ? `+${value.toFixed(1)}` : `${value.toFixed(1)}`;
+function makePriority(score) {
+  if (score >= 75) return "Tier 1";
+  if (score >= 45) return "Tier 2";
+  return "Tier 3";
 }
 
-export async function ensureExecutiveFeedEventsTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS executive_feed_events (
-      id SERIAL PRIMARY KEY,
-      event_type TEXT NOT NULL,
-      severity TEXT DEFAULT 'Medium',
-      title TEXT NOT NULL,
-      source TEXT NOT NULL,
-      state TEXT,
-      office TEXT,
-      risk TEXT DEFAULT 'Monitor',
-      candidate_name TEXT,
-      candidate_id TEXT,
-      vendor_id INTEGER,
-      metadata JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_executive_feed_events_created_at ON executive_feed_events (created_at DESC)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_executive_feed_events_state ON executive_feed_events (state)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_executive_feed_events_office ON executive_feed_events (office)`);
+function makeOverlayTier(score) {
+  if (score >= 80) return "Critical";
+  if (score >= 60) return "Elevated";
+  if (score >= 35) return "Watch";
+  return "Monitor";
 }
 
-export async function getBattlegroundSignalRows(limit = 12) {
-  const query = `
-    with vendor_counts as (
-      select upper(state) as state_code, count(*)::int as vendor_count
-      from vendors
-      where state is not null and state <> ''
-      group by upper(state)
-    ),
-    finance as (
-      select candidate_id, coalesce(receipts, 0) as receipts, coalesce(cash_on_hand, 0) as cash_on_hand
-      from fundraising_live
-    )
-    select
-      c.id,
-      c.external_id,
-      c.full_name as candidate,
-      c.state,
-      c.office,
-      c.party,
-      coalesce(f.receipts, 0) as receipts,
-      coalesce(f.cash_on_hand, 0) as cash_on_hand,
-      coalesce(v.vendor_count, 0) as vendor_count,
-      c.last_imported_at
-    from candidates c
-    left join finance f on f.candidate_id = c.external_id
-    left join vendor_counts v on v.state_code = upper(c.state)
-    where c.state is not null
-      and c.state <> ''
-      and c.office is not null
-      and c.office <> ''
-      and c.office in ('Senate', 'House', 'Governor', 'President')
-    order by coalesce(f.receipts, 0) desc, c.state asc, c.office asc, c.full_name asc
-    limit $1
-  `;
-
-  const { rows } = await pool.query(query, [limit]);
-
-  return (rows || []).map((row, index) => {
-    const state = normalizeStateName(row.state);
-    const code = stateCode(state);
-    const baseProbability = Math.max(49, 58 - index);
-    const probability = `${baseProbability}%`;
-    const momentum = buildMomentum(index);
-    const priority = buildPriority(probability, Number(row.receipts || 0), Number(row.vendor_count || 0));
-    const risk = buildRisk(probability, Number(row.vendor_count || 0));
-
-    return {
-      id: row.id,
-      external_id: row.external_id,
-      race: `${code} ${row.office}`,
-      candidate: row.candidate || "",
-      state,
-      state_code: code,
-      office: row.office,
-      probability,
-      momentum,
-      risk,
-      priority,
-      party: row.party || "",
-      receipts: Number(row.receipts || 0),
-      cash_on_hand: Number(row.cash_on_hand || 0),
-      vendor_count: Number(row.vendor_count || 0),
-      updated_at: row.last_imported_at || null
-    };
-  });
+async function safeQuery(sql, params = []) {
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows || [];
+  } catch (error) {
+    console.warn("[LiveDataHub] query fallback:", error.message);
+    return [];
+  }
 }
 
-export async function getFundraisingSignalRows(limit = 6) {
-  await ensureFundraisingLiveTable();
-
-  const result = await pool.query(
+export async function getLiveFundraising(limit = 25) {
+  return safeQuery(
     `
-      with ranked as (
-        select
-          row_number() over (
-            order by coalesce(receipts, 0) desc, coalesce(cash_on_hand, 0) desc, coalesce(name, '') asc
-          ) as rank,
-          candidate_id,
-          name,
-          state,
-          office,
-          party,
-          coalesce(receipts, 0) as receipts,
-          coalesce(cash_on_hand, 0) as cash_on_hand
-        from fundraising_live
-      )
-      select *
-      from ranked
-      order by rank asc
-      limit $1
+      SELECT
+        candidate_id,
+        name,
+        state,
+        office,
+        party,
+        COALESCE(receipts, 0) AS receipts,
+        COALESCE(cash_on_hand, 0) AS cash_on_hand,
+        source_updated_at
+      FROM fundraising_live
+      ORDER BY COALESCE(receipts, 0) DESC, COALESCE(cash_on_hand, 0) DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+}
+
+export async function getFundraisingLeaderboard(limit = 25) {
+  const rows = await getLiveFundraising(limit);
+
+  const leaderboard = rows.map((row, index) => ({
+    ...row,
+    rank: index + 1,
+    state: normalizeStateName(row.state),
+    office: row.office || "Race",
+    party: row.party || "N/A",
+    receipts: n(row.receipts),
+    cash_on_hand: n(row.cash_on_hand),
+    risk: "Monitor"
+  }));
+
+  const totalReceipts = leaderboard.reduce((sum, row) => sum + n(row.receipts), 0);
+  const totalCash = leaderboard.reduce((sum, row) => sum + n(row.cash_on_hand), 0);
+  const averageReceipts = Math.round(totalReceipts / Math.max(leaderboard.length, 1));
+
+  return {
+    metrics: [
+      {
+        label: "Tracked Finance Leaders",
+        value: String(leaderboard.length),
+        delta: "Live FEC-linked records",
+        tone: "up"
+      },
+      {
+        label: "Modeled Receipts",
+        value: fmtMoney(totalReceipts),
+        delta: "Leaderboard total",
+        tone: "up"
+      },
+      {
+        label: "Average Raise",
+        value: fmtMoney(averageReceipts),
+        delta: "Across leaders",
+        tone: "up"
+      },
+      {
+        label: "Cash On Hand",
+        value: fmtMoney(totalCash),
+        delta: "Competitive reserves",
+        tone: "up"
+      }
+    ],
+    leaderboard,
+    summary: {
+      tracked_candidates: leaderboard.length,
+      total_receipts: totalReceipts,
+      total_cash_on_hand: totalCash,
+      average_receipts: averageReceipts,
+      last_synced_at:
+        leaderboard.map((row) => row.source_updated_at).filter(Boolean).sort().at(-1) || null
+    }
+  };
+}
+
+export async function getExecutiveFeedEvents(limit = 20) {
+  const rows = await safeQuery(
+    `
+      SELECT
+        id,
+        event_type,
+        severity,
+        title,
+        source,
+        state,
+        office,
+        risk,
+        candidate_name,
+        candidate_id,
+        vendor_id,
+        metadata,
+        created_at
+      FROM executive_feed_events
+      ORDER BY created_at DESC, id DESC
+      LIMIT $1
     `,
     [limit]
   );
 
-  return result.rows || [];
-}
-
-export async function rebuildExecutiveFeedEvents() {
-  await ensureExecutiveFeedEventsTable();
-  await ensureFundraisingLiveTable();
-  await ensureNewsSignalsTable();
-  await ensurePollingSignalsTable();
-
-  const battlegrounds = await getBattlegroundSignalRows(8);
-  const fundraising = await getFundraisingSignalRows(6);
-  const recentNews = await getRecentNewsSignals(6);
-  const recentPolling = await getRecentPollingSignals(6);
-
-  await pool.query(`DELETE FROM executive_feed_events`);
-
-  let inserted = 0;
-
-  for (const row of battlegrounds.slice(0, 4)) {
-    await pool.query(
-      `
-        INSERT INTO executive_feed_events (
-          event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,metadata
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-      `,
-      [
-        "battleground.priority",
-        row.priority === "Tier 1" ? "High" : "Medium",
-        `${row.race} remains live on the board`,
-        "Battleground Engine",
-        row.state,
-        row.office,
-        row.risk,
-        row.candidate,
-        row.external_id,
-        JSON.stringify({
-          race: row.race,
-          probability: row.probability,
-          momentum: row.momentum,
-          priority: row.priority,
-          receipts: row.receipts,
-          vendor_count: row.vendor_count
-        })
-      ]
-    );
-    inserted += 1;
-  }
-
-  for (const [index, row] of fundraising.slice(0, 3).entries()) {
-    await pool.query(
-      `
-        INSERT INTO executive_feed_events (
-          event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,metadata
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-      `,
-      [
-        "fundraising.signal",
-        index === 0 ? "High" : "Medium",
-        `${row.name} is a top fundraising leader`,
-        "Fundraising Intelligence",
-        normalizeStateName(row.state),
-        row.office,
-        index === 0 ? "Watch" : "Monitor",
-        row.name,
-        row.candidate_id,
-        JSON.stringify({
-          rank: row.rank,
-          receipts: Number(row.receipts || 0),
-          cash_on_hand: Number(row.cash_on_hand || 0),
-          party: row.party || ""
-        })
-      ]
-    );
-    inserted += 1;
-  }
-
-  for (const item of recentNews.slice(0, 3)) {
-    await pool.query(
-      `
-        INSERT INTO executive_feed_events (
-          event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,metadata
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-      `,
-      [
-        "news.signal",
-        "Medium",
-        item.title,
-        "News Intelligence",
-        item.state,
-        item.office,
-        "Watch",
-        item.candidate_name,
-        item.candidate_id,
-        JSON.stringify({
-          url: item.url,
-          description: item.description,
-          published_at: item.published_at,
-          query: item.query
-        })
-      ]
-    );
-    inserted += 1;
-  }
-
-  for (const item of recentPolling.slice(0, 3)) {
-    await pool.query(
-      `
-        INSERT INTO executive_feed_events (
-          event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,metadata
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-      `,
-      [
-        "polling.signal",
-        "Medium",
-        `${item.pollster || "New poll"} updated ${item.subject || item.candidate_name || "race"} polling`,
-        "Polling Intelligence",
-        item.state,
-        item.office,
-        "Watch",
-        item.candidate_name,
-        item.candidate_id,
-        JSON.stringify({
-          poll_type: item.poll_type,
-          pollster: item.pollster,
-          subject: item.subject,
-          end_date: item.end_date,
-          sample_size: item.sample_size,
-          population: item.population,
-          url: item.url,
-          answers: item.answers || []
-        })
-      ]
-    );
-    inserted += 1;
-  }
-
-  const vendorGapRows = battlegrounds.filter((row) => Number(row.vendor_count || 0) < 2).slice(0, 3);
-
-  for (const row of vendorGapRows) {
-    await pool.query(
-      `
-        INSERT INTO executive_feed_events (
-          event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,metadata
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-      `,
-      [
-        "vendor.coverage_gap",
-        "High",
-        `${row.race} has thin vendor coverage`,
-        "Vendor Intelligence",
-        row.state,
-        row.office,
-        "Elevated",
-        row.candidate,
-        row.external_id,
-        JSON.stringify({
-          vendor_count: row.vendor_count,
-          receipts: row.receipts,
-          recommendation: "Expand in-state vendor bench"
-        })
-      ]
-    );
-    inserted += 1;
-  }
-
-  return { success: true, inserted };
-}
-
-export async function getExecutiveFeedEvents(limit = 8) {
-  await ensureExecutiveFeedEventsTable();
-
-  const result = await pool.query(
-    `
-      select
-        id,event_type,severity,title,source,state,office,risk,candidate_name,candidate_id,vendor_id,metadata,created_at
-      from executive_feed_events
-      order by created_at desc, id desc
-      limit $1
-    `,
-    [limit]
-  );
-
-  return (result.rows || []).map((row) => ({
+  return rows.map((row) => ({
     id: row.id,
     time: row.created_at
       ? new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : "Now",
     title: row.title,
     source: row.source,
-    severity: row.severity,
+    severity: row.severity || "Info",
     type: row.event_type,
-    state: row.state,
-    office: row.office,
-    risk: row.risk,
+    event_type: row.event_type,
+    state: normalizeStateName(row.state),
+    office: row.office || "N/A",
+    risk: row.risk || "Monitor",
     candidate_name: row.candidate_name,
     candidate_id: row.candidate_id,
     vendor_id: row.vendor_id,
@@ -402,165 +164,73 @@ export async function getExecutiveFeedEvents(limit = 8) {
   }));
 }
 
-export async function getLiveIntelligenceStatus() {
-  await ensureExecutiveFeedEventsTable();
-  await ensureFundraisingLiveTable();
-  await ensureNewsSignalsTable();
-  await ensurePollingSignalsTable();
-
-  const [
-    feedCountResult,
-    latestFeedResult,
-    latestFundraisingResult,
-    candidateCountResult,
-    vendorCountResult,
-    newsCountResult,
-    latestNewsResult,
-    pollingCountResult,
-    latestPollingResult
-  ] = await Promise.all([
-    pool.query(`select count(*)::int as total from executive_feed_events`),
-    pool.query(`select max(created_at) as last_feed_event_at from executive_feed_events`),
-    pool.query(`select max(source_updated_at) as last_fundraising_sync_at from fundraising_live`),
-    pool.query(`select count(*)::int as total from candidates`),
-    pool.query(`select count(*)::int as total from vendors`),
-    pool.query(`select count(*)::int as total from news_signals`),
-    pool.query(`select max(coalesce(published_at, updated_at, created_at)) as last_news_signal_at from news_signals`),
-    pool.query(`select count(*)::int as total from polling_signals`),
-    pool.query(`select max(coalesce(end_date::timestamp, updated_at, created_at)) as last_polling_signal_at from polling_signals`)
-  ]);
-
-  const recentFeed = await getExecutiveFeedEvents(6);
-
-  return {
-    summary: {
-      feed_events: feedCountResult.rows?.[0]?.total || 0,
-      candidates: candidateCountResult.rows?.[0]?.total || 0,
-      vendors: vendorCountResult.rows?.[0]?.total || 0,
-      news_signals: newsCountResult.rows?.[0]?.total || 0,
-      polling_signals: pollingCountResult.rows?.[0]?.total || 0,
-      last_feed_event_at: latestFeedResult.rows?.[0]?.last_feed_event_at || null,
-      last_fundraising_sync_at: latestFundraisingResult.rows?.[0]?.last_fundraising_sync_at || null,
-      last_news_signal_at: latestNewsResult.rows?.[0]?.last_news_signal_at || null,
-      last_polling_signal_at: latestPollingResult.rows?.[0]?.last_polling_signal_at || null
-    },
-    recentFeed
-  };
+export async function getVendorSignals(limit = 25) {
+  return safeQuery(
+    `
+      SELECT *
+      FROM vendors
+      ORDER BY id DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 }
 
-export async function runLiveIntelligenceRefresh() {
-  await ensureExecutiveFeedEventsTable();
-  await ensureFundraisingLiveTable();
-  await ensureNewsSignalsTable();
-  await ensurePollingSignalsTable();
-
-  let news = { success: false, skipped: true, reason: "News ingestion not attempted" };
-  let polling = { success: false, skipped: true, reason: "Polling ingestion not attempted" };
-
-  try {
-    news = await ingestNewsSignals(8, 4);
-  } catch (error) {
-    news = { success: false, error: error.message };
-  }
-
-  try {
-    polling = await ingestPollingSignals(8);
-  } catch (error) {
-    polling = { success: false, error: error.message };
-  }
-
-  const executive_feed = await rebuildExecutiveFeedEvents();
-
-  const alerts = { success: false, skipped: true, reason: "Disabled in intelligence.service.js" };
-
-  const status = await getLiveIntelligenceStatus();
-
-  return {
-    success: true,
-    fundraising_refreshed: true,
-    news,
-    polling,
-    executive_feed,
-    alerts,
-    status
-  };
+export async function getConsultantSignals(limit = 25) {
+  return safeQuery(
+    `
+      SELECT *
+      FROM consultants
+      ORDER BY id DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-export async function getIntelligenceSummary() {
-  return {
-    status: "ok",
-    generated_at: new Date().toISOString(),
-    summary: {
-      candidates: 0,
-      vendors: 0,
-      feed_events: 0
-    }
-  };
+export async function getDonorSignals(limit = 25) {
+  return safeQuery(
+    `
+      SELECT *
+      FROM donors
+      ORDER BY id DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 }
 
-export async function getIntelligenceDashboard() {
-  const feed = await getExecutiveFeedEvents(8).catch(() => []);
-  return {
-    battlegrounds: await getBattlegroundDashboardData(),
-    executiveFeed: feed,
-    generated_at: new Date().toISOString()
-  };
-}
+export async function getMailOpsSignals(limit = 25) {
+  const rows = await safeQuery(
+    `
+      SELECT *
+      FROM mailops_events
+      ORDER BY id DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 
-export async function getIntelligenceForecast() {
-  return {
-    generated_at: new Date().toISOString(),
-    results: []
-  };
-}
+  if (rows.length) return rows;
 
-export async function getIntelligenceRankings() {
-  return {
-    generated_at: new Date().toISOString(),
-    results: []
-  };
+  return safeQuery(
+    `
+      SELECT *
+      FROM mail_ops_events
+      ORDER BY id DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 }
 
 export async function getIntelligenceMap() {
-  await ensureFundraisingLiveTable();
-
-  const result = await pool.query(`
-    SELECT
-      candidate_id,
-      name,
-      state,
-      office,
-      party,
-      COALESCE(receipts, 0) AS receipts,
-      COALESCE(cash_on_hand, 0) AS cash_on_hand,
-      source_updated_at
-    FROM fundraising_live
-    WHERE state IS NOT NULL
-      AND state <> ''
-      AND office IS NOT NULL
-      AND office <> ''
-    ORDER BY COALESCE(receipts, 0) DESC, COALESCE(cash_on_hand, 0) DESC
-    LIMIT 1000
-  `);
-
-  const rows = result.rows || [];
+  const rows = await getLiveFundraising(1000);
   const groups = new Map();
 
   for (const row of rows) {
     const state = normalizeStateName(row.state);
-    const office = row.office || "Unknown";
+    const office = row.office || "Race";
     const key = `${state}::${office}`;
 
     if (!groups.has(key)) {
@@ -575,13 +245,10 @@ export async function getIntelligenceMap() {
     }
 
     const group = groups.get(key);
-    const receipts = Number(row.receipts || 0);
-    const cash = Number(row.cash_on_hand || 0);
+    group.totalReceipts += n(row.receipts);
+    group.totalCashOnHand += n(row.cash_on_hand);
 
-    group.totalReceipts += receipts;
-    group.totalCashOnHand += cash;
-
-    if (!group.last_synced_at && row.source_updated_at) {
+    if (row.source_updated_at && (!group.last_synced_at || row.source_updated_at > group.last_synced_at)) {
       group.last_synced_at = row.source_updated_at;
     }
 
@@ -589,138 +256,259 @@ export async function getIntelligenceMap() {
       candidate_id: row.candidate_id,
       name: row.name || "Unknown Candidate",
       party: row.party || "N/A",
-      receipts,
-      cash_on_hand: cash,
+      receipts: n(row.receipts),
+      cash_on_hand: n(row.cash_on_hand),
       rank: 0
     });
   }
 
-  const battlegrounds = Array.from(groups.values()).map((group) => {
-    const candidates = group.candidates
-      .sort((a, b) => Number(b.receipts || 0) - Number(a.receipts || 0))
-      .slice(0, 5)
-      .map((candidate, index) => ({
-        ...candidate,
-        rank: index + 1
-      }));
+  const battlegrounds = Array.from(groups.values())
+    .map((group) => {
+      const candidates = group.candidates
+        .sort((a, b) => b.receipts - a.receipts)
+        .slice(0, 5)
+        .map((candidate, index) => ({
+          ...candidate,
+          rank: index + 1
+        }));
 
-    const receiptsScore = Math.min(60, Math.round(group.totalReceipts / 250000));
-    const cashScore = Math.min(25, Math.round(group.totalCashOnHand / 300000));
-    const depthScore = Math.min(15, candidates.length * 3);
-    const overlayScore = Math.min(100, receiptsScore + cashScore + depthScore);
+      const receiptsScore = Math.min(60, Math.round(group.totalReceipts / 250000));
+      const cashScore = Math.min(25, Math.round(group.totalCashOnHand / 300000));
+      const depthScore = Math.min(15, candidates.length * 3);
+      const overlayScore = Math.min(100, receiptsScore + cashScore + depthScore);
 
-    let overlayTier = "Monitor";
-    if (overlayScore >= 80) overlayTier = "Critical";
-    else if (overlayScore >= 60) overlayTier = "Elevated";
-    else if (overlayScore >= 35) overlayTier = "Watch";
-
-    return {
-      state: group.state,
-      office: group.office,
-      overlayScore,
-      overlayTier,
-      totalReceipts: group.totalReceipts,
-      totalCashOnHand: group.totalCashOnHand,
-      candidates,
-      last_synced_at: group.last_synced_at
-    };
-  }).sort((a, b) => b.overlayScore - a.overlayScore);
-
-  const trackedStates = new Set(battlegrounds.map((item) => item.state)).size;
-  const lastSync = battlegrounds
-    .map((item) => item.last_synced_at)
-    .filter(Boolean)
-    .sort()
-    .at(-1) || null;
+      return {
+        state: group.state,
+        office: group.office,
+        overlayScore,
+        overlayTier: makeOverlayTier(overlayScore),
+        totalReceipts: group.totalReceipts,
+        totalCashOnHand: group.totalCashOnHand,
+        candidates,
+        last_synced_at: group.last_synced_at
+      };
+    })
+    .sort((a, b) => b.overlayScore - a.overlayScore);
 
   return {
     summary: {
-      trackedStates,
+      trackedStates: new Set(battlegrounds.map((item) => item.state)).size,
       overlays: battlegrounds.length,
-      last_synced_at: lastSync
+      last_synced_at:
+        battlegrounds.map((item) => item.last_synced_at).filter(Boolean).sort().at(-1) || null
     },
     battlegrounds
   };
 }
 
-export async function getLiveFundraising(limit = 12) {
-  await ensureFundraisingLiveTable();
+export async function getBattlegroundDashboardData() {
+  const map = await getIntelligenceMap();
 
-  const result = await pool.query(
-    `
-      SELECT *
-      FROM fundraising_live
-      ORDER BY COALESCE(receipts, 0) DESC
-      LIMIT $1
-    `,
-    [limit]
-  );
+  return map.battlegrounds.slice(0, 8).map((item) => {
+    const probability = Math.max(49, Math.min(62, Math.round(item.overlayScore / 2 + 18)));
+    const momentum = Number((item.overlayScore / 30).toFixed(1));
+    const risk = makeRisk(item.overlayScore);
+    const priority = makePriority(item.overlayScore);
+    const topCandidate = item.candidates?.[0] || null;
 
-  return result.rows || [];
+    return {
+      race: `${item.state} ${item.office}`,
+      candidate: topCandidate?.name || `${item.state} ${item.office}`,
+      state: item.state,
+      office: item.office,
+      probability: `${probability}%`,
+      win_probability: probability,
+      momentum: momentum >= 0 ? `+${momentum}` : String(momentum),
+      risk,
+      priority,
+      receipts: item.totalReceipts,
+      cash_on_hand: item.totalCashOnHand,
+      vendor_count: 0,
+      candidates: item.candidates
+    };
+  });
 }
 
-export async function getFundraisingLeaderboard(limit = 12) {
-  return getLiveFundraising(limit);
-}
+export async function getIntelligenceSummary() {
+  const [fundraisingPayload, feed, vendors, consultants, donors, mailops, map] = await Promise.all([
+    getFundraisingLeaderboard(25),
+    getExecutiveFeedEvents(25),
+    getVendorSignals(25),
+    getConsultantSignals(25),
+    getDonorSignals(25),
+    getMailOpsSignals(25),
+    getIntelligenceMap()
+  ]);
 
-export async function getCandidateIntelligenceSummary(filters = {}) {
   return {
-    total: 0,
-    filters,
+    generated_at: new Date().toISOString(),
     summary: {
-      candidates_tracked: 0,
-      active_states: 0,
-      offices_tracked: 0,
-      last_updated: new Date().toISOString()
-    },
-    results: []
+      fundraising_records: fundraisingPayload.leaderboard.length,
+      feed_events: feed.length,
+      vendors: vendors.length,
+      consultants: consultants.length,
+      donors: donors.length,
+      mailops_events: mailops.length,
+      map_overlays: map.summary.overlays,
+      tracked_states: map.summary.trackedStates
+    }
   };
 }
 
-export async function getBattlegroundDashboardData() {
-  return [
-    {
-      state: "Georgia",
-      office: "Senate",
-      win_probability: 57,
-      momentum: 2.4,
-      risk: "Elevated",
-      priority: "Tier 1"
-    },
-    {
-      state: "Pennsylvania",
-      office: "Senate",
-      win_probability: 54,
-      momentum: 1.8,
-      risk: "Watch",
-      priority: "Tier 1"
-    },
-    {
-      state: "Arizona",
-      office: "Senate",
-      win_probability: 51,
-      momentum: 1.1,
-      risk: "Watch",
-      priority: "Tier 2"
-    }
-  ];
+export async function getIntelligenceDashboard() {
+  const [
+    summary,
+    battlegrounds,
+    fundraisingPayload,
+    executiveFeed,
+    vendors,
+    donors,
+    consultants,
+    mailops
+  ] = await Promise.all([
+    getIntelligenceSummary(),
+    getBattlegroundDashboardData(),
+    getFundraisingLeaderboard(8),
+    getExecutiveFeedEvents(12),
+    getVendorSignals(8),
+    getDonorSignals(8),
+    getConsultantSignals(8),
+    getMailOpsSignals(8)
+  ]);
+
+  const leaderboard = fundraisingPayload.leaderboard || [];
+  const totalReceipts = fundraisingPayload.summary?.total_receipts || 0;
+  const totalCash = fundraisingPayload.summary?.total_cash_on_hand || 0;
+
+  return {
+    generated_at: new Date().toISOString(),
+
+    metrics: [
+      {
+        label: "Fundraising Leaders",
+        value: String(leaderboard.length),
+        delta: "Live finance records",
+        tone: "up"
+      },
+      {
+        label: "Receipts Modeled",
+        value: fmtMoney(totalReceipts),
+        delta: "From fundraising_live",
+        tone: "up"
+      },
+      {
+        label: "Cash On Hand",
+        value: fmtMoney(totalCash),
+        delta: "Reserve strength",
+        tone: "up"
+      },
+      {
+        label: "Active Signals",
+        value: String(executiveFeed.length),
+        delta: "Executive feed events",
+        tone: "up"
+      }
+    ],
+
+    feed: executiveFeed,
+    executiveFeed,
+
+    battlegrounds,
+
+    leaderboard,
+    fundraisingLeaders: leaderboard,
+    fundraisingSummary: fundraisingPayload.summary,
+
+    vendors,
+    donors,
+    consultants,
+    mailops,
+
+    summary: summary.summary
+  };
 }
 
+export async function getIntelligenceForecast() {
+  const battlegrounds = await getBattlegroundDashboardData();
 
+  return {
+    generated_at: new Date().toISOString(),
+    results: battlegrounds
+  };
+}
+
+export async function getIntelligenceRankings() {
+  const fundraisingPayload = await getFundraisingLeaderboard(50);
+
+  return {
+    generated_at: new Date().toISOString(),
+    results: fundraisingPayload.leaderboard
+  };
+}
+
+export async function getCandidateIntelligenceSummary(filters = {}) {
+  const rows = await safeQuery(
+    `
+      SELECT
+        id,
+        external_id,
+        full_name,
+        state,
+        office,
+        party,
+        last_imported_at
+      FROM candidates
+      ORDER BY last_imported_at DESC NULLS LAST, full_name ASC
+      LIMIT 100
+    `
+  );
+
+  return {
+    total: rows.length,
+    filters,
+    summary: {
+      candidates_tracked: rows.length,
+      active_states: new Set(rows.map((r) => r.state).filter(Boolean)).size,
+      offices_tracked: new Set(rows.map((r) => r.office).filter(Boolean)).size,
+      last_updated: new Date().toISOString()
+    },
+    results: rows
+  };
+}
 
 export async function getIntelligenceCommand() {
   const dashboard = await getIntelligenceDashboard();
 
   return {
     generated_at: new Date().toISOString(),
+
+    metrics: dashboard.metrics,
+
+    battlegrounds: dashboard.battlegrounds,
+
+    feed: dashboard.feed,
+
+    actions: dashboard.feed.slice(0, 8).map((item, index) => ({
+      id: `action-${item.id || index}`,
+      title: item.title || "Review live signal",
+      owner: item.source || "Command",
+      due: index < 2 ? "Now" : "Today",
+      detail: item.risk ? `Risk level: ${item.risk}` : "Review and assign next action.",
+      state: item.state,
+      office: item.office,
+      risk: item.risk || "Monitor"
+    })),
+
     command: {
-      top_battlegrounds: dashboard.battlegrounds?.slice(0, 5) || [],
-      top_fundraising: dashboard.fundraisingLeaders?.slice(0, 5) || [],
-      urgent_feed: (dashboard.executiveFeed || []).filter((item) =>
+      top_battlegrounds: dashboard.battlegrounds.slice(0, 5),
+      top_fundraising: dashboard.leaderboard.slice(0, 5),
+      urgent_feed: dashboard.feed.filter((item) =>
         ["High", "Critical"].includes(item.severity)
       ),
-      vendor_signals: dashboard.vendors || [],
-      mailops_signals: dashboard.mailops || []
+      vendor_signals: dashboard.vendors,
+      donor_signals: dashboard.donors,
+      consultant_signals: dashboard.consultants,
+      mailops_signals: dashboard.mailops
     }
   };
 }
