@@ -534,9 +534,112 @@ export async function getIntelligenceRankings() {
 }
 
 export async function getIntelligenceMap() {
+  await ensureFundraisingLiveTable();
+
+  const result = await pool.query(`
+    SELECT
+      candidate_id,
+      name,
+      state,
+      office,
+      party,
+      COALESCE(receipts, 0) AS receipts,
+      COALESCE(cash_on_hand, 0) AS cash_on_hand,
+      source_updated_at
+    FROM fundraising_live
+    WHERE state IS NOT NULL
+      AND state <> ''
+      AND office IS NOT NULL
+      AND office <> ''
+    ORDER BY COALESCE(receipts, 0) DESC, COALESCE(cash_on_hand, 0) DESC
+    LIMIT 1000
+  `);
+
+  const rows = result.rows || [];
+  const groups = new Map();
+
+  for (const row of rows) {
+    const state = normalizeStateName(row.state);
+    const office = row.office || "Unknown";
+    const key = `${state}::${office}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        state,
+        office,
+        totalReceipts: 0,
+        totalCashOnHand: 0,
+        candidates: [],
+        last_synced_at: row.source_updated_at || null
+      });
+    }
+
+    const group = groups.get(key);
+    const receipts = Number(row.receipts || 0);
+    const cash = Number(row.cash_on_hand || 0);
+
+    group.totalReceipts += receipts;
+    group.totalCashOnHand += cash;
+
+    if (!group.last_synced_at && row.source_updated_at) {
+      group.last_synced_at = row.source_updated_at;
+    }
+
+    group.candidates.push({
+      candidate_id: row.candidate_id,
+      name: row.name || "Unknown Candidate",
+      party: row.party || "N/A",
+      receipts,
+      cash_on_hand: cash,
+      rank: 0
+    });
+  }
+
+  const battlegrounds = Array.from(groups.values()).map((group) => {
+    const candidates = group.candidates
+      .sort((a, b) => Number(b.receipts || 0) - Number(a.receipts || 0))
+      .slice(0, 5)
+      .map((candidate, index) => ({
+        ...candidate,
+        rank: index + 1
+      }));
+
+    const receiptsScore = Math.min(60, Math.round(group.totalReceipts / 250000));
+    const cashScore = Math.min(25, Math.round(group.totalCashOnHand / 300000));
+    const depthScore = Math.min(15, candidates.length * 3);
+    const overlayScore = Math.min(100, receiptsScore + cashScore + depthScore);
+
+    let overlayTier = "Monitor";
+    if (overlayScore >= 80) overlayTier = "Critical";
+    else if (overlayScore >= 60) overlayTier = "Elevated";
+    else if (overlayScore >= 35) overlayTier = "Watch";
+
+    return {
+      state: group.state,
+      office: group.office,
+      overlayScore,
+      overlayTier,
+      totalReceipts: group.totalReceipts,
+      totalCashOnHand: group.totalCashOnHand,
+      candidates,
+      last_synced_at: group.last_synced_at
+    };
+  }).sort((a, b) => b.overlayScore - a.overlayScore);
+
+  const trackedStates = new Set(battlegrounds.map((item) => item.state)).size;
+  const lastSync = battlegrounds
+    .map((item) => item.last_synced_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+
   return {
-    generated_at: new Date().toISOString(),
-    results: []
+    summary: {
+      trackedStates,
+      overlays: battlegrounds.length,
+      last_synced_at: lastSync
+    },
+    battlegrounds
   };
 }
 
@@ -602,4 +705,5 @@ export async function getBattlegroundDashboardData() {
     }
   ];
 }
+
 
