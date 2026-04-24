@@ -1,167 +1,114 @@
-import express from "express";
+﻿import express from "express";
 import {
+  getBattlegroundDashboardData,
+  getCandidateIntelligenceSummary,
+  getExecutiveFeedEvents,
   getFundraisingLeaderboard,
+  getIntelligenceCommand,
   getIntelligenceDashboard,
   getIntelligenceForecast,
   getIntelligenceMap,
   getIntelligenceRankings,
   getIntelligenceSummary,
-  getLiveFundraising,
-  getCandidateIntelligenceSummary,
-  getBattlegroundDashboardData
+  getLiveFundraising
 } from "../services/intelligence.service.js";
-import {
-  getLiveIntelligenceStatus,
-  runLiveIntelligenceRefresh
-} from "../services/intelligenceRefresh.service.js";
-import { getRecentNewsSignals, ingestNewsSignals } from "../services/newsIngestion.service.js";
-import { requireRoles } from "../middleware/roles.middleware.js";
 
 const router = express.Router();
 
+function sendError(res, error, fallback) {
+  res.status(500).json({
+    error: error.message || fallback
+  });
+}
+
 router.get("/summary", async (_req, res) => {
   try {
-    const data = await getIntelligenceSummary();
-    res.status(200).json(data);
+    res.json(await getIntelligenceSummary());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load intelligence summary"
-    });
+    sendError(res, error, "Failed to load intelligence summary");
   }
 });
 
 router.get("/dashboard", async (_req, res) => {
   try {
-    const data = await getIntelligenceDashboard();
-    res.status(200).json(data);
+    res.json(await getIntelligenceDashboard());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load intelligence dashboard"
-    });
+    sendError(res, error, "Failed to load intelligence dashboard");
   }
 });
 
 router.get("/forecast", async (_req, res) => {
   try {
-    const data = await getIntelligenceForecast();
-    res.status(200).json(data);
+    res.json(await getIntelligenceForecast());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load intelligence forecast"
-    });
+    sendError(res, error, "Failed to load intelligence forecast");
   }
 });
 
 router.get("/rankings", async (_req, res) => {
   try {
-    const data = await getIntelligenceRankings();
-    res.status(200).json(data);
+    res.json(await getIntelligenceRankings());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load intelligence rankings"
-    });
+    sendError(res, error, "Failed to load intelligence rankings");
   }
 });
 
 router.get("/map", async (_req, res) => {
   try {
-    const data = await getIntelligenceMap();
-    res.status(200).json(data);
+    res.json(await getIntelligenceMap());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load intelligence map"
-    });
+    sendError(res, error, "Failed to load intelligence map");
+  }
+});
+
+router.get("/feed", async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+    res.json({ results: await getExecutiveFeedEvents(limit) });
+  } catch (error) {
+    sendError(res, error, "Failed to load intelligence feed");
+  }
+});
+
+router.get("/command", async (_req, res) => {
+  try {
+    res.json(await getIntelligenceCommand());
+  } catch (error) {
+    sendError(res, error, "Failed to load command intelligence");
   }
 });
 
 router.get("/fundraising/live", async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 12), 100));
-    const data = await getLiveFundraising(limit);
-    res.status(200).json(data);
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+    res.json(await getLiveFundraising(limit));
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load live fundraising"
-    });
+    sendError(res, error, "Failed to load live fundraising");
   }
 });
 
 router.get("/fundraising/leaderboard", async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 12), 100));
-    const data = await getFundraisingLeaderboard(limit);
-    res.status(200).json(data);
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+    res.json(await getFundraisingLeaderboard(limit));
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load fundraising leaderboard"
-    });
+    sendError(res, error, "Failed to load fundraising leaderboard");
   }
 });
 
 router.get("/candidate-summary", async (req, res) => {
   try {
-    const data = await getCandidateIntelligenceSummary(req.query || {});
-    res.status(200).json(data);
+    res.json(await getCandidateIntelligenceSummary(req.query || {}));
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load candidate intelligence summary"
-    });
+    sendError(res, error, "Failed to load candidate intelligence summary");
   }
 });
 
 router.get("/battlegrounds", async (_req, res) => {
   try {
-    const data = await getBattlegroundDashboardData();
-    res.status(200).json(data);
+    res.json(await getBattlegroundDashboardData());
   } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load battleground dashboard data"
-    });
-  }
-});
-
-router.get("/status", requireRoles("admin"), async (_req, res) => {
-  try {
-    const data = await getLiveIntelligenceStatus();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load live intelligence status"
-    });
-  }
-});
-
-router.post("/refresh", requireRoles("admin"), async (_req, res) => {
-  try {
-    const data = await runLiveIntelligenceRefresh();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to refresh live intelligence"
-    });
-  }
-});
-
-router.post("/ingest/news", requireRoles("admin"), async (_req, res) => {
-  try {
-    const data = await ingestNewsSignals(8, 4);
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to ingest news signals"
-    });
-  }
-});
-
-router.get("/news", requireRoles("admin"), async (req, res) => {
-  try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 10), 50));
-    const data = await getRecentNewsSignals(limit);
-    res.status(200).json({ results: data });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to load news signals"
-    });
+    sendError(res, error, "Failed to load battleground dashboard data");
   }
 });
 

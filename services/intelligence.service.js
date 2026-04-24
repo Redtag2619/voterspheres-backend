@@ -707,3 +707,20 @@ export async function getBattlegroundDashboardData() {
 }
 
 
+
+export async function getIntelligenceCommand() {
+  const dashboard = await getIntelligenceDashboard();
+
+  return {
+    generated_at: new Date().toISOString(),
+    command: {
+      top_battlegrounds: dashboard.battlegrounds?.slice(0, 5) || [],
+      top_fundraising: dashboard.fundraisingLeaders?.slice(0, 5) || [],
+      urgent_feed: (dashboard.executiveFeed || []).filter((item) =>
+        ["High", "Critical"].includes(item.severity)
+      ),
+      vendor_signals: dashboard.vendors || [],
+      mailops_signals: dashboard.mailops || []
+    }
+  };
+}
