@@ -2,7 +2,7 @@ import axios from "axios";
 import { pool } from "../db/pool.js";
 
 function text(value = "") {
-  return String(value || "").trim();
+  return String(value || "").trim(); 
 }
 
 function stateName(value = "") {
