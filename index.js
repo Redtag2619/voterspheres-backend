@@ -1,4 +1,4 @@
-import "dotenv/config"; 
+﻿import "dotenv/config";
 import express from "express"; 
 import http from "http";
 import cors from "cors";
@@ -290,7 +290,7 @@ async function runScheduledIntelligenceRefresh(trigger = "startup") {
   try {
     const result = await runLiveIntelligenceRefresh();
 
-    console.log(`✅ Live intelligence refresh complete (${trigger})`, {
+    console.log(`âœ… Live intelligence refresh complete (${trigger})`, {
       feed_inserted: result?.executive_feed?.inserted,
       alerts_sent: result?.alerts?.sent,
       alerts_failed: result?.alerts?.failed,
@@ -298,14 +298,14 @@ async function runScheduledIntelligenceRefresh(trigger = "startup") {
       polling_seen: result?.polling?.seen
     });
   } catch (error) {
-    console.error(`❌ Live intelligence refresh failed (${trigger})`, error.message);
+    console.error(`âŒ Live intelligence refresh failed (${trigger})`, error.message);
   }
 }
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
-  console.log("✅ Live intelligence layer enabled");
-  console.log("✅ Stripe webhook mounted at /api/billing/webhook");
+  console.log(`âœ… VoterSpheres backend listening on port ${PORT}`);
+  console.log("âœ… Live intelligence layer enabled");
+  console.log("âœ… Stripe webhook mounted at /api/billing/webhook");
 
   if (LIVE_REFRESH_ENABLED) {
     runScheduledIntelligenceRefresh("startup");
@@ -314,3 +314,5 @@ server.listen(PORT, "0.0.0.0", () => {
     }, LIVE_REFRESH_INTERVAL_MS);
   }
 });
+
+
