@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+﻿import { pool } from "../db/pool.js";
 
 import { ensureFundraisingLiveTable } from "./fec.service.js"; 
 
@@ -13,10 +13,6 @@ import {
   getRecentPollingSignals,
   ingestPollingSignals
 } from "./pollingIngestion.service.js";
-
-import {
-  dispatchAlertsForRecentFeed
-} from "./alerts.service.js"; 
 
 function normalizeStateName(value = "") {
   const raw = String(value || "").trim().toUpperCase();
@@ -475,12 +471,7 @@ export async function runLiveIntelligenceRefresh() {
 
   const executive_feed = await rebuildExecutiveFeedEvents();
 
-  let alerts = { success: false, skipped: true, reason: "Alert dispatch not attempted" };
-  try {
-    alerts = await dispatchAlertsForRecentFeed(25);
-  } catch (error) {
-    alerts = { success: false, error: error.message };
-  }
+  const alerts = { success: false, skipped: true, reason: "Disabled in intelligence.service.js" };
 
   const status = await getLiveIntelligenceStatus();
 
@@ -494,3 +485,121 @@ export async function runLiveIntelligenceRefresh() {
     status
   };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function getIntelligenceSummary() {
+  return {
+    status: "ok",
+    generated_at: new Date().toISOString(),
+    summary: {
+      candidates: 0,
+      vendors: 0,
+      feed_events: 0
+    }
+  };
+}
+
+export async function getIntelligenceDashboard() {
+  const feed = await getExecutiveFeedEvents(8).catch(() => []);
+  return {
+    battlegrounds: await getBattlegroundDashboardData(),
+    executiveFeed: feed,
+    generated_at: new Date().toISOString()
+  };
+}
+
+export async function getIntelligenceForecast() {
+  return {
+    generated_at: new Date().toISOString(),
+    results: []
+  };
+}
+
+export async function getIntelligenceRankings() {
+  return {
+    generated_at: new Date().toISOString(),
+    results: []
+  };
+}
+
+export async function getIntelligenceMap() {
+  return {
+    generated_at: new Date().toISOString(),
+    results: []
+  };
+}
+
+export async function getLiveFundraising(limit = 12) {
+  await ensureFundraisingLiveTable();
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM fundraising_live
+      ORDER BY COALESCE(receipts, 0) DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+
+  return result.rows || [];
+}
+
+export async function getFundraisingLeaderboard(limit = 12) {
+  return getLiveFundraising(limit);
+}
+
+export async function getCandidateIntelligenceSummary(filters = {}) {
+  return {
+    total: 0,
+    filters,
+    summary: {
+      candidates_tracked: 0,
+      active_states: 0,
+      offices_tracked: 0,
+      last_updated: new Date().toISOString()
+    },
+    results: []
+  };
+}
+
+export async function getBattlegroundDashboardData() {
+  return [
+    {
+      state: "Georgia",
+      office: "Senate",
+      win_probability: 57,
+      momentum: 2.4,
+      risk: "Elevated",
+      priority: "Tier 1"
+    },
+    {
+      state: "Pennsylvania",
+      office: "Senate",
+      win_probability: 54,
+      momentum: 1.8,
+      risk: "Watch",
+      priority: "Tier 1"
+    },
+    {
+      state: "Arizona",
+      office: "Senate",
+      win_probability: 51,
+      momentum: 1.1,
+      risk: "Watch",
+      priority: "Tier 2"
+    }
+  ];
+}
+
