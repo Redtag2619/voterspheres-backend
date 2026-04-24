@@ -3,7 +3,7 @@ import { ensureFundraisingLiveTable } from "./fec.service.js";
 import { ensureNewsSignalsTable, getRecentNewsSignals, ingestNewsSignals } from "./newsIngestion.service.js";
 
 function normalizeStateName(value = "") {
-  const raw = String(value || "").trim().toUpperCase();
+  const raw = String(value || "").trim().toUpperCase(); 
   const map = {
     AL: "Alabama",
     AK: "Alaska",
