@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 
-import { ensureFundraisingLiveTable } from "./fec.service.js";
+import { ensureFundraisingLiveTable } from "./fec.service.js"; 
 
 import {
   ensureNewsSignalsTable,
