@@ -1,5 +1,5 @@
 import { pool } from "../db/pool.js";
-import { ensureFundraisingLiveTable } from "./fec.service.js";
+import { ensureFundraisingLiveTable } from "./fec.service.js"; 
 import { ensureNewsSignalsTable, getRecentNewsSignals, ingestNewsSignals } from "./newsIngestion.service.js";
 
 function normalizeStateName(value = "") {
