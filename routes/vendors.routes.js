@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import { requireRoles } from "../middleware/roles.middleware.js";
 import { pool } from "../db/pool.js";
 
@@ -255,6 +255,45 @@ router.get("/dropdowns/statuses", async (_req, res) => {
   }
 });
 
+
+router.get("/dropdowns/categories", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT category
+      FROM vendors
+      WHERE category IS NOT NULL AND category <> ''
+      ORDER BY category ASC
+    `);
+
+    res.status(200).json({
+      results: result.rows.map((row) => row.category).filter(Boolean)
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load vendor categories"
+    });
+  }
+});
+
+router.get("/dropdowns/statuses", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT status
+      FROM vendors
+      WHERE status IS NOT NULL AND status <> ''
+      ORDER BY status ASC
+    `);
+
+    res.status(200).json({
+      results: result.rows.map((row) => row.status).filter(Boolean)
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load vendor statuses"
+    });
+  }
+});
+
 router.get("/", async (req, res) => {
   try {
     await ensureVendorTable();
@@ -387,3 +426,4 @@ router.post("/import", requireRoles("admin"), async (_req, res) => {
 });
 
 export default router;
+
