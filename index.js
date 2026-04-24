@@ -279,7 +279,7 @@ const server = http.createServer(app);
 initSocket(server, ALLOWED_ORIGINS);
 
 const LIVE_REFRESH_ENABLED =
-  String(process.env.LIVE_REFRESH_ENABLED || "true").toLowerCase() === "true";
+  String(process.env.LIVE_REFRESH_ENABLED || "false").toLowerCase() === "true";
 
 const LIVE_REFRESH_INTERVAL_MS = Math.max(
   60_000,
