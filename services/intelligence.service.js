@@ -1,7 +1,7 @@
 import { pool } from "../db/pool.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js";
 import { ensureNewsSignalsTable, getRecentNewsSignals, ingestNewsSignals } from "./newsIngestion.service.js";
-import { ensurePollingSignalsTable, getRecentPollingSignals, ingestPollingSignals } from "./pollingIngestion.service.js";
+import { ensurePollingSignalsTable, getRecentPollingSignals, ingestPollingSignals } from "./pollingIngestion.service.js"; 
 import { dispatchAlertsForRecentFeed } from "./alerts.service.js";
 
 function normalizeStateName(value = "") {
