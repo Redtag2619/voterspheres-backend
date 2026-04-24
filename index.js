@@ -3,7 +3,7 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
+import morgan from "morgan"; 
 
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
