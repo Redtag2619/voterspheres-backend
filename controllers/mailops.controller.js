@@ -1,5 +1,6 @@
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
+import { publishRealtimeEvent } from "../lib/realtime.bus.js";
 
 function text(value = "") {
   return String(value || "").trim();
