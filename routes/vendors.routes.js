@@ -358,4 +358,74 @@ router.post("/import", requireAuth, requireRoles("admin"), async (_req, res) => 
   }
 });
 
+router.post("/intelligence/dispatch-alerts", requireAuth, async (_req, res) => {
+  try {
+    const { publishRealtimeEvent } = await import("../lib/realtime.bus.js");
+
+    const result = await pool.query(`
+      SELECT
+        COALESCE(NULLIF(state, ''), 'Unknown') AS state,
+        COUNT(*)::int AS vendor_count,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'active')::int AS active_count,
+        COUNT(DISTINCT NULLIF(category, ''))::int AS category_count
+      FROM vendors
+      GROUP BY COALESCE(NULLIF(state, ''), 'Unknown')
+      ORDER BY vendor_count DESC, state ASC
+    `);
+
+    const alerts = result.rows
+      .map((row) => {
+        const vendorCount = Number(row.vendor_count || 0);
+        const activeCount = Number(row.active_count || 0);
+        const categoryCount = Number(row.category_count || 0);
+
+        const score = Math.min(
+          100,
+          Math.min(45, vendorCount * 12) +
+          Math.min(35, categoryCount * 10) +
+          Math.min(20, activeCount * 8)
+        );
+
+        if (score >= 55) return null;
+
+        return {
+          event_type: "vendor.coverage_gap",
+          title: `${row.state} vendor coverage gap`,
+          severity: score < 30 ? "High" : "Medium",
+          source: "Vendor Intelligence",
+          state: row.state,
+          office: "Statewide",
+          risk: score < 30 ? "Elevated" : "Watch",
+          detail:
+            score < 30
+              ? "Critical vendor coverage gap. Add direct mail, digital, field, and compliance capacity."
+              : "Thin vendor bench. Add backup capacity before campaign volume increases.",
+          coverage_score: score,
+          vendor_count: vendorCount,
+          active_count: activeCount,
+          category_count: categoryCount
+        };
+      })
+      .filter(Boolean);
+
+    for (const alert of alerts) {
+      publishRealtimeEvent({
+        type: "alert.dispatched",
+        channel: "intelligence:global",
+        payload: { alert }
+      });
+    }
+
+    res.json({
+      ok: true,
+      dispatched: alerts.length,
+      alerts
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message || "Failed to dispatch vendor alerts"
+    });
+  }
+});
+
 export default router;
