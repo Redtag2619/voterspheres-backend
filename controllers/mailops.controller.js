@@ -13,6 +13,7 @@ function normalizeSeverity(value) {
 
 function normalizeStatus(value) {
   const status = text(value || "Pending");
+
   return [
     "Pending",
     "Scheduled",
@@ -21,7 +22,7 @@ function normalizeStatus(value) {
     "Elevated",
     "Delivered",
     "Delayed",
-    "Resolved"
+    "Resolved",
   ].includes(status)
     ? status
     : "Pending";
@@ -29,6 +30,7 @@ function normalizeStatus(value) {
 
 function normalizeEventType(value) {
   const eventType = text(value || "mail_update");
+
   return [
     "mail_update",
     "drop_created",
@@ -37,7 +39,7 @@ function normalizeEventType(value) {
     "delivery_update",
     "vendor_update",
     "issue_opened",
-    "issue_resolved"
+    "issue_resolved",
   ].includes(eventType)
     ? eventType
     : "mail_update";
@@ -163,25 +165,52 @@ function buildWhere(query = {}) {
 
   return {
     values,
-    whereSql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""
+    whereSql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
   };
 }
 
 function buildMetrics(rows) {
   const total = rows.length;
+
   const elevated = rows.filter((row) =>
     ["elevated", "delayed"].includes(String(row.status || "").toLowerCase())
   ).length;
-  const high = rows.filter((row) => String(row.severity || "").toLowerCase() === "high").length;
+
+  const high = rows.filter(
+    (row) => String(row.severity || "").toLowerCase() === "high"
+  ).length;
+
   const onTrack = rows.filter((row) =>
-    ["on track", "delivered", "resolved"].includes(String(row.status || "").toLowerCase())
+    ["on track", "delivered", "resolved"].includes(
+      String(row.status || "").toLowerCase()
+    )
   ).length;
 
   return [
-    { label: "Mail Drops", value: String(total), delta: `${Math.min(total, 4)} active today`, tone: "up" },
-    { label: "Delivery Risk", value: String(elevated), delta: elevated ? `${elevated} elevated` : "No elevated drops", tone: elevated ? "down" : "up" },
-    { label: "Postal Alerts", value: String(high), delta: high ? `${high} high severity` : "Monitoring stable", tone: high ? "down" : "up" },
-    { label: "On-Time Rate", value: total ? `${Math.round((onTrack / total) * 100)}%` : "0%", delta: `${onTrack} on track`, tone: "up" }
+    {
+      label: "Mail Drops",
+      value: String(total),
+      delta: `${Math.min(total, 4)} active today`,
+      tone: "up",
+    },
+    {
+      label: "Delivery Risk",
+      value: String(elevated),
+      delta: elevated ? `${elevated} elevated` : "No elevated drops",
+      tone: elevated ? "down" : "up",
+    },
+    {
+      label: "Postal Alerts",
+      value: String(high),
+      delta: high ? `${high} high severity` : "Monitoring stable",
+      tone: high ? "down" : "up",
+    },
+    {
+      label: "On-Time Rate",
+      value: total ? `${Math.round((onTrack / total) * 100)}%` : "0%",
+      delta: `${onTrack} on track`,
+      tone: "up",
+    },
   ];
 }
 
@@ -195,7 +224,7 @@ function eventToDrop(row) {
     location: row.location,
     status: row.status,
     in_home: row.in_home,
-    note: row.note
+    note: row.note,
   };
 }
 
@@ -208,26 +237,47 @@ function eventToAlert(row) {
     detail: row.note || `${row.event_type || "mail_update"} updated`,
     state: row.state,
     office: row.office,
-    risk: row.risk
+    risk: row.risk,
+  };
+}
+
+function shouldAlert(event) {
+  return (
+    ["Elevated", "Delayed"].includes(event.status) ||
+    event.severity === "High"
+  );
+}
+
+function buildRealtimePayload(event) {
+  return {
+    event,
+    alert: shouldAlert(event) ? eventToAlert(event) : null,
   };
 }
 
 function publishMailOps(type, event) {
+  const payload = buildRealtimePayload(event);
+
   try {
     publishEvent({
       type,
       channel: "intelligence:mailops",
       timestamp: new Date().toISOString(),
-      payload: {
-        event,
-        alert:
-          ["Elevated", "Delayed"].includes(event.status) || event.severity === "High"
-            ? eventToAlert(event)
-            : null
-      }
+      payload,
     });
   } catch (error) {
-    console.error("MailOps publish warning:", error.message);
+    console.error("MailOps publishEvent warning:", error.message);
+  }
+
+  try {
+    publishRealtimeEvent({
+      type,
+      channel: "intelligence:mailops",
+      timestamp: new Date().toISOString(),
+      payload,
+    });
+  } catch (error) {
+    console.error("MailOps realtime publish warning:", error.message);
   }
 }
 
@@ -251,10 +301,7 @@ export async function getMailOpsDashboard(req, res) {
     const rows = result.rows || [];
     const drops = rows.slice(0, 10).map(eventToDrop);
     const alerts = rows
-      .filter((row) =>
-        ["High"].includes(row.severity) ||
-        ["Elevated", "Delayed"].includes(row.status)
-      )
+      .filter((row) => shouldAlert(row))
       .slice(0, 10)
       .map(eventToAlert);
 
@@ -263,11 +310,13 @@ export async function getMailOpsDashboard(req, res) {
       drops,
       alerts,
       _demo: false,
-      demo: false
+      demo: false,
     });
   } catch (error) {
     console.error("getMailOpsDashboard error:", error.message);
-    return res.status(500).json({ error: error.message || "Failed to load MailOps dashboard" });
+    return res.status(500).json({
+      error: error.message || "Failed to load MailOps dashboard",
+    });
   }
 }
 
@@ -291,11 +340,13 @@ export async function listMailOpsEvents(req, res) {
     return res.json({
       results: result.rows || [],
       _demo: false,
-      demo: false
+      demo: false,
     });
   } catch (error) {
     console.error("listMailOpsEvents error:", error.message);
-    return res.status(500).json({ error: error.message || "Failed to load MailOps events" });
+    return res.status(500).json({
+      error: error.message || "Failed to load MailOps events",
+    });
   }
 }
 
@@ -307,7 +358,7 @@ export async function createMailOpsEvent(req, res) {
 
     if (!payload.campaign || !payload.state || !payload.office || !payload.location) {
       return res.status(400).json({
-        error: "campaign, state, office, and location are required"
+        error: "campaign, state, office, and location are required",
       });
     }
 
@@ -347,7 +398,7 @@ export async function createMailOpsEvent(req, res) {
         payload.in_home || null,
         text(payload.note),
         userId,
-        firmId
+        firmId,
       ]
     );
 
@@ -356,11 +407,13 @@ export async function createMailOpsEvent(req, res) {
 
     return res.status(201).json({
       ok: true,
-      event
+      event,
     });
   } catch (error) {
     console.error("createMailOpsEvent error:", error.message);
-    return res.status(500).json({ error: error.message || "Failed to create MailOps event" });
+    return res.status(500).json({
+      error: error.message || "Failed to create MailOps event",
+    });
   }
 }
 
@@ -382,21 +435,35 @@ export async function updateMailOpsEvent(req, res) {
       risk: payload.risk,
       location: payload.location,
       vendor_name: payload.vendor_name,
-      event_type: payload.event_type !== undefined ? normalizeEventType(payload.event_type) : undefined,
-      status: payload.status !== undefined ? normalizeStatus(payload.status) : undefined,
-      severity: payload.severity !== undefined ? normalizeSeverity(payload.severity) : undefined,
+      event_type:
+        payload.event_type !== undefined
+          ? normalizeEventType(payload.event_type)
+          : undefined,
+      status:
+        payload.status !== undefined
+          ? normalizeStatus(payload.status)
+          : undefined,
+      severity:
+        payload.severity !== undefined
+          ? normalizeSeverity(payload.severity)
+          : undefined,
       event_time: payload.event_time,
       in_home: payload.in_home,
-      note: payload.note
+      note: payload.note,
     };
 
-    const entries = Object.entries(allowed).filter(([, value]) => value !== undefined);
+    const entries = Object.entries(allowed).filter(
+      ([, value]) => value !== undefined
+    );
 
     if (!entries.length) {
-      return res.status(400).json({ error: "No updatable fields were provided" });
+      return res.status(400).json({
+        error: "No updatable fields were provided",
+      });
     }
 
     const values = [];
+
     const setParts = entries.map(([key, value], index) => {
       values.push(value);
       return `${key} = $${index + 1}`;
@@ -415,7 +482,9 @@ export async function updateMailOpsEvent(req, res) {
     );
 
     if (!result.rows.length) {
-      return res.status(404).json({ error: "MailOps event not found" });
+      return res.status(404).json({
+        error: "MailOps event not found",
+      });
     }
 
     const event = result.rows[0];
@@ -423,10 +492,12 @@ export async function updateMailOpsEvent(req, res) {
 
     return res.json({
       ok: true,
-      event
+      event,
     });
   } catch (error) {
     console.error("updateMailOpsEvent error:", error.message);
-    return res.status(500).json({ error: error.message || "Failed to update MailOps event" });
+    return res.status(500).json({
+      error: error.message || "Failed to update MailOps event",
+    });
   }
 }
