@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import {
   getBattlegroundDashboardData,
   getCandidateIntelligenceSummary,
@@ -20,6 +20,43 @@ function sendError(res, error, fallback) {
     error: error.message || fallback
   });
 }
+
+function liveRefreshEnabled() {
+  return String(process.env.LIVE_REFRESH_ENABLED || "false").toLowerCase() === "true";
+}
+
+router.get("/status", async (_req, res) => {
+  try {
+    const summary = await getIntelligenceSummary();
+
+    res.json({
+      ok: true,
+      service: "VoterSpheres Live Intelligence",
+      status: "online",
+      live_refresh_enabled: liveRefreshEnabled(),
+      generated_at: new Date().toISOString(),
+      summary: summary?.summary || {}
+    });
+  } catch (error) {
+    sendError(res, error, "Failed to load intelligence status");
+  }
+});
+
+router.post("/refresh", async (_req, res) => {
+  try {
+    const dashboard = await getIntelligenceDashboard();
+
+    res.json({
+      ok: true,
+      refreshed: true,
+      message: "Live intelligence refresh endpoint is online. Background refresh is manual-safe.",
+      generated_at: new Date().toISOString(),
+      summary: dashboard?.summary || {}
+    });
+  } catch (error) {
+    sendError(res, error, "Failed to refresh intelligence");
+  }
+});
 
 router.get("/summary", async (_req, res) => {
   try {
