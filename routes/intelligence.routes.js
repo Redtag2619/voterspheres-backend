@@ -12,6 +12,10 @@ import {
   getIntelligenceSummary,
   getLiveFundraising
 } from "../services/intelligence.service.js";
+import {
+  dispatchCrossSignalAlerts,
+  getCrossSignalIntelligence
+} from "../services/crossSignalIntelligence.service.js";
 
 const router = express.Router();
 
@@ -55,6 +59,22 @@ router.post("/refresh", async (_req, res) => {
     });
   } catch (error) {
     sendError(res, error, "Failed to refresh intelligence");
+  }
+});
+
+router.get("/cross-signal", async (_req, res) => {
+  try {
+    res.json(await getCrossSignalIntelligence());
+  } catch (error) {
+    sendError(res, error, "Failed to load cross-signal intelligence");
+  }
+});
+
+router.post("/cross-signal/dispatch-alerts", async (_req, res) => {
+  try {
+    res.json(await dispatchCrossSignalAlerts());
+  } catch (error) {
+    sendError(res, error, "Failed to dispatch cross-signal alerts");
   }
 });
 
