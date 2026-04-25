@@ -8,6 +8,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
 import alertsRoutes from "./routes/alerts.routes.js";
+import realtimeRoutes from "./routes/realtime.routes.js";
 import crmRoutes from "./routes/crm.routes.js";
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
@@ -30,7 +31,6 @@ import betaAdminRoutes from "./routes/betaAdmin.routes.js";
 import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
-import realtimeRoutes from "./routes/realtime.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -153,6 +153,7 @@ app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
+app.use("/api/realtime", requireAuth, realtimeRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
 app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
 app.use("/api/firms", requireAuth, firmWorkspaceRoutes);
@@ -169,7 +170,6 @@ app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
-app.use("/api/realtime", requireAuth, realtimeRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
@@ -316,5 +316,7 @@ server.listen(PORT, "0.0.0.0", () => {
     }, LIVE_REFRESH_INTERVAL_MS);
   }
 });
+
+
 
 
