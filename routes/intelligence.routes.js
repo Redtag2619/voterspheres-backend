@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import {
   getBattlegroundDashboardData,
   getCandidateIntelligenceSummary,
@@ -169,4 +169,22 @@ router.get("/battlegrounds", async (_req, res) => {
   }
 });
 
+
+router.get("/cross-signal", async (_req, res) => {
+  try {
+    res.json(await getCrossSignalIntelligence());
+  } catch (error) {
+    sendError(res, error, "Failed to load cross-signal intelligence");
+  }
+});
+
+router.post("/cross-signal/dispatch-alerts", async (_req, res) => {
+  try {
+    res.json(await dispatchCrossSignalAlerts());
+  } catch (error) {
+    sendError(res, error, "Failed to dispatch cross-signal alerts");
+  }
+});
+
 export default router;
+
