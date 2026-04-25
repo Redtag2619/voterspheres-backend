@@ -1,4 +1,4 @@
-﻿import { pool } from "../db/pool.js";
+import { pool } from "../db/pool.js";
 
 function n(value) {
   return Number(value || 0);
@@ -30,6 +30,23 @@ function makeOverlayTier(score) {
   if (score >= 60) return "Elevated";
   if (score >= 35) return "Watch";
   return "Monitor";
+}
+
+function severityScore(value = "") {
+  const v = String(value || "").toLowerCase();
+  if (v === "critical") return 100;
+  if (v === "high") return 70;
+  if (v === "medium") return 40;
+  if (v === "low") return 15;
+  return 10;
+}
+
+function riskScore(value = "") {
+  const v = String(value || "").toLowerCase();
+  if (v === "elevated") return 30;
+  if (v === "watch") return 15;
+  if (v === "monitor") return 5;
+  return 0;
 }
 
 async function safeQuery(sql, params = []) {
@@ -82,30 +99,10 @@ export async function getFundraisingLeaderboard(limit = 25) {
 
   return {
     metrics: [
-      {
-        label: "Tracked Finance Leaders",
-        value: String(leaderboard.length),
-        delta: "Live FEC-linked records",
-        tone: "up"
-      },
-      {
-        label: "Modeled Receipts",
-        value: fmtMoney(totalReceipts),
-        delta: "Leaderboard total",
-        tone: "up"
-      },
-      {
-        label: "Average Raise",
-        value: fmtMoney(averageReceipts),
-        delta: "Across leaders",
-        tone: "up"
-      },
-      {
-        label: "Cash On Hand",
-        value: fmtMoney(totalCash),
-        delta: "Competitive reserves",
-        tone: "up"
-      }
+      { label: "Tracked Finance Leaders", value: String(leaderboard.length), delta: "Live FEC-linked records", tone: "up" },
+      { label: "Modeled Receipts", value: fmtMoney(totalReceipts), delta: "Leaderboard total", tone: "up" },
+      { label: "Average Raise", value: fmtMoney(averageReceipts), delta: "Across leaders", tone: "up" },
+      { label: "Cash On Hand", value: fmtMoney(totalCash), delta: "Competitive reserves", tone: "up" }
     ],
     leaderboard,
     summary: {
@@ -148,11 +145,11 @@ export async function getExecutiveFeedEvents(limit = 20) {
     time: row.created_at
       ? new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : "Now",
-    title: row.title,
-    source: row.source,
+    title: row.title || "Live intelligence signal",
+    source: row.source || "Intelligence Feed",
     severity: row.severity || "Info",
-    type: row.event_type,
-    event_type: row.event_type,
+    type: row.event_type || "intelligence.signal",
+    event_type: row.event_type || "intelligence.signal",
     state: normalizeStateName(row.state),
     office: row.office || "N/A",
     risk: row.risk || "Monitor",
@@ -205,7 +202,7 @@ export async function getMailOpsSignals(limit = 25) {
     `
       SELECT *
       FROM mailops_events
-      ORDER BY id DESC
+      ORDER BY event_time DESC NULLS LAST, id DESC
       LIMIT $1
     `,
     [limit]
@@ -382,48 +379,22 @@ export async function getIntelligenceDashboard() {
 
   return {
     generated_at: new Date().toISOString(),
-
     metrics: [
-      {
-        label: "Fundraising Leaders",
-        value: String(leaderboard.length),
-        delta: "Live finance records",
-        tone: "up"
-      },
-      {
-        label: "Receipts Modeled",
-        value: fmtMoney(totalReceipts),
-        delta: "From fundraising_live",
-        tone: "up"
-      },
-      {
-        label: "Cash On Hand",
-        value: fmtMoney(totalCash),
-        delta: "Reserve strength",
-        tone: "up"
-      },
-      {
-        label: "Active Signals",
-        value: String(executiveFeed.length),
-        delta: "Executive feed events",
-        tone: "up"
-      }
+      { label: "Fundraising Leaders", value: String(leaderboard.length), delta: "Live finance records", tone: "up" },
+      { label: "Receipts Modeled", value: fmtMoney(totalReceipts), delta: "From fundraising_live", tone: "up" },
+      { label: "Cash On Hand", value: fmtMoney(totalCash), delta: "Reserve strength", tone: "up" },
+      { label: "Active Signals", value: String(executiveFeed.length), delta: "Executive feed events", tone: "up" }
     ],
-
     feed: executiveFeed,
     executiveFeed,
-
     battlegrounds,
-
     leaderboard,
     fundraisingLeaders: leaderboard,
     fundraisingSummary: fundraisingPayload.summary,
-
     vendors,
     donors,
     consultants,
     mailops,
-
     summary: summary.summary
   };
 }
@@ -476,39 +447,94 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
   };
 }
 
+function buildActionFromSignal(item, index) {
+  const sev = String(item.severity || "").toLowerCase();
+  const risk = String(item.risk || "").toLowerCase();
+
+  let actionType = "Review";
+  let priority = "Normal";
+  let due = "Next Cycle";
+
+  if (sev === "critical") {
+    actionType = "Escalate Immediately";
+    priority = "Immediate";
+    due = "Now";
+  } else if (sev === "high") {
+    actionType = "Investigate Now";
+    priority = "High";
+    due = "Today";
+  } else if (risk === "elevated") {
+    actionType = "Mitigate Risk";
+    priority = "High";
+    due = "Today";
+  } else if (risk === "watch") {
+    actionType = "Monitor Closely";
+    priority = "Normal";
+    due = "Next Cycle";
+  }
+
+  return {
+    id: `action-${item.id || index}`,
+    title: `${actionType}: ${item.title || "Live signal"}`,
+    owner: item.source || "Command",
+    priority,
+    due,
+    detail:
+      item.metadata?.recommendation ||
+      item.metadata?.description ||
+      `State: ${item.state || "N/A"} • Office: ${item.office || "N/A"}`,
+    state: item.state || "National",
+    office: item.office || "N/A",
+    risk: item.risk || "Monitor"
+  };
+}
+
 export async function getIntelligenceCommand() {
   const dashboard = await getIntelligenceDashboard();
 
+  const scoredFeed = (dashboard.feed || []).map((item) => ({
+    ...item,
+    score: severityScore(item.severity) + riskScore(item.risk)
+  }));
+
+  const prioritizedFeed = scoredFeed.sort((a, b) => b.score - a.score);
+
+  const urgentFeed = prioritizedFeed.filter((item) =>
+    ["High", "Critical"].includes(item.severity)
+  );
+
+  const mailopsActions = (dashboard.mailops || []).slice(0, 4).map((item, index) => ({
+    id: `mailops-action-${item.id || index}`,
+    title: `MailOps: ${item.campaign || "Review mail operation"}`,
+    owner: "MailOps",
+    priority: ["High", "Elevated", "Delayed"].includes(item.severity || item.status) ? "High" : "Normal",
+    due: ["High", "Elevated", "Delayed"].includes(item.severity || item.status) ? "Today" : "Next Cycle",
+    detail: item.note || `${item.location || "Mail operation"} requires review.`,
+    state: item.state || "National",
+    office: item.office || "N/A",
+    risk: item.risk || "Monitor"
+  }));
+
+  const actions = [
+    ...prioritizedFeed.slice(0, 8).map(buildActionFromSignal),
+    ...mailopsActions
+  ].slice(0, 10);
+
   return {
     generated_at: new Date().toISOString(),
-
     metrics: dashboard.metrics,
-
     battlegrounds: dashboard.battlegrounds,
-
-    feed: dashboard.feed,
-
-    actions: dashboard.feed.slice(0, 8).map((item, index) => ({
-      id: `action-${item.id || index}`,
-      title: item.title || "Review live signal",
-      owner: item.source || "Command",
-      due: index < 2 ? "Now" : "Today",
-      detail: item.risk ? `Risk level: ${item.risk}` : "Review and assign next action.",
-      state: item.state,
-      office: item.office,
-      risk: item.risk || "Monitor"
-    })),
-
+    feed: prioritizedFeed.slice(0, 20),
+    urgent_feed: urgentFeed,
+    actions,
     command: {
       top_battlegrounds: dashboard.battlegrounds.slice(0, 5),
       top_fundraising: dashboard.leaderboard.slice(0, 5),
-      urgent_feed: dashboard.feed.filter((item) =>
-        ["High", "Critical"].includes(item.severity)
-      ),
-      vendor_signals: dashboard.vendors,
-      donor_signals: dashboard.donors,
-      consultant_signals: dashboard.consultants,
-      mailops_signals: dashboard.mailops
+      urgent_feed: urgentFeed,
+      vendor_signals: dashboard.vendors.slice(0, 10),
+      donor_signals: dashboard.donors.slice(0, 10),
+      consultant_signals: dashboard.consultants.slice(0, 10),
+      mailops_signals: dashboard.mailops.slice(0, 10)
     }
   };
 }
