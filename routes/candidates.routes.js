@@ -216,6 +216,42 @@ async function importLiveCandidates() {
 -------------------------- */
 
 
+
+router.post("/refresh-profiles", async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 250));
+    const result = await enrichAllCandidateProfiles(limit);
+
+    res.status(200).json({
+      ok: true,
+      message: "Candidate profile refresh completed.",
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to refresh candidate profiles"
+    });
+  }
+});
+
+
+router.post("/:id/refresh-profile", async (req, res) => {
+  try {
+    const result = await enrichCandidateProfile(req.params.id);
+
+    res.status(200).json(
+      result || {
+        error: "Candidate not found",
+        id: req.params.id
+      }
+    );
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to refresh candidate profile"
+    });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     await ensureCandidatesTable();
@@ -339,33 +375,6 @@ router.get("/", requireAuth, async (req, res) => {
    FIXED: refresh endpoint
 -------------------------- */
 
-router.post("/refresh-profiles", requireAuth, async (_req, res) => {
-  try {
-    await ensureCandidatesTable();
-
-    const result = await pool.query(`
-      UPDATE candidates
-      SET updated_at = NOW()
-      WHERE id IN (
-        SELECT id FROM candidates
-        ORDER BY updated_at DESC
-        LIMIT 200
-      )
-      RETURNING id
-    `);
-
-    res.json({
-      ok: true,
-      refreshed: result.rowCount,
-      message: "Candidate profiles refreshed",
-      _live: true
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 /* --------------------------
    LOOKUPS
 -------------------------- */
@@ -399,36 +408,6 @@ router.post("/import", requireAuth, requireRoles("admin"), async (_req, res) => 
 });
 
 
-router.post("/refresh-profiles", async (_req, res) => {
-  try {
-    await ensureCandidatesTable();
-
-    const result = await pool.query(`
-      UPDATE candidates
-      SET updated_at = NOW()
-      WHERE id IN (
-        SELECT id
-        FROM candidates
-        ORDER BY COALESCE(updated_at, last_imported_at, created_at) DESC NULLS LAST
-        LIMIT 250
-      )
-      RETURNING id
-    `);
-
-    res.json({
-      ok: true,
-      refreshed: result.rowCount || 0,
-      message: "Candidate profiles refresh endpoint is online.",
-      generated_at: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to refresh candidate profiles"
-    });
-  }
-});
-
-
 router.post("/:id/enrich-profile", async (req, res) => {
   try {
     const result = await enrichCandidateProfile(req.params.id);
@@ -440,22 +419,9 @@ router.post("/:id/enrich-profile", async (req, res) => {
   }
 });
 
-router.post("/refresh-profiles", async (req, res) => {
-  try {
-    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 250));
-    const result = await enrichAllCandidateProfiles(limit);
-    res.json({
-      ok: true,
-      ...result
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message || "Failed to refresh profiles"
-    });
-  }
-});
-
 export default router;
+
+
 
 
 
