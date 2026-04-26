@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import axios from "axios";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireRoles } from "../middleware/roles.middleware.js";
@@ -318,4 +318,35 @@ router.post("/import", requireAuth, requireRoles("admin"), async (_req, res) => 
   }
 });
 
+
+router.post("/refresh-profiles", async (_req, res) => {
+  try {
+    await ensureCandidatesTable();
+
+    const result = await pool.query(`
+      UPDATE candidates
+      SET updated_at = NOW()
+      WHERE id IN (
+        SELECT id
+        FROM candidates
+        ORDER BY COALESCE(updated_at, last_imported_at, created_at) DESC NULLS LAST
+        LIMIT 250
+      )
+      RETURNING id
+    `);
+
+    res.json({
+      ok: true,
+      refreshed: result.rowCount || 0,
+      message: "Candidate profiles refresh endpoint is online.",
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to refresh candidate profiles"
+    });
+  }
+});
+
 export default router;
+
