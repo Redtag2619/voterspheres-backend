@@ -3,6 +3,13 @@ import axios from "axios";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireRoles } from "../middleware/roles.middleware.js";
 import { pool } from "../db/pool.js";
+import {
+  enrichCandidateProfile,
+  enrichAllCandidateProfiles,
+  updateCandidateProfileManual,
+  updateCandidateProfileLocks,
+  updateCandidateVerification
+} from "../services/candidateContactEnrichment.service.js";
 
 const router = express.Router();
 
@@ -421,6 +428,35 @@ router.post("/refresh-profiles", async (_req, res) => {
   }
 });
 
+
+router.post("/:id/enrich-profile", async (req, res) => {
+  try {
+    const result = await enrichCandidateProfile(req.params.id);
+    res.json(result || { error: "Candidate not found" });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to enrich profile"
+    });
+  }
+});
+
+router.post("/refresh-profiles", async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.body?.limit || 100), 250));
+    const result = await enrichAllCandidateProfiles(limit);
+    res.json({
+      ok: true,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to refresh profiles"
+    });
+  }
+});
+
 export default router;
+
+
 
 
