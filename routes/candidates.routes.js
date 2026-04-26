@@ -208,6 +208,79 @@ async function importLiveCandidates() {
    ROUTES
 -------------------------- */
 
+
+router.get("/:id", async (req, res) => {
+  try {
+    await ensureCandidatesTable();
+
+    const value = normalizeText(req.params.id);
+
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          external_id,
+          source,
+          full_name,
+          first_name,
+          last_name,
+          state,
+          office,
+          district,
+          party,
+          incumbent_status,
+          campaign_committee_id,
+          campaign_committee_name,
+          website,
+          election_year,
+          status,
+          source_updated_at,
+          last_imported_at,
+          created_at,
+          updated_at
+        FROM candidates
+        WHERE CAST(id AS TEXT) = $1
+           OR COALESCE(external_id, '') = $1
+        LIMIT 1
+      `,
+      [value]
+    );
+
+    if (!result.rows.length) {
+      return res.status(200).json({
+        id: value,
+        external_id: value,
+        source: "fallback",
+        full_name: "Candidate profile unavailable",
+        first_name: "",
+        last_name: "",
+        state: "",
+        office: "",
+        district: "",
+        party: "",
+        incumbent_status: "",
+        campaign_committee_id: "",
+        campaign_committee_name: "",
+        website: "",
+        election_year: null,
+        status: "unavailable",
+        source_updated_at: null,
+        last_imported_at: null,
+        created_at: null,
+        updated_at: null,
+        _missing: true,
+        message: "Candidate profile was not found in the live database."
+      });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Failed to load candidate"
+    });
+  }
+});
+
 router.get("/", requireAuth, async (req, res) => {
   try {
     await ensureCandidatesTable();
@@ -349,4 +422,5 @@ router.post("/refresh-profiles", async (_req, res) => {
 });
 
 export default router;
+
 
