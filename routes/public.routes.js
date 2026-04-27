@@ -6,9 +6,7 @@ let cachedDb = null;
 let cachedDbSource = null;
 
 async function getDb() {
-  if (cachedDb) {
-    return { db: cachedDb, source: cachedDbSource };
-  }
+  if (cachedDb) return { db: cachedDb, source: cachedDbSource };
 
   const candidates = [
     "../config/database.js",
@@ -29,9 +27,7 @@ async function getDb() {
         cachedDbSource = path;
         return { db, source: path };
       }
-    } catch {
-      // try next
-    }
+    } catch {}
   }
 
   return { db: null, source: null };
@@ -41,9 +37,7 @@ async function safeQuery(sql, params = []) {
   const { db, source } = await getDb();
 
   if (!db) {
-    throw new Error(
-      "Database connection not available. Public route could not resolve your DB module."
-    );
+    throw new Error("Database connection not available.");
   }
 
   if (typeof db.query === "function") {
@@ -56,28 +50,33 @@ async function safeQuery(sql, params = []) {
     return { rows, _dbSource: source };
   }
 
-  throw new Error(`Unsupported DB driver from source: ${source}`);
+  throw new Error(`Unsupported DB driver: ${source}`);
 }
 
 async function ensureEnterpriseLeadsTable() {
+  // Base table
   await safeQuery(`
     CREATE TABLE IF NOT EXISTS enterprise_leads (
       id SERIAL PRIMARY KEY,
-      full_name TEXT NOT NULL,
-      firm_name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      role TEXT NOT NULL,
+      full_name TEXT,
+      firm_name TEXT,
+      email TEXT,
+      role TEXT,
       notes TEXT,
       source TEXT DEFAULT 'landing_page',
       status TEXT DEFAULT 'new',
-      reviewed_by_user_id INTEGER,
-      reviewed_by_email TEXT,
-      reviewed_at TIMESTAMP,
-      review_notes TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  // 🔥 Critical: ensure all columns exist (fixes your 500)
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS role TEXT`);
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS notes TEXT`);
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS source TEXT`);
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS status TEXT`);
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS created_at TIMESTAMP`);
+  await safeQuery(`ALTER TABLE enterprise_leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
 }
 
 router.post("/enterprise-leads", async (req, res) => {
@@ -89,12 +88,18 @@ router.post("/enterprise-leads", async (req, res) => {
       firm_name = "",
       email = "",
       role = "",
-      notes = ""
+      notes = "",
+      team_size = "",
+      message = ""
     } = req.body || {};
 
-    if (!full_name || !firm_name || !email || !role) {
+    // 🔥 Normalize payload (fix frontend/backend mismatch)
+    const finalRole = role || team_size || "Website Lead";
+    const finalNotes = notes || message || "";
+
+    if (!full_name || !firm_name || !email) {
       return res.status(400).json({
-        error: "Full name, firm name, email, and role are required."
+        error: "full_name, firm_name, and email are required"
       });
     }
 
@@ -111,17 +116,19 @@ router.post("/enterprise-leads", async (req, res) => {
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'landing_page', 'new', NOW(), NOW())
-        RETURNING id, full_name, firm_name, email, role, status, created_at
+        VALUES ($1,$2,$3,$4,$5,'landing_page','new',NOW(),NOW())
+        RETURNING *
       `,
-      [full_name, firm_name, email, role, notes]
+      [full_name, firm_name, email, finalRole, finalNotes]
     );
 
     return res.status(201).json({
-      success: true,
+      ok: true,
       lead: result.rows?.[0] || null
     });
   } catch (error) {
+    console.error("❌ Enterprise lead error:", error);
+
     return res.status(500).json({
       error: error.message || "Failed to submit enterprise lead"
     });
