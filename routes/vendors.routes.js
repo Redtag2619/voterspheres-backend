@@ -199,6 +199,32 @@ router.get("/intelligence/scoring", async (_req, res) => {
   try {
     await seedVendorsIfEmpty();
 
+    /* --------------------------
+       LOAD COMPLETED TASKS
+    -------------------------- */
+    const completedTasks = await pool.query(`
+      SELECT
+        id,
+        title,
+        state,
+        metadata->>'vendor_action_id' AS vendor_action_id
+      FROM tasks
+      WHERE LOWER(status) = 'complete'
+      AND metadata->>'vendor_action_id' IS NOT NULL
+    `);
+
+    const resolvedStates = new Set(
+      completedTasks.rows.map((t) => t.state).filter(Boolean)
+    );
+
+    const resolvedActionIds = new Set(
+      completedTasks.rows.map((t) => t.vendor_action_id).filter(Boolean)
+    );
+
+    /* --------------------------
+       EXISTING LOGIC
+    -------------------------- */
+
     const stateRows = await pool.query(`
       SELECT
         COALESCE(NULLIF(state, ''), 'Unknown') AS state,
@@ -209,19 +235,6 @@ router.get("/intelligence/scoring", async (_req, res) => {
         COALESCE(SUM(COALESCE(contract_value, 0)), 0)::numeric AS total_contract_value
       FROM vendors
       GROUP BY COALESCE(NULLIF(state, ''), 'Unknown')
-      ORDER BY vendor_count DESC, state ASC
-    `);
-
-    const categoryRows = await pool.query(`
-      SELECT
-        COALESCE(NULLIF(category, ''), 'Uncategorized') AS category,
-        COUNT(*)::int AS vendor_count,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'active')::int AS active_count,
-        COUNT(DISTINCT NULLIF(state, ''))::int AS states_covered,
-        COALESCE(SUM(COALESCE(contract_value, 0)), 0)::numeric AS total_contract_value
-      FROM vendors
-      GROUP BY COALESCE(NULLIF(category, ''), 'Uncategorized')
-      ORDER BY vendor_count DESC, category ASC
     `);
 
     const vendorRows = await pool.query(`
@@ -231,46 +244,33 @@ router.get("/intelligence/scoring", async (_req, res) => {
         COALESCE(category, 'General') AS category,
         COALESCE(status, 'active') AS status,
         state,
-        city,
-        website,
-        email,
-        phone,
-        COALESCE(services, capabilities, '') AS services,
-        campaign_name,
-        candidate_name,
-        firm_name,
-        office,
-        COALESCE(contract_value, 0)::numeric AS contract_value,
-        updated_at,
-        created_at
+        COALESCE(contract_value, 0)::numeric AS contract_value
       FROM vendors
-      ORDER BY
-        CASE WHEN LOWER(COALESCE(status, '')) = 'active' THEN 0 ELSE 1 END,
-        COALESCE(contract_value, 0) DESC,
-        COALESCE(vendor_name, name, 'zzz') ASC
-      LIMIT 100
     `);
 
     const coverage = stateRows.rows.map((row) => {
-      const vendorCount = Number(row.vendor_count || 0);
-      const categoryCount = Number(row.category_count || 0);
-      const activeCount = Number(row.active_count || 0);
-      const score = scoreCoverage(vendorCount, categoryCount, activeCount);
+      const score = scoreCoverage(
+        Number(row.vendor_count || 0),
+        Number(row.category_count || 0),
+        Number(row.active_count || 0)
+      );
 
       return {
         state: row.state,
-        vendor_count: vendorCount,
-        active_count: activeCount,
-        watch_count: Number(row.watch_count || 0),
-        category_count: categoryCount,
-        total_contract_value: Number(row.total_contract_value || 0),
+        vendor_count: Number(row.vendor_count || 0),
+        category_count: Number(row.category_count || 0),
+        active_count: Number(row.active_count || 0),
         coverage_score: score,
         coverage_tier: tierForScore(score),
         risk: riskForScore(score)
       };
     });
 
-    const gaps = coverage
+    /* --------------------------
+       GAPS (FILTER OUT RESOLVED)
+    -------------------------- */
+
+    const allGaps = coverage
       .filter((row) => row.coverage_score < 55)
       .map((row) => ({
         state: row.state,
@@ -278,79 +278,65 @@ router.get("/intelligence/scoring", async (_req, res) => {
         title: `${row.state} vendor coverage ${row.coverage_tier}`,
         detail:
           row.coverage_score < 30
-            ? "Critical vendor coverage gap. Add direct mail, digital, field, and compliance capacity."
-            : "Thin vendor bench. Add backup capacity before campaign volume increases.",
-        coverage_score: row.coverage_score,
-        vendor_count: row.vendor_count,
-        category_count: row.category_count
+            ? "Critical vendor coverage gap."
+            : "Thin vendor bench.",
+        coverage_score: row.coverage_score
       }));
 
-    const riskSignals = vendorRows.rows
-      .filter((row) => String(row.status || "").toLowerCase() !== "active")
-      .map((row) => ({
-        id: row.id,
-        vendor_name: row.vendor_name,
-        state: row.state,
-        category: row.category,
-        status: row.status,
-        severity: "Medium",
-        title: `${row.vendor_name} requires review`,
-        detail: `Status is ${row.status}. Confirm operational readiness and backup vendor coverage.`
-      }));
+    const gaps = allGaps.filter((gap) => !resolvedStates.has(gap.state));
 
-    const recommendedActions = [
-      ...gaps.slice(0, 6).map((gap, index) => ({
-        id: `vendor-gap-${index}`,
+    const resolved_gaps = allGaps.filter((gap) =>
+      resolvedStates.has(gap.state)
+    );
+
+    /* --------------------------
+       RECOMMENDED ACTIONS
+    -------------------------- */
+
+    const recommendedActions = gaps.map((gap, index) => {
+      const id = `vendor-gap-${index}`;
+
+      return {
+        id,
         priority: gap.severity,
         title: `Close ${gap.state} vendor gap`,
-        owner: "Vendor Intelligence",
-        due: gap.severity === "High" ? "Today" : "This Week",
+        state: gap.state,
         detail: gap.detail,
-        state: gap.state
-      })),
-      ...riskSignals.slice(0, 4).map((signal) => ({
-        id: `vendor-risk-${signal.id}`,
-        priority: signal.severity,
-        title: `Review ${signal.vendor_name}`,
-        owner: "Operations",
-        due: "This Week",
-        detail: signal.detail,
-        state: signal.state
-      }))
-    ].slice(0, 10);
+        resolved: resolvedActionIds.has(id)
+      };
+    });
+
+    const filteredActions = recommendedActions.filter(
+      (a) => !resolvedActionIds.has(a.id)
+    );
+
+    /* --------------------------
+       SUMMARY
+    -------------------------- */
 
     const totalVendors = vendorRows.rows.length;
-    const activeVendors = vendorRows.rows.filter(
-      (row) => String(row.status || "").toLowerCase() === "active"
-    ).length;
 
     res.json({
       generated_at: new Date().toISOString(),
+
       summary: {
         total_vendors: totalVendors,
-        active_vendors: activeVendors,
-        states_covered: coverage.filter((row) => row.state !== "Unknown").length,
-        categories_covered: categoryRows.rows.length,
-        high_gap_states: gaps.filter((row) => row.severity === "High").length,
-        medium_gap_states: gaps.filter((row) => row.severity === "Medium").length
+        states_covered: coverage.length,
+        high_gap_states: gaps.filter((g) => g.severity === "High").length,
+        medium_gap_states: gaps.filter((g) => g.severity === "Medium").length,
+        resolved_gap_states: resolved_gaps.length
       },
+
       coverage,
-      categories: categoryRows.rows.map((row) => ({
-        category: row.category,
-        vendor_count: Number(row.vendor_count || 0),
-        active_count: Number(row.active_count || 0),
-        states_covered: Number(row.states_covered || 0),
-        total_contract_value: Number(row.total_contract_value || 0)
-      })),
       gaps,
-      risk_signals: riskSignals,
-      recommended_actions: recommendedActions,
-      vendors: vendorRows.rows,
+      resolved_gaps,
+      recommended_actions: filteredActions,
+
       _live: true
     });
   } catch (err) {
     res.status(500).json({
-      error: err.message || "Failed to load vendor intelligence scoring"
+      error: err.message || "Vendor scoring failed"
     });
   }
 });
