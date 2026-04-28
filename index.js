@@ -1,4 +1,4 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 import express from "express"; 
 import http from "http"; 
 import cors from "cors";
@@ -166,7 +166,7 @@ app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
-app.use("/api/vendors", requireAuth, vendorsRoutes);
+app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
@@ -294,7 +294,7 @@ async function runScheduledIntelligenceRefresh(trigger = "startup") {
   try {
     const result = await runLiveIntelligenceRefresh();
 
-    console.log(`âœ… Live intelligence refresh complete (${trigger})`, {
+    console.log(`✅ Live intelligence refresh complete (${trigger})`, {
       feed_inserted: result?.executive_feed?.inserted,
       alerts_sent: result?.alerts?.sent,
       alerts_failed: result?.alerts?.failed,
@@ -302,14 +302,14 @@ async function runScheduledIntelligenceRefresh(trigger = "startup") {
       polling_seen: result?.polling?.seen
     });
   } catch (error) {
-    console.error(`âŒ Live intelligence refresh failed (${trigger})`, error.message);
+    console.error(`❌ Live intelligence refresh failed (${trigger})`, error.message);
   }
 }
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`âœ… VoterSpheres backend listening on port ${PORT}`);
-  console.log("âœ… Live intelligence layer enabled");
-  console.log("âœ… Stripe webhook mounted at /api/billing/webhook");
+  console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
+  console.log("✅ Live intelligence layer enabled");
+  console.log("✅ Stripe webhook mounted at /api/billing/webhook");
 
   if (LIVE_REFRESH_ENABLED) {
     runScheduledIntelligenceRefresh("startup");
