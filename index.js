@@ -166,7 +166,7 @@ app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
-app.use("/api/vendors", requireAuth, vendorsRoutes);
+app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
