@@ -10,6 +10,7 @@ async function getDb() {
   const candidates = [
     "../config/database.js",
     "../config/db.js",
+    "../db/pool.js",
     "../db.js",
     "../database.js",
     "../lib/database.js",
@@ -35,6 +36,18 @@ async function getDb() {
 async function query(sql, params = []) {
   const db = await getDb();
   return db.query(sql, params);
+}
+
+function asText(value = "") {
+  return String(value || "").trim();
+}
+
+function isVendorTaskSource(source = "") {
+  return ["vendor_network", "vendor_intelligence"].includes(asText(source));
+}
+
+function getVendorActionId(metadata = {}) {
+  return asText(metadata?.vendor_action_id);
 }
 
 async function ensureTasksTable() {
@@ -68,6 +81,10 @@ async function ensureTasksTable() {
   await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`);
   await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
   await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_vendor_action_id ON tasks ((metadata->>'vendor_action_id'))`);
 }
 
 router.get("/", async (req, res) => {
@@ -75,7 +92,8 @@ router.get("/", async (req, res) => {
     await ensureTasksTable();
 
     const limit = Math.max(1, Math.min(Number(req.query.limit || 50), 200));
-    const status = String(req.query.status || "").trim();
+    const status = asText(req.query.status);
+    const source = asText(req.query.source);
 
     const params = [];
     const where = [];
@@ -83,6 +101,11 @@ router.get("/", async (req, res) => {
     if (status) {
       params.push(status);
       where.push(`status = $${params.length}`);
+    }
+
+    if (source) {
+      params.push(source);
+      where.push(`source = $${params.length}`);
     }
 
     params.push(limit);
@@ -133,8 +156,38 @@ router.post("/", async (req, res) => {
       metadata = {}
     } = req.body || {};
 
-    if (!String(title).trim()) {
+    const safeTitle = asText(title);
+    const safeSource = asText(source) || "command_center";
+    const safeMetadata = metadata && typeof metadata === "object" ? metadata : {};
+    const vendorActionId = getVendorActionId(safeMetadata);
+
+    if (!safeTitle) {
       return res.status(400).json({ error: "Task title is required." });
+    }
+
+    if (isVendorTaskSource(safeSource) && vendorActionId) {
+      const existing = await query(
+        `
+        SELECT *
+        FROM tasks
+        WHERE
+          source IN ('vendor_network', 'vendor_intelligence')
+          AND COALESCE(status, 'open') <> 'complete'
+          AND metadata->>'vendor_action_id' = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [vendorActionId]
+      );
+
+      if (existing.rows.length) {
+        return res.status(200).json({
+          ok: true,
+          duplicate: true,
+          message: "Existing open vendor task returned.",
+          task: existing.rows[0]
+        });
+      }
     }
 
     const result = await query(
@@ -157,21 +210,22 @@ router.post("/", async (req, res) => {
       RETURNING *
       `,
       [
-        title,
+        safeTitle,
         description,
-        source,
+        safeSource,
         state,
         office,
         priority,
         status,
         assigned_to,
         due_label,
-        JSON.stringify(metadata || {})
+        JSON.stringify(safeMetadata)
       ]
     );
 
     res.status(201).json({
       ok: true,
+      duplicate: false,
       task: result.rows[0]
     });
   } catch (error) {
