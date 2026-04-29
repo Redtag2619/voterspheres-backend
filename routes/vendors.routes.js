@@ -283,11 +283,15 @@ router.get("/intelligence/scoring", async (_req, res) => {
         coverage_score: row.coverage_score
       }));
 
-    const gaps = allGaps.filter((gap) => !resolvedStates.has(gap.state));
+    const gaps = allGaps.filter((gap, index) => {
+  const id = `vendor-gap-${index}`;
+  return !resolvedActionIds.has(id);
+});
 
-    const resolved_gaps = allGaps.filter((gap) =>
-      resolvedStates.has(gap.state)
-    );
+    const resolved_gaps = allGaps.filter((gap, index) => {
+  const id = `vendor-gap-${index}`;
+  return resolvedActionIds.has(id);
+});
 
     /* --------------------------
        RECOMMENDED ACTIONS
