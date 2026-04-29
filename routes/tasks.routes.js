@@ -1,131 +1,141 @@
 import express from "express";
+import { pool } from "../db/pool.js";
 
 const router = express.Router();
 
-let cachedDb = null;
-
-async function getDb() {
-  if (cachedDb) return cachedDb;
-
-  const candidates = [
-    "../config/database.js",
-    "../config/db.js",
-    "../db/pool.js",
-    "../db.js",
-    "../database.js",
-    "../lib/database.js",
-    "../lib/db.js"
-  ];
-
-  for (const path of candidates) {
-    try {
-      const mod = await import(path);
-      const db = mod.default || mod.db || mod.pool || mod.client || null;
-      if (db?.query) {
-        cachedDb = db;
-        return db;
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  throw new Error("Database connection not available for tasks route.");
+function text(value = "") {
+  return String(value ?? "").trim();
 }
 
-async function query(sql, params = []) {
-  const db = await getDb();
-  return db.query(sql, params);
+function normalizeStatus(value = "open") {
+  const status = text(value).toLowerCase();
+  if (["complete", "completed", "done"].includes(status)) return "complete";
+  if (["in_progress", "in progress", "started", "active"].includes(status)) return "in_progress";
+  if (["blocked", "hold", "paused"].includes(status)) return "blocked";
+  return "open";
 }
 
-function asText(value = "") {
-  return String(value || "").trim();
+function normalizePriority(value = "medium") {
+  const priority = text(value).toLowerCase();
+  if (["critical", "high"].includes(priority)) return priority;
+  if (priority === "low") return "low";
+  return "medium";
 }
 
-function isVendorTaskSource(source = "") {
-  return ["vendor_network", "vendor_intelligence"].includes(asText(source));
+function normalizeMetadata(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value;
 }
 
-function getVendorActionId(metadata = {}) {
-  return asText(metadata?.vendor_action_id);
+function getDedupeKey(metadata = {}) {
+  return (
+    text(metadata.vendor_action_id) ||
+    text(metadata.feed_id) ||
+    text(metadata.signal_id) ||
+    text(metadata.action_id) ||
+    ""
+  );
 }
 
 async function ensureTasksTable() {
-  await query(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
       source TEXT DEFAULT 'command_center',
-      state TEXT,
-      office TEXT,
+      state TEXT DEFAULT 'National',
+      office TEXT DEFAULT 'Statewide',
       priority TEXT DEFAULT 'medium',
       status TEXT DEFAULT 'open',
-      assigned_to TEXT,
-      due_label TEXT,
+      assigned_to TEXT DEFAULT 'Command Team',
+      due_label TEXT DEFAULT 'Today',
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
 
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'command_center'`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS state TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS office TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'medium'`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_label TEXT`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
-  await query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+  const columns = [
+    ["title", "TEXT"],
+    ["description", "TEXT"],
+    ["source", "TEXT DEFAULT 'command_center'"],
+    ["state", "TEXT DEFAULT 'National'"],
+    ["office", "TEXT DEFAULT 'Statewide'"],
+    ["priority", "TEXT DEFAULT 'medium'"],
+    ["status", "TEXT DEFAULT 'open'"],
+    ["assigned_to", "TEXT DEFAULT 'Command Team'"],
+    ["due_label", "TEXT DEFAULT 'Today'"],
+    ["metadata", "JSONB DEFAULT '{}'::jsonb"],
+    ["created_at", "TIMESTAMP DEFAULT NOW()"],
+    ["updated_at", "TIMESTAMP DEFAULT NOW()"]
+  ];
 
-  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_tasks_vendor_action_id ON tasks ((metadata->>'vendor_action_id'))`);
+  for (const [name, type] of columns) {
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS ${name} ${type}`);
+  }
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_feed_id ON tasks((metadata->>'feed_id'))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_signal_id ON tasks((metadata->>'signal_id'))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_vendor_action_id ON tasks((metadata->>'vendor_action_id'))`);
+}
+
+async function findDuplicateTask(metadata = {}) {
+  const vendorActionId = text(metadata.vendor_action_id);
+  const feedId = text(metadata.feed_id);
+  const signalId = text(metadata.signal_id);
+  const actionId = text(metadata.action_id);
+
+  if (!vendorActionId && !feedId && !signalId && !actionId) return null;
+
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM tasks
+    WHERE
+      ($1 <> '' AND metadata->>'vendor_action_id' = $1)
+      OR ($2 <> '' AND metadata->>'feed_id' = $2)
+      OR ($3 <> '' AND metadata->>'signal_id' = $3)
+      OR ($4 <> '' AND metadata->>'action_id' = $4)
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [vendorActionId, feedId, signalId, actionId]
+  );
+
+  return result.rows[0] || null;
 }
 
 router.get("/", async (req, res) => {
   try {
     await ensureTasksTable();
 
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 50), 200));
-    const status = asText(req.query.status);
-    const source = asText(req.query.source);
+    const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 100));
+    const status = text(req.query.status).toLowerCase();
+    const source = text(req.query.source).toLowerCase();
 
-    const params = [];
-    const where = [];
-
-    if (status) {
-      params.push(status);
-      where.push(`status = $${params.length}`);
-    }
-
-    if (source) {
-      params.push(source);
-      where.push(`source = $${params.length}`);
-    }
-
-    params.push(limit);
-
-    const result = await query(
+    const result = await pool.query(
       `
       SELECT *
       FROM tasks
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      WHERE ($1 = '' OR LOWER(COALESCE(status, '')) = $1)
+        AND ($2 = '' OR LOWER(COALESCE(source, '')) = $2)
       ORDER BY
-        CASE status
-          WHEN 'open' THEN 1
-          WHEN 'in_progress' THEN 2
+        CASE LOWER(COALESCE(status, 'open'))
+          WHEN 'open' THEN 0
+          WHEN 'in_progress' THEN 1
+          WHEN 'blocked' THEN 2
           WHEN 'complete' THEN 3
           ELSE 4
         END,
+        updated_at DESC,
         created_at DESC
-      LIMIT $${params.length}
+      LIMIT $3
       `,
-      params
+      [status, source, limit]
     );
 
     res.json({
@@ -133,9 +143,55 @@ router.get("/", async (req, res) => {
       total: result.rows.length,
       results: result.rows
     });
-  } catch (error) {
-    console.error("Tasks list error:", error);
-    res.status(500).json({ error: error.message || "Failed to load tasks" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load tasks" });
+  }
+});
+
+router.get("/feed-state", async (req, res) => {
+  try {
+    await ensureTasksTable();
+
+    const ids = String(req.query.ids || "")
+      .split(",")
+      .map((item) => text(item))
+      .filter(Boolean)
+      .slice(0, 100);
+
+    if (!ids.length) {
+      return res.json({ ok: true, results: {} });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT id, title, status, source, metadata, updated_at
+      FROM tasks
+      WHERE metadata->>'feed_id' = ANY($1::text[])
+         OR metadata->>'signal_id' = ANY($1::text[])
+      ORDER BY updated_at DESC
+      `,
+      [ids]
+    );
+
+    const results = {};
+
+    for (const task of result.rows) {
+      const feedId = task.metadata?.feed_id || task.metadata?.signal_id;
+      if (!feedId || results[feedId]) continue;
+
+      results[feedId] = {
+        exists: true,
+        task_id: task.id,
+        status: task.status || "open",
+        source: task.source,
+        title: task.title,
+        updated_at: task.updated_at
+      };
+    }
+
+    res.json({ ok: true, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load feed task state" });
   }
 });
 
@@ -143,54 +199,32 @@ router.post("/", async (req, res) => {
   try {
     await ensureTasksTable();
 
-    const {
-      title = "",
-      description = "",
-      source = "command_center",
-      state = "",
-      office = "",
-      priority = "medium",
-      status = "open",
-      assigned_to = "",
-      due_label = "",
-      metadata = {}
-    } = req.body || {};
+    const metadata = normalizeMetadata(req.body.metadata);
+    const duplicate = await findDuplicateTask(metadata);
 
-    const safeTitle = asText(title);
-    const safeSource = asText(source) || "command_center";
-    const safeMetadata = metadata && typeof metadata === "object" ? metadata : {};
-    const vendorActionId = getVendorActionId(safeMetadata);
-
-    if (!safeTitle) {
-      return res.status(400).json({ error: "Task title is required." });
+    if (duplicate) {
+      return res.status(200).json({
+        ok: true,
+        duplicate: true,
+        task: duplicate,
+        dedupe_key: getDedupeKey(metadata)
+      });
     }
 
-    if (isVendorTaskSource(safeSource) && vendorActionId) {
-      const existing = await query(
-        `
-        SELECT *
-        FROM tasks
-        WHERE
-          source IN ('vendor_network', 'vendor_intelligence')
-          AND COALESCE(status, 'open') <> 'complete'
-          AND metadata->>'vendor_action_id' = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-        `,
-        [vendorActionId]
-      );
+    const payload = {
+      title: text(req.body.title) || "Untitled task",
+      description: text(req.body.description),
+      source: text(req.body.source) || "command_center",
+      state: text(req.body.state) || "National",
+      office: text(req.body.office) || "Statewide",
+      priority: normalizePriority(req.body.priority),
+      status: normalizeStatus(req.body.status),
+      assigned_to: text(req.body.assigned_to) || "Command Team",
+      due_label: text(req.body.due_label) || "Today",
+      metadata
+    };
 
-      if (existing.rows.length) {
-        return res.status(200).json({
-          ok: true,
-          duplicate: true,
-          message: "Existing open vendor task returned.",
-          task: existing.rows[0]
-        });
-      }
-    }
-
-    const result = await query(
+    const result = await pool.query(
       `
       INSERT INTO tasks (
         title,
@@ -210,27 +244,27 @@ router.post("/", async (req, res) => {
       RETURNING *
       `,
       [
-        safeTitle,
-        description,
-        safeSource,
-        state,
-        office,
-        priority,
-        status,
-        assigned_to,
-        due_label,
-        JSON.stringify(safeMetadata)
+        payload.title,
+        payload.description,
+        payload.source,
+        payload.state,
+        payload.office,
+        payload.priority,
+        payload.status,
+        payload.assigned_to,
+        payload.due_label,
+        JSON.stringify(payload.metadata)
       ]
     );
 
     res.status(201).json({
       ok: true,
       duplicate: false,
-      task: result.rows[0]
+      task: result.rows[0],
+      dedupe_key: getDedupeKey(metadata)
     });
-  } catch (error) {
-    console.error("Task create error:", error);
-    res.status(500).json({ error: error.message || "Failed to create task" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to create task" });
   }
 });
 
@@ -238,58 +272,63 @@ router.patch("/:id", async (req, res) => {
   try {
     await ensureTasksTable();
 
-    const taskId = Number(req.params.id);
-    if (!taskId) return res.status(400).json({ error: "Invalid task id." });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Invalid task id" });
+    }
 
-    const {
-      title,
-      description,
-      priority,
-      status,
-      assigned_to,
-      due_label,
-      metadata
-    } = req.body || {};
+    const existing = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+    if (!existing.rows[0]) {
+      return res.status(404).json({ error: "Task not found" });
+    }
 
-    const result = await query(
+    const current = existing.rows[0];
+    const metadata = req.body.metadata
+      ? { ...(current.metadata || {}), ...normalizeMetadata(req.body.metadata) }
+      : current.metadata || {};
+
+    const result = await pool.query(
       `
       UPDATE tasks
       SET
         title = COALESCE($2, title),
         description = COALESCE($3, description),
-        priority = COALESCE($4, priority),
-        status = COALESCE($5, status),
-        assigned_to = COALESCE($6, assigned_to),
-        due_label = COALESCE($7, due_label),
-        metadata = COALESCE($8::jsonb, metadata),
+        source = COALESCE($4, source),
+        state = COALESCE($5, state),
+        office = COALESCE($6, office),
+        priority = COALESCE($7, priority),
+        status = COALESCE($8, status),
+        assigned_to = COALESCE($9, assigned_to),
+        due_label = COALESCE($10, due_label),
+        metadata = $11::jsonb,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
       `,
       [
-        taskId,
-        title ?? null,
-        description ?? null,
-        priority ?? null,
-        status ?? null,
-        assigned_to ?? null,
-        due_label ?? null,
-        metadata === undefined ? null : JSON.stringify(metadata || {})
+        id,
+        req.body.title === undefined ? null : text(req.body.title),
+        req.body.description === undefined ? null : text(req.body.description),
+        req.body.source === undefined ? null : text(req.body.source),
+        req.body.state === undefined ? null : text(req.body.state),
+        req.body.office === undefined ? null : text(req.body.office),
+        req.body.priority === undefined ? null : normalizePriority(req.body.priority),
+        req.body.status === undefined ? null : normalizeStatus(req.body.status),
+        req.body.assigned_to === undefined ? null : text(req.body.assigned_to),
+        req.body.due_label === undefined ? null : text(req.body.due_label),
+        JSON.stringify(metadata)
       ]
     );
 
-    if (!result.rows.length) {
-      return res.status(404).json({ error: "Task not found." });
-    }
-
-    res.json({
-      ok: true,
-      task: result.rows[0]
-    });
-  } catch (error) {
-    console.error("Task update error:", error);
-    res.status(500).json({ error: error.message || "Failed to update task" });
+    res.json({ ok: true, task: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to update task" });
   }
+});
+
+router.put("/:id", async (req, res) => {
+  req.method = "PATCH";
+  router.handle(req, res);
 });
 
 export default router;
