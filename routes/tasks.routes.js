@@ -9,22 +9,35 @@ function text(value = "") {
 
 function normalizeStatus(value = "open") {
   const status = text(value).toLowerCase();
+
   if (["complete", "completed", "done"].includes(status)) return "complete";
   if (["in_progress", "in progress", "started", "active"].includes(status)) return "in_progress";
   if (["blocked", "hold", "paused"].includes(status)) return "blocked";
+
   return "open";
 }
 
 function normalizePriority(value = "medium") {
   const priority = text(value).toLowerCase();
+
   if (["critical", "high"].includes(priority)) return priority;
   if (priority === "low") return "low";
+
   return "medium";
 }
 
 function normalizeMetadata(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value;
+}
+
+function initialsFromName(name = "Command Team") {
+  return text(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "CT";
 }
 
 function getDedupeKey(metadata = {}) {
@@ -49,6 +62,13 @@ async function ensureTasksTable() {
       priority TEXT DEFAULT 'medium',
       status TEXT DEFAULT 'open',
       assigned_to TEXT DEFAULT 'Command Team',
+      assigned_to_user_id TEXT,
+      assigned_to_email TEXT,
+      assignee_avatar TEXT,
+      assignee_initials TEXT,
+      created_by TEXT,
+      created_by_user_id TEXT,
+      created_by_email TEXT,
       due_label TEXT DEFAULT 'Today',
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW(),
@@ -65,6 +85,13 @@ async function ensureTasksTable() {
     ["priority", "TEXT DEFAULT 'medium'"],
     ["status", "TEXT DEFAULT 'open'"],
     ["assigned_to", "TEXT DEFAULT 'Command Team'"],
+    ["assigned_to_user_id", "TEXT"],
+    ["assigned_to_email", "TEXT"],
+    ["assignee_avatar", "TEXT"],
+    ["assignee_initials", "TEXT"],
+    ["created_by", "TEXT"],
+    ["created_by_user_id", "TEXT"],
+    ["created_by_email", "TEXT"],
     ["due_label", "TEXT DEFAULT 'Today'"],
     ["metadata", "JSONB DEFAULT '{}'::jsonb"],
     ["created_at", "TIMESTAMP DEFAULT NOW()"],
@@ -78,6 +105,8 @@ async function ensureTasksTable() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_user_id ON tasks(assigned_to_user_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_feed_id ON tasks((metadata->>'feed_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_signal_id ON tasks((metadata->>'signal_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_vendor_action_id ON tasks((metadata->>'vendor_action_id'))`);
@@ -109,6 +138,61 @@ async function findDuplicateTask(metadata = {}) {
   return result.rows[0] || null;
 }
 
+function normalizeTaskPayload(body = {}, current = {}) {
+  const assignedTo =
+    text(body.assigned_to) ||
+    text(body.assignee_name) ||
+    text(current.assigned_to) ||
+    "Command Team";
+
+  return {
+    title: text(body.title) || text(current.title) || "Untitled task",
+    description:
+      body.description === undefined ? current.description || "" : text(body.description),
+    source: text(body.source) || text(current.source) || "command_center",
+    state: text(body.state) || text(current.state) || "National",
+    office: text(body.office) || text(current.office) || "Statewide",
+    priority:
+      body.priority === undefined
+        ? normalizePriority(current.priority || "medium")
+        : normalizePriority(body.priority),
+    status:
+      body.status === undefined
+        ? normalizeStatus(current.status || "open")
+        : normalizeStatus(body.status),
+    assigned_to: assignedTo,
+    assigned_to_user_id:
+      body.assigned_to_user_id === undefined
+        ? current.assigned_to_user_id || null
+        : text(body.assigned_to_user_id) || null,
+    assigned_to_email:
+      body.assigned_to_email === undefined
+        ? current.assigned_to_email || null
+        : text(body.assigned_to_email) || null,
+    assignee_avatar:
+      body.assignee_avatar === undefined
+        ? current.assignee_avatar || null
+        : text(body.assignee_avatar) || null,
+    assignee_initials:
+      text(body.assignee_initials) ||
+      text(current.assignee_initials) ||
+      initialsFromName(assignedTo),
+    created_by:
+      body.created_by === undefined
+        ? current.created_by || "System"
+        : text(body.created_by) || "System",
+    created_by_user_id:
+      body.created_by_user_id === undefined
+        ? current.created_by_user_id || null
+        : text(body.created_by_user_id) || null,
+    created_by_email:
+      body.created_by_email === undefined
+        ? current.created_by_email || null
+        : text(body.created_by_email) || null,
+    due_label: text(body.due_label) || text(current.due_label) || "Today"
+  };
+}
+
 router.get("/", async (req, res) => {
   try {
     await ensureTasksTable();
@@ -116,6 +200,8 @@ router.get("/", async (req, res) => {
     const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 100));
     const status = text(req.query.status).toLowerCase();
     const source = text(req.query.source).toLowerCase();
+    const assignedTo = text(req.query.assigned_to).toLowerCase();
+    const assignedToUserId = text(req.query.assigned_to_user_id);
 
     const result = await pool.query(
       `
@@ -123,6 +209,8 @@ router.get("/", async (req, res) => {
       FROM tasks
       WHERE ($1 = '' OR LOWER(COALESCE(status, '')) = $1)
         AND ($2 = '' OR LOWER(COALESCE(source, '')) = $2)
+        AND ($3 = '' OR LOWER(COALESCE(assigned_to, '')) = $3)
+        AND ($4 = '' OR COALESCE(assigned_to_user_id, '') = $4)
       ORDER BY
         CASE LOWER(COALESCE(status, 'open'))
           WHEN 'open' THEN 0
@@ -133,9 +221,9 @@ router.get("/", async (req, res) => {
         END,
         updated_at DESC,
         created_at DESC
-      LIMIT $3
+      LIMIT $5
       `,
-      [status, source, limit]
+      [status, source, assignedTo, assignedToUserId, limit]
     );
 
     res.json({
@@ -145,6 +233,43 @@ router.get("/", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to load tasks" });
+  }
+});
+
+router.get("/assignees", async (_req, res) => {
+  try {
+    await ensureTasksTable();
+
+    const result = await pool.query(`
+      SELECT
+        COALESCE(NULLIF(assigned_to, ''), 'Command Team') AS name,
+        COALESCE(NULLIF(assigned_to_user_id, ''), '') AS user_id,
+        COALESCE(NULLIF(assigned_to_email, ''), '') AS email,
+        COALESCE(NULLIF(assignee_avatar, ''), '') AS avatar,
+        COALESCE(NULLIF(assignee_initials, ''), '') AS initials,
+        COUNT(*)::int AS task_count,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) <> 'complete')::int AS open_count,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'complete')::int AS complete_count
+      FROM tasks
+      GROUP BY
+        COALESCE(NULLIF(assigned_to, ''), 'Command Team'),
+        COALESCE(NULLIF(assigned_to_user_id, ''), ''),
+        COALESCE(NULLIF(assigned_to_email, ''), ''),
+        COALESCE(NULLIF(assignee_avatar, ''), ''),
+        COALESCE(NULLIF(assignee_initials, ''), '')
+      ORDER BY open_count DESC, task_count DESC, name ASC
+    `);
+
+    res.json({
+      ok: true,
+      total: result.rows.length,
+      results: result.rows.map((row) => ({
+        ...row,
+        initials: row.initials || initialsFromName(row.name)
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load assignees" });
   }
 });
 
@@ -164,7 +289,18 @@ router.get("/feed-state", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, title, status, source, metadata, updated_at
+      SELECT
+        id,
+        title,
+        status,
+        source,
+        assigned_to,
+        assigned_to_user_id,
+        assigned_to_email,
+        assignee_avatar,
+        assignee_initials,
+        metadata,
+        updated_at
       FROM tasks
       WHERE metadata->>'feed_id' = ANY($1::text[])
          OR metadata->>'signal_id' = ANY($1::text[])
@@ -185,6 +321,11 @@ router.get("/feed-state", async (req, res) => {
         status: task.status || "open",
         source: task.source,
         title: task.title,
+        assigned_to: task.assigned_to || "Command Team",
+        assigned_to_user_id: task.assigned_to_user_id,
+        assigned_to_email: task.assigned_to_email,
+        assignee_avatar: task.assignee_avatar,
+        assignee_initials: task.assignee_initials || initialsFromName(task.assigned_to),
         updated_at: task.updated_at
       };
     }
@@ -211,18 +352,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const payload = {
-      title: text(req.body.title) || "Untitled task",
-      description: text(req.body.description),
-      source: text(req.body.source) || "command_center",
-      state: text(req.body.state) || "National",
-      office: text(req.body.office) || "Statewide",
-      priority: normalizePriority(req.body.priority),
-      status: normalizeStatus(req.body.status),
-      assigned_to: text(req.body.assigned_to) || "Command Team",
-      due_label: text(req.body.due_label) || "Today",
-      metadata
-    };
+    const payload = normalizeTaskPayload(req.body);
 
     const result = await pool.query(
       `
@@ -235,12 +365,19 @@ router.post("/", async (req, res) => {
         priority,
         status,
         assigned_to,
+        assigned_to_user_id,
+        assigned_to_email,
+        assignee_avatar,
+        assignee_initials,
+        created_by,
+        created_by_user_id,
+        created_by_email,
         due_label,
         metadata,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,NOW(),NOW())
       RETURNING *
       `,
       [
@@ -252,8 +389,15 @@ router.post("/", async (req, res) => {
         payload.priority,
         payload.status,
         payload.assigned_to,
+        payload.assigned_to_user_id,
+        payload.assigned_to_email,
+        payload.assignee_avatar,
+        payload.assignee_initials,
+        payload.created_by,
+        payload.created_by_user_id,
+        payload.created_by_email,
         payload.due_label,
-        JSON.stringify(payload.metadata)
+        JSON.stringify(metadata)
       ]
     );
 
@@ -278,44 +422,62 @@ router.patch("/:id", async (req, res) => {
     }
 
     const existing = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+
     if (!existing.rows[0]) {
       return res.status(404).json({ error: "Task not found" });
     }
 
     const current = existing.rows[0];
+
     const metadata = req.body.metadata
       ? { ...(current.metadata || {}), ...normalizeMetadata(req.body.metadata) }
       : current.metadata || {};
+
+    const payload = normalizeTaskPayload(req.body, current);
 
     const result = await pool.query(
       `
       UPDATE tasks
       SET
-        title = COALESCE($2, title),
-        description = COALESCE($3, description),
-        source = COALESCE($4, source),
-        state = COALESCE($5, state),
-        office = COALESCE($6, office),
-        priority = COALESCE($7, priority),
-        status = COALESCE($8, status),
-        assigned_to = COALESCE($9, assigned_to),
-        due_label = COALESCE($10, due_label),
-        metadata = $11::jsonb,
+        title = $2,
+        description = $3,
+        source = $4,
+        state = $5,
+        office = $6,
+        priority = $7,
+        status = $8,
+        assigned_to = $9,
+        assigned_to_user_id = $10,
+        assigned_to_email = $11,
+        assignee_avatar = $12,
+        assignee_initials = $13,
+        created_by = $14,
+        created_by_user_id = $15,
+        created_by_email = $16,
+        due_label = $17,
+        metadata = $18::jsonb,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
       `,
       [
         id,
-        req.body.title === undefined ? null : text(req.body.title),
-        req.body.description === undefined ? null : text(req.body.description),
-        req.body.source === undefined ? null : text(req.body.source),
-        req.body.state === undefined ? null : text(req.body.state),
-        req.body.office === undefined ? null : text(req.body.office),
-        req.body.priority === undefined ? null : normalizePriority(req.body.priority),
-        req.body.status === undefined ? null : normalizeStatus(req.body.status),
-        req.body.assigned_to === undefined ? null : text(req.body.assigned_to),
-        req.body.due_label === undefined ? null : text(req.body.due_label),
+        payload.title,
+        payload.description,
+        payload.source,
+        payload.state,
+        payload.office,
+        payload.priority,
+        payload.status,
+        payload.assigned_to,
+        payload.assigned_to_user_id,
+        payload.assigned_to_email,
+        payload.assignee_avatar,
+        payload.assignee_initials,
+        payload.created_by,
+        payload.created_by_user_id,
+        payload.created_by_email,
+        payload.due_label,
         JSON.stringify(metadata)
       ]
     );
