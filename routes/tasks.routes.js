@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../db/pool.js";
+import { publishEvent } from "../lib/intelligence.events.js";
 
 const router = express.Router();
 
@@ -40,6 +41,19 @@ function initialsFromName(name = "Command Team") {
       .map((part) => part[0]?.toUpperCase())
       .join("") || "CT"
   );
+}
+
+function emitTaskEvent(type, payload = {}) {
+  try {
+    publishEvent({
+      type,
+      channel: "tasks",
+      timestamp: new Date().toISOString(),
+      payload
+    });
+  } catch (error) {
+    console.warn(`Realtime task event failed: ${type}`, error?.message || error);
+  }
 }
 
 function getDedupeKey(metadata = {}) {
@@ -225,7 +239,14 @@ async function addActivity(taskId, event = {}) {
     ]
   );
 
-  return result.rows[0];
+  const activity = result.rows[0];
+
+  emitTaskEvent("task.activity_created", {
+    task_id: taskId,
+    activity
+  });
+
+  return activity;
 }
 
 async function findDuplicateTask(metadata = {}) {
@@ -553,6 +574,12 @@ router.post("/:id/comments", async (req, res) => {
       metadata: { comment_id: comment.id }
     });
 
+    emitTaskEvent("task.comment_created", {
+      task_id: id,
+      comment,
+      activity
+    });
+
     res.status(201).json({ ok: true, comment, activity });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to create task comment" });
@@ -689,6 +716,8 @@ router.post("/", async (req, res) => {
       metadata
     });
 
+    emitTaskEvent("task.created", { task });
+
     res.status(201).json({
       ok: true,
       duplicate: false,
@@ -770,7 +799,7 @@ router.patch("/:id", async (req, res) => {
 
     const updated = result.rows[0];
 
-    await addActivity(id, {
+    const activity = await addActivity(id, {
       event_type: "task.updated",
       title: taskActivityTitle(current, updated),
       detail: req.body.activity_detail || "Task fields updated",
@@ -789,6 +818,11 @@ router.patch("/:id", async (req, res) => {
           priority: updated.priority
         }
       }
+    });
+
+    emitTaskEvent("task.updated", {
+      task: updated,
+      activity
     });
 
     res.json({ ok: true, task: updated });
