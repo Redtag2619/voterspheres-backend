@@ -32,12 +32,14 @@ function normalizeMetadata(value = {}) {
 }
 
 function initialsFromName(name = "Command Team") {
-  return text(name)
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "CT";
+  return (
+    text(name)
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "CT"
+  );
 }
 
 function getDedupeKey(metadata = {}) {
@@ -110,6 +112,120 @@ async function ensureTasksTable() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_feed_id ON tasks((metadata->>'feed_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_signal_id ON tasks((metadata->>'signal_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_vendor_action_id ON tasks((metadata->>'vendor_action_id'))`);
+}
+
+async function ensureTaskCollaborationTables() {
+  await ensureTasksTable();
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS task_comments (
+      id SERIAL PRIMARY KEY,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      author_name TEXT DEFAULT 'Command Team',
+      author_user_id TEXT,
+      author_email TEXT,
+      author_initials TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS task_activity (
+      id SERIAL PRIMARY KEY,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL DEFAULT 'task.updated',
+      title TEXT NOT NULL,
+      detail TEXT,
+      actor_name TEXT DEFAULT 'System',
+      actor_user_id TEXT,
+      actor_email TEXT,
+      actor_initials TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  const commentColumns = [
+    ["body", "TEXT"],
+    ["author_name", "TEXT DEFAULT 'Command Team'"],
+    ["author_user_id", "TEXT"],
+    ["author_email", "TEXT"],
+    ["author_initials", "TEXT"],
+    ["metadata", "JSONB DEFAULT '{}'::jsonb"],
+    ["created_at", "TIMESTAMP DEFAULT NOW()"],
+    ["updated_at", "TIMESTAMP DEFAULT NOW()"]
+  ];
+
+  for (const [name, type] of commentColumns) {
+    await pool.query(`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS ${name} ${type}`);
+  }
+
+  const activityColumns = [
+    ["event_type", "TEXT NOT NULL DEFAULT 'task.updated'"],
+    ["title", "TEXT NOT NULL DEFAULT 'Task updated'"],
+    ["detail", "TEXT"],
+    ["actor_name", "TEXT DEFAULT 'System'"],
+    ["actor_user_id", "TEXT"],
+    ["actor_email", "TEXT"],
+    ["actor_initials", "TEXT"],
+    ["metadata", "JSONB DEFAULT '{}'::jsonb"],
+    ["created_at", "TIMESTAMP DEFAULT NOW()"]
+  ];
+
+  for (const [name, type] of activityColumns) {
+    await pool.query(`ALTER TABLE task_activity ADD COLUMN IF NOT EXISTS ${name} ${type}`);
+  }
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_comments_task_id ON task_comments(task_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_comments_created_at ON task_comments(created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_activity_task_id ON task_activity(task_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_activity_created_at ON task_activity(created_at DESC)`);
+}
+
+async function findTaskById(id) {
+  const result = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+  return result.rows[0] || null;
+}
+
+async function addActivity(taskId, event = {}) {
+  await ensureTaskCollaborationTables();
+
+  const actorName = text(event.actor_name) || text(event.actor) || "System";
+
+  const result = await pool.query(
+    `
+    INSERT INTO task_activity (
+      task_id,
+      event_type,
+      title,
+      detail,
+      actor_name,
+      actor_user_id,
+      actor_email,
+      actor_initials,
+      metadata,
+      created_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW())
+    RETURNING *
+    `,
+    [
+      taskId,
+      text(event.event_type) || "task.updated",
+      text(event.title) || "Task updated",
+      text(event.detail),
+      actorName,
+      text(event.actor_user_id) || null,
+      text(event.actor_email) || null,
+      text(event.actor_initials) || initialsFromName(actorName),
+      JSON.stringify(normalizeMetadata(event.metadata))
+    ]
+  );
+
+  return result.rows[0];
 }
 
 async function findDuplicateTask(metadata = {}) {
@@ -193,9 +309,29 @@ function normalizeTaskPayload(body = {}, current = {}) {
   };
 }
 
+function taskActivityTitle(before = {}, after = {}) {
+  const changes = [];
+
+  if (normalizeStatus(before.status) !== normalizeStatus(after.status)) {
+    changes.push(`status changed to ${normalizeStatus(after.status).replace("_", " ")}`);
+  }
+
+  if (text(before.assigned_to) !== text(after.assigned_to)) {
+    changes.push(`reassigned to ${after.assigned_to || "Command Team"}`);
+  }
+
+  if (text(before.priority) !== text(after.priority)) {
+    changes.push(`priority changed to ${after.priority || "medium"}`);
+  }
+
+  if (!changes.length) return "Task updated";
+
+  return `Task ${changes.join(" and ")}`;
+}
+
 router.get("/", async (req, res) => {
   try {
-    await ensureTasksTable();
+    await ensureTaskCollaborationTables();
 
     const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 100));
     const status = text(req.query.status).toLowerCase();
@@ -238,7 +374,7 @@ router.get("/", async (req, res) => {
 
 router.get("/assignees", async (_req, res) => {
   try {
-    await ensureTasksTable();
+    await ensureTaskCollaborationTables();
 
     const result = await pool.query(`
       SELECT
@@ -275,7 +411,7 @@ router.get("/assignees", async (_req, res) => {
 
 router.get("/feed-state", async (req, res) => {
   try {
-    await ensureTasksTable();
+    await ensureTaskCollaborationTables();
 
     const ids = String(req.query.ids || "")
       .split(",")
@@ -336,9 +472,148 @@ router.get("/feed-state", async (req, res) => {
   }
 });
 
+router.get("/:id/comments", async (req, res) => {
+  try {
+    await ensureTaskCollaborationTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
+
+    const task = await findTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM task_comments
+      WHERE task_id = $1
+      ORDER BY created_at DESC
+      `,
+      [id]
+    );
+
+    res.json({ ok: true, total: result.rows.length, results: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load task comments" });
+  }
+});
+
+router.post("/:id/comments", async (req, res) => {
+  try {
+    await ensureTaskCollaborationTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
+
+    const task = await findTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const body = text(req.body.body || req.body.text || req.body.comment);
+    if (!body) return res.status(400).json({ error: "Comment body is required" });
+
+    const authorName = text(req.body.author_name || req.body.author || task.assigned_to) || "Command Team";
+
+    const commentResult = await pool.query(
+      `
+      INSERT INTO task_comments (
+        task_id,
+        body,
+        author_name,
+        author_user_id,
+        author_email,
+        author_initials,
+        metadata,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,NOW(),NOW())
+      RETURNING *
+      `,
+      [
+        id,
+        body,
+        authorName,
+        text(req.body.author_user_id) || null,
+        text(req.body.author_email) || null,
+        text(req.body.author_initials) || initialsFromName(authorName),
+        JSON.stringify(normalizeMetadata(req.body.metadata))
+      ]
+    );
+
+    const comment = commentResult.rows[0];
+
+    const activity = await addActivity(id, {
+      event_type: "task.comment.created",
+      title: `Comment added by ${comment.author_name}`,
+      detail: comment.body,
+      actor_name: comment.author_name,
+      actor_user_id: comment.author_user_id,
+      actor_email: comment.author_email,
+      actor_initials: comment.author_initials,
+      metadata: { comment_id: comment.id }
+    });
+
+    res.status(201).json({ ok: true, comment, activity });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to create task comment" });
+  }
+});
+
+router.get("/:id/activity", async (req, res) => {
+  try {
+    await ensureTaskCollaborationTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
+
+    const task = await findTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM task_activity
+      WHERE task_id = $1
+      ORDER BY created_at DESC
+      `,
+      [id]
+    );
+
+    res.json({ ok: true, total: result.rows.length, results: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load task activity" });
+  }
+});
+
+router.get("/:id/timeline", async (req, res) => {
+  try {
+    await ensureTaskCollaborationTables();
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
+
+    const task = await findTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    const [comments, activity] = await Promise.all([
+      pool.query(`SELECT * FROM task_comments WHERE task_id = $1 ORDER BY created_at DESC`, [id]),
+      pool.query(`SELECT * FROM task_activity WHERE task_id = $1 ORDER BY created_at DESC`, [id])
+    ]);
+
+    res.json({
+      ok: true,
+      task,
+      comments: comments.rows,
+      activity: activity.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to load task timeline" });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
-    await ensureTasksTable();
+    await ensureTaskCollaborationTables();
 
     const metadata = normalizeMetadata(req.body.metadata);
     const duplicate = await findDuplicateTask(metadata);
@@ -401,10 +676,23 @@ router.post("/", async (req, res) => {
       ]
     );
 
+    const task = result.rows[0];
+
+    await addActivity(task.id, {
+      event_type: "task.created",
+      title: "Task created",
+      detail: task.title,
+      actor_name: task.created_by || "System",
+      actor_user_id: task.created_by_user_id,
+      actor_email: task.created_by_email,
+      actor_initials: initialsFromName(task.created_by || "System"),
+      metadata
+    });
+
     res.status(201).json({
       ok: true,
       duplicate: false,
-      task: result.rows[0],
+      task,
       dedupe_key: getDedupeKey(metadata)
     });
   } catch (err) {
@@ -414,20 +702,18 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   try {
-    await ensureTasksTable();
+    await ensureTaskCollaborationTables();
 
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Invalid task id" });
     }
 
-    const existing = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+    const current = await findTaskById(id);
 
-    if (!existing.rows[0]) {
+    if (!current) {
       return res.status(404).json({ error: "Task not found" });
     }
-
-    const current = existing.rows[0];
 
     const metadata = req.body.metadata
       ? { ...(current.metadata || {}), ...normalizeMetadata(req.body.metadata) }
@@ -482,7 +768,30 @@ router.patch("/:id", async (req, res) => {
       ]
     );
 
-    res.json({ ok: true, task: result.rows[0] });
+    const updated = result.rows[0];
+
+    await addActivity(id, {
+      event_type: "task.updated",
+      title: taskActivityTitle(current, updated),
+      detail: req.body.activity_detail || "Task fields updated",
+      actor_name: text(req.body.actor_name) || text(req.body.updated_by) || updated.assigned_to || "System",
+      actor_user_id: text(req.body.actor_user_id) || null,
+      actor_email: text(req.body.actor_email) || null,
+      metadata: {
+        before: {
+          status: current.status,
+          assigned_to: current.assigned_to,
+          priority: current.priority
+        },
+        after: {
+          status: updated.status,
+          assigned_to: updated.assigned_to,
+          priority: updated.priority
+        }
+      }
+    });
+
+    res.json({ ok: true, task: updated });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to update task" });
   }
