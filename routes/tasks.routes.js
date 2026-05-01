@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
 
@@ -109,6 +109,8 @@ async function ensureTasksTable() {
     ["created_by_user_id", "TEXT"],
     ["created_by_email", "TEXT"],
     ["due_label", "TEXT DEFAULT 'Today'"],
+    ["firm_id", "INTEGER"],
+    ["workspace_id", "INTEGER"],
     ["metadata", "JSONB DEFAULT '{}'::jsonb"],
     ["created_at", "TIMESTAMP DEFAULT NOW()"],
     ["updated_at", "TIMESTAMP DEFAULT NOW()"]
@@ -123,6 +125,8 @@ async function ensureTasksTable() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to_user_id ON tasks(assigned_to_user_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_firm_id ON tasks(firm_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_workspace_id ON tasks(workspace_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_feed_id ON tasks((metadata->>'feed_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_signal_id ON tasks((metadata->>'signal_id'))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_metadata_vendor_action_id ON tasks((metadata->>'vendor_action_id'))`);
@@ -168,6 +172,8 @@ async function ensureTaskCollaborationTables() {
     ["author_user_id", "TEXT"],
     ["author_email", "TEXT"],
     ["author_initials", "TEXT"],
+    ["firm_id", "INTEGER"],
+    ["workspace_id", "INTEGER"],
     ["metadata", "JSONB DEFAULT '{}'::jsonb"],
     ["created_at", "TIMESTAMP DEFAULT NOW()"],
     ["updated_at", "TIMESTAMP DEFAULT NOW()"]
@@ -185,6 +191,8 @@ async function ensureTaskCollaborationTables() {
     ["actor_user_id", "TEXT"],
     ["actor_email", "TEXT"],
     ["actor_initials", "TEXT"],
+    ["firm_id", "INTEGER"],
+    ["workspace_id", "INTEGER"],
     ["metadata", "JSONB DEFAULT '{}'::jsonb"],
     ["created_at", "TIMESTAMP DEFAULT NOW()"]
   ];
@@ -359,6 +367,8 @@ router.get("/", async (req, res) => {
     const source = text(req.query.source).toLowerCase();
     const assignedTo = text(req.query.assigned_to).toLowerCase();
     const assignedToUserId = text(req.query.assigned_to_user_id);
+    const firmId = req.auth?.firmId || req.user?.firm_id || "";
+    const workspaceId = text(req.query.workspace_id || req.query.campaign_id);
 
     const result = await pool.query(
       `
@@ -368,6 +378,8 @@ router.get("/", async (req, res) => {
         AND ($2 = '' OR LOWER(COALESCE(source, '')) = $2)
         AND ($3 = '' OR LOWER(COALESCE(assigned_to, '')) = $3)
         AND ($4 = '' OR COALESCE(assigned_to_user_id, '') = $4)
+        AND ($6 = '' OR COALESCE(firm_id::text, '') = $6)
+        AND ($7 = '' OR COALESCE(workspace_id::text, '') = $7)
       ORDER BY
         CASE LOWER(COALESCE(status, 'open'))
           WHEN 'open' THEN 0
@@ -380,7 +392,7 @@ router.get("/", async (req, res) => {
         created_at DESC
       LIMIT $5
       `,
-      [status, source, assignedTo, assignedToUserId, limit]
+      [status, source, assignedTo, assignedToUserId, limit, String(firmId || ""), String(workspaceId || "")]
     );
 
     res.json({
@@ -543,6 +555,8 @@ router.post("/:id/comments", async (req, res) => {
         author_user_id,
         author_email,
         author_initials,
+        firm_id,
+        workspace_id,
         metadata,
         created_at,
         updated_at
@@ -655,6 +669,8 @@ router.post("/", async (req, res) => {
     }
 
     const payload = normalizeTaskPayload(req.body);
+    const firmId = req.auth?.firmId || req.user?.firm_id || req.body.firm_id || null;
+    const workspaceId = req.body.workspace_id || req.body.campaign_id || req.query.workspace_id || null;
 
     const result = await pool.query(
       `
@@ -675,11 +691,13 @@ router.post("/", async (req, res) => {
         created_by_user_id,
         created_by_email,
         due_label,
+        firm_id,
+        workspace_id,
         metadata,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,NOW(),NOW())
       RETURNING *
       `,
       [
@@ -699,6 +717,8 @@ router.post("/", async (req, res) => {
         payload.created_by_user_id,
         payload.created_by_email,
         payload.due_label,
+        firmId,
+        workspaceId,
         JSON.stringify(metadata)
       ]
     );
@@ -793,6 +813,8 @@ router.patch("/:id", async (req, res) => {
         payload.created_by_user_id,
         payload.created_by_email,
         payload.due_label,
+        firmId,
+        workspaceId,
         JSON.stringify(metadata)
       ]
     );
@@ -837,3 +859,4 @@ router.put("/:id", async (req, res) => {
 });
 
 export default router;
+
