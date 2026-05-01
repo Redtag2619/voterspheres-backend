@@ -32,6 +32,7 @@ import firmUsersRoutes from "./routes/firmUsers.routes.js";
 import firmInvitesRoutes from "./routes/firmInvites.routes.js";
 import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js";
 import tasksRoutes from "./routes/tasks.routes.js";
+import workspacesRoutes from "./routes/workspaces.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -172,6 +173,7 @@ app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/tasks", tasksRoutes);
+app.use("/api/workspaces", requireAuth, workspacesRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
