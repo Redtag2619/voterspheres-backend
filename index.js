@@ -34,6 +34,8 @@ import enterpriseLeadsAdminRoutes from "./routes/enterpriseLeadsAdmin.routes.js"
 import tasksRoutes from "./routes/tasks.routes.js";
 import workspacesRoutes from "./routes/workspaces.routes.js";
 import workspaceContactsRoutes from "./routes/workspaceContacts.routes.js";
+import scheduledReportsRoutes from "./routes/scheduledReports.routes.js";
+import { startScheduledReportRunner } from "./services/scheduledReports.service.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -176,6 +178,7 @@ app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
+app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
@@ -314,6 +317,10 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
   console.log("✅ Live intelligence layer enabled");
   console.log("✅ Stripe webhook mounted at /api/billing/webhook");
+
+  // 🔥 START scheduled reports engine
+  startScheduledReportRunner();
+});
 
   if (LIVE_REFRESH_ENABLED) {
     runScheduledIntelligenceRefresh("startup");
