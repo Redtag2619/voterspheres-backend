@@ -317,9 +317,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ VoterSpheres backend listening on port ${PORT}`);
   console.log("✅ Live intelligence layer enabled");
   console.log("✅ Stripe webhook mounted at /api/billing/webhook");
-
-  // 🔥 START scheduled reports engine
-  startScheduledReportRunner();
+ startScheduledReportRunner();
 });
 
   if (LIVE_REFRESH_ENABLED) {
