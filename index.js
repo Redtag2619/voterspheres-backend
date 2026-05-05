@@ -325,10 +325,5 @@ server.listen(PORT, "0.0.0.0", () => {
     }, LIVE_REFRESH_INTERVAL_MS);
   }
 
-  // 🔥 START scheduled reports engine
   startScheduledReportRunner();
-});
-
-
-
-
+}); 
