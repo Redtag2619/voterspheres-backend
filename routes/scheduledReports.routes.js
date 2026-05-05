@@ -50,6 +50,15 @@ function getUserId(req) {
   return req.auth?.userId || req.user?.id || null;
 }
 
+function getPlanTier(req) {
+  return String(
+    req.auth?.planTier ||
+      req.auth?.plan_tier ||
+      req.user?.plan_tier ||
+      "starter"
+  ).toLowerCase();
+}
+
 function text(value = "") {
   return String(value ?? "").trim();
 }
@@ -61,6 +70,53 @@ function normalizeRecipients(value) {
     .split(",")
     .map(text)
     .filter(Boolean);
+}
+
+function requireProPlan(req, res, next) {
+  const plan = getPlanTier(req);
+
+  if (plan === "starter" || plan === "free") {
+    return res.status(403).json({
+      error: "Upgrade required",
+      requiredPlan: "pro",
+      currentPlan: plan,
+      message: "Scheduled reports are a Pro feature."
+    });
+  }
+
+  return next();
+}
+
+async function enforceScheduleLimit(req, res, workspaceId) {
+  const plan = getPlanTier(req);
+  const firmId = getFirmId(req);
+
+  if (plan === "enterprise" || plan === "admin") return true;
+
+  const result = await query(
+    `
+      SELECT COUNT(*)::int AS count
+      FROM workspace_report_schedules
+      WHERE firm_id = $1
+        AND workspace_id = $2
+        AND enabled = true
+    `,
+    [firmId, workspaceId]
+  );
+
+  const count = Number(result.rows?.[0]?.count || 0);
+
+  if (plan === "pro" && count >= 3) {
+    res.status(403).json({
+      error: "Upgrade required",
+      requiredPlan: "enterprise",
+      currentPlan: plan,
+      message: "Pro allows up to 3 active scheduled reports. Upgrade to Enterprise for unlimited schedules."
+    });
+    return false;
+  }
+
+  return true;
 }
 
 async function requireWorkspaceAccess(req, res) {
@@ -126,12 +182,15 @@ router.get("/workspace/:workspaceId", async (req, res) => {
   }
 });
 
-router.post("/workspace/:workspaceId", async (req, res) => {
+router.post("/workspace/:workspaceId", requireProPlan, async (req, res) => {
   try {
     await ensureScheduledReportTables();
 
     const access = await requireWorkspaceAccess(req, res);
     if (!access) return;
+
+    const withinLimit = await enforceScheduleLimit(req, res, access.workspaceId);
+    if (!withinLimit) return;
 
     const recipients = normalizeRecipients(req.body.recipients || req.body.to);
     if (!recipients.length) {
@@ -215,9 +274,30 @@ router.patch("/:scheduleId", async (req, res) => {
     const existing = current.rows?.[0];
     if (!existing) return res.status(404).json({ error: "Schedule not found" });
 
-    const frequency = req.body.frequency === undefined ? existing.frequency : text(req.body.frequency) || "weekly";
-    const dayOfWeek = req.body.day_of_week === undefined ? existing.day_of_week : Number(req.body.day_of_week);
-    const hour = req.body.hour === undefined ? existing.hour : Number(req.body.hour);
+    const enabling =
+      req.body.enabled !== undefined &&
+      Boolean(req.body.enabled) === true &&
+      Boolean(existing.enabled) === false;
+
+    if (enabling) {
+      const withinLimit = await enforceScheduleLimit(req, res, existing.workspace_id);
+      if (!withinLimit) return;
+    }
+
+    const frequency =
+      req.body.frequency === undefined
+        ? existing.frequency
+        : text(req.body.frequency) || "weekly";
+
+    const dayOfWeek =
+      req.body.day_of_week === undefined
+        ? existing.day_of_week
+        : Number(req.body.day_of_week);
+
+    const hour =
+      req.body.hour === undefined
+        ? existing.hour
+        : Number(req.body.hour);
 
     const nextRunAt = calculateNextRunAt(
       {
@@ -274,7 +354,7 @@ router.patch("/:scheduleId", async (req, res) => {
   }
 });
 
-router.post("/:scheduleId/run-now", async (req, res) => {
+router.post("/:scheduleId/run-now", requireProPlan, async (req, res) => {
   try {
     await ensureScheduledReportTables();
 
