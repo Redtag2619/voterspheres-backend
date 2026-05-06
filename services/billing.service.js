@@ -3,7 +3,7 @@ import { pool } from "../db/pool.js";
 let stripeClient = null;
 
 function getEnv(name, fallback = "") {
-  return process.env[name] || fallback;
+  return process.env[name] || fallback; 
 }
 
 function createHttpError(message, statusCode = 500) {
