@@ -201,7 +201,6 @@ router.post("/", async (req, res) => {
       source,
       utm_source,
       utm_medium,
-      utm_campaign,
       created_at,
       updated_at
     )
@@ -227,7 +226,6 @@ router.post("/", async (req, res) => {
       $17,
       $18,
       $19,
-      $20,
       NOW(),
       NOW()
     )
@@ -253,7 +251,6 @@ router.post("/", async (req, res) => {
     nullableText(req.body?.source) || "enterprise_intake",
     nullableText(req.body?.utm_source || req.body?.utmSource),
     nullableText(req.body?.utm_medium || req.body?.utmMedium),
-    nullableText(req.body?.utm_campaign || req.body?.utmCampaign),
   ]
 );
     return res.status(201).json({
