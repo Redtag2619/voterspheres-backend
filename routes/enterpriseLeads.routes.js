@@ -7,7 +7,7 @@ const router = express.Router();
 
 const VALID_STAGES = [
   "new",
-  "contacted",
+  "contacted", 
   "qualified",
   "demo_scheduled",
   "proposal_sent",
