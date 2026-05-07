@@ -157,7 +157,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
-app.use("/api/enterprise-leads", enterpriseLeadsRoutes); 
+app.use("/api/enterprise-leads", enterpriseLeadRoutes);
+app.use("/api/public/enterprise-leads", enterpriseLeadRoutes); 
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/realtime", requireAuth, realtimeRoutes);
