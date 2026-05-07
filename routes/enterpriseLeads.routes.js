@@ -52,147 +52,50 @@ async function ensureEnterpriseLeadTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS enterprise_leads (
       id SERIAL PRIMARY KEY,
-      firm_id INTEGER,
-      assigned_user_id INTEGER,
-      stage TEXT NOT NULL DEFAULT 'new',
-      priority TEXT NOT NULL DEFAULT 'medium',
-
-      firm_name TEXT,
-      contact_name TEXT,
-      email TEXT NOT NULL,
-      phone TEXT,
-      title TEXT,
-      website TEXT,
-
-      organization_type TEXT,
-      states TEXT[],
-      cycle TEXT,
-      campaign_count INTEGER,
-      team_size INTEGER,
-      budget_range TEXT,
-      timeline TEXT,
-      use_case TEXT,
-      message TEXT,
-
-      source TEXT DEFAULT 'enterprise_intake',
-      utm_source TEXT,
-      utm_medium TEXT,
-      utm_campaign TEXT,
-
-      last_contacted_at TIMESTAMP,
-      next_follow_up_at TIMESTAMP,
-      won_at TIMESTAMP,
-      lost_at TIMESTAMP,
-      lost_reason TEXT,
-
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
 
-    await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS stage TEXT DEFAULT 'new'
-  `);
-
   await pool.query(`
     ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'medium'
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS assigned_user_id INTEGER
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS organization_type TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS states TEXT[]
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS cycle TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS campaign_count INTEGER
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS team_size INTEGER
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS budget_range TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS timeline TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS use_case TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'enterprise_intake'
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS utm_source TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS utm_medium TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS utm_campaign TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMP
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS next_follow_up_at TIMESTAMP
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS won_at TIMESTAMP
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS lost_at TIMESTAMP
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
-      ADD COLUMN IF NOT EXISTS lost_reason TEXT
-  `);
-
-  await pool.query(`
-    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS firm_id INTEGER,
+      ADD COLUMN IF NOT EXISTS assigned_user_id INTEGER,
+      ADD COLUMN IF NOT EXISTS stage TEXT DEFAULT 'new',
+      ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'medium',
+      ADD COLUMN IF NOT EXISTS firm_name TEXT,
+      ADD COLUMN IF NOT EXISTS contact_name TEXT,
+      ADD COLUMN IF NOT EXISTS email TEXT,
+      ADD COLUMN IF NOT EXISTS phone TEXT,
+      ADD COLUMN IF NOT EXISTS title TEXT,
+      ADD COLUMN IF NOT EXISTS website TEXT,
+      ADD COLUMN IF NOT EXISTS organization_type TEXT,
+      ADD COLUMN IF NOT EXISTS states TEXT[],
+      ADD COLUMN IF NOT EXISTS cycle TEXT,
+      ADD COLUMN IF NOT EXISTS campaign_count INTEGER,
+      ADD COLUMN IF NOT EXISTS team_size INTEGER,
+      ADD COLUMN IF NOT EXISTS budget_range TEXT,
+      ADD COLUMN IF NOT EXISTS timeline TEXT,
+      ADD COLUMN IF NOT EXISTS use_case TEXT,
+      ADD COLUMN IF NOT EXISTS message TEXT,
+      ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'enterprise_intake',
+      ADD COLUMN IF NOT EXISTS utm_source TEXT,
+      ADD COLUMN IF NOT EXISTS utm_medium TEXT,
+      ADD COLUMN IF NOT EXISTS utm_campaign TEXT,
+      ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS next_follow_up_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS won_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS lost_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS lost_reason TEXT,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
+  `);
+
+  await pool.query(`
+    UPDATE enterprise_leads
+    SET
+      stage = COALESCE(NULLIF(stage, ''), 'new'),
+      priority = COALESCE(NULLIF(priority, ''), 'medium'),
+      source = COALESCE(NULLIF(source, ''), 'enterprise_intake'),
+      updated_at = COALESCE(updated_at, NOW())
   `);
 
   await pool.query(`
