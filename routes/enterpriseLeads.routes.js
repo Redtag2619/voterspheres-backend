@@ -90,6 +90,111 @@ async function ensureEnterpriseLeadTables() {
     )
   `);
 
+    await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS stage TEXT DEFAULT 'new'
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'medium'
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS assigned_user_id INTEGER
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS organization_type TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS states TEXT[]
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS cycle TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS campaign_count INTEGER
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS team_size INTEGER
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS budget_range TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS timeline TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS use_case TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'enterprise_intake'
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS utm_source TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS utm_medium TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS utm_campaign TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMP
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS next_follow_up_at TIMESTAMP
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS won_at TIMESTAMP
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS lost_at TIMESTAMP
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS lost_reason TEXT
+  `);
+
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS enterprise_lead_notes (
       id SERIAL PRIMARY KEY,
