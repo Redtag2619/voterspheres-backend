@@ -87,6 +87,12 @@ async function ensureEnterpriseLeadTables() {
       ADD COLUMN IF NOT EXISTS lost_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS lost_reason TEXT,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
+  `);  
+  
+  await pool.query(`
+    ALTER TABLE enterprise_leads
+      ALTER COLUMN full_name DROP NOT NULL,
+      ALTER COLUMN team_size DROP NOT NULL
   `);
 
   await pool.query(`
@@ -243,7 +249,7 @@ router.post("/", async (req, res) => {
     parseStates(req.body?.states),
     nullableText(req.body?.cycle),
     numberOrNull(req.body?.campaign_count || req.body?.campaignCount),
-    numberOrNull(req.body?.team_size || req.body?.teamSize),
+    numberOrNull(req.body?.team_size || req.body?.teamSize) || 1,
     nullableText(req.body?.budget_range || req.body?.budgetRange),
     nullableText(req.body?.timeline),
     nullableText(req.body?.use_case || req.body?.useCase),
