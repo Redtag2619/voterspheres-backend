@@ -177,9 +177,7 @@ router.post("/", async (req, res) => {
       nullableText(req.body?.firm_name || req.body?.firmName) ||
       "Enterprise Lead";
 
-    const result = await pool.query(
-      `
-       const result = await pool.query(
+   const result = await pool.query(
   `
     INSERT INTO enterprise_leads (
       stage,
