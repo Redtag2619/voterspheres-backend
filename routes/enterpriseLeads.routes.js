@@ -150,6 +150,16 @@ router.post("/", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
+    await pool.query(`
+      ALTER TABLE enterprise_leads
+        ADD COLUMN IF NOT EXISTS full_name TEXT
+    `);
+
+    await pool.query(`
+      ALTER TABLE enterprise_leads
+        ALTER COLUMN full_name DROP NOT NULL
+    `);
+
     const email = text(req.body?.email).toLowerCase();
 
     if (!email) {
@@ -158,12 +168,18 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const contactName = nullableText(req.body?.contact_name || req.body?.contactName);
-    const firmName = nullableText(req.body?.firm_name || req.body?.firmName);
+    const contactName =
+      nullableText(req.body?.contact_name || req.body?.contactName) ||
+      nullableText(req.body?.full_name || req.body?.fullName) ||
+      email;
+
+    const firmName =
+      nullableText(req.body?.firm_name || req.body?.firmName) ||
+      "Enterprise Lead";
 
     const result = await pool.query(
       `
-       INSERT INTO enterprise_leads (
+        INSERT INTO enterprise_leads (
           stage,
           priority,
           firm_name,
@@ -193,6 +209,7 @@ router.post("/", async (req, res) => {
           'new',
           $1,
           $2,
+          $3,
           $3,
           $4,
           $5,
