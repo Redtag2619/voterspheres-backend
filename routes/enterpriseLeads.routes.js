@@ -163,10 +163,11 @@ router.post("/", async (req, res) => {
 
     const result = await pool.query(
       `
-        INSERT INTO enterprise_leads (
+       INSERT INTO enterprise_leads (
           stage,
           priority,
           firm_name,
+          full_name,
           contact_name,
           email,
           phone,
