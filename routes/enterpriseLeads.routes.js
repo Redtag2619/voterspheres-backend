@@ -342,8 +342,27 @@ if (workspaceId) {
 
     const result = await pool.query(
       `
-        SELECT *
-        FROM enterprise_leads
+       SELECT
+         id,
+         created_at,
+         updated_at,
+         stage,
+         status,
+         priority,
+         firm_name,
+         full_name,
+         contact_name,
+         email,
+         phone,
+         states,
+         budget_range,
+         use_case,
+         message,
+         source,
+         provisioned_workspace_id,
+         provisioning_status
+       FROM enterprise_leads
+
         ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
         ORDER BY
           CASE priority
