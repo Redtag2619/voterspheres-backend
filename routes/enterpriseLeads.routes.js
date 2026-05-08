@@ -7,7 +7,7 @@ const router = express.Router();
 
 const VALID_STAGES = [
   "new",
-  "contacted", 
+  "contacted",
   "qualified",
   "demo_scheduled",
   "proposal_sent",
@@ -126,6 +126,7 @@ async function ensureEnterpriseLeadTables() {
   await pool.query(`
     ALTER TABLE enterprise_leads
       ALTER COLUMN full_name DROP NOT NULL,
+      ALTER COLUMN contact_name DROP NOT NULL,
       ALTER COLUMN team_size DROP NOT NULL
   `);
 
@@ -136,8 +137,8 @@ async function ensureEnterpriseLeadTables() {
       status = COALESCE(NULLIF(status, ''), NULLIF(stage, ''), 'new'),
       priority = COALESCE(NULLIF(priority, ''), 'medium'),
       source = COALESCE(NULLIF(source, ''), 'enterprise_intake'),
-      full_name = COALESCE(full_name, contact_name, email, 'Unknown Lead'),
-      contact_name = COALESCE(contact_name, full_name, email, 'Unknown Lead'),
+      full_name = COALESCE(full_name, contact_name, email, firm_name, 'Unknown Lead'),
+      contact_name = COALESCE(contact_name, full_name, email, firm_name, 'Unknown Lead'),
       team_size = COALESCE(team_size, 1),
       updated_at = COALESCE(updated_at, NOW())
   `);
@@ -177,26 +178,21 @@ router.post("/", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
-    const email = text(req.body?.email).toLowerCase();
+    const body = req.body || {};
+    const email = text(body.email).toLowerCase();
 
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
 
     const contactName =
-      nullableText(req.body?.contact_name || req.body?.contactName) ||
-      nullableText(req.body?.full_name || req.body?.fullName) ||
+      nullableText(body.contact_name || body.contactName) ||
+      nullableText(body.full_name || body.fullName) ||
       email;
 
     const firmName =
-      nullableText(req.body?.firm_name || req.body?.firmName) ||
-      "Enterprise Lead";
-    
-    console.log("Enterprise lead payload:", req.body);
-
-    const stage = "new";
-    const priority = normalizePriority(req.body?.priority || "high");
-    const teamSize = numberOrNull(req.body?.team_size || req.body?.teamSize) || 1;
+      nullableText(body.firm_name || body.firmName) ||
+      "Enterprise Prospect";
 
     const result = await pool.query(
       `
@@ -229,57 +225,56 @@ router.post("/", async (req, res) => {
           updated_at
         )
         VALUES (
-          $1,
+          'new',
+          'new',
           $1,
           $2,
           $3,
-          $4,
+          $3,
           $4,
           $5,
           $6,
           $7,
           $8,
-          $9,
-          $10::text[],
+          $9::text[],
+          $10,
           $11,
           $12,
           $13,
           $14,
           $15,
           $16,
-          $17,
+          $16,
           $17,
           $18,
           $19,
           $20,
-          $21,
           NOW(),
           NOW()
         )
         RETURNING *
       `,
       [
-        stage,
-        priority,
+        normalizePriority(body.priority || "high"),
         firmName,
         contactName,
         email,
-        nullableText(req.body?.phone),
-        nullableText(req.body?.title),
-        nullableText(req.body?.website),
-        nullableText(req.body?.organization_type || req.body?.organizationType),
-        parseStates(req.body?.states),
-        nullableText(req.body?.cycle),
-        numberOrNull(req.body?.campaign_count || req.body?.campaignCount),
-        teamSize,
-        nullableText(req.body?.budget_range || req.body?.budgetRange),
-        nullableText(req.body?.timeline),
-        nullableText(req.body?.use_case || req.body?.useCase),
-        nullableText(req.body?.message),
-        nullableText(req.body?.source) || "enterprise_intake",
-        nullableText(req.body?.utm_source || req.body?.utmSource),
-        nullableText(req.body?.utm_medium || req.body?.utmMedium),
-        nullableText(req.body?.utm_campaign || req.body?.utmCampaign),
+        nullableText(body.phone),
+        nullableText(body.title),
+        nullableText(body.website),
+        nullableText(body.organization_type || body.organizationType),
+        parseStates(body.states),
+        nullableText(body.cycle),
+        numberOrNull(body.campaign_count || body.campaignCount),
+        numberOrNull(body.team_size || body.teamSize) || 1,
+        nullableText(body.budget_range || body.budgetRange),
+        nullableText(body.timeline),
+        nullableText(body.use_case || body.useCase),
+        nullableText(body.message),
+        nullableText(body.source) || "enterprise_intake",
+        nullableText(body.utm_source || body.utmSource),
+        nullableText(body.utm_medium || body.utmMedium),
+        nullableText(body.utm_campaign || body.utmCampaign),
       ]
     );
 
@@ -378,7 +373,6 @@ router.get("/admin", requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Enterprise lead list error:", error);
-    console.error("Enterprise lead public create error:", error);
 
     return res.status(500).json({
       error: error.message || "Failed to load enterprise leads",
