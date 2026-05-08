@@ -191,6 +191,8 @@ router.post("/", async (req, res) => {
     const firmName =
       nullableText(req.body?.firm_name || req.body?.firmName) ||
       "Enterprise Lead";
+    
+    console.log("Enterprise lead payload:", req.body);
 
     const stage = "new";
     const priority = normalizePriority(req.body?.priority || "high");
@@ -376,6 +378,7 @@ router.get("/admin", requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Enterprise lead list error:", error);
+    console.error("Enterprise lead public create error:", error);
 
     return res.status(500).json({
       error: error.message || "Failed to load enterprise leads",
