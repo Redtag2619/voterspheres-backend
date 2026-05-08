@@ -301,7 +301,6 @@ router.get("/admin", requireAuth, async (req, res) => {
     const stage = text(req.query?.stage || req.query?.status);
 const priority = text(req.query?.priority);
 const q = text(req.query?.q);
-const workspaceId = numberOrNull(req.query?.workspace_id);
 const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
 
 const conditions = [];
@@ -318,12 +317,7 @@ if (priority && priority !== "all") {
   values.push(normalizePriority(priority));
 }
 
-if (workspaceId) {
-  conditions.push(`provisioned_workspace_id = $${idx++}`);
-  values.push(workspaceId);
-}
-    
-    if (q) {
+     if (q) {
       conditions.push(`
         (
           firm_name ILIKE $${idx}
@@ -340,43 +334,32 @@ if (workspaceId) {
 
     values.push(limit);
 
-    const result = await pool.query(
-      `
-       SELECT
-         id,
-         created_at,
-         updated_at,
-         stage,
-         status,
-         priority,
-         firm_name,
-         full_name,
-         contact_name,
-         email,
-         phone,
-         states,
-         budget_range,
-         use_case,
-         message,
-         source,
-         provisioned_workspace_id,
-         provisioning_status
-       FROM enterprise_leads
-
-        ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
-        ORDER BY
-          CASE priority
-            WHEN 'urgent' THEN 1
-            WHEN 'high' THEN 2
-            WHEN 'medium' THEN 3
-            ELSE 4
-          END,
-          created_at DESC
-        LIMIT $${idx}
-      `,
-      values
-    );
-
+   const result = await pool.query(
+  `
+    SELECT
+      id,
+      created_at,
+      updated_at,
+      stage,
+      status,
+      priority,
+      firm_name,
+      full_name,
+      contact_name,
+      email,
+      phone,
+      states,
+      budget_range,
+      use_case,
+      message,
+      source
+    FROM enterprise_leads
+    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+    ORDER BY created_at DESC
+    LIMIT $${idx}
+  `,
+  values
+);
     const summary = await pool.query(`
       SELECT
         COUNT(*)::int AS total,
