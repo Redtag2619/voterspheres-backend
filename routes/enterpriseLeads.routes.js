@@ -299,24 +299,30 @@ router.get("/admin", requireAuth, async (req, res) => {
     await ensureEnterpriseLeadTables();
 
     const stage = text(req.query?.stage || req.query?.status);
-    const priority = text(req.query?.priority);
-    const q = text(req.query?.q);
-    const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
+const priority = text(req.query?.priority);
+const q = text(req.query?.q);
+const workspaceId = numberOrNull(req.query?.workspace_id);
+const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
 
-    const conditions = [];
-    const values = [];
-    let idx = 1;
+const conditions = [];
+const values = [];
+let idx = 1;
 
-    if (stage && stage !== "all") {
-      conditions.push(`COALESCE(stage, status) = $${idx++}`);
-      values.push(normalizeStage(stage));
-    }
+if (stage && stage !== "all") {
+  conditions.push(`COALESCE(stage, status) = $${idx++}`);
+  values.push(normalizeStage(stage));
+}
 
-    if (priority && priority !== "all") {
-      conditions.push(`priority = $${idx++}`);
-      values.push(normalizePriority(priority));
-    }
+if (priority && priority !== "all") {
+  conditions.push(`priority = $${idx++}`);
+  values.push(normalizePriority(priority));
+}
 
+if (workspaceId) {
+  conditions.push(`provisioned_workspace_id = $${idx++}`);
+  values.push(workspaceId);
+}
+    
     if (q) {
       conditions.push(`
         (
