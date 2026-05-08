@@ -125,9 +125,10 @@ async function ensureEnterpriseLeadTables() {
 
   await pool.query(`
     ALTER TABLE enterprise_leads
-      ALTER COLUMN full_name DROP NOT NULL,
-      ALTER COLUMN contact_name DROP NOT NULL,
-      ALTER COLUMN team_size DROP NOT NULL
+    ALTER COLUMN full_name DROP NOT NULL,
+    ALTER COLUMN contact_name DROP NOT NULL,
+    ALTER COLUMN team_size DROP NOT NULL,
+    ALTER COLUMN message DROP NOT NULL
   `);
 
   await pool.query(`
@@ -140,6 +141,7 @@ async function ensureEnterpriseLeadTables() {
       full_name = COALESCE(full_name, contact_name, email, firm_name, 'Unknown Lead'),
       contact_name = COALESCE(contact_name, full_name, email, firm_name, 'Unknown Lead'),
       team_size = COALESCE(team_size, 1),
+      message = COALESCE(message, use_case, notes, 'Enterprise intake request'),
       updated_at = COALESCE(updated_at, NOW())
   `);
 
