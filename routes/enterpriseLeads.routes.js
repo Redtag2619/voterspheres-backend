@@ -63,8 +63,8 @@ function parseStates(value) {
 function serializeLead(row = {}) {
   return {
     ...row,
-    stage: row.stage || row.status || "new",
-    status: row.status || row.stage || "new",
+    stage: row.stage ? String(row.stage) : row.status ? String(row.status) : "new",
+    status: row.status ? String(row.status) : row.stage ? String(row.stage) : "new",
     states: Array.isArray(row.states) ? row.states : [],
   };
 }
@@ -125,23 +125,33 @@ async function ensureEnterpriseLeadTables() {
 
   await pool.query(`
     ALTER TABLE enterprise_leads
-    ALTER COLUMN full_name DROP NOT NULL,
-    ALTER COLUMN contact_name DROP NOT NULL,
-    ALTER COLUMN team_size DROP NOT NULL,
-    ALTER COLUMN message DROP NOT NULL
+      ALTER COLUMN full_name DROP NOT NULL,
+      ALTER COLUMN contact_name DROP NOT NULL,
+      ALTER COLUMN firm_name DROP NOT NULL,
+      ALTER COLUMN email DROP NOT NULL,
+      ALTER COLUMN phone DROP NOT NULL,
+      ALTER COLUMN message DROP NOT NULL,
+      ALTER COLUMN notes DROP NOT NULL,
+      ALTER COLUMN team_size DROP NOT NULL,
+      ALTER COLUMN stage DROP NOT NULL,
+      ALTER COLUMN status DROP NOT NULL,
+      ALTER COLUMN priority DROP NOT NULL,
+      ALTER COLUMN source DROP NOT NULL
   `);
 
   await pool.query(`
     UPDATE enterprise_leads
     SET
-      stage = COALESCE(NULLIF(stage, ''), NULLIF(status, ''), 'new'),
-      status = COALESCE(NULLIF(status, ''), NULLIF(stage, ''), 'new'),
-      priority = COALESCE(NULLIF(priority, ''), 'medium'),
-      source = COALESCE(NULLIF(source, ''), 'enterprise_intake'),
+      stage = COALESCE(NULLIF(stage::text, ''), NULLIF(status::text, ''), 'new'),
+      status = COALESCE(NULLIF(status::text, ''), NULLIF(stage::text, ''), 'new'),
+      priority = COALESCE(NULLIF(priority::text, ''), 'medium'),
+      source = COALESCE(NULLIF(source::text, ''), 'enterprise_intake'),
       full_name = COALESCE(full_name, contact_name, email, firm_name, 'Unknown Lead'),
       contact_name = COALESCE(contact_name, full_name, email, firm_name, 'Unknown Lead'),
+      firm_name = COALESCE(firm_name, 'Enterprise Prospect'),
       team_size = COALESCE(team_size, 1),
       message = COALESCE(message, use_case, notes, 'Enterprise intake request'),
+      notes = COALESCE(notes, message, use_case, 'Enterprise intake request'),
       updated_at = COALESCE(updated_at, NOW())
   `);
 
@@ -272,7 +282,7 @@ router.post("/", async (req, res) => {
         nullableText(body.budget_range || body.budgetRange),
         nullableText(body.timeline),
         nullableText(body.use_case || body.useCase),
-        nullableText(body.message),
+        nullableText(body.message) || "Enterprise intake request",
         nullableText(body.source) || "enterprise_intake",
         nullableText(body.utm_source || body.utmSource),
         nullableText(body.utm_medium || body.utmMedium),
@@ -299,25 +309,25 @@ router.get("/admin", requireAuth, async (req, res) => {
     await ensureEnterpriseLeadTables();
 
     const stage = text(req.query?.stage || req.query?.status);
-const priority = text(req.query?.priority);
-const q = text(req.query?.q);
-const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
+    const priority = text(req.query?.priority);
+    const q = text(req.query?.q);
+    const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 250);
 
-const conditions = [];
-const values = [];
-let idx = 1;
+    const conditions = [];
+    const values = [];
+    let idx = 1;
 
-if (stage && stage !== "all") {
-  conditions.push(`COALESCE(stage, status) = $${idx++}`);
-  values.push(normalizeStage(stage));
-}
+    if (stage && stage !== "all") {
+      conditions.push(`stage::text = $${idx++}`);
+      values.push(normalizeStage(stage));
+    }
 
-if (priority && priority !== "all") {
-  conditions.push(`priority = $${idx++}`);
-  values.push(normalizePriority(priority));
-}
+    if (priority && priority !== "all") {
+      conditions.push(`priority::text = $${idx++}`);
+      values.push(normalizePriority(priority));
+    }
 
-     if (q) {
+    if (q) {
       conditions.push(`
         (
           firm_name ILIKE $${idx}
@@ -334,42 +344,45 @@ if (priority && priority !== "all") {
 
     values.push(limit);
 
-   const result = await pool.query(
-  `
-    SELECT
-      id,
-      created_at,
-      updated_at,
-      stage,
-      status,
-      priority,
-      firm_name,
-      full_name,
-      contact_name,
-      email,
-      phone,
-      states,
-      budget_range,
-      use_case,
-      message,
-      source
-    FROM enterprise_leads
-    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
-    ORDER BY created_at DESC
-    LIMIT $${idx}
-  `,
-  values
-);
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          created_at,
+          updated_at,
+          stage::text AS stage,
+          status::text AS status,
+          priority::text AS priority,
+          firm_name,
+          full_name,
+          contact_name,
+          email,
+          phone,
+          states,
+          budget_range,
+          use_case,
+          message,
+          source,
+          provisioned_workspace_id,
+          provisioning_status
+        FROM enterprise_leads
+        ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+        ORDER BY created_at DESC
+        LIMIT $${idx}
+      `,
+      values
+    );
+
     const summary = await pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) = 'new')::int AS new_count,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) = 'qualified')::int AS qualified_count,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) = 'demo_scheduled')::int AS demo_scheduled_count,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) = 'proposal_sent')::int AS proposal_sent_count,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) = 'won')::int AS won_count,
-        COUNT(*) FILTER (WHERE COALESCE(stage, status) IN ('lost', 'archived'))::int AS lost_count,
-        COUNT(*) FILTER (WHERE priority IN ('high', 'urgent'))::int AS high_priority_count,
+        COUNT(*) FILTER (WHERE stage::text = 'new')::int AS new_count,
+        COUNT(*) FILTER (WHERE stage::text = 'qualified')::int AS qualified_count,
+        COUNT(*) FILTER (WHERE stage::text = 'demo_scheduled')::int AS demo_scheduled_count,
+        COUNT(*) FILTER (WHERE stage::text = 'proposal_sent')::int AS proposal_sent_count,
+        COUNT(*) FILTER (WHERE stage::text = 'won')::int AS won_count,
+        COUNT(*) FILTER (WHERE stage::text IN ('lost', 'archived'))::int AS lost_count,
+        COUNT(*) FILTER (WHERE priority::text IN ('high', 'urgent'))::int AS high_priority_count,
         COUNT(*) FILTER (WHERE provisioned_workspace_id IS NOT NULL)::int AS provisioned_count
       FROM enterprise_leads
     `);
@@ -613,8 +626,8 @@ router.post("/admin/:id/approve", requireAuth, async (req, res) => {
         UPDATE enterprise_leads
         SET
           is_beta_approved = true,
-          stage = CASE WHEN stage = 'new' THEN 'qualified' ELSE stage END,
-          status = CASE WHEN status = 'new' THEN 'qualified' ELSE status END,
+          stage = CASE WHEN stage::text = 'new' THEN 'qualified' ELSE stage END,
+          status = CASE WHEN status::text = 'new' THEN 'qualified' ELSE status END,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -678,8 +691,8 @@ router.post("/admin/:id/approve-and-invite", requireAuth, async (req, res) => {
           is_beta_approved = true,
           has_pending_invite = true,
           invite_link = $2,
-          stage = CASE WHEN stage = 'new' THEN 'qualified' ELSE stage END,
-          status = CASE WHEN status = 'new' THEN 'qualified' ELSE status END,
+          stage = CASE WHEN stage::text = 'new' THEN 'qualified' ELSE stage END,
+          status = CASE WHEN status::text = 'new' THEN 'qualified' ELSE status END,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
