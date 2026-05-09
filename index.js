@@ -183,7 +183,7 @@ app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
-app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
+app.use("/api/workspace-onboarding", requireAuth, workspaceOnboardingRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
