@@ -160,6 +160,7 @@ app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes); 
+app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/realtime", requireAuth, realtimeRoutes);
@@ -183,7 +184,6 @@ app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
-app.use("/api/workspace-onboarding", requireAuth, workspaceOnboardingRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
