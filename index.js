@@ -37,6 +37,7 @@ import workspaceContactsRoutes from "./routes/workspaceContacts.routes.js";
 import scheduledReportsRoutes from "./routes/scheduledReports.routes.js";
 import { startScheduledReportRunner } from "./services/scheduledReports.service.js";
 import enterpriseLeadsRoutes from "./routes/enterpriseLeads.routes.js";
+import workspaceOnboardingRoutes from "./routes/workspaceOnboarding.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -182,6 +183,7 @@ app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
+app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
