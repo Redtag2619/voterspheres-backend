@@ -38,6 +38,7 @@ import scheduledReportsRoutes from "./routes/scheduledReports.routes.js";
 import { startScheduledReportRunner } from "./services/scheduledReports.service.js";
 import enterpriseLeadsRoutes from "./routes/enterpriseLeads.routes.js";
 import workspaceOnboardingRoutes from "./routes/workspaceOnboarding.routes.js";
+import candidateProfilesRoutes from "./routes/candidateProfiles.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -73,6 +74,11 @@ app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
   })
+);
+
+app.use(
+  "/api/candidate-profiles",
+  candidateProfilesRoutes
 );
 
 app.use(
