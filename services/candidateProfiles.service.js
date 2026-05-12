@@ -482,5 +482,198 @@ export async function getCandidateContactCoverage() {
     FROM candidate_profiles
   `);
 
-  return result.rows[0];
+ export async function updateCandidateProfileLocks(candidateId, payload = {}) {
+  await ensureCandidateProfilesTable();
+
+  const candidateCheck = await pool.query(
+    `SELECT id FROM candidates WHERE id = $1 LIMIT 1`,
+    [candidateId]
+  );
+
+  if (!candidateCheck.rows.length) return null;
+
+  const result = await pool.query(
+    `
+      INSERT INTO candidate_profiles (
+        candidate_id,
+        admin_locked,
+        locked_fields,
+        updated_at,
+        created_at
+      )
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (candidate_id)
+      DO UPDATE SET
+        admin_locked = EXCLUDED.admin_locked,
+        locked_fields = EXCLUDED.locked_fields,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      candidateId,
+      Boolean(payload.admin_locked),
+      JSON.stringify(payload.locked_fields || {}),
+    ]
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function updateCandidateProfileManual(
+  candidateId,
+  payload = {},
+  options = {}
+) {
+  await ensureCandidateProfilesTable();
+
+  const candidateCheck = await pool.query(
+    `SELECT id FROM candidates WHERE id = $1 LIMIT 1`,
+    [candidateId]
+  );
+
+  if (!candidateCheck.rows.length) return null;
+
+  const result = await pool.query(
+    `
+      INSERT INTO candidate_profiles (
+        candidate_id,
+        campaign_website,
+        official_website,
+        office_address,
+        campaign_address,
+        phone,
+        email,
+        press_contact_email,
+        facebook_url,
+        x_url,
+        instagram_url,
+        youtube_url,
+        linkedin_url,
+        tiktok_url,
+        source_label,
+        admin_locked,
+        locked_fields,
+        updated_at,
+        created_at
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,'manual_edit',$15,$16,NOW(),NOW()
+      )
+      ON CONFLICT (candidate_id)
+      DO UPDATE SET
+        campaign_website = COALESCE(EXCLUDED.campaign_website, candidate_profiles.campaign_website),
+        official_website = COALESCE(EXCLUDED.official_website, candidate_profiles.official_website),
+        office_address = COALESCE(EXCLUDED.office_address, candidate_profiles.office_address),
+        campaign_address = COALESCE(EXCLUDED.campaign_address, candidate_profiles.campaign_address),
+        phone = COALESCE(EXCLUDED.phone, candidate_profiles.phone),
+        email = COALESCE(EXCLUDED.email, candidate_profiles.email),
+        press_contact_email = COALESCE(EXCLUDED.press_contact_email, candidate_profiles.press_contact_email),
+        facebook_url = COALESCE(EXCLUDED.facebook_url, candidate_profiles.facebook_url),
+        x_url = COALESCE(EXCLUDED.x_url, candidate_profiles.x_url),
+        instagram_url = COALESCE(EXCLUDED.instagram_url, candidate_profiles.instagram_url),
+        youtube_url = COALESCE(EXCLUDED.youtube_url, candidate_profiles.youtube_url),
+        linkedin_url = COALESCE(EXCLUDED.linkedin_url, candidate_profiles.linkedin_url),
+        tiktok_url = COALESCE(EXCLUDED.tiktok_url, candidate_profiles.tiktok_url),
+        source_label = 'manual_edit',
+        admin_locked = EXCLUDED.admin_locked,
+        locked_fields = EXCLUDED.locked_fields,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      candidateId,
+      payload.campaign_website || null,
+      payload.official_website || null,
+      payload.office_address || null,
+      payload.campaign_address || null,
+      payload.phone || null,
+      payload.email || null,
+      payload.press_contact_email || null,
+      payload.facebook_url || null,
+      payload.x_url || null,
+      payload.instagram_url || null,
+      payload.youtube_url || null,
+      payload.linkedin_url || null,
+      payload.tiktok_url || null,
+      Boolean(options.lock_edited_fields || payload.admin_locked),
+      JSON.stringify(
+        options.lock_edited_fields
+          ? {
+              campaign_website: true,
+              official_website: true,
+              office_address: true,
+              campaign_address: true,
+              phone: true,
+              email: true,
+              press_contact_email: true,
+              facebook_url: true,
+              x_url: true,
+              instagram_url: true,
+              youtube_url: true,
+              linkedin_url: true,
+              tiktok_url: true,
+            }
+          : payload.locked_fields || {}
+      ),
+    ]
+  );
+
+  return {
+    profile: result.rows[0] || null,
+  };
+}
+
+export async function updateCandidateVerification(candidateId, payload = {}) {
+  await ensureCandidateProfilesTable();
+
+  const candidateCheck = await pool.query(
+    `SELECT id FROM candidates WHERE id = $1 LIMIT 1`,
+    [candidateId]
+  );
+
+  if (!candidateCheck.rows.length) return null;
+
+  const isVerified = Boolean(payload.is_verified);
+
+  const result = await pool.query(
+    `
+      INSERT INTO candidate_profiles (
+        candidate_id,
+        is_verified,
+        verified_by,
+        verified_at,
+        internal_notes,
+        updated_at,
+        created_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        CASE WHEN $2 = true THEN NOW() ELSE NULL END,
+        $4,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (candidate_id)
+      DO UPDATE SET
+        is_verified = EXCLUDED.is_verified,
+        verified_by = EXCLUDED.verified_by,
+        verified_at = EXCLUDED.verified_at,
+        internal_notes = EXCLUDED.internal_notes,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      candidateId,
+      isVerified,
+      payload.verified_by || null,
+      payload.internal_notes || null,
+    ]
+  );
+
+  return {
+    profile: result.rows[0] || null,
+  };
 }
