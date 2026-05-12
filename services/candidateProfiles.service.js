@@ -481,6 +481,7 @@ export async function getCandidateContactCoverage() {
       )::int AS with_social
     FROM candidate_profiles
   `);
+}
 
  export async function updateCandidateProfileLocks(candidateId, payload = {}) {
   await ensureCandidateProfilesTable();
