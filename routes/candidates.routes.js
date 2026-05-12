@@ -2,7 +2,7 @@ import express from "express";
 import {
   fetchCandidates,
   fetchCandidateById,
-  fetchCandidateContacts,
+  fetchCandidateContacts, 
   fetchCandidateStates,
   fetchCandidateOffices,
   fetchCandidateParties,
