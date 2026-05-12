@@ -162,7 +162,7 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes); 
 app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
-app.use("/api/candidate-profiles",candidateProfilesRoutes);
+app.use("/api/candidate-profiles", candidateProfilesRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/realtime", requireAuth, realtimeRoutes);
