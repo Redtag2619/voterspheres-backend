@@ -59,6 +59,10 @@ function getUserId(req) {
   return req.auth?.userId || req.authUser?.id || req.user?.id || null;
 }
 
+function getUserEmail(req) {
+  return req.auth?.email || req.authUser?.email || req.user?.email || null;
+}
+
 function text(value = "") {
   return String(value ?? "").trim();
 }
@@ -70,6 +74,10 @@ function normalizeWorkspaceId(value) {
 
 function normalizeBoolean(value) {
   return value === true || value === "true" || value === 1 || value === "1";
+}
+
+function getChecklistDefinition(itemId) {
+  return DEFAULT_CHECKLIST.find((item) => item.id === itemId) || null;
 }
 
 function buildChecklist(rows = []) {
@@ -86,6 +94,22 @@ function buildChecklist(rows = []) {
       updatedByUserId: row?.updated_by_user_id || null,
     };
   });
+}
+
+function serializeActivity(row = {}) {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    item_id: row.item_id,
+    item_title: row.item_title,
+    activity_type: row.activity_type,
+    is_complete: row.is_complete,
+    actor_user_id: row.actor_user_id,
+    actor_email: row.actor_email,
+    message: row.message,
+    metadata: row.metadata || {},
+    created_at: row.created_at,
+  };
 }
 
 async function ensureWorkspaceOnboardingTables() {
@@ -112,6 +136,119 @@ async function ensureWorkspaceOnboardingTables() {
     CREATE INDEX IF NOT EXISTS workspace_onboarding_item_idx
       ON workspace_onboarding_checklist(item_id)
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_onboarding_activity (
+      id SERIAL PRIMARY KEY,
+      workspace_id INTEGER NOT NULL,
+      item_id TEXT,
+      item_title TEXT,
+      activity_type TEXT NOT NULL DEFAULT 'checklist_updated',
+      is_complete BOOLEAN,
+      actor_user_id INTEGER,
+      actor_email TEXT,
+      message TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS workspace_onboarding_activity_workspace_idx
+      ON workspace_onboarding_activity(workspace_id, created_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS workspace_onboarding_activity_item_idx
+      ON workspace_onboarding_activity(item_id)
+  `);
+}
+
+async function loadChecklistForWorkspace(workspaceId) {
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM workspace_onboarding_checklist
+      WHERE workspace_id = $1
+      ORDER BY id ASC
+    `,
+    [workspaceId]
+  );
+
+  const checklist = buildChecklist(result.rows || []);
+  const completedCount = checklist.filter((item) => item.complete).length;
+
+  return {
+    checklist,
+    summary: {
+      total: checklist.length,
+      completed: completedCount,
+      completionRate: checklist.length
+        ? Math.round((completedCount / checklist.length) * 100)
+        : 0,
+    },
+  };
+}
+
+async function loadActivityForWorkspace(workspaceId, limit = 25) {
+  const safeLimit = Math.min(Math.max(Number(limit || 25), 1), 100);
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM workspace_onboarding_activity
+      WHERE workspace_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT $2
+    `,
+    [workspaceId, safeLimit]
+  );
+
+  return result.rows.map(serializeActivity);
+}
+
+async function insertActivity({
+  workspaceId,
+  itemId = null,
+  itemTitle = null,
+  activityType = "checklist_updated",
+  isComplete = null,
+  actorUserId = null,
+  actorEmail = null,
+  message = "",
+  metadata = {},
+}) {
+  const result = await pool.query(
+    `
+      INSERT INTO workspace_onboarding_activity (
+        workspace_id,
+        item_id,
+        item_title,
+        activity_type,
+        is_complete,
+        actor_user_id,
+        actor_email,
+        message,
+        metadata,
+        created_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW())
+      RETURNING *
+    `,
+    [
+      workspaceId,
+      itemId,
+      itemTitle,
+      activityType,
+      isComplete,
+      actorUserId,
+      actorEmail,
+      message,
+      JSON.stringify(metadata || {}),
+    ]
+  );
+
+  return serializeActivity(result.rows[0]);
 }
 
 router.get("/:workspaceId/onboarding-checklist", requireAuth, async (req, res) => {
@@ -124,36 +261,54 @@ router.get("/:workspaceId/onboarding-checklist", requireAuth, async (req, res) =
       return res.status(400).json({ error: "Invalid workspace id" });
     }
 
-    const result = await pool.query(
-      `
-        SELECT *
-        FROM workspace_onboarding_checklist
-        WHERE workspace_id = $1
-        ORDER BY id ASC
-      `,
-      [workspaceId]
+    const checklistData = await loadChecklistForWorkspace(workspaceId);
+    const activity = await loadActivityForWorkspace(
+      workspaceId,
+      req.query?.activity_limit || 25
     );
-
-    const checklist = buildChecklist(result.rows || []);
-    const completedCount = checklist.filter((item) => item.complete).length;
 
     return res.json({
       ok: true,
       workspace_id: workspaceId,
-      checklist,
-      summary: {
-        total: checklist.length,
-        completed: completedCount,
-        completionRate: checklist.length
-          ? Math.round((completedCount / checklist.length) * 100)
-          : 0,
-      },
+      ...checklistData,
+      activity,
+      activityTimeline: activity,
     });
   } catch (error) {
     console.error("Workspace onboarding checklist load error:", error);
 
     return res.status(500).json({
       error: error.message || "Failed to load workspace onboarding checklist",
+    });
+  }
+});
+
+router.get("/:workspaceId/onboarding-activity", requireAuth, async (req, res) => {
+  try {
+    await ensureWorkspaceOnboardingTables();
+
+    const workspaceId = normalizeWorkspaceId(req.params.workspaceId);
+
+    if (!workspaceId) {
+      return res.status(400).json({ error: "Invalid workspace id" });
+    }
+
+    const activity = await loadActivityForWorkspace(
+      workspaceId,
+      req.query?.limit || 50
+    );
+
+    return res.json({
+      ok: true,
+      workspace_id: workspaceId,
+      results: activity,
+      activity,
+    });
+  } catch (error) {
+    console.error("Workspace onboarding activity load error:", error);
+
+    return res.status(500).json({
+      error: error.message || "Failed to load workspace onboarding activity",
     });
   }
 });
@@ -175,9 +330,23 @@ router.put(
         return res.status(400).json({ error: "Invalid workspace id" });
       }
 
-      if (!DEFAULT_CHECKLIST.some((item) => item.id === itemId)) {
+      const itemDefinition = getChecklistDefinition(itemId);
+
+      if (!itemDefinition) {
         return res.status(400).json({ error: "Invalid checklist item id" });
       }
+
+      const before = await pool.query(
+        `
+          SELECT *
+          FROM workspace_onboarding_checklist
+          WHERE workspace_id = $1 AND item_id = $2
+          LIMIT 1
+        `,
+        [workspaceId, itemId]
+      );
+
+      const previousComplete = Boolean(before.rows?.[0]?.is_complete);
 
       const result = await pool.query(
         `
@@ -214,31 +383,54 @@ router.put(
         [workspaceId, itemId, isComplete, getUserId(req)]
       );
 
-      const rows = await pool.query(
-        `
-          SELECT *
-          FROM workspace_onboarding_checklist
-          WHERE workspace_id = $1
-          ORDER BY id ASC
-        `,
-        [workspaceId]
-      );
+      let activity = null;
 
-      const checklist = buildChecklist(rows.rows || []);
-      const completedCount = checklist.filter((item) => item.complete).length;
+      if (previousComplete !== isComplete) {
+        activity = await insertActivity({
+          workspaceId,
+          itemId,
+          itemTitle: itemDefinition.title,
+          activityType: isComplete
+            ? "checklist_completed"
+            : "checklist_reopened",
+          isComplete,
+          actorUserId: getUserId(req),
+          actorEmail: getUserEmail(req),
+          message: isComplete
+            ? `Completed onboarding item: ${itemDefinition.title}`
+            : `Reopened onboarding item: ${itemDefinition.title}`,
+          metadata: {
+            category: itemDefinition.category,
+            priority: itemDefinition.priority,
+          },
+        });
+      } else {
+        activity = await insertActivity({
+          workspaceId,
+          itemId,
+          itemTitle: itemDefinition.title,
+          activityType: "checklist_updated",
+          isComplete,
+          actorUserId: getUserId(req),
+          actorEmail: getUserEmail(req),
+          message: `Updated onboarding item: ${itemDefinition.title}`,
+          metadata: {
+            category: itemDefinition.category,
+            priority: itemDefinition.priority,
+          },
+        });
+      }
+
+      const checklistData = await loadChecklistForWorkspace(workspaceId);
+      const activityRows = await loadActivityForWorkspace(workspaceId, 25);
 
       return res.json({
         ok: true,
         item: result.rows[0],
         workspace_id: workspaceId,
-        checklist,
-        summary: {
-          total: checklist.length,
-          completed: completedCount,
-          completionRate: checklist.length
-            ? Math.round((completedCount / checklist.length) * 100)
-            : 0,
-        },
+        ...checklistData,
+        activity,
+        activityTimeline: activityRows,
       });
     } catch (error) {
       console.error("Workspace onboarding checklist update error:", error);
@@ -269,17 +461,27 @@ router.delete("/:workspaceId/onboarding-checklist", requireAuth, async (req, res
       [workspaceId]
     );
 
-    const checklist = buildChecklist([]);
+    await insertActivity({
+      workspaceId,
+      itemId: null,
+      itemTitle: "Onboarding Checklist",
+      activityType: "checklist_reset",
+      isComplete: false,
+      actorUserId: getUserId(req),
+      actorEmail: getUserEmail(req),
+      message: "Reset workspace onboarding checklist",
+      metadata: {},
+    });
+
+    const checklistData = await loadChecklistForWorkspace(workspaceId);
+    const activityRows = await loadActivityForWorkspace(workspaceId, 25);
 
     return res.json({
       ok: true,
       workspace_id: workspaceId,
-      checklist,
-      summary: {
-        total: checklist.length,
-        completed: 0,
-        completionRate: 0,
-      },
+      ...checklistData,
+      activity: activityRows,
+      activityTimeline: activityRows,
     });
   } catch (error) {
     console.error("Workspace onboarding checklist reset error:", error);
