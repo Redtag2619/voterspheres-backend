@@ -5,6 +5,8 @@ import {
   getCandidateContactCoverage,
 } from "../services/candidateProfiles.service.js";
 
+import pool from "../config/database.js";
+
 function getArg(name, fallback = null) {
   const prefix = `--${name}=`;
 
@@ -22,10 +24,27 @@ const limit = Number(
   )
 );
 
+const offset = Number(
+  getArg("offset", 0)
+);
+
+const onlyMissing =
+  String(
+    getArg("only-missing", "true")
+  ).toLowerCase() !== "false";
+
 try {
-  console.log(
-    "Starting candidate enrichment..."
-  );
+  console.log("Starting scheduled candidate enrichment...", {
+    limit,
+    offset,
+    onlyMissing,
+    maxPages:
+      process.env.CANDIDATE_ENRICH_MAX_PAGES || 10,
+    brave:
+      Boolean(process.env.BRAVE_SEARCH_API_KEY),
+    serpapi:
+      Boolean(process.env.SERPAPI_API_KEY),
+  });
 
   const before =
     await getCandidateContactCoverage();
@@ -33,7 +52,10 @@ try {
   console.log("Coverage before:", before);
 
   const result =
-    await enrichAllCandidateProfiles(limit);
+    await enrichAllCandidateProfiles(limit, {
+      offset,
+      onlyMissing,
+    });
 
   console.log("Enrichment result:", result);
 
@@ -41,13 +63,13 @@ try {
     await getCandidateContactCoverage();
 
   console.log("Coverage after:", after);
-
-  process.exit(0);
 } catch (error) {
   console.error(
-    "Candidate enrichment failed:",
+    "Scheduled candidate enrichment failed:",
     error
   );
 
-  process.exit(1);
+  process.exitCode = 1;
+} finally {
+  await pool.end();
 }
