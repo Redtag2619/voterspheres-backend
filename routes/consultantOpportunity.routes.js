@@ -5,7 +5,7 @@ import {
   getConsultantOpportunitySummary,
   getConsultantOpportunityDetail,
   getCampaignOpportunityHeatmap,
-} from "../services/consultantOpportunity.service.js";
+} from "../services/consultantOpportunity.service.js"; 
 
 const router = express.Router();
 
