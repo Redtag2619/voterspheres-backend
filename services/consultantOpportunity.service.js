@@ -533,5 +533,3 @@ export async function getConsultantOpportunityDetail(candidateId) {
   };
 }
 
-  return result.rows[0] || null;
-}
