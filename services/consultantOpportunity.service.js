@@ -428,7 +428,10 @@ export async function getConsultantOpportunityDetail(candidateId) {
     [candidateId]
   );
 
-  export async function getCampaignOpportunityHeatmap(filters = {}) {
+  return result.rows[0] || null;
+}
+
+export async function getCampaignOpportunityHeatmap(filters = {}) {
   await ensureOpportunityTables();
 
   if (filters.refresh === true || filters.refresh === "true") {
@@ -492,24 +495,37 @@ export async function getConsultantOpportunityDetail(candidateId) {
     params
   );
 
-  const states = stateResult.rows.map((row) => ({
-    ...row,
-    avg_score: Number(row.avg_score || 0),
-    heat_level:
-      Number(row.avg_score || 0) >= 80
-        ? "urgent"
-        : Number(row.avg_score || 0) >= 60
-          ? "high"
-          : Number(row.avg_score || 0) >= 40
-            ? "medium"
-            : "low",
-  }));
+  const states = stateResult.rows.map((row) => {
+    const avgScore = Number(row.avg_score || 0);
+
+    return {
+      ...row,
+      avg_score: avgScore,
+      heat_level:
+        avgScore >= 80
+          ? "urgent"
+          : avgScore >= 60
+            ? "high"
+            : avgScore >= 40
+              ? "medium"
+              : "low",
+    };
+  });
 
   const summary = {
     states: states.length,
-    total_campaigns: states.reduce((sum, row) => sum + Number(row.total_campaigns || 0), 0),
-    urgent_count: states.reduce((sum, row) => sum + Number(row.urgent_count || 0), 0),
-    high_count: states.reduce((sum, row) => sum + Number(row.high_count || 0), 0),
+    total_campaigns: states.reduce(
+      (sum, row) => sum + Number(row.total_campaigns || 0),
+      0
+    ),
+    urgent_count: states.reduce(
+      (sum, row) => sum + Number(row.urgent_count || 0),
+      0
+    ),
+    high_count: states.reduce(
+      (sum, row) => sum + Number(row.high_count || 0),
+      0
+    ),
     avg_score: states.length
       ? Number(
           (
@@ -532,4 +548,3 @@ export async function getConsultantOpportunityDetail(candidateId) {
     top_opportunities: topResult.rows || [],
   };
 }
-
