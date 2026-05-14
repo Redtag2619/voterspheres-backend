@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  scoreConsultantOpportunities,
+  scoreConsultantOpportunities, 
   listConsultantOpportunities,
   getConsultantOpportunitySummary,
   getConsultantOpportunityDetail,
