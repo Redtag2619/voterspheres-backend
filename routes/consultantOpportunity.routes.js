@@ -4,6 +4,7 @@ import {
   listConsultantOpportunities,
   getConsultantOpportunitySummary,
   getConsultantOpportunityDetail,
+  getCampaignOpportunityHeatmap,
 } from "../services/consultantOpportunity.service.js";
 
 const router = express.Router();
@@ -33,6 +34,18 @@ router.get("/summary", async (req, res) => {
     console.error("Consultant opportunity summary error:", error);
     return res.status(500).json({
       error: error.message || "Failed to load consultant opportunity summary",
+    });
+  }
+});
+
+router.get("/heatmap", async (req, res) => {
+  try {
+    const data = await getCampaignOpportunityHeatmap(req.query || {});
+    return res.json({ ok: true, ...data });
+  } catch (error) {
+    console.error("Campaign opportunity heatmap error:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to load campaign opportunity heatmap",
     });
   }
 });
