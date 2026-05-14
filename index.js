@@ -180,7 +180,7 @@ app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
-app.use("/api/consultants", requireAuth, consultantsRoutes);
+app.use("/api/consultants", consultantsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/tasks", tasksRoutes);
