@@ -428,5 +428,110 @@ export async function getConsultantOpportunityDetail(candidateId) {
     [candidateId]
   );
 
+  export async function getCampaignOpportunityHeatmap(filters = {}) {
+  await ensureOpportunityTables();
+
+  if (filters.refresh === true || filters.refresh === "true") {
+    await scoreConsultantOpportunities({
+      limit: filters.limit || 500,
+      state: filters.state || null,
+    });
+  }
+
+  const params = [];
+  const where = [];
+
+  if (filters.state) {
+    params.push(clean(filters.state).toUpperCase());
+    where.push(`UPPER(COALESCE(c.state, c.state_code, '')) = $${params.length}`);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const stateResult = await pool.query(
+    `
+      SELECT
+        COALESCE(c.state, c.state_code, 'NA') AS state,
+        COUNT(*)::int AS total_campaigns,
+        COUNT(*) FILTER (WHERE cos.opportunity_band = 'urgent')::int AS urgent_count,
+        COUNT(*) FILTER (WHERE cos.opportunity_band = 'high')::int AS high_count,
+        COUNT(*) FILTER (WHERE cos.opportunity_band = 'medium')::int AS medium_count,
+        COUNT(*) FILTER (WHERE cos.opportunity_band = 'low')::int AS low_count,
+        ROUND(AVG(cos.opportunity_score)::numeric, 1) AS avg_score,
+        MAX(cos.opportunity_score)::int AS top_score,
+        MAX(cos.scored_at) AS last_scored_at
+      FROM consultant_opportunity_scores cos
+      JOIN candidates c ON c.id = cos.candidate_id
+      ${whereSql}
+      GROUP BY COALESCE(c.state, c.state_code, 'NA')
+      ORDER BY avg_score DESC NULLS LAST, urgent_count DESC, high_count DESC
+    `,
+    params
+  );
+
+  const topResult = await pool.query(
+    `
+      SELECT
+        cos.*,
+        COALESCE(c.full_name, c.name, 'Candidate') AS candidate_name,
+        COALESCE(c.state, c.state_code, 'NA') AS state,
+        COALESCE(c.office, '') AS office,
+        COALESCE(c.party, '') AS party,
+        COALESCE(cp.campaign_website, cp.official_website, c.website, '') AS website,
+        COALESCE(cp.email, c.contact_email, '') AS email,
+        COALESCE(cp.phone, c.phone, '') AS phone,
+        cp.contact_confidence,
+        cp.last_scraped_at
+      FROM consultant_opportunity_scores cos
+      JOIN candidates c ON c.id = cos.candidate_id
+      LEFT JOIN candidate_profiles cp ON cp.candidate_id = c.id
+      ${whereSql}
+      ORDER BY cos.opportunity_score DESC, cos.scored_at DESC
+      LIMIT 25
+    `,
+    params
+  );
+
+  const states = stateResult.rows.map((row) => ({
+    ...row,
+    avg_score: Number(row.avg_score || 0),
+    heat_level:
+      Number(row.avg_score || 0) >= 80
+        ? "urgent"
+        : Number(row.avg_score || 0) >= 60
+          ? "high"
+          : Number(row.avg_score || 0) >= 40
+            ? "medium"
+            : "low",
+  }));
+
+  const summary = {
+    states: states.length,
+    total_campaigns: states.reduce((sum, row) => sum + Number(row.total_campaigns || 0), 0),
+    urgent_count: states.reduce((sum, row) => sum + Number(row.urgent_count || 0), 0),
+    high_count: states.reduce((sum, row) => sum + Number(row.high_count || 0), 0),
+    avg_score: states.length
+      ? Number(
+          (
+            states.reduce((sum, row) => sum + Number(row.avg_score || 0), 0) /
+            states.length
+          ).toFixed(1)
+        )
+      : 0,
+    last_scored_at:
+      states
+        .map((row) => row.last_scored_at)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || null,
+  };
+
+  return {
+    summary,
+    states,
+    top_opportunities: topResult.rows || [],
+  };
+}
+
   return result.rows[0] || null;
 }
