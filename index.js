@@ -39,6 +39,7 @@ import { startScheduledReportRunner } from "./services/scheduledReports.service.
 import enterpriseLeadsRoutes from "./routes/enterpriseLeads.routes.js";
 import workspaceOnboardingRoutes from "./routes/workspaceOnboarding.routes.js";
 import { startCandidateEnrichmentScheduler } from "./services/candidateEnrichmentScheduler.service.js";
+import consultantOpportunityRoutes from "./routes/consultantOpportunity.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -180,6 +181,7 @@ app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
+app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
