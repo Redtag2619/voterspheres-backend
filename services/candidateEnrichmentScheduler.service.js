@@ -5,6 +5,7 @@ import {
 
 let timer = null;
 let running = false;
+let offset = 0;
 
 export function startCandidateEnrichmentScheduler() {
   const enabled =
@@ -21,8 +22,12 @@ export function startCandidateEnrichmentScheduler() {
   );
 
   const batchSize = Number(
-    process.env.CANDIDATE_ENRICH_SCHEDULER_BATCH_SIZE || 100
+    process.env.CANDIDATE_ENRICH_SCHEDULER_BATCH_SIZE || 250
   );
+
+  const onlyMissing =
+    String(process.env.CANDIDATE_ENRICH_ONLY_MISSING || "true").toLowerCase() !==
+    "false";
 
   async function runScheduledEnrichment() {
     if (running) return;
@@ -32,13 +37,23 @@ export function startCandidateEnrichmentScheduler() {
     try {
       console.log("Candidate enrichment scheduler running...", {
         batchSize,
+        offset,
+        onlyMissing,
       });
 
       const before = await getCandidateContactCoverage();
 
       const result = await enrichAllCandidateProfiles(batchSize, {
-        onlyMissing: true,
+        offset,
+        onlyMissing,
+        full: false,
       });
+
+      offset += batchSize;
+
+      if (!result?.candidate_ids?.length || result?.candidate_ids?.length < batchSize) {
+        offset = 0;
+      }
 
       const after = await getCandidateContactCoverage();
 
@@ -46,6 +61,7 @@ export function startCandidateEnrichmentScheduler() {
         before,
         result,
         after,
+        nextOffset: offset,
       });
     } catch (error) {
       console.error(
@@ -59,9 +75,7 @@ export function startCandidateEnrichmentScheduler() {
 
   timer = setInterval(runScheduledEnrichment, intervalMs);
 
-  console.log(
-    `Candidate enrichment scheduler enabled (${intervalMs}ms).`
-  );
+  console.log(`Candidate enrichment scheduler enabled (${intervalMs}ms).`);
 
   if (
     String(process.env.CANDIDATE_ENRICH_RUN_ON_STARTUP || "").toLowerCase() ===
@@ -74,9 +88,6 @@ export function startCandidateEnrichmentScheduler() {
 }
 
 export function stopCandidateEnrichmentScheduler() {
-  if (timer) {
-    clearInterval(timer);
-  }
-
+  if (timer) clearInterval(timer);
   timer = null;
 }
