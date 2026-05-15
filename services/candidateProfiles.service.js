@@ -701,7 +701,6 @@ export async function enrichAllCandidateProfiles(limit = 100, options = {}) {
         OR COALESCE(cp.email, c.contact_email, '') = ''
         OR COALESCE(cp.phone, c.phone, '') = ''
         OR COALESCE(cp.campaign_website, c.website, '') = ''
-        OR COALESCE(cp.facebook_url, cp.x_url, cp.instagram_url, cp.youtube_url, cp.linkedin_url, cp.tiktok_url, '') = ''
       )
     `);
   }
