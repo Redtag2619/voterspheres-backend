@@ -3,6 +3,21 @@ import pool from "../config/database.js";
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
 const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
 
+const BAD_DOMAINS = [
+  "example.com",
+  "fec.gov",
+  "ballotpedia.org",
+  "wikipedia.org",
+  "facebook.com",
+  "x.com",
+  "twitter.com",
+  "instagram.com",
+  "youtube.com",
+  "linkedin.com",
+  "opensecrets.org",
+  "votesmart.org",
+];
+
 function clean(value) {
   if (value === undefined || value === null) return null;
   const next = String(value).trim();
@@ -11,6 +26,13 @@ function clean(value) {
 
 function unique(values = []) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function safeUrl(value) {
+  const next = clean(value);
+  if (!next) return null;
+  if (next.startsWith("http://") || next.startsWith("https://")) return next;
+  return `https://${next}`;
 }
 
 function normalizeEmail(value) {
@@ -22,11 +44,39 @@ function normalizePhone(value) {
   return clean(value);
 }
 
-function safeUrl(value) {
-  const next = clean(value);
-  if (!next) return null;
-  if (next.startsWith("http://") || next.startsWith("https://")) return next;
-  return `https://${next}`;
+function domainOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function isBadDiscoveryUrl(url) {
+  const domain = domainOf(url);
+  if (!domain) return true;
+  return BAD_DOMAINS.some((bad) => domain === bad || domain.endsWith(`.${bad}`));
+}
+
+function isLikelyCampaignUrl(url = "") {
+  const lower = String(url).toLowerCase();
+
+  if (isBadDiscoveryUrl(lower)) return false;
+
+  return (
+    lower.includes("for") ||
+    lower.includes("campaign") ||
+    lower.includes("vote") ||
+    lower.includes("elect") ||
+    lower.includes("committee") ||
+    lower.includes("senate") ||
+    lower.includes("congress") ||
+    lower.includes("house") ||
+    lower.includes("mayor") ||
+    lower.includes("governor") ||
+    lower.includes("sheriff") ||
+    lower.includes("judge")
+  );
 }
 
 async function ensureCandidateProfilesTable() {
@@ -80,7 +130,10 @@ function extractEmails(html = "") {
     ),
   ];
 
-  return unique(matches.map((m) => normalizeEmail(m[1])));
+  return unique(matches.map((m) => normalizeEmail(m[1]))).filter((email) => {
+    if (!email) return false;
+    return !email.includes("example.com");
+  });
 }
 
 function extractPhones(text = "") {
@@ -168,6 +221,7 @@ function pickImportantInternalPages(html = "", baseUrl = "", maxPages = 6) {
     "media",
     "connect",
     "volunteer",
+    "donate",
   ];
 
   return extractLinks(html, baseUrl)
@@ -210,6 +264,103 @@ async function fetchHtml(url) {
   }
 }
 
+function buildSearchQueries(candidate) {
+  const name = candidate.full_name || candidate.name || "";
+  const state = candidate.state || candidate.state_code || "";
+  const office = candidate.office || "";
+  const district = candidate.district || "";
+
+  return unique([
+    `${name} ${state} ${office} campaign website`,
+    `${name} ${office} ${state} official campaign`,
+    `${name} for ${office} ${state}`,
+    `${name} campaign contact`,
+    district ? `${name} ${state} district ${district} campaign` : null,
+  ]);
+}
+
+async function braveSearch(query) {
+  if (!BRAVE_SEARCH_API_KEY) return [];
+
+  try {
+    const response = await fetch(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`,
+      {
+        headers: {
+          "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+
+    return (data?.web?.results || [])
+      .map((item) => ({
+        url: item.url,
+        title: item.title,
+        description: item.description,
+        source: "brave",
+        query,
+      }))
+      .filter((item) => item.url);
+  } catch {
+    return [];
+  }
+}
+
+async function serpSearch(query) {
+  if (!SERPAPI_API_KEY) return [];
+
+  try {
+    const response = await fetch(
+      `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${SERPAPI_API_KEY}`
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+
+    return (data?.organic_results || [])
+      .map((item) => ({
+        url: item.link,
+        title: item.title,
+        description: item.snippet,
+        source: "serpapi",
+        query,
+      }))
+      .filter((item) => item.url);
+  } catch {
+    return [];
+  }
+}
+
+function scoreSearchResult(item, candidate) {
+  const url = safeUrl(item.url);
+  if (!url) return -100;
+
+  const lower = `${url} ${item.title || ""} ${item.description || ""}`.toLowerCase();
+  const name = String(candidate.full_name || candidate.name || "").toLowerCase();
+  const lastName = name.split(/\s+/).filter(Boolean).at(-1) || "";
+
+  let score = 0;
+
+  if (isBadDiscoveryUrl(url)) score -= 50;
+  if (isLikelyCampaignUrl(url)) score += 30;
+  if (lastName && lower.includes(lastName)) score += 15;
+  if (lower.includes("campaign")) score += 12;
+  if (lower.includes("official")) score += 10;
+  if (lower.includes("for ")) score += 8;
+  if (lower.includes("donate")) score += 5;
+  if (lower.includes("contact")) score += 5;
+  if (lower.includes("facebook.com") || lower.includes("twitter.com")) score -= 10;
+  if (lower.includes("ballotpedia") || lower.includes("wikipedia")) score -= 20;
+
+  return score;
+}
+
 async function discoverWebsite(candidate) {
   const direct =
     candidate.website ||
@@ -217,46 +368,55 @@ async function discoverWebsite(candidate) {
     candidate.official_website ||
     candidate.url;
 
-  if (direct) return safeUrl(direct);
-
-  const name = candidate.full_name || candidate.name || "";
-  const state = candidate.state || candidate.state_code || "";
-  const office = candidate.office || "";
-
-  const query = encodeURIComponent(`${name} ${state} ${office} campaign website`);
-
-  if (BRAVE_SEARCH_API_KEY) {
-    try {
-      const response = await fetch(
-        `https://api.search.brave.com/res/v1/web/search?q=${query}`,
-        {
-          headers: {
-            "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
-          },
-        }
-      );
-
-      const data = await response.json();
-      const result = data?.web?.results?.find((item) => item?.url);
-
-      if (result?.url) return safeUrl(result.url);
-    } catch {}
+  if (direct && !isBadDiscoveryUrl(direct)) {
+    return {
+      website: safeUrl(direct),
+      attempts: [{ type: "direct", url: safeUrl(direct), accepted: true }],
+    };
   }
 
-  if (SERPAPI_API_KEY) {
-    try {
-      const response = await fetch(
-        `https://serpapi.com/search.json?q=${query}&api_key=${SERPAPI_API_KEY}`
-      );
+  const attempts = [];
+  const queries = buildSearchQueries(candidate);
 
-      const data = await response.json();
-      const result = data?.organic_results?.find((item) => item?.link);
+  for (const query of queries) {
+    const results = [
+      ...(await braveSearch(query)),
+      ...(await serpSearch(query)),
+    ];
 
-      if (result?.link) return safeUrl(result.link);
-    } catch {}
+    const ranked = results
+      .map((item) => ({
+        ...item,
+        url: safeUrl(item.url),
+        score: scoreSearchResult(item, candidate),
+      }))
+      .filter((item) => item.url)
+      .sort((a, b) => b.score - a.score);
+
+    attempts.push({
+      query,
+      results: ranked.slice(0, 5).map((item) => ({
+        url: item.url,
+        score: item.score,
+        title: item.title || null,
+        source: item.source,
+      })),
+    });
+
+    const best = ranked.find((item) => item.score >= 20 && !isBadDiscoveryUrl(item.url));
+
+    if (best?.url) {
+      return {
+        website: best.url,
+        attempts,
+      };
+    }
   }
 
-  return null;
+  return {
+    website: null,
+    attempts,
+  };
 }
 
 function candidateAddress(candidate) {
@@ -301,9 +461,13 @@ function mergeUnlocked(existing = {}, incoming = {}) {
   for (const [key, value] of Object.entries(incoming)) {
     if (key === "candidate_id") continue;
     if (adminLocked || lockedFields?.[key]) continue;
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      merged[key] = value;
-    }
+
+    const valid =
+      value !== undefined &&
+      value !== null &&
+      !(typeof value === "string" && value.trim() === "");
+
+    if (valid) merged[key] = value;
   }
 
   return merged;
@@ -330,7 +494,8 @@ export async function enrichCandidateProfile(candidateId) {
   if (!candidate) return null;
 
   const existing = await getExistingProfile(candidateId);
-  const website = await discoverWebsite(candidate);
+  const discovery = await discoverWebsite(candidate);
+  const website = discovery.website;
 
   const scrapedPages = [];
   let combinedHtml = "";
@@ -385,8 +550,17 @@ export async function enrichCandidateProfile(candidateId) {
     press_contact_name: null,
     ...socials,
     contact_source_url: website,
-    source_label: website ? "campaign_site_live" : "candidate_table",
-    scraped_pages: scrapedPages,
+    source_label: website ? "campaign_site_live" : "discovery_failed",
+    scraped_pages: [
+      ...scrapedPages,
+      {
+        type: "discovery",
+        website,
+        brave_enabled: Boolean(BRAVE_SEARCH_API_KEY),
+        serpapi_enabled: Boolean(SERPAPI_API_KEY),
+        attempts: discovery.attempts || [],
+      },
+    ],
     last_scraped_at: new Date(),
   };
 
@@ -533,7 +707,6 @@ export async function enrichAllCandidateProfiles(limit = 100, options = {}) {
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
   const queryLimit = options.full ? 5000 : batchLimit;
 
   params.push(queryLimit);
@@ -625,6 +798,9 @@ export async function getCandidateContactCoverage(filters = {}) {
         COUNT(*) FILTER (
           WHERE cp.is_verified = true OR c.contact_verified = true
         )::int AS verified,
+        COUNT(*) FILTER (
+          WHERE cp.source_label = 'discovery_failed'
+        )::int AS discovery_failed,
         ROUND(AVG(COALESCE(cp.contact_confidence, 0))::numeric, 2) AS avg_confidence
       FROM candidates c
       LEFT JOIN candidate_profiles cp ON cp.candidate_id = c.id
@@ -641,6 +817,7 @@ export async function getCandidateContactCoverage(filters = {}) {
     with_address: 0,
     with_social: 0,
     verified: 0,
+    discovery_failed: 0,
     avg_confidence: 0,
   };
 }
