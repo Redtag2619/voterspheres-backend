@@ -1,4 +1,5 @@
 import pool from "../config/database.js";
+import { enrichCandidateWithFecCommitteeContact } from "./fec.service.js";
 
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
 const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
@@ -177,35 +178,12 @@ function extractSocialLinks(html = "", baseUrl = "") {
   for (const link of links) {
     const lower = link.toLowerCase();
 
-    if (!socials.facebook_url && lower.includes("facebook.com")) {
-      socials.facebook_url = link;
-    }
-
-    if (
-      !socials.x_url &&
-      (lower.includes("x.com") || lower.includes("twitter.com"))
-    ) {
-      socials.x_url = link;
-    }
-
-    if (!socials.instagram_url && lower.includes("instagram.com")) {
-      socials.instagram_url = link;
-    }
-
-    if (
-      !socials.youtube_url &&
-      (lower.includes("youtube.com") || lower.includes("youtu.be"))
-    ) {
-      socials.youtube_url = link;
-    }
-
-    if (!socials.linkedin_url && lower.includes("linkedin.com")) {
-      socials.linkedin_url = link;
-    }
-
-    if (!socials.tiktok_url && lower.includes("tiktok.com")) {
-      socials.tiktok_url = link;
-    }
+    if (!socials.facebook_url && lower.includes("facebook.com")) socials.facebook_url = link;
+    if (!socials.x_url && (lower.includes("x.com") || lower.includes("twitter.com"))) socials.x_url = link;
+    if (!socials.instagram_url && lower.includes("instagram.com")) socials.instagram_url = link;
+    if (!socials.youtube_url && (lower.includes("youtube.com") || lower.includes("youtu.be"))) socials.youtube_url = link;
+    if (!socials.linkedin_url && lower.includes("linkedin.com")) socials.linkedin_url = link;
+    if (!socials.tiktok_url && lower.includes("tiktok.com")) socials.tiktok_url = link;
   }
 
   return socials;
@@ -379,10 +357,7 @@ async function discoverWebsite(candidate) {
   const queries = buildSearchQueries(candidate);
 
   for (const query of queries) {
-    const results = [
-      ...(await braveSearch(query)),
-      ...(await serpSearch(query)),
-    ];
+    const results = [...(await braveSearch(query)), ...(await serpSearch(query))];
 
     const ranked = results
       .map((item) => ({
@@ -403,7 +378,9 @@ async function discoverWebsite(candidate) {
       })),
     });
 
-    const best = ranked.find((item) => item.score >= 20 && !isBadDiscoveryUrl(item.url));
+    const best = ranked.find(
+      (item) => item.score >= 20 && !isBadDiscoveryUrl(item.url)
+    );
 
     if (best?.url) {
       return {
@@ -441,7 +418,6 @@ function calculateConfidence(profile) {
   if (profile.phone) score += 0.2;
   if (profile.campaign_website) score += 0.15;
   if (profile.office_address || profile.campaign_address) score += 0.15;
-
   if (profile.facebook_url) score += 0.04;
   if (profile.x_url) score += 0.04;
   if (profile.instagram_url) score += 0.04;
@@ -482,7 +458,7 @@ async function getExistingProfile(candidateId) {
   return result.rows[0] || {};
 }
 
-export async function enrichCandidateProfile(candidateId) {
+export async function enrichCandidateProfile(candidateId, options = {}) {
   await ensureCandidateProfilesTable();
 
   const candidateResult = await pool.query(
@@ -493,8 +469,30 @@ export async function enrichCandidateProfile(candidateId) {
   const candidate = candidateResult.rows[0];
   if (!candidate) return null;
 
+  if (options.useFec !== false && candidate.fec_candidate_id) {
+    try {
+      await enrichCandidateWithFecCommitteeContact(candidate);
+    } catch (error) {
+      console.warn(
+        "FEC committee contact lookup failed:",
+        candidate.id,
+        error?.message || error
+      );
+    }
+  }
+
   const existing = await getExistingProfile(candidateId);
-  const discovery = await discoverWebsite(candidate);
+  const alreadyHasCore =
+    existing.email && existing.phone && existing.campaign_website;
+
+  if (alreadyHasCore && options.forceCrawler !== true) {
+    return {
+      candidate,
+      profile: existing,
+    };
+  }
+
+  const discovery = await discoverWebsite({ ...candidate, ...existing });
   const website = discovery.website;
 
   const scrapedPages = [];
@@ -536,21 +534,26 @@ export async function enrichCandidateProfile(candidateId) {
 
   const incoming = {
     candidate_id: candidateId,
-    campaign_website: website || candidate.website || null,
-    official_website: null,
-    office_address: fallbackAddress,
-    campaign_address: fallbackAddress,
-    phone: phones[0] || candidate.phone || null,
-    email: emails[0] || candidate.contact_email || candidate.press_email || null,
-    press_contact_email: emails[1] || candidate.press_email || null,
-    chief_of_staff_name: null,
-    campaign_manager_name: null,
-    finance_director_name: null,
-    political_director_name: null,
-    press_contact_name: null,
+    campaign_website: website || candidate.website || existing.campaign_website || null,
+    official_website: existing.official_website || null,
+    office_address: fallbackAddress || existing.office_address || null,
+    campaign_address: fallbackAddress || existing.campaign_address || null,
+    phone: phones[0] || candidate.phone || existing.phone || null,
+    email:
+      emails[0] ||
+      candidate.contact_email ||
+      candidate.press_email ||
+      existing.email ||
+      null,
+    press_contact_email: emails[1] || candidate.press_email || existing.press_contact_email || null,
+    chief_of_staff_name: existing.chief_of_staff_name || null,
+    campaign_manager_name: existing.campaign_manager_name || null,
+    finance_director_name: existing.finance_director_name || null,
+    political_director_name: existing.political_director_name || null,
+    press_contact_name: existing.press_contact_name || null,
     ...socials,
-    contact_source_url: website,
-    source_label: website ? "campaign_site_live" : "discovery_failed",
+    contact_source_url: website || existing.contact_source_url || null,
+    source_label: website ? "campaign_site_live" : existing.source_label || "discovery_failed",
     scraped_pages: [
       ...scrapedPages,
       {
@@ -716,7 +719,7 @@ export async function enrichAllCandidateProfiles(limit = 100, options = {}) {
 
   const result = await pool.query(
     `
-      SELECT c.id
+      SELECT c.*
       FROM candidates c
       LEFT JOIN candidate_profiles cp ON cp.candidate_id = c.id
       ${whereSql}
@@ -732,7 +735,9 @@ export async function enrichAllCandidateProfiles(limit = 100, options = {}) {
 
   for (const row of result.rows) {
     try {
-      const enriched = await enrichCandidateProfile(row.id);
+      const enriched = await enrichCandidateProfile(row.id, {
+        useFec: options.useFec !== false,
+      });
 
       if (enriched?.candidate?.id) {
         refreshed.push(enriched.candidate.id);
@@ -800,6 +805,9 @@ export async function getCandidateContactCoverage(filters = {}) {
         COUNT(*) FILTER (
           WHERE cp.source_label = 'discovery_failed'
         )::int AS discovery_failed,
+        COUNT(*) FILTER (
+          WHERE cp.source_label = 'fec_committee'
+        )::int AS fec_committee,
         ROUND(AVG(COALESCE(cp.contact_confidence, 0))::numeric, 2) AS avg_confidence
       FROM candidates c
       LEFT JOIN candidate_profiles cp ON cp.candidate_id = c.id
@@ -817,6 +825,7 @@ export async function getCandidateContactCoverage(filters = {}) {
     with_social: 0,
     verified: 0,
     discovery_failed: 0,
+    fec_committee: 0,
     avg_confidence: 0,
   };
 }
