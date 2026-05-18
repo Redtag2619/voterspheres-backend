@@ -24,6 +24,7 @@ const state = getArg("state", null);
 const office = getArg("office", null);
 const onlyMissing = boolArg("only-missing", true);
 const full = boolArg("full", false);
+const useFec = boolArg("fec", true);
 
 try {
   console.log("Starting candidate contact enrichment...", {
@@ -33,8 +34,10 @@ try {
     office,
     onlyMissing,
     full,
+    useFec,
     brave: Boolean(process.env.BRAVE_SEARCH_API_KEY),
     serpapi: Boolean(process.env.SERPAPI_API_KEY),
+    fec: Boolean(process.env.FEC_API_KEY),
   });
 
   const before = await getCandidateContactCoverage({ state, office });
@@ -46,6 +49,7 @@ try {
     office,
     onlyMissing,
     full,
+    useFec,
   });
 
   console.log("Enrichment result:", result);
