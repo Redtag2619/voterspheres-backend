@@ -2,7 +2,7 @@ import express from "express";
 import {
   fetchCandidates,
   fetchCandidateById,
-  fetchCandidateContacts, 
+  fetchCandidateContacts,
   fetchCandidateStates,
   fetchCandidateOffices,
   fetchCandidateParties,
@@ -16,6 +16,8 @@ import {
   updateCandidateProfileLocks,
   updateCandidateVerification,
 } from "../services/candidateProfiles.service.js";
+
+import { syncFecCommitteeContactsForCandidates } from "../services/fec.service.js";
 
 import {
   getCandidateIntelligenceSummary,
@@ -104,6 +106,74 @@ router.get("/contact-coverage", async (req, res) => {
   }
 });
 
+router.get("/enrichment-status", async (req, res) => {
+  try {
+    const coverage = await getCandidateContactCoverage(req.query || {});
+    const total = Number(coverage?.total || coverage?.total_candidates || 0);
+    const withEmail = Number(coverage?.with_email || 0);
+    const withPhone = Number(coverage?.with_phone || 0);
+    const withWebsite = Number(coverage?.with_website || 0);
+    const withAddress = Number(coverage?.with_address || 0);
+
+    const status = {
+      total_candidates: total,
+      total,
+      with_email: withEmail,
+      with_phone: withPhone,
+      with_website: withWebsite,
+      with_address: withAddress,
+      with_social: Number(coverage?.with_social || 0),
+      verified: Number(coverage?.verified || 0),
+      discovery_failed: Number(coverage?.discovery_failed || 0),
+      fec_committee: Number(coverage?.fec_committee || 0),
+      avg_confidence: coverage?.avg_confidence || 0,
+      missing_email: Math.max(total - withEmail, 0),
+      missing_phone: Math.max(total - withPhone, 0),
+      missing_website: Math.max(total - withWebsite, 0),
+      missing_address: Math.max(total - withAddress, 0),
+      enrichment_running: false,
+      last_sync_at: new Date().toISOString(),
+    };
+
+    return res.json({
+      ok: true,
+      status,
+      coverage: status,
+    });
+  } catch (error) {
+    console.error("Candidate enrichment status error:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to load candidate enrichment status",
+    });
+  }
+});
+
+router.post("/sync-fec-committee-contacts", async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.body?.limit || 500), 1), 5000);
+    const offset = Math.max(Number(req.body?.offset || 0), 0);
+    const cycle = req.body?.cycle ? Number(req.body.cycle) : undefined;
+
+    const result = await syncFecCommitteeContactsForCandidates({
+      limit,
+      offset,
+      cycle,
+      state: req.body?.state || null,
+      office: req.body?.office || null,
+    });
+
+    return res.json({
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error("Candidate FEC committee contact sync error:", error);
+    return res.status(500).json({
+      error: error.message || "Failed to sync FEC committee contacts",
+    });
+  }
+});
+
 router.get("/intelligence/scoring", async (req, res) => {
   try {
     const result = await getCandidateIntelligenceSummary(req.query || {});
@@ -142,6 +212,7 @@ router.post("/refresh-profiles", async (req, res) => {
       offset: req.body?.offset || 0,
       state: req.body?.state || null,
       onlyMissing: req.body?.only_missing !== false,
+      useFec: req.body?.use_fec !== false,
     });
 
     return res.json({
