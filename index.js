@@ -188,7 +188,7 @@ app.use("/api/tasks", tasksRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
-app.use("/api/relationships", requireAuth, relationshipGraphRoutes);
+app.use("/api/relationships", relationshipGraphRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
@@ -319,7 +319,20 @@ async function runScheduledIntelligenceRefresh(trigger = "startup") {
       polling_seen: result?.polling?.seen
     });
   } catch (error) {
-    console.error(`❌ Live intelligence refresh failed (${trigger})`, error.message);
+    if (
+  error?.response?.status === 402 ||
+  String(error?.message || "").includes("402")
+) {
+  console.warn(
+    `⚠️ Live intelligence refresh skipped (${trigger}) — plan gated`
+  );
+  return;
+}
+
+console.error(
+  `❌ Live intelligence refresh failed (${trigger})`,
+  error.message
+);
   }
 }
 
