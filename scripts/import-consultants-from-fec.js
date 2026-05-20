@@ -8,7 +8,6 @@ function getArg(name, fallback = null) {
   return hit ? hit.slice(prefix.length) : fallback;
 }
 
-<<<<<<< HEAD
 function boolArg(name, fallback = false) {
   const value = getArg(name, String(fallback));
   return String(value).toLowerCase() === "true";
@@ -45,7 +44,6 @@ main()
   .finally(async () => {
     await pool.end();
   });
-=======
 run();
 
->>>>>>> 0fc9c66 (build live fec consultant intelligence engine)
+0fc9c66 (build live fec consultant intelligence engine)
