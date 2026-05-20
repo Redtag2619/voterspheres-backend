@@ -16,6 +16,7 @@
     "ingest:once": "node jobs/providerIngestion.jobRunner.js",
     "sync:fec": "node scripts/syncFecData.js",
     "sync:candidate-contacts": "node scripts/enrich-candidate-contacts.js"
+    "import:consultants": "node scripts/import-consultants-from-fec.js"
   },
   "dependencies": {
     "axios": "^1.13.5",
