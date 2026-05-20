@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 import pool from "../config/database.js";
 import { importConsultantsFromFec } from "../services/consultantImport.service.js";
@@ -46,4 +47,8 @@ main()
   });
 run();
 
+<<<<<<< HEAD
 0fc9c66 (build live fec consultant intelligence engine)
+=======
+0fc9c66 (build live fec consultant intelligence engine)
+>>>>>>> 2c0729e (build live fec consultant intelligence engine)
