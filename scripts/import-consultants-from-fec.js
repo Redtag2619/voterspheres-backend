@@ -47,8 +47,3 @@ main()
   });
 run();
 
-<<<<<<< HEAD
-0fc9c66 (build live fec consultant intelligence engine)
-=======
-0fc9c66 (build live fec consultant intelligence engine)
->>>>>>> 2c0729e (build live fec consultant intelligence engine)
