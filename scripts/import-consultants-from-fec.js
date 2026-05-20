@@ -1,4 +1,3 @@
-
 import "dotenv/config";
 import pool from "../config/database.js";
 import { importConsultantsFromFec } from "../services/consultantImport.service.js";
@@ -19,7 +18,9 @@ async function main() {
     cycle: Number(getArg("cycle", process.env.FEC_DEFAULT_CYCLE || 2026)),
     candidateLimit: Number(getArg("candidate-limit", 25)),
     offset: Number(getArg("offset", 0)),
-    maxPages: Number(getArg("max-pages", process.env.FEC_CONSULTANT_IMPORT_MAX_PAGES || 3)),
+    maxPages: Number(
+      getArg("max-pages", process.env.FEC_CONSULTANT_IMPORT_MAX_PAGES || 3)
+    ),
     dryRun: boolArg("dry-run", false),
     state: getArg("state", null),
     office: getArg("office", null),
@@ -45,5 +46,3 @@ main()
   .finally(async () => {
     await pool.end();
   });
-run();
-
