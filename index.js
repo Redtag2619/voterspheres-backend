@@ -42,6 +42,9 @@ import { startCandidateEnrichmentScheduler } from "./services/candidateEnrichmen
 import consultantOpportunityRoutes from "./routes/consultantOpportunity.routes.js";
 import relationshipGraphRoutes from "./routes/relationshipGraph.routes.js";
 import consultantImportRoutes from "./routes/consultantImport.routes.js";
+import consultantRiskRoutes from "./routes/consultantRisk.routes.js";
+import { startConsultantImportJob } from "./jobs/consultantImport.job.js";
+
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -191,6 +194,7 @@ app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
 app.use("/api/relationships", relationshipGraphRoutes);
 app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
+app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
@@ -352,4 +356,5 @@ server.listen(PORT, "0.0.0.0", () => {
 
   startScheduledReportRunner();
   startCandidateEnrichmentScheduler();
+  startConsultantImportJob();
 }); 
