@@ -40,6 +40,15 @@ async function ensureConsultantsTable() {
   await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS notes TEXT`);
   await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'`);
   await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_confidence NUMERIC DEFAULT 0`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_source TEXT`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_source_url TEXT`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_verified_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_enriched_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS linkedin_url TEXT`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS address TEXT`);
+  await pool.query(`ALTER TABLE consultants ADD COLUMN IF NOT EXISTS contact_status TEXT DEFAULT 'missing'`);
+
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultants_state ON consultants(state)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_consultants_category ON consultants(category)`);
@@ -122,6 +131,14 @@ router.get("/", async (req, res) => {
       `
         SELECT
           id,
+          linkedin_url,
+          address,
+          contact_confidence,
+          contact_source,
+          contact_source_url,
+          contact_verified_at,
+          contact_enriched_at,
+          COALESCE(contact_status, 'missing') AS contact_status,
           COALESCE(name, firm_name, 'Unnamed Consultant') AS name,
           firm_name,
           COALESCE(category, 'General Consulting') AS category,
