@@ -45,6 +45,7 @@ import consultantImportRoutes from "./routes/consultantImport.routes.js";
 import consultantRiskRoutes from "./routes/consultantRisk.routes.js";
 import { startConsultantImportJob } from "./jobs/consultantImport.job.js";
 import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
+import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js";
 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -196,6 +197,7 @@ app.use("/api/relationships", relationshipGraphRoutes);
 app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
 app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
 app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
+app.use("/api/consultants/contact-enrichment", requireAuth, consultantContactEnrichmentRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
