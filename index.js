@@ -44,6 +44,7 @@ import relationshipGraphRoutes from "./routes/relationshipGraph.routes.js";
 import consultantImportRoutes from "./routes/consultantImport.routes.js";
 import consultantRiskRoutes from "./routes/consultantRisk.routes.js";
 import { startConsultantImportJob } from "./jobs/consultantImport.job.js";
+import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -185,7 +186,6 @@ app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/vendors", vendorsRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
-app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/tasks", tasksRoutes);
@@ -195,6 +195,8 @@ app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
 app.use("/api/relationships", relationshipGraphRoutes);
 app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
 app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
+app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
+app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
