@@ -102,7 +102,10 @@ export async function getConsultantDeepProfile(consultantId, options = {}) {
 
   const consultantResult = await pool.query(
     `
-      SELECT *
+      SELECT
+        *,
+        COALESCE(contact_status, 'missing') AS contact_status,
+        COALESCE(contact_confidence, 0) AS contact_confidence
       FROM consultants
       WHERE id = $1
       LIMIT 1
