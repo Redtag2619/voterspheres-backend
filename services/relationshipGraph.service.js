@@ -207,6 +207,18 @@ async function fetchRelationshipRows(options = {}) {
         r.candidate_party,
         r.candidate_office,
 
+       cand.fec_candidate_id,
+       cand.website AS candidate_website,
+       cand.contact_email AS candidate_contact_email,
+       cand.press_email AS candidate_press_email,
+       cand.phone AS candidate_phone,
+       cp.campaign_website,
+       cp.official_website,
+       cp.email AS profile_email,
+       cp.press_contact_email,
+       cp.phone AS profile_phone,
+       cp.contact_confidence,
+
         r.category AS relationship_category,
         COALESCE(r.total_amount, 0)::numeric AS total_amount,
         COALESCE(r.transaction_count, 0)::int AS transaction_count,
@@ -216,6 +228,8 @@ async function fetchRelationshipRows(options = {}) {
         r.updated_at
       FROM consultant_candidate_relationships r
       LEFT JOIN consultants c ON c.id = r.consultant_id
+      LEFT JOIN candidates cand ON cand.id = r.candidate_id
+      LEFT JOIN candidate_profiles cp ON cp.candidate_id = cand.id
       WHERE ${where.join(" AND ")}
       ORDER BY COALESCE(r.total_amount, 0) DESC, COALESCE(r.transaction_count, 0) DESC
       LIMIT $${limitParam}
@@ -300,11 +314,20 @@ function buildGraphFromRelationships(rows = []) {
       relationship_count: 1,
       raw: {
         id: row.candidate_id,
+        fec_candidate_id: row.fec_candidate_id,
         name: row.candidate_name,
         full_name: row.candidate_name,
         state: row.candidate_state,
         party: row.candidate_party,
         office: row.candidate_office,
+        website: row.candidate_website,
+        campaign_website: row.campaign_website,
+        official_website: row.official_website,
+        contact_email: row.candidate_contact_email,
+        press_email: row.candidate_press_email || row.press_contact_email,
+        email: row.profile_email,
+        phone: row.candidate_phone || row.profile_phone,
+        contact_confidence: row.contact_confidence,
         total_amount: amount,
         transaction_count: transactions,
       },
