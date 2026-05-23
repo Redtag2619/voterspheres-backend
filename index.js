@@ -199,8 +199,8 @@ app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
 app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
 app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
 app.use("/api/consultants/contact-enrichment", requireAuth, consultantContactEnrichmentRoutes);
-app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/committees", requireAuth, committeeIntelRoutes);
+app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
