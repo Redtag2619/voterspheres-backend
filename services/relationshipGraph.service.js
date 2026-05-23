@@ -7,7 +7,7 @@ function num(value, fallback = 0) {
 
 function clean(value) {
   if (value === undefined || value === null) return "";
-  return String(value).trim();
+  return String(value).replace(/\s+/g, " ").trim();
 }
 
 function first(...values) {
@@ -18,98 +18,87 @@ function first(...values) {
   return "";
 }
 
-function stateOf(row) {
-  return first(row.state, row.state_code, row.coverage_state).toUpperCase();
-}
-
-function partyOf(row) {
-  return first(row.party, row.party_affiliation).toLowerCase();
+function getDefaultCycle() {
+  return Number(process.env.FEC_DEFAULT_CYCLE || 2026);
 }
 
 function moneyLabel(value) {
   const amount = num(value);
-  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
-  if (amount >= 1000) return `$${Math.round(amount / 1000)}K`;
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `$${Math.round(amount / 1_000)}K`;
   return `$${Math.round(amount).toLocaleString()}`;
 }
 
-function candidateName(row) {
-  return first(
-    row.full_name,
-    row.name,
-    [row.first_name, row.last_name].filter(Boolean).join(" ")
-  ) || "Candidate";
+function nodeId(type, value) {
+  return `${type}-${String(value || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-function consultantName(row) {
-  return first(row.name, row.firm_name, row.consultant_name, row.company) || "Consultant";
+function edgeId(source, target, type) {
+  return `${source}->${target}:${type}`;
 }
 
-function donorName(row) {
-  return first(row.name, row.donor_name, row.committee_name) || "Donor";
+function getState(row = {}) {
+  return first(row.candidate_state, row.state, row.state_code, row.coverage_state).toUpperCase();
 }
 
-function candidateScore(row) {
-  let score = 30;
-  if (row.contact_email || row.email || row.phone) score += 15;
-  if (row.website || row.campaign_website) score += 10;
-  if (row.state || row.state_code) score += 8;
-  if (row.office) score += 8;
-  if (row.party) score += 5;
-  if (row.contact_verified) score += 12;
-  if (row.incumbent) score += 8;
-  return Math.min(100, score);
+function getParty(row = {}) {
+  return first(row.candidate_party, row.party, row.party_affiliation);
 }
 
-function consultantScore(row) {
-  let score = 35;
-  if (row.state || row.coverage_state) score += 10;
-  if (row.specialty || row.category || row.service_category) score += 10;
-  if (row.win_rate) score += Math.min(20, num(row.win_rate) / 5);
-  if (row.clients_count) score += Math.min(15, num(row.clients_count));
-  if (row.rating) score += Math.min(10, num(row.rating) * 2);
-  return Math.min(100, Math.round(score));
+function getOffice(row = {}) {
+  return first(row.candidate_office, row.office);
 }
 
-function donorScore(row) {
-  const amount = num(
-    row.total_amount ||
-      row.amount ||
-      row.contribution_amount ||
-      row.total_contributions
-  );
-
-  let score = 25;
-  if (amount) score += Math.min(45, Math.log10(Math.max(amount, 1)) * 8);
-  if (row.state) score += 8;
-  if (row.party || row.party_affiliation) score += 7;
-  if (row.cycle) score += 5;
-  return Math.min(100, Math.round(score));
+function influenceFromAmount(amount, base = 35) {
+  const value = num(amount);
+  if (!value) return base;
+  return Math.min(100, Math.round(base + Math.log10(Math.max(value, 1)) * 8));
 }
 
-function stateMatch(a, b) {
-  const left = stateOf(a);
-  const right = stateOf(b);
-  return Boolean(left && right && left === right);
+function strengthFromAmount(amount, transactions = 1) {
+  const value = num(amount);
+  const count = num(transactions, 1);
+  const score = Math.log10(Math.max(value, 1)) * 12 + Math.min(25, count * 2);
+  return Math.min(100, Math.max(20, Math.round(score)));
 }
 
-function partyMatch(a, b) {
-  const left = partyOf(a);
-  const right = partyOf(b);
-  if (!left || !right) return false;
-  return left.includes(right) || right.includes(left);
+function addNode(map, node) {
+  const existing = map.get(node.id);
+
+  if (!existing) {
+    map.set(node.id, node);
+    return;
+  }
+
+  map.set(node.id, {
+    ...existing,
+    ...node,
+    influence: Math.max(num(existing.influence), num(node.influence)),
+    total_amount: num(existing.total_amount) + num(node.total_amount),
+    relationship_count: num(existing.relationship_count) + num(node.relationship_count),
+    raw: {
+      ...(existing.raw || {}),
+      ...(node.raw || {}),
+    },
+  });
 }
 
-function officeMatch(candidate, consultant) {
-  const office = clean(candidate.office).toLowerCase();
-  const specialty = first(
-    consultant.specialty,
-    consultant.category,
-    consultant.service_category
-  ).toLowerCase();
+function addLink(map, link) {
+  const id = link.id || edgeId(link.source, link.target, link.type);
+  const existing = map.get(id);
 
-  if (!office || !specialty) return false;
-  return specialty.includes(office) || office.includes(specialty);
+  if (!existing) {
+    map.set(id, { ...link, id });
+    return;
+  }
+
+  map.set(id, {
+    ...existing,
+    ...link,
+    amount: num(existing.amount) + num(link.amount),
+    strength: Math.max(num(existing.strength), num(link.strength)),
+    transaction_count: num(existing.transaction_count) + num(link.transaction_count),
+  });
 }
 
 async function querySafe(sql, params = []) {
@@ -122,23 +111,71 @@ async function querySafe(sql, params = []) {
   }
 }
 
-async function fetchCandidates({ state, party, office, limit }) {
-  const params = [];
-  const where = [];
+async function fetchRelationshipRows(options = {}) {
+  const cycle = num(options.cycle, getDefaultCycle());
+  const limit = Math.min(Math.max(num(options.limit, 100), 10), 1000);
+  const state = clean(options.state).toUpperCase();
+  const party = clean(options.party);
+  const office = clean(options.office);
+  const search = clean(options.search);
+  const committee = clean(options.committee);
+  const consultant = clean(options.consultant);
+  const candidate = clean(options.candidate);
+  const minAmount = num(options.minAmount || options.min_amount, 0);
+
+  const params = [cycle];
+  const where = ["r.cycle = $1"];
 
   if (state) {
     params.push(state);
-    where.push(`UPPER(COALESCE(c.state, c.state_code, '')) = UPPER($${params.length})`);
+    where.push(`UPPER(COALESCE(r.candidate_state, '')) = $${params.length}`);
   }
 
   if (party) {
     params.push(`%${party}%`);
-    where.push(`COALESCE(c.party, '') ILIKE $${params.length}`);
+    where.push(`COALESCE(r.candidate_party, '') ILIKE $${params.length}`);
   }
 
   if (office) {
     params.push(`%${office}%`);
-    where.push(`COALESCE(c.office, '') ILIKE $${params.length}`);
+    where.push(`COALESCE(r.candidate_office, '') ILIKE $${params.length}`);
+  }
+
+  if (search) {
+    params.push(`%${search}%`);
+    where.push(`(
+      r.committee_name ILIKE $${params.length}
+      OR r.committee_id ILIKE $${params.length}
+      OR r.candidate_name ILIKE $${params.length}
+      OR c.name ILIKE $${params.length}
+      OR c.firm_name ILIKE $${params.length}
+    )`);
+  }
+
+  if (committee) {
+    params.push(`%${committee}%`);
+    where.push(`(
+      r.committee_name ILIKE $${params.length}
+      OR r.committee_id ILIKE $${params.length}
+    )`);
+  }
+
+  if (consultant) {
+    params.push(`%${consultant}%`);
+    where.push(`(
+      c.name ILIKE $${params.length}
+      OR c.firm_name ILIKE $${params.length}
+    )`);
+  }
+
+  if (candidate) {
+    params.push(`%${candidate}%`);
+    where.push(`r.candidate_name ILIKE $${params.length}`);
+  }
+
+  if (minAmount > 0) {
+    params.push(minAmount);
+    where.push(`COALESCE(r.total_amount, 0) >= $${params.length}`);
   }
 
   params.push(limit);
@@ -147,285 +184,254 @@ async function fetchCandidates({ state, party, office, limit }) {
   return querySafe(
     `
       SELECT
-        c.id,
-        c.fec_candidate_id,
-        COALESCE(c.full_name, c.name) AS full_name,
-        c.name,
-        c.party,
-        c.office,
-        c.state,
-        c.state_code,
-        c.district,
-        c.website,
-        c.contact_email,
-        c.press_email,
-        c.phone,
-        c.incumbent,
-        c.contact_verified,
-        cp.campaign_website,
-        cp.email,
-        cp.contact_confidence,
-        cp.source_label
-      FROM candidates c
-      LEFT JOIN candidate_profiles cp ON cp.candidate_id = c.id
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY
-        COALESCE(cp.contact_confidence, 0) DESC,
-        c.id ASC
+        r.id AS relationship_id,
+        r.cycle,
+        r.committee_id,
+        COALESCE(NULLIF(TRIM(r.committee_name), ''), r.committee_id, 'Unknown Committee') AS committee_name,
+
+        r.consultant_id,
+        COALESCE(NULLIF(TRIM(c.name), ''), NULLIF(TRIM(c.firm_name), ''), 'Unknown Consultant') AS consultant_name,
+        c.firm_name,
+        c.category AS consultant_category,
+        c.state AS consultant_state,
+        c.website AS consultant_website,
+        c.email AS consultant_email,
+        c.phone AS consultant_phone,
+        c.influence_score,
+        c.exposure_score,
+        c.risk_label,
+
+        r.candidate_id,
+        COALESCE(NULLIF(TRIM(r.candidate_name), ''), 'Unknown Candidate') AS candidate_name,
+        r.candidate_state,
+        r.candidate_party,
+        r.candidate_office,
+
+        r.category AS relationship_category,
+        COALESCE(r.total_amount, 0)::numeric AS total_amount,
+        COALESCE(r.transaction_count, 0)::int AS transaction_count,
+        r.last_disbursement_date,
+        r.confidence,
+        r.purpose,
+        r.updated_at
+      FROM consultant_candidate_relationships r
+      LEFT JOIN consultants c ON c.id = r.consultant_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY COALESCE(r.total_amount, 0) DESC, COALESCE(r.transaction_count, 0) DESC
       LIMIT $${limitParam}
     `,
     params
   );
 }
 
-async function fetchConsultants({ state, limit }) {
-  const params = [];
-  const where = [];
+function buildGraphFromRelationships(rows = []) {
+  const nodes = new Map();
+  const links = new Map();
 
-  if (state) {
-    params.push(state);
-    where.push(`UPPER(COALESCE(state, coverage_state, '')) = UPPER($${params.length})`);
-  }
+  for (const row of rows) {
+    const committeeKey = row.committee_id || row.committee_name;
+    const consultantKey = row.consultant_id || row.consultant_name;
+    const candidateKey = row.candidate_id || row.candidate_name;
 
-  params.push(limit);
-  const limitParam = params.length;
+    const committeeNodeId = nodeId("committee", committeeKey);
+    const consultantNodeId = nodeId("consultant", consultantKey);
+    const candidateNodeId = nodeId("candidate", candidateKey);
 
-  return querySafe(
-    `
-      SELECT *
-      FROM consultants
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY id ASC
-      LIMIT $${limitParam}
-    `,
-    params
-  );
-}
+    const amount = num(row.total_amount);
+    const transactions = num(row.transaction_count, 1);
+    const strength = strengthFromAmount(amount, transactions);
 
-async function fetchDonors({ state, party, limit }) {
-  const params = [];
-  const where = [];
-
-  if (state) {
-    params.push(state);
-    where.push(`UPPER(COALESCE(state, '')) = UPPER($${params.length})`);
-  }
-
-  if (party) {
-    params.push(`%${party}%`);
-    where.push(`COALESCE(party, party_affiliation, '') ILIKE $${params.length}`);
-  }
-
-  params.push(limit);
-  const limitParam = params.length;
-
-  return querySafe(
-    `
-      SELECT *
-      FROM donors
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY id ASC
-      LIMIT $${limitParam}
-    `,
-    params
-  );
-}
-
-function buildNodes({ candidates, consultants, donors }) {
-  const nodes = [];
-
-  for (const row of candidates) {
-    nodes.push({
-      id: `candidate-${row.id || row.fec_candidate_id}`,
-      source_id: row.id,
-      type: "candidate",
-      label: candidateName(row),
-      subtitle: `${first(row.state, row.state_code, "N/A")} • ${first(row.office, "Office")}`,
-      state: first(row.state, row.state_code),
-      party: first(row.party),
-      influence: candidateScore(row),
-      raw: row,
+    addNode(nodes, {
+      id: committeeNodeId,
+      source_id: row.committee_id,
+      type: "committee",
+      label: row.committee_name || row.committee_id || "Committee",
+      subtitle: `${row.committee_id || "Committee"} • ${moneyLabel(amount)}`,
+      state: getState(row),
+      party: getParty(row),
+      influence: influenceFromAmount(amount, 45),
+      total_amount: amount,
+      relationship_count: 1,
+      raw: {
+        committee_id: row.committee_id,
+        committee_name: row.committee_name,
+        cycle: row.cycle,
+        total_amount: amount,
+        transaction_count: transactions,
+      },
     });
-  }
 
-  for (const row of consultants) {
-    nodes.push({
-      id: `consultant-${row.id || consultantName(row)}`,
-      source_id: row.id,
+    addNode(nodes, {
+      id: consultantNodeId,
+      source_id: row.consultant_id,
       type: "consultant",
-      label: consultantName(row),
-      subtitle: first(row.state, row.coverage_state, row.category, "Consultant"),
-      state: first(row.state, row.coverage_state),
-      party: first(row.party, row.party_affiliation),
-      influence: consultantScore(row),
-      raw: row,
+      label: row.consultant_name || row.firm_name || "Consultant",
+      subtitle: first(row.consultant_category, row.consultant_state, "Political Consulting"),
+      state: first(row.consultant_state, getState(row)),
+      party: getParty(row),
+      influence: Math.max(num(row.influence_score), influenceFromAmount(amount, 40)),
+      total_amount: amount,
+      relationship_count: 1,
+      raw: {
+        id: row.consultant_id,
+        name: row.consultant_name,
+        firm_name: row.firm_name,
+        category: row.consultant_category,
+        state: row.consultant_state,
+        website: row.consultant_website,
+        email: row.consultant_email,
+        phone: row.consultant_phone,
+        influence_score: row.influence_score,
+        exposure_score: row.exposure_score,
+        risk_label: row.risk_label,
+      },
+    });
+
+    addNode(nodes, {
+      id: candidateNodeId,
+      source_id: row.candidate_id,
+      type: "candidate",
+      label: row.candidate_name || "Candidate",
+      subtitle: `${first(row.candidate_state, "State N/A")} • ${first(row.candidate_office, "Office N/A")}`,
+      state: getState(row),
+      party: getParty(row),
+      influence: influenceFromAmount(amount, 38),
+      total_amount: amount,
+      relationship_count: 1,
+      raw: {
+        id: row.candidate_id,
+        name: row.candidate_name,
+        full_name: row.candidate_name,
+        state: row.candidate_state,
+        party: row.candidate_party,
+        office: row.candidate_office,
+        total_amount: amount,
+        transaction_count: transactions,
+      },
+    });
+
+    addLink(links, {
+      source: committeeNodeId,
+      target: consultantNodeId,
+      type: "committee_consultant",
+      label: "Committee paid consultant",
+      strength,
+      amount,
+      transaction_count: transactions,
+      raw: {
+        relationship_id: row.relationship_id,
+        category: row.relationship_category,
+        purpose: row.purpose,
+        confidence: row.confidence,
+        last_disbursement_date: row.last_disbursement_date,
+      },
+    });
+
+    addLink(links, {
+      source: consultantNodeId,
+      target: candidateNodeId,
+      type: "consultant_candidate",
+      label: "Consultant works with candidate",
+      strength,
+      amount,
+      transaction_count: transactions,
+      raw: {
+        relationship_id: row.relationship_id,
+        category: row.relationship_category,
+        purpose: row.purpose,
+        confidence: row.confidence,
+        last_disbursement_date: row.last_disbursement_date,
+      },
+    });
+
+    addLink(links, {
+      source: committeeNodeId,
+      target: candidateNodeId,
+      type: "committee_candidate",
+      label: "Committee linked to candidate",
+      strength: Math.max(20, Math.round(strength * 0.85)),
+      amount,
+      transaction_count: transactions,
+      raw: {
+        relationship_id: row.relationship_id,
+        category: row.relationship_category,
+        confidence: row.confidence,
+      },
     });
   }
 
-  for (const row of donors) {
-    const amount = num(
-      row.total_amount ||
-        row.amount ||
-        row.contribution_amount ||
-        row.total_contributions
-    );
-
-    nodes.push({
-      id: `donor-${row.id || row.donor_id || donorName(row)}`,
-      source_id: row.id || row.donor_id,
-      type: "donor",
-      label: donorName(row),
-      subtitle: `${first(row.state, "National")} • ${moneyLabel(amount)}`,
-      state: first(row.state),
-      party: first(row.party, row.party_affiliation),
-      influence: donorScore(row),
-      raw: row,
-    });
-  }
-
-  return nodes;
-}
-
-function buildLinks(nodes) {
-  const links = [];
-
-  const candidates = nodes.filter((node) => node.type === "candidate");
-  const consultants = nodes.filter((node) => node.type === "consultant");
-  const donors = nodes.filter((node) => node.type === "donor");
-
-  for (const candidate of candidates) {
-    const consultantMatches = consultants
-      .map((consultant) => {
-        let strength = 0;
-        if (stateMatch(candidate.raw, consultant.raw)) strength += 45;
-        if (officeMatch(candidate.raw, consultant.raw)) strength += 25;
-        if (partyMatch(candidate.raw, consultant.raw)) strength += 15;
-        strength += Math.min(15, consultant.influence / 8);
-        return { consultant, strength };
-      })
-      .filter((item) => item.strength >= 35)
-      .sort((a, b) => b.strength - a.strength)
-      .slice(0, 3);
-
-    for (const match of consultantMatches) {
-      links.push({
-        source: candidate.id,
-        target: match.consultant.id,
-        type: "candidate_consultant",
-        strength: Math.round(match.strength),
-        label: "Consultant fit",
-      });
-    }
-
-    const donorMatches = donors
-      .map((donor) => {
-        let strength = 0;
-        if (stateMatch(candidate.raw, donor.raw)) strength += 35;
-        if (partyMatch(candidate.raw, donor.raw)) strength += 25;
-        strength += Math.min(35, donor.influence / 2);
-        return { donor, strength };
-      })
-      .filter((item) => item.strength >= 32)
-      .sort((a, b) => b.strength - a.strength)
-      .slice(0, 4);
-
-    for (const match of donorMatches) {
-      links.push({
-        source: candidate.id,
-        target: match.donor.id,
-        type: "candidate_donor",
-        strength: Math.round(match.strength),
-        label: "Donor affinity",
-      });
-    }
-  }
-
-  for (const consultant of consultants) {
-    const donorMatches = donors
-      .map((donor) => {
-        let strength = 0;
-        if (stateMatch(consultant.raw, donor.raw)) strength += 25;
-        if (partyMatch(consultant.raw, donor.raw)) strength += 18;
-        strength += Math.min(20, (consultant.influence + donor.influence) / 10);
-        return { donor, strength };
-      })
-      .filter((item) => item.strength >= 30)
-      .sort((a, b) => b.strength - a.strength)
-      .slice(0, 2);
-
-    for (const match of donorMatches) {
-      links.push({
-        source: consultant.id,
-        target: match.donor.id,
-        type: "consultant_donor",
-        strength: Math.round(match.strength),
-        label: "Network overlap",
-      });
-    }
-  }
-
-  return links;
+  return {
+    nodes: [...nodes.values()].sort((a, b) => num(b.total_amount) - num(a.total_amount)),
+    links: [...links.values()].sort((a, b) => num(b.amount) - num(a.amount)),
+  };
 }
 
 function buildInsights(nodes, links) {
   const candidates = nodes.filter((node) => node.type === "candidate");
   const consultants = nodes.filter((node) => node.type === "consultant");
-  const donors = nodes.filter((node) => node.type === "donor");
+  const committees = nodes.filter((node) => node.type === "committee");
 
   const topInfluencers = [...nodes]
-    .sort((a, b) => b.influence - a.influence)
+    .sort((a, b) => num(b.influence) - num(a.influence))
     .slice(0, 10);
 
   const strongestLinks = [...links]
-    .sort((a, b) => b.strength - a.strength)
+    .sort((a, b) => num(b.strength) - num(a.strength))
     .slice(0, 10);
 
-  const orphanCandidates = candidates.filter((candidate) => {
+  const orphanCandidates = candidates.filter((candidateNode) => {
     return !links.some(
-      (link) => link.source === candidate.id || link.target === candidate.id
+      (link) => link.source === candidateNode.id || link.target === candidateNode.id
     );
   });
 
+  const totalAmount = links.reduce((sum, link) => sum + num(link.amount), 0);
+
   return {
     summary: [
-      `${candidates.length} candidate nodes mapped against ${consultants.length} consultant nodes and ${donors.length} donor nodes.`,
-      `${strongestLinks.length} high-value relationship paths are ready for consultant or fundraising action.`,
-      `${orphanCandidates.length} candidates have weak network coverage and should be prioritized for enrichment.`,
+      `${committees.length} committee nodes, ${consultants.length} consultant nodes, and ${candidates.length} candidate nodes are mapped from FEC-derived relationship data.`,
+      `${strongestLinks.length} high-value relationship paths are ready for committee, consultant, and candidate intelligence review.`,
+      `${moneyLabel(totalAmount)} in visible relationship money flow is represented in the current graph.`,
     ],
     top_influencers: topInfluencers,
+    topInfluencers,
     strongest_links: strongestLinks,
+    highStrengthLinks: strongestLinks,
     orphan_candidates: orphanCandidates.slice(0, 20),
+    orphanCandidates: orphanCandidates.slice(0, 20),
   };
 }
 
 export async function getRelationshipGraph(options = {}) {
-  const limit = Math.min(Math.max(num(options.limit, 50), 10), 150);
+  const limit = Math.min(Math.max(num(options.limit, 100), 10), 1000);
 
   const filters = {
+    cycle: num(options.cycle, getDefaultCycle()),
     state: clean(options.state),
     party: clean(options.party),
     office: clean(options.office),
+    search: clean(options.search),
+    committee: clean(options.committee),
+    consultant: clean(options.consultant),
+    candidate: clean(options.candidate),
+    minAmount: clean(options.minAmount || options.min_amount),
     limit,
   };
 
-  const [candidates, consultants, donors] = await Promise.all([
-    fetchCandidates(filters),
-    fetchConsultants(filters),
-    fetchDonors(filters),
-  ]);
-
-  const nodes = buildNodes({ candidates, consultants, donors });
-  const links = buildLinks(nodes);
+  const rows = await fetchRelationshipRows(filters);
+  const { nodes, links } = buildGraphFromRelationships(rows);
   const insights = buildInsights(nodes, links);
 
   return {
     filters,
     counts: {
-      candidates: candidates.length,
-      consultants: consultants.length,
-      donors: donors.length,
+      committees: nodes.filter((node) => node.type === "committee").length,
+      candidates: nodes.filter((node) => node.type === "candidate").length,
+      consultants: nodes.filter((node) => node.type === "consultant").length,
+      donors: 0,
       nodes: nodes.length,
       links: links.length,
+      rows: rows.length,
     },
     nodes,
     links,
