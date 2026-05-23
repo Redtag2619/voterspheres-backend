@@ -71,23 +71,8 @@ export async function ensureCommitteeIntelSchema() {
   `);
 }
 
-export async function getCommitteeIntel(options = {}) {
-  await ensureCommitteeIntelSchema();
-
-  const cycle = num(options.cycle, getDefaultCycle());
-  const limit = Math.min(Math.max(num(options.limit, 500), 1), 1000);
-  const offset = Math.max(num(options.offset, 0), 0);
-  const search = clean(options.search);
-  const state = normalizeState(options.state);
-  const party = clean(options.party);
-  const minAmount = num(options.minAmount || options.min_amount, 0);
-
-  const battlegroundStates = parseList(
-    options.battlegroundStates || options.battleground_states || "AZ,GA,MI,NV,NC,PA,WI"
-  ).map(normalizeState);
-
-  const values = [cycle, battlegroundStates];
-
+function buildWhereClause({ cycle, search, state, party }) {
+  const values = [cycle];
   const where = [
     "r.cycle = $1",
     "r.committee_id IS NOT NULL",
@@ -115,12 +100,48 @@ export async function getCommitteeIntel(options = {}) {
     where.push(`COALESCE(r.candidate_party, '') ILIKE $${values.length}`);
   }
 
-  const whereSql = where.join(" AND ");
+  return {
+    values,
+    whereSql: where.join(" AND "),
+  };
+}
 
-  const minAmountParam = values.length + 1;
-  const limitParam = values.length + 2;
-  const offsetParam = values.length + 3;
-  const queryValues = [...values, minAmount, limit, offset];
+export async function getCommitteeIntel(options = {}) {
+  await ensureCommitteeIntelSchema();
+
+  const cycle = num(options.cycle, getDefaultCycle());
+  const limit = Math.min(Math.max(num(options.limit, 500), 1), 1000);
+  const offset = Math.max(num(options.offset, 0), 0);
+  const search = clean(options.search);
+  const state = normalizeState(options.state);
+  const party = clean(options.party);
+  const minAmount = num(options.minAmount || options.min_amount, 0);
+
+  const battlegroundStates = parseList(
+    options.battlegroundStates ||
+      options.battleground_states ||
+      "AZ,GA,MI,NV,NC,PA,WI"
+  ).map(normalizeState);
+
+  const { values, whereSql } = buildWhereClause({
+    cycle,
+    search,
+    state,
+    party,
+  });
+
+  const committeesValues = [
+    ...values,
+    battlegroundStates,
+    minAmount,
+    limit,
+    offset,
+  ];
+
+  const battlegroundParam = values.length + 1;
+  const minAmountParam = values.length + 2;
+  const limitParam = values.length + 3;
+  const offsetParam = values.length + 4;
 
   const committeesSql = `
     WITH committee_base AS (
@@ -149,11 +170,11 @@ export async function getCommitteeIntel(options = {}) {
           WHERE r.category IS NOT NULL AND TRIM(r.category) <> ''
         ) AS categories,
         COUNT(DISTINCT CASE
-          WHEN UPPER(COALESCE(r.candidate_state, '')) = ANY($2::text[])
+          WHEN UPPER(COALESCE(r.candidate_state, '')) = ANY($${battlegroundParam}::text[])
           THEN r.candidate_id
         END)::int AS battleground_candidate_count,
         COALESCE(SUM(CASE
-          WHEN UPPER(COALESCE(r.candidate_state, '')) = ANY($2::text[])
+          WHEN UPPER(COALESCE(r.candidate_state, '')) = ANY($${battlegroundParam}::text[])
           THEN r.total_amount
           ELSE 0
         END), 0)::numeric AS battleground_amount
@@ -186,89 +207,84 @@ export async function getCommitteeIntel(options = {}) {
     LIMIT $${limitParam} OFFSET $${offsetParam}
   `;
 
-  const [
-    committeeResult,
-    summaryResult,
-    heatmapResult,
-    concentrationResult,
-  ] = await Promise.all([
-    pool.query(committeesSql, queryValues),
+  const committeeResult = await pool.query(committeesSql, committeesValues);
 
-    pool.query(
-      `
-        SELECT
-          COUNT(DISTINCT r.committee_id)::int AS total_committees,
-          COUNT(DISTINCT r.consultant_id)::int AS total_consultants,
-          COUNT(DISTINCT r.candidate_id)::int AS total_candidates,
-          COUNT(DISTINCT r.candidate_state)::int AS total_states,
-          COUNT(DISTINCT r.candidate_party)::int AS total_parties,
-          COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
-          COALESCE(SUM(r.transaction_count), 0)::int AS total_transactions,
-          COUNT(*)::int AS total_relationship_rows
-        FROM consultant_candidate_relationships r
-        LEFT JOIN consultants c ON c.id = r.consultant_id
-        WHERE ${whereSql}
-      `,
-      values
-    ),
+  const summaryResult = await pool.query(
+    `
+      SELECT
+        COUNT(DISTINCT r.committee_id)::int AS total_committees,
+        COUNT(DISTINCT r.consultant_id)::int AS total_consultants,
+        COUNT(DISTINCT r.candidate_id)::int AS total_candidates,
+        COUNT(DISTINCT r.candidate_state)::int AS total_states,
+        COUNT(DISTINCT r.candidate_party)::int AS total_parties,
+        COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
+        COALESCE(SUM(r.transaction_count), 0)::int AS total_transactions,
+        COUNT(*)::int AS total_relationship_rows
+      FROM consultant_candidate_relationships r
+      LEFT JOIN consultants c ON c.id = r.consultant_id
+      WHERE ${whereSql}
+    `,
+    values
+  );
 
-    pool.query(
-      `
+  const heatmapResult = await pool.query(
+    `
+      SELECT
+        COALESCE(r.candidate_state, 'Unknown') AS state,
+        COUNT(DISTINCT r.committee_id)::int AS committee_count,
+        COUNT(DISTINCT r.consultant_id)::int AS consultant_count,
+        COUNT(DISTINCT r.candidate_id)::int AS candidate_count,
+        COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
+        COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count
+      FROM consultant_candidate_relationships r
+      LEFT JOIN consultants c ON c.id = r.consultant_id
+      WHERE ${whereSql}
+      GROUP BY COALESCE(r.candidate_state, 'Unknown')
+      ORDER BY total_amount DESC
+      LIMIT 25
+    `,
+    values
+  );
+
+  const concentrationValues = [...values, minAmount];
+
+  const concentrationResult = await pool.query(
+    `
+      WITH base AS (
         SELECT
-          COALESCE(r.candidate_state, 'Unknown') AS state,
-          COUNT(DISTINCT r.committee_id)::int AS committee_count,
+          r.committee_id,
+          COALESCE(NULLIF(TRIM(r.committee_name), ''), r.committee_id) AS committee_name,
           COUNT(DISTINCT r.consultant_id)::int AS consultant_count,
           COUNT(DISTINCT r.candidate_id)::int AS candidate_count,
-          COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
-          COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count
+          COUNT(DISTINCT r.candidate_party)::int AS party_count,
+          COUNT(DISTINCT r.candidate_state)::int AS state_count,
+          COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount
         FROM consultant_candidate_relationships r
         LEFT JOIN consultants c ON c.id = r.consultant_id
         WHERE ${whereSql}
-        GROUP BY COALESCE(r.candidate_state, 'Unknown')
-        ORDER BY total_amount DESC
-        LIMIT 25
-      `,
-      values
-    ),
-
-    pool.query(
-      `
-        WITH base AS (
-          SELECT
-            r.committee_id,
-            COALESCE(NULLIF(TRIM(r.committee_name), ''), r.committee_id) AS committee_name,
-            COUNT(DISTINCT r.consultant_id)::int AS consultant_count,
-            COUNT(DISTINCT r.candidate_id)::int AS candidate_count,
-            COUNT(DISTINCT r.candidate_party)::int AS party_count,
-            COUNT(DISTINCT r.candidate_state)::int AS state_count,
-            COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount
-          FROM consultant_candidate_relationships r
-          LEFT JOIN consultants c ON c.id = r.consultant_id
-          WHERE ${whereSql}
-          GROUP BY
-            r.committee_id,
-            COALESCE(NULLIF(TRIM(r.committee_name), ''), r.committee_id)
-        )
-        SELECT
-          *,
-          LEAST(
-            100,
-            ROUND(
-              LEAST(35, LN(GREATEST(total_amount, 1)) * 3)
-              + LEAST(25, consultant_count * 5)
-              + LEAST(20, candidate_count * 3)
-              + LEAST(10, state_count * 2)
-              + LEAST(10, party_count * 5)
-            )
-          ) AS concentration_score
-        FROM base
-        WHERE total_amount >= $${minAmountParam}
-        ORDER BY concentration_score DESC, total_amount DESC
-        LIMIT 25
-      `,
-      [...values, minAmount]
-    ),
-  ]);
+        GROUP BY
+          r.committee_id,
+          COALESCE(NULLIF(TRIM(r.committee_name), ''), r.committee_id)
+      )
+      SELECT
+        *,
+        LEAST(
+          100,
+          ROUND(
+            LEAST(35, LN(GREATEST(total_amount, 1)) * 3)
+            + LEAST(25, consultant_count * 5)
+            + LEAST(20, candidate_count * 3)
+            + LEAST(10, state_count * 2)
+            + LEAST(10, party_count * 5)
+          )
+        ) AS concentration_score
+      FROM base
+      WHERE total_amount >= $${concentrationValues.length}
+      ORDER BY concentration_score DESC, total_amount DESC
+      LIMIT 25
+    `,
+    concentrationValues
+  );
 
   const committeeIds = committeeResult.rows.map((row) => row.committee_id);
 
@@ -276,84 +292,82 @@ export async function getCommitteeIntel(options = {}) {
   let topCandidates = [];
 
   if (committeeIds.length) {
-    const [consultantsResult, candidatesResult] = await Promise.all([
-      pool.query(
-        `
-          SELECT *
-          FROM (
-            SELECT
-              r.committee_id,
-              r.consultant_id,
-              c.name AS consultant_name,
-              c.firm_name,
-              c.category,
-              c.state,
-              c.influence_score,
-              c.exposure_score,
-              c.risk_label,
-              COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
-              COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count,
-              COUNT(DISTINCT r.candidate_id)::int AS candidate_count,
-              ROW_NUMBER() OVER (
-                PARTITION BY r.committee_id
-                ORDER BY COALESCE(SUM(r.total_amount), 0) DESC
-              ) AS rn
-            FROM consultant_candidate_relationships r
-            LEFT JOIN consultants c ON c.id = r.consultant_id
-            WHERE r.cycle = $1
-              AND r.committee_id = ANY($2::text[])
-            GROUP BY
-              r.committee_id,
-              r.consultant_id,
-              c.name,
-              c.firm_name,
-              c.category,
-              c.state,
-              c.influence_score,
-              c.exposure_score,
-              c.risk_label
-          ) ranked
-          WHERE rn <= 10
-          ORDER BY committee_id, total_amount DESC
-        `,
-        [cycle, committeeIds]
-      ),
+    const consultantsResult = await pool.query(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            r.committee_id,
+            r.consultant_id,
+            c.name AS consultant_name,
+            c.firm_name,
+            c.category,
+            c.state,
+            c.influence_score,
+            c.exposure_score,
+            c.risk_label,
+            COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
+            COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count,
+            COUNT(DISTINCT r.candidate_id)::int AS candidate_count,
+            ROW_NUMBER() OVER (
+              PARTITION BY r.committee_id
+              ORDER BY COALESCE(SUM(r.total_amount), 0) DESC
+            ) AS rn
+          FROM consultant_candidate_relationships r
+          LEFT JOIN consultants c ON c.id = r.consultant_id
+          WHERE r.cycle = $1
+            AND r.committee_id = ANY($2::text[])
+          GROUP BY
+            r.committee_id,
+            r.consultant_id,
+            c.name,
+            c.firm_name,
+            c.category,
+            c.state,
+            c.influence_score,
+            c.exposure_score,
+            c.risk_label
+        ) ranked
+        WHERE rn <= 10
+        ORDER BY committee_id, total_amount DESC
+      `,
+      [cycle, committeeIds]
+    );
 
-      pool.query(
-        `
-          SELECT *
-          FROM (
-            SELECT
-              r.committee_id,
-              r.candidate_id,
-              r.candidate_name,
-              r.candidate_state,
-              r.candidate_office,
-              r.candidate_party,
-              COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
-              COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count,
-              COUNT(DISTINCT r.consultant_id)::int AS consultant_count,
-              ROW_NUMBER() OVER (
-                PARTITION BY r.committee_id
-                ORDER BY COALESCE(SUM(r.total_amount), 0) DESC
-              ) AS rn
-            FROM consultant_candidate_relationships r
-            WHERE r.cycle = $1
-              AND r.committee_id = ANY($2::text[])
-            GROUP BY
-              r.committee_id,
-              r.candidate_id,
-              r.candidate_name,
-              r.candidate_state,
-              r.candidate_office,
-              r.candidate_party
-          ) ranked
-          WHERE rn <= 10
-          ORDER BY committee_id, total_amount DESC
-        `,
-        [cycle, committeeIds]
-      ),
-    ]);
+    const candidatesResult = await pool.query(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            r.committee_id,
+            r.candidate_id,
+            r.candidate_name,
+            r.candidate_state,
+            r.candidate_office,
+            r.candidate_party,
+            COALESCE(SUM(r.total_amount), 0)::numeric AS total_amount,
+            COALESCE(SUM(r.transaction_count), 0)::int AS transaction_count,
+            COUNT(DISTINCT r.consultant_id)::int AS consultant_count,
+            ROW_NUMBER() OVER (
+              PARTITION BY r.committee_id
+              ORDER BY COALESCE(SUM(r.total_amount), 0) DESC
+            ) AS rn
+          FROM consultant_candidate_relationships r
+          WHERE r.cycle = $1
+            AND r.committee_id = ANY($2::text[])
+          GROUP BY
+            r.committee_id,
+            r.candidate_id,
+            r.candidate_name,
+            r.candidate_state,
+            r.candidate_office,
+            r.candidate_party
+        ) ranked
+        WHERE rn <= 10
+        ORDER BY committee_id, total_amount DESC
+      `,
+      [cycle, committeeIds]
+    );
 
     topConsultants = consultantsResult.rows;
     topCandidates = candidatesResult.rows;
