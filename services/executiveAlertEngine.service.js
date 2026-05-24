@@ -61,7 +61,7 @@ export async function buildExecutiveAlertFeed(options = {}) {
   /**
    * CONSULTANT RISK ALERTS
    */
-  for (const consultant of consultantRisk.top_exposure || []) {
+  for (const consultant of consultantRisk?.top_exposure || consultantRisk?.results || []) {
     const exposure =
       Number(consultant.exposure_score || 0);
 
@@ -99,6 +99,109 @@ export async function buildExecutiveAlertFeed(options = {}) {
       metadata: link
     });
   }
+
+  /**
+ * FINANCE / FUNDRAISING ALERTS
+ */
+for (const feed of executiveFeed || []) {
+  const type = String(feed.type || feed.event_type || "").toLowerCase();
+  const source = String(feed.source || "").toLowerCase();
+  const title = String(feed.title || "").toLowerCase();
+
+  const isFinance =
+    type.includes("fundraising") ||
+    type.includes("finance") ||
+    type.includes("fec") ||
+    source.includes("fundraising") ||
+    source.includes("finance") ||
+    source.includes("fec") ||
+    title.includes("fundraising") ||
+    title.includes("finance") ||
+    title.includes("receipts");
+
+  if (!isFinance) continue;
+
+  alerts.push({
+    id: `finance-${feed.id || alerts.length}`,
+    type: "finance_signal",
+    severity: String(feed.severity || "medium").toLowerCase(),
+    title: feed.title || "Finance signal detected",
+    state: feed.state || "National",
+    office: feed.office || "Finance",
+    risk: feed.risk || "Monitor",
+    score: 65,
+    source: feed.source || "Finance Intelligence",
+    recommendation: "Review fundraising movement and compare against race pressure.",
+    metadata: feed,
+  });
+}
+
+/**
+ * POLLING ALERTS
+ */
+for (const feed of executiveFeed || []) {
+  const type = String(feed.type || feed.event_type || "").toLowerCase();
+  const source = String(feed.source || "").toLowerCase();
+  const title = String(feed.title || "").toLowerCase();
+
+  const isPolling =
+    type.includes("poll") ||
+    source.includes("poll") ||
+    title.includes("poll") ||
+    title.includes("survey") ||
+    title.includes("margin");
+
+  if (!isPolling) continue;
+
+  alerts.push({
+    id: `polling-${feed.id || alerts.length}`,
+    type: "polling_signal",
+    severity: String(feed.severity || "medium").toLowerCase(),
+    title: feed.title || "Polling movement detected",
+    state: feed.state || "National",
+    office: feed.office || "Polling",
+    risk: feed.risk || "Watch",
+    score: 60,
+    source: feed.source || "Polling Intelligence",
+    recommendation: "Review polling movement and update battleground pressure.",
+    metadata: feed,
+  });
+}
+
+/**
+ * NEWS / MEDIA ALERTS
+ */
+for (const feed of executiveFeed || []) {
+  const type = String(feed.type || feed.event_type || "").toLowerCase();
+  const source = String(feed.source || "").toLowerCase();
+  const title = String(feed.title || "").toLowerCase();
+
+  const isNews =
+    type.includes("news") ||
+    type.includes("media") ||
+    source.includes("news") ||
+    source.includes("media") ||
+    source.includes("war room") ||
+    title.includes("attack") ||
+    title.includes("story") ||
+    title.includes("headline");
+
+  if (!isNews) continue;
+
+  alerts.push({
+    id: `news-${feed.id || alerts.length}`,
+    type: "news_signal",
+    severity: String(feed.severity || "medium").toLowerCase(),
+    title: feed.title || "News signal detected",
+    state: feed.state || "National",
+    office: feed.office || "Media",
+    risk: feed.risk || "Monitor",
+    score: 60,
+    source: feed.source || "News Intelligence",
+    recommendation: "Review media movement and prepare response guidance.",
+    metadata: feed,
+  });
+}
 
   /**
  * DARK MONEY ALERTS
