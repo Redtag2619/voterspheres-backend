@@ -1,4 +1,5 @@
 import { getRelationshipGraph } from "./relationshipGraph.service.js";
+import { getDarkMoneyExposure } from "./darkMoneyExposure.service.js";
 import {
   getConsultantRiskDashboard
 } from "./consultantRisk.service.js";
@@ -15,10 +16,18 @@ function buildSeverity(score = 0) {
 }
 
 function buildSignalType(item = {}) {
-  if (item.type?.includes("dark")) return "dark_money";
-  if (item.type?.includes("consultant")) return "consultant";
-  if (item.type?.includes("vendor")) return "vendor_gap";
-  if (item.type?.includes("relationship")) return "relationship";
+  const type = String(item.type || item.event_type || "").toLowerCase();
+  const source = String(item.source || "").toLowerCase();
+  const title = String(item.title || "").toLowerCase();
+
+  if (type.includes("dark") || source.includes("dark") || title.includes("dark money")) return "dark_money";
+  if (type.includes("consultant") || source.includes("consultant") || title.includes("consultant")) return "consultant_exposure";
+  if (type.includes("vendor") || source.includes("vendor")) return "vendor_gap";
+  if (type.includes("relationship") || source.includes("relationship")) return "relationship_signal";
+  if (type.includes("poll") || source.includes("poll")) return "polling_signal";
+  if (type.includes("news") || source.includes("news") || source.includes("media")) return "news_signal";
+  if (type.includes("fundraising") || type.includes("finance") || source.includes("fec") || source.includes("finance")) return "finance_signal";
+
   return "executive_signal";
 }
 
@@ -26,6 +35,7 @@ export async function buildExecutiveAlertFeed(options = {}) {
   const [
     relationshipGraph,
     consultantRisk,
+    darkMoney,
     executiveFeed
   ] = await Promise.all([
     getRelationshipGraph({
@@ -34,6 +44,10 @@ export async function buildExecutiveAlertFeed(options = {}) {
     }),
 
     getConsultantRiskDashboard({
+      limit: options.limit || 25
+    }),
+
+    getDarkMoneyExposure({
       limit: options.limit || 25
     }),
 
@@ -85,6 +99,29 @@ export async function buildExecutiveAlertFeed(options = {}) {
       metadata: link
     });
   }
+
+  /**
+ * DARK MONEY ALERTS
+ */
+for (const item of darkMoney?.top_exposure || darkMoney?.results || []) {
+  const exposure = Number(item.exposure_score || 0);
+
+  if (exposure < 50) continue;
+
+  alerts.push({
+    id: `dark-money-${item.committee_id || item.committee_name}`,
+    type: "dark_money",
+    severity: buildSeverity(exposure),
+    title: `${item.committee_name || item.committee_id || "Committee"} dark money exposure elevated`,
+    state: Array.isArray(item.states) ? item.states.join(", ") : "National",
+    office: "Committee Network",
+    risk: item.exposure_tier || item.severity || "Watch",
+    score: exposure,
+    source: "Dark Money Exposure Layer",
+    recommendation: item.narrative || "Review committee relationships and consultant overlap.",
+    metadata: item
+  });
+}
 
   /**
    * EXECUTIVE FEED ALERTS
