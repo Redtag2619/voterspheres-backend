@@ -48,6 +48,7 @@ import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
 import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js";
 import committeeIntelRoutes from "./routes/committeeIntel.routes.js";
 import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
+import executiveAlertEngineRoutes from "./routes/executiveAlertEngine.routes.js";
 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -174,6 +175,7 @@ app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
+app.use("/api/executive-alerts", requireAuth, executiveAlertEngineRoutes);
 app.use("/api/realtime", requireAuth, realtimeRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
 app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
