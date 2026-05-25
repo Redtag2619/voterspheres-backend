@@ -191,6 +191,83 @@ function publishMailOps(type, event) {
   }
 }
 
+async function ensureMailOpsPostalFacilitiesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mailops_postal_facilities (
+      id SERIAL PRIMARY KEY,
+      facility_type TEXT NOT NULL,
+      facility_name TEXT NOT NULL,
+      facility_address TEXT,
+      city TEXT,
+      state TEXT,
+      zip TEXT,
+      source TEXT DEFAULT 'postalpro_seed',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(facility_type, facility_name, facility_address)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_type
+    ON mailops_postal_facilities(facility_type)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_state
+    ON mailops_postal_facilities(state)
+  `);
+}
+
+async function seedMailOpsPostalFacilitiesIfEmpty() {
+  await ensureMailOpsPostalFacilitiesTable();
+
+  const count = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM mailops_postal_facilities`
+  );
+
+  if (Number(count.rows[0]?.total || 0) > 0) return;
+
+  await pool.query(`
+    INSERT INTO mailops_postal_facilities
+      (facility_type, facility_name, facility_address, city, state, zip, source)
+    VALUES
+      ('SCF', 'Atlanta SCF', '1605 Boggs Rd NW, Duluth, GA 30096', 'Duluth', 'GA', '30096', 'seed'),
+      ('SCF', 'Philadelphia SCF', '7500 Lindbergh Blvd, Philadelphia, PA 19176', 'Philadelphia', 'PA', '19176', 'seed'),
+      ('SCF', 'Pittsburgh SCF', '1001 California Ave, Pittsburgh, PA 15290', 'Pittsburgh', 'PA', '15290', 'seed'),
+      ('SCF', 'Phoenix SCF', '4949 E Van Buren St, Phoenix, AZ 85026', 'Phoenix', 'AZ', '85026', 'seed'),
+      ('SCF', 'Detroit SCF', '1401 W Fort St, Detroit, MI 48233', 'Detroit', 'MI', '48233', 'seed'),
+      ('SCF', 'Milwaukee SCF', '345 W Saint Paul Ave, Milwaukee, WI 53203', 'Milwaukee', 'WI', '53203', 'seed'),
+      ('SCF', 'Las Vegas SCF', '1001 E Sunset Rd, Las Vegas, NV 89199', 'Las Vegas', 'NV', '89199', 'seed'),
+      ('SCF', 'Charlotte SCF', '2901 Scott Futrell Dr, Charlotte, NC 28228', 'Charlotte', 'NC', '28228', 'seed'),
+      ('SCF', 'Dallas SCF', '401 Tom Landry Hwy, Dallas, TX 75260', 'Dallas', 'TX', '75260', 'seed'),
+      ('SCF', 'Los Angeles SCF', '7001 S Central Ave, Los Angeles, CA 90052', 'Los Angeles', 'CA', '90052', 'seed'),
+      ('SCF', 'New York SCF', '341 9th Ave, New York, NY 10199', 'New York', 'NY', '10199', 'seed'),
+      ('SCF', 'Chicago SCF', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed'),
+
+      ('NDC', 'Atlanta NDC', '1800 James Jackson Pkwy NW, Atlanta, GA 30369', 'Atlanta', 'GA', '30369', 'seed'),
+      ('NDC', 'Philadelphia NDC', '1900 Byberry Rd, Philadelphia, PA 19116', 'Philadelphia', 'PA', '19116', 'seed'),
+      ('NDC', 'Pittsburgh NDC', '300 Brush Creek Rd, Warrendale, PA 15095', 'Warrendale', 'PA', '15095', 'seed'),
+      ('NDC', 'Dallas NDC', '2400 Tom Landry Hwy, Dallas, TX 75211', 'Dallas', 'TX', '75211', 'seed'),
+      ('NDC', 'Los Angeles NDC', '16800 Valley View Ave, La Mirada, CA 90638', 'La Mirada', 'CA', '90638', 'seed'),
+      ('NDC', 'Chicago NDC', '7500 Roosevelt Rd, Forest Park, IL 60130', 'Forest Park', 'IL', '60130', 'seed'),
+      ('NDC', 'New Jersey NDC', '80 County Rd, Jersey City, NJ 07097', 'Jersey City', 'NJ', '07097', 'seed'),
+      ('NDC', 'Denver NDC', '7755 E 56th Ave, Denver, CO 80266', 'Denver', 'CO', '80266', 'seed'),
+
+      ('BMEU', 'Atlanta BMEU', '3900 Crown Rd SW, Atlanta, GA 30304', 'Atlanta', 'GA', '30304', 'seed'),
+      ('BMEU', 'Philadelphia BMEU', '3000 Chestnut St, Philadelphia, PA 19104', 'Philadelphia', 'PA', '19104', 'seed'),
+      ('BMEU', 'Pittsburgh BMEU', '1001 California Ave, Pittsburgh, PA 15290', 'Pittsburgh', 'PA', '15290', 'seed'),
+      ('BMEU', 'Phoenix BMEU', '4949 E Van Buren St, Phoenix, AZ 85026', 'Phoenix', 'AZ', '85026', 'seed'),
+      ('BMEU', 'Chicago BMEU', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed'),
+
+      ('DDU', 'Atlanta DDU', '3900 Crown Rd SW, Atlanta, GA 30304', 'Atlanta', 'GA', '30304', 'seed'),
+      ('DDU', 'Philadelphia DDU', '3000 Chestnut St, Philadelphia, PA 19104', 'Philadelphia', 'PA', '19104', 'seed'),
+      ('DDU', 'Chicago DDU', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed')
+    ON CONFLICT DO NOTHING
+  `);
+}
+
 async function ensureMailOpsEventsTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS mailops_events (
@@ -214,7 +291,7 @@ async function ensureMailOpsEventsTable() {
     )
   `);
 
-  const columns = [
+    const columns = [
     ["campaign", "TEXT"],
     ["state", "TEXT"],
     ["office", "TEXT"],
@@ -565,6 +642,21 @@ function buildMetrics(rows) {
   ];
 }
 
+await seedMailOpsPostalFacilitiesIfEmpty();
+
+const facilities = await pool.query(`
+  SELECT
+    facility_type,
+    facility_name AS name,
+    facility_address AS address,
+    city,
+    state,
+    zip
+  FROM mailops_postal_facilities
+  WHERE is_active = true
+  ORDER BY facility_type, state, facility_name
+`);
+
 export async function getMailOpsOptions(req, res) {
   try {
     await ensureMailOpsEventsTable();
@@ -600,35 +692,12 @@ export async function getMailOpsOptions(req, res) {
       organizations: organizations.rows.map((r) => r.value).filter(Boolean),
       organization_addresses: organizationAddresses.rows.map((r) => r.value).filter(Boolean),
 
-      scfs: [
-        { name: "Atlanta SCF", address: "1605 Boggs Rd NW, Duluth, GA 30096" },
-        { name: "Philadelphia SCF", address: "7500 Lindbergh Blvd, Philadelphia, PA 19176" },
-        { name: "Pittsburgh SCF", address: "1001 California Ave, Pittsburgh, PA 15290" },
-        { name: "Phoenix SCF", address: "4949 E Van Buren St, Phoenix, AZ 85026" },
-        { name: "Detroit SCF", address: "1401 W Fort St, Detroit, MI 48233" },
-        { name: "Milwaukee SCF", address: "345 W Saint Paul Ave, Milwaukee, WI 53203" },
-        { name: "Las Vegas SCF", address: "1001 E Sunset Rd, Las Vegas, NV 89199" },
-        { name: "Charlotte SCF", address: "2901 Scott Futrell Dr, Charlotte, NC 28228" },
-        { name: "Dallas SCF", address: "401 Tom Landry Hwy, Dallas, TX 75260" },
-        { name: "Los Angeles SCF", address: "7001 S Central Ave, Los Angeles, CA 90052" },
-        { name: "New York SCF", address: "341 9th Ave, New York, NY 10199" },
-        { name: "Chicago SCF", address: "433 W Harrison St, Chicago, IL 60699" },
-        ...scfs.rows.filter((r) => r.name)
-      ],
+      facilities: facilities.rows,
+      scfs: facilities.rows.filter((row) => row.facility_type === "SCF"),
+      ndcs: facilities.rows.filter((row) => row.facility_type === "NDC"),
+      bmeus: facilities.rows.filter((row) => row.facility_type === "BMEU"),
+      ddus: facilities.rows.filter((row) => row.facility_type === "DDU"),
 
-      ndcs: [
-        { name: "Atlanta NDC", address: "1800 James Jackson Pkwy NW, Atlanta, GA 30369" },
-        { name: "Philadelphia NDC", address: "1900 Byberry Rd, Philadelphia, PA 19116" },
-        { name: "Pittsburgh NDC", address: "300 Brush Creek Rd, Warrendale, PA 15095" },
-        { name: "Dallas NDC", address: "2400 Tom Landry Hwy, Dallas, TX 75211" },
-        { name: "Los Angeles NDC", address: "16800 Valley View Ave, La Mirada, CA 90638" },
-        { name: "Chicago NDC", address: "7500 Roosevelt Rd, Forest Park, IL 60130" },
-        { name: "New Jersey NDC", address: "80 County Rd, Jersey City, NJ 07097" },
-        { name: "Denver NDC", address: "7755 E 56th Ave, Denver, CO 80266" },
-        ...ndcs.rows.filter((r) => r.name)
-      ]
-    });
-  } catch (error) {
     console.error("getMailOpsOptions error:", error.message);
     return res.status(500).json({
       error: error.message || "Failed to load MailOps options"
