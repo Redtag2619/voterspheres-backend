@@ -31,6 +31,82 @@ function buildSignalType(item = {}) {
   return "executive_signal";
 }
 
+function hasFamily(alerts = [], familyType = "") {
+  return alerts.some((alert) =>
+    String(alert.type || "").toLowerCase().includes(familyType)
+  );
+}
+
+function addFallbackFamilyAlerts(alerts = []) {
+  const now = new Date().toISOString();
+
+  if (!hasFamily(alerts, "consultant")) {
+    alerts.push({
+      id: "fallback-consultant-watch",
+      type: "consultant_exposure",
+      severity: "medium",
+      title: "Consultant exposure watch active",
+      state: "National",
+      office: "Consulting",
+      risk: "Watch",
+      score: 55,
+      source: "Consultant Risk Engine",
+      recommendation: "No high-risk consultant exposure is currently detected. Continue monitoring consultant relationships.",
+      metadata: { generated_fallback: true, timestamp: now },
+    });
+  }
+
+  if (!hasFamily(alerts, "finance")) {
+    alerts.push({
+      id: "fallback-finance-watch",
+      type: "finance_signal",
+      severity: "medium",
+      title: "Finance monitoring active",
+      state: "National",
+      office: "Finance",
+      risk: "Monitor",
+      score: 52,
+      source: "Finance Intelligence",
+      recommendation: "No active fundraising spike is currently detected. Continue monitoring receipts, burn rate, and race pressure.",
+      metadata: { generated_fallback: true, timestamp: now },
+    });
+  }
+
+  if (!hasFamily(alerts, "polling")) {
+    alerts.push({
+      id: "fallback-polling-watch",
+      type: "polling_signal",
+      severity: "medium",
+      title: "Polling movement monitor active",
+      state: "National",
+      office: "Polling",
+      risk: "Watch",
+      score: 50,
+      source: "Polling Intelligence",
+      recommendation: "No active polling movement is currently detected. Continue monitoring margin shifts and battleground changes.",
+      metadata: { generated_fallback: true, timestamp: now },
+    });
+  }
+
+  if (!hasFamily(alerts, "news")) {
+    alerts.push({
+      id: "fallback-news-watch",
+      type: "news_signal",
+      severity: "medium",
+      title: "News and media monitoring active",
+      state: "National",
+      office: "Media",
+      risk: "Monitor",
+      score: 50,
+      source: "News Intelligence",
+      recommendation: "No active news escalation is currently detected. Continue monitoring attack narratives and media velocity.",
+      metadata: { generated_fallback: true, timestamp: now },
+    });
+  }
+
+  return alerts;
+}
+
 export async function buildExecutiveAlertFeed(options = {}) {
   const [
     relationshipGraph,
@@ -244,6 +320,8 @@ for (const item of darkMoney?.top_exposure || darkMoney?.results || []) {
     });
   }
 
+  addFallbackFamilyAlerts(alerts);
+  
   alerts.sort((a, b) => {
     const rank = {
       critical: 4,
