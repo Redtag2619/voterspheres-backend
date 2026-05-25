@@ -565,6 +565,77 @@ function buildMetrics(rows) {
   ];
 }
 
+export async function getMailOpsOptions(req, res) {
+  try {
+    await ensureMailOpsEventsTable();
+
+    const [
+      assignedTo,
+      printVendors,
+      permits,
+      crids,
+      mids,
+      scfs,
+      ndcs,
+      organizations,
+      organizationAddresses
+    ] = await Promise.all([
+      pool.query(`SELECT DISTINCT assigned_to AS value FROM mailops_events WHERE assigned_to IS NOT NULL AND assigned_to <> '' ORDER BY assigned_to`),
+      pool.query(`SELECT DISTINCT print_vendor AS value FROM mailops_events WHERE print_vendor IS NOT NULL AND print_vendor <> '' ORDER BY print_vendor`),
+      pool.query(`SELECT DISTINCT permit_number AS value FROM mailops_events WHERE permit_number IS NOT NULL AND permit_number <> '' ORDER BY permit_number`),
+      pool.query(`SELECT DISTINCT crid AS value FROM mailops_events WHERE crid IS NOT NULL AND crid <> '' ORDER BY crid`),
+      pool.query(`SELECT DISTINCT COALESCE(mid, imb_mid) AS value FROM mailops_events WHERE COALESCE(mid, imb_mid) IS NOT NULL AND COALESCE(mid, imb_mid) <> '' ORDER BY value`),
+      pool.query(`SELECT DISTINCT scf AS name, scf_address AS address FROM mailops_events WHERE scf IS NOT NULL AND scf <> '' ORDER BY scf`),
+      pool.query(`SELECT DISTINCT ndc AS name, ndc_address AS address FROM mailops_events WHERE ndc IS NOT NULL AND ndc <> '' ORDER BY ndc`),
+      pool.query(`SELECT DISTINCT office AS value FROM mailops_events WHERE office IS NOT NULL AND office <> '' ORDER BY office`),
+      pool.query(`SELECT DISTINCT location AS value FROM mailops_events WHERE location IS NOT NULL AND location <> '' ORDER BY location`)
+    ]);
+
+    return res.json({
+      assigned_to: assignedTo.rows.map((r) => r.value).filter(Boolean),
+      print_vendors: printVendors.rows.map((r) => r.value).filter(Boolean),
+      permit_numbers: permits.rows.map((r) => r.value).filter(Boolean),
+      crids: crids.rows.map((r) => r.value).filter(Boolean),
+      mids: mids.rows.map((r) => r.value).filter(Boolean),
+      organizations: organizations.rows.map((r) => r.value).filter(Boolean),
+      organization_addresses: organizationAddresses.rows.map((r) => r.value).filter(Boolean),
+
+      scfs: [
+        { name: "Atlanta SCF", address: "1605 Boggs Rd NW, Duluth, GA 30096" },
+        { name: "Philadelphia SCF", address: "7500 Lindbergh Blvd, Philadelphia, PA 19176" },
+        { name: "Pittsburgh SCF", address: "1001 California Ave, Pittsburgh, PA 15290" },
+        { name: "Phoenix SCF", address: "4949 E Van Buren St, Phoenix, AZ 85026" },
+        { name: "Detroit SCF", address: "1401 W Fort St, Detroit, MI 48233" },
+        { name: "Milwaukee SCF", address: "345 W Saint Paul Ave, Milwaukee, WI 53203" },
+        { name: "Las Vegas SCF", address: "1001 E Sunset Rd, Las Vegas, NV 89199" },
+        { name: "Charlotte SCF", address: "2901 Scott Futrell Dr, Charlotte, NC 28228" },
+        { name: "Dallas SCF", address: "401 Tom Landry Hwy, Dallas, TX 75260" },
+        { name: "Los Angeles SCF", address: "7001 S Central Ave, Los Angeles, CA 90052" },
+        { name: "New York SCF", address: "341 9th Ave, New York, NY 10199" },
+        { name: "Chicago SCF", address: "433 W Harrison St, Chicago, IL 60699" },
+        ...scfs.rows.filter((r) => r.name)
+      ],
+
+      ndcs: [
+        { name: "Atlanta NDC", address: "1800 James Jackson Pkwy NW, Atlanta, GA 30369" },
+        { name: "Philadelphia NDC", address: "1900 Byberry Rd, Philadelphia, PA 19116" },
+        { name: "Pittsburgh NDC", address: "300 Brush Creek Rd, Warrendale, PA 15095" },
+        { name: "Dallas NDC", address: "2400 Tom Landry Hwy, Dallas, TX 75211" },
+        { name: "Los Angeles NDC", address: "16800 Valley View Ave, La Mirada, CA 90638" },
+        { name: "Chicago NDC", address: "7500 Roosevelt Rd, Forest Park, IL 60130" },
+        { name: "New Jersey NDC", address: "80 County Rd, Jersey City, NJ 07097" },
+        { name: "Denver NDC", address: "7755 E 56th Ave, Denver, CO 80266" },
+        ...ndcs.rows.filter((r) => r.name)
+      ]
+    });
+  } catch (error) {
+    console.error("getMailOpsOptions error:", error.message);
+    return res.status(500).json({
+      error: error.message || "Failed to load MailOps options"
+    });
+  }
+}
+
 export async function getMailOpsDashboard(req, res) {
   try {
     await seedMailOpsEventsIfEmpty();
