@@ -697,7 +697,8 @@ export async function getMailOpsOptions(req, res) {
       ndcs: facilities.rows.filter((row) => row.facility_type === "NDC"),
       bmeus: facilities.rows.filter((row) => row.facility_type === "BMEU"),
       ddus: facilities.rows.filter((row) => row.facility_type === "DDU"),
-
+      
+} catch (error) {
     console.error("getMailOpsOptions error:", error.message);
     return res.status(500).json({
       error: error.message || "Failed to load MailOps options"
