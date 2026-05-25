@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getMailOpsDashboard,
+  getMailOpsOptions,
   listMailOpsEvents,
   createMailOpsEvent,
   updateMailOpsEvent,
@@ -12,6 +13,7 @@ const router = express.Router();
 
 // DASHBOARD
 router.get("/dashboard", requireAuth, getMailOpsDashboard);
+router.get("/options", requireAuth, getMailOpsOptions);
 
 // EVENTS
 router.get("/events", requireAuth, listMailOpsEvents);
