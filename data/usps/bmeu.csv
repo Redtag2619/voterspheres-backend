@@ -1,0 +1,6 @@
+facility_type,facility_name,facility_address,city,state,zip,source,is_active
+BMEU,Atlanta BMEU,"3900 Crown Rd SW",Atlanta,GA,30304,postalpro_bmeu,true
+BMEU,Philadelphia BMEU,"3000 Chestnut St",Philadelphia,PA,19104,postalpro_bmeu,true
+BMEU,Pittsburgh BMEU,"1001 California Ave",Pittsburgh,PA,15290,postalpro_bmeu,true
+BMEU,Phoenix BMEU,"4949 E Van Buren St",Phoenix,AZ,85026,postalpro_bmeu,true
+BMEU,Chicago BMEU,"433 W Harrison St",Chicago,IL,60699,postalpro_bmeu,true
