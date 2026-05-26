@@ -1,0 +1,7 @@
+facility_type,facility_name,facility_address,city,state,zip,source,is_active
+SCF,Atlanta SCF,"1605 Boggs Rd NW",Duluth,GA,30096,postalpro_l005,true
+SCF,Philadelphia SCF,"7500 Lindbergh Blvd",Philadelphia,PA,19176,postalpro_l005,true
+SCF,Pittsburgh SCF,"1001 California Ave",Pittsburgh,PA,15290,postalpro_l005,true
+SCF,Phoenix SCF,"4949 E Van Buren St",Phoenix,AZ,85026,postalpro_l005,true
+SCF,Chicago SCF,"433 W Harrison St",Chicago,IL,60699,postalpro_l005,true
+SCF,Dallas SCF,"401 Tom Landry Hwy",Dallas,TX,75260,postalpro_l005,true
