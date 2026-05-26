@@ -1,0 +1,5 @@
+facility_type,facility_name,facility_address,city,state,zip,source,is_active
+DDU,Atlanta DDU,"3900 Crown Rd SW",Atlanta,GA,30304,postalpro_ddu,true
+DDU,Philadelphia DDU,"3000 Chestnut St",Philadelphia,PA,19104,postalpro_ddu,true
+DDU,Chicago DDU,"433 W Harrison St",Chicago,IL,60699,postalpro_ddu,true
+DDU,Dallas DDU,"401 Tom Landry Hwy",Dallas,TX,75260,postalpro_ddu,true
