@@ -1,57 +1,22 @@
 import express from "express";
+
 import {
-  createMailEvent,
-  getMailDashboard,
-  getMailIntelligenceSummary,
-  getMailTimeline,
-  updateMailEvent
-} from "../services/mail.service.js";
+  getMailOpsDashboard,
+  getMailOpsOptions,
+  listMailOpsEvents,
+  createMailOpsEvent,
+  updateMailOpsEvent,
+} from "../controllers/mailops.controller.js";
+
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/dashboard", async (_req, res) => {
-  try {
-    const data = await getMailDashboard();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load mail dashboard" });
-  }
-});
+router.get("/dashboard", requireAuth, getMailOpsDashboard);
+router.get("/options", requireAuth, getMailOpsOptions);
 
-router.get("/timeline", async (_req, res) => {
-  try {
-    const data = await getMailTimeline();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load mail timeline" });
-  }
-});
-
-router.get("/intelligence/summary", async (_req, res) => {
-  try {
-    const data = await getMailIntelligenceSummary();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to load mail intelligence" });
-  }
-});
-
-router.post("/events", async (req, res) => {
-  try {
-    const data = await createMailEvent(req.body || {});
-    res.status(201).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to create mail event" });
-  }
-});
-
-router.patch("/events/:eventId", async (req, res) => {
-  try {
-    const data = await updateMailEvent(req.params.eventId, req.body || {});
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message || "Failed to update mail event" });
-  }
-});
+router.get("/events", requireAuth, listMailOpsEvents);
+router.post("/events", requireAuth, createMailOpsEvent);
+router.patch("/events/:eventId", requireAuth, updateMailOpsEvent);
 
 export default router;
