@@ -1,0 +1,7 @@
+facility_type,facility_name,facility_address,city,state,zip,source,is_active
+NDC,Atlanta NDC,"1800 James Jackson Pkwy NW",Atlanta,GA,30369,postalpro_l601,true
+NDC,Philadelphia NDC,"1900 Byberry Rd",Philadelphia,PA,19116,postalpro_l601,true
+NDC,Pittsburgh NDC,"300 Brush Creek Rd",Warrendale,PA,15095,postalpro_l601,true
+NDC,Dallas NDC,"2400 Tom Landry Hwy",Dallas,TX,75211,postalpro_l601,true
+NDC,Los Angeles NDC,"16800 Valley View Ave",La Mirada,CA,90638,postalpro_l601,true
+NDC,Chicago NDC,"7500 Roosevelt Rd",Forest Park,IL,60130,postalpro_l601,true
