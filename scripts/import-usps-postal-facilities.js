@@ -109,18 +109,90 @@ async function ensureTable() {
 }
 
 async function importRow(row, fileName) {
-  const facilityType = clean(row.facility_type).toUpperCase();
-  const facilityName = clean(row.facility_name);
-  const facilityAddress = clean(row.facility_address);
-  const city = clean(row.city);
-  const state = clean(row.state).toUpperCase();
-  const zip = clean(row.zip);
-  const source = clean(row.source) || `usps_${fileName}`;
-  const isActive =
-    clean(row.is_active).toLowerCase() === "false" ? false : true;
 
-  if (!facilityType || !facilityName) {
-    return { skipped: true, reason: "Missing facility_type or facility_name" };
+  // USPS-native column mapping
+  const facilityType =
+    clean(
+      row.facility_type ||
+      row["FACILITY T"] ||
+      row["FACILITY TYPE"]
+    ).toUpperCase();
+
+  const facilityName =
+    clean(
+      row.facility_name ||
+      row["FACILITY N"] ||
+      row["FACILITY NAME"]
+    );
+
+  const facilityAddress =
+    clean(
+      row.facility_address ||
+      row["FACILITY A"] ||
+      row["ADDRESS"]
+    );
+
+  const city =
+    clean(
+      row.city ||
+      row["FACILITY C"] ||
+      row["CITY"]
+    );
+
+  const state =
+    clean(
+      row.state ||
+      row["FACILITY S"] ||
+      row["STATE"]
+    ).toUpperCase();
+
+  const zip =
+    clean(
+      row.zip ||
+      row["ZIP"] ||
+      row["ZIP CODE"]
+    );
+
+  const bmeuIndicator =
+    clean(
+      row["BMEU INDICATOR"]
+    ).toUpperCase();
+
+  // Infer facility type when USPS does not provide it cleanly
+  let normalizedFacilityType = facilityType;
+
+  if (!normalizedFacilityType) {
+    if (bmeuIndicator === "Y") {
+      normalizedFacilityType = "BMEU";
+    } else if (
+      facilityName.includes("NDC")
+    ) {
+      normalizedFacilityType = "NDC";
+    } else if (
+      facilityName.includes("SCF")
+    ) {
+      normalizedFacilityType = "SCF";
+    } else {
+      normalizedFacilityType = "DDU";
+    }
+  }
+
+  const source =
+    clean(row.source) ||
+    `usps_${fileName}`;
+
+  const isActive =
+    clean(row.is_active).toLowerCase() === "false"
+      ? false
+      : true;
+
+  if (
+    !normalizedFacilityType ||
+    !facilityName
+  ) {
+    return {
+      skipped: true
+    };
   }
 
   await pool.query(
@@ -138,7 +210,13 @@ async function importRow(row, fileName) {
         updated_at
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
-      ON CONFLICT (facility_type, facility_name, facility_address)
+
+      ON CONFLICT (
+        facility_type,
+        facility_name,
+        facility_address
+      )
+
       DO UPDATE SET
         city = EXCLUDED.city,
         state = EXCLUDED.state,
@@ -148,7 +226,7 @@ async function importRow(row, fileName) {
         updated_at = NOW()
     `,
     [
-      facilityType,
+      normalizedFacilityType,
       facilityName,
       facilityAddress || null,
       city || null,
@@ -159,7 +237,9 @@ async function importRow(row, fileName) {
     ]
   );
 
-  return { skipped: false };
+  return {
+    skipped: false
+  };
 }
 
 async function importFile(fileName) {
