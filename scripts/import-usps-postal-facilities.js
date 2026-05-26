@@ -6,10 +6,7 @@ import { pool } from "../db/pool.js";
 const DATA_DIR = path.resolve(process.cwd(), "data", "usps");
 
 const FILES = [
-  "bmeu.csv",
-  "scf_l005.csv",
-  "ndc_l601.csv",
-  "ddu.csv",
+  "master.csv"
 ];
 
 function parseCsvLine(line) {
