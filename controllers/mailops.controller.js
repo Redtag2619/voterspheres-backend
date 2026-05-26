@@ -660,6 +660,7 @@ const facilities = await pool.query(`
 export async function getMailOpsOptions(req, res) {
   try {
     await ensureMailOpsEventsTable();
+    await ensureMailOpsPostalFacilitiesTable();
 
     const [
       assignedTo,
@@ -667,41 +668,134 @@ export async function getMailOpsOptions(req, res) {
       permits,
       crids,
       mids,
-      scfs,
-      ndcs,
       organizations,
-      organizationAddresses
+      organizationAddresses,
+      facilities,
     ] = await Promise.all([
-      pool.query(`SELECT DISTINCT assigned_to AS value FROM mailops_events WHERE assigned_to IS NOT NULL AND assigned_to <> '' ORDER BY assigned_to`),
-      pool.query(`SELECT DISTINCT print_vendor AS value FROM mailops_events WHERE print_vendor IS NOT NULL AND print_vendor <> '' ORDER BY print_vendor`),
-      pool.query(`SELECT DISTINCT permit_number AS value FROM mailops_events WHERE permit_number IS NOT NULL AND permit_number <> '' ORDER BY permit_number`),
-      pool.query(`SELECT DISTINCT crid AS value FROM mailops_events WHERE crid IS NOT NULL AND crid <> '' ORDER BY crid`),
-      pool.query(`SELECT DISTINCT COALESCE(mid, imb_mid) AS value FROM mailops_events WHERE COALESCE(mid, imb_mid) IS NOT NULL AND COALESCE(mid, imb_mid) <> '' ORDER BY value`),
-      pool.query(`SELECT DISTINCT scf AS name, scf_address AS address FROM mailops_events WHERE scf IS NOT NULL AND scf <> '' ORDER BY scf`),
-      pool.query(`SELECT DISTINCT ndc AS name, ndc_address AS address FROM mailops_events WHERE ndc IS NOT NULL AND ndc <> '' ORDER BY ndc`),
-      pool.query(`SELECT DISTINCT office AS value FROM mailops_events WHERE office IS NOT NULL AND office <> '' ORDER BY office`),
-      pool.query(`SELECT DISTINCT location AS value FROM mailops_events WHERE location IS NOT NULL AND location <> '' ORDER BY location`)
+      pool.query(`
+        SELECT DISTINCT assigned_to AS value
+        FROM mailops_events
+        WHERE assigned_to IS NOT NULL
+          AND assigned_to <> ''
+        ORDER BY assigned_to
+      `),
+
+      pool.query(`
+        SELECT DISTINCT print_vendor AS value
+        FROM mailops_events
+        WHERE print_vendor IS NOT NULL
+          AND print_vendor <> ''
+        ORDER BY print_vendor
+      `),
+
+      pool.query(`
+        SELECT DISTINCT permit_number AS value
+        FROM mailops_events
+        WHERE permit_number IS NOT NULL
+          AND permit_number <> ''
+        ORDER BY permit_number
+      `),
+
+      pool.query(`
+        SELECT DISTINCT crid AS value
+        FROM mailops_events
+        WHERE crid IS NOT NULL
+          AND crid <> ''
+        ORDER BY crid
+      `),
+
+      pool.query(`
+        SELECT DISTINCT COALESCE(mid, imb_mid) AS value
+        FROM mailops_events
+        WHERE COALESCE(mid, imb_mid) IS NOT NULL
+          AND COALESCE(mid, imb_mid) <> ''
+        ORDER BY value
+      `),
+
+      pool.query(`
+        SELECT DISTINCT office AS value
+        FROM mailops_events
+        WHERE office IS NOT NULL
+          AND office <> ''
+        ORDER BY office
+      `),
+
+      pool.query(`
+        SELECT DISTINCT location AS value
+        FROM mailops_events
+        WHERE location IS NOT NULL
+          AND location <> ''
+        ORDER BY location
+      `),
+
+      pool.query(`
+        SELECT
+          facility_type,
+          facility_name AS name,
+          facility_address AS address,
+          city,
+          state,
+          zip
+        FROM mailops_postal_facilities
+        WHERE is_active = true
+        ORDER BY facility_type, state, facility_name
+      `),
     ]);
 
     return res.json({
-      assigned_to: assignedTo.rows.map((r) => r.value).filter(Boolean),
-      print_vendors: printVendors.rows.map((r) => r.value).filter(Boolean),
-      permit_numbers: permits.rows.map((r) => r.value).filter(Boolean),
-      crids: crids.rows.map((r) => r.value).filter(Boolean),
-      mids: mids.rows.map((r) => r.value).filter(Boolean),
-      organizations: organizations.rows.map((r) => r.value).filter(Boolean),
-      organization_addresses: organizationAddresses.rows.map((r) => r.value).filter(Boolean),
+      assigned_to: assignedTo.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      print_vendors: printVendors.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      permit_numbers: permits.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      crids: crids.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      mids: mids.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      organizations: organizations.rows
+        .map((r) => r.value)
+        .filter(Boolean),
+
+      organization_addresses: organizationAddresses.rows
+        .map((r) => r.value)
+        .filter(Boolean),
 
       facilities: facilities.rows,
-      scfs: facilities.rows.filter((row) => row.facility_type === "SCF"),
-      ndcs: facilities.rows.filter((row) => row.facility_type === "NDC"),
-      bmeus: facilities.rows.filter((row) => row.facility_type === "BMEU"),
-      ddus: facilities.rows.filter((row) => row.facility_type === "DDU"),
-      
-} catch (error) {
+
+      scfs: facilities.rows.filter(
+        (row) => row.facility_type === "SCF"
+      ),
+
+      ndcs: facilities.rows.filter(
+        (row) => row.facility_type === "NDC"
+      ),
+
+      bmeus: facilities.rows.filter(
+        (row) => row.facility_type === "BMEU"
+      ),
+
+      ddus: facilities.rows.filter(
+        (row) => row.facility_type === "DDU"
+      ),
+    });
+  } catch (error) {
     console.error("getMailOpsOptions error:", error.message);
+
     return res.status(500).json({
-      error: error.message || "Failed to load MailOps options"
+      error:
+        error.message ||
+        "Failed to load MailOps options",
     });
   }
 }
