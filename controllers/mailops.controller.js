@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
-import { publishRealtimeEvent } from "../lib/realtime.bus.js";
+import { publishRealtimeEvent } from "../lib/realtime.bus.js"; 
 
 async function ensureMailOpsPostalFacilitiesTable() {
   await pool.query(`
