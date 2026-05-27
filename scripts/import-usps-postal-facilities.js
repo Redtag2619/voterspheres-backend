@@ -6,7 +6,10 @@ import { pool } from "../db/pool.js";
 const DATA_DIR = path.resolve(process.cwd(), "data", "usps");
 
 const FILES = [
-  "master.csv"
+  "facilityReport1.csv",
+  "facilityReport2.csv",
+  "facilityReport3.csv",
+  "facilityReport4.csv",
 ];
 
 function parseCsvLine(line) {
@@ -42,17 +45,40 @@ function parseCsvLine(line) {
   return result;
 }
 
+function normalizeHeader(value) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function findHeaderLineIndex(lines) {
+  return lines.findIndex((line) => {
+    const normalized = line.toLowerCase();
+    return (
+      normalized.includes("facility name") &&
+      normalized.includes("facility type") &&
+      normalized.includes("address") &&
+      normalized.includes("zip")
+    );
+  });
+}
+
 function parseCsv(content) {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = content.split(/\r?\n/).filter(Boolean);
 
   if (!lines.length) return [];
 
-  const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+  const headerLineIndex = findHeaderLineIndex(lines);
 
-  return lines.slice(1).map((line) => {
+  if (headerLineIndex < 0) {
+    return [];
+  }
+
+  const rawHeaders = parseCsvLine(lines[headerLineIndex]);
+  const headers = rawHeaders.map(normalizeHeader);
+
+  return lines.slice(headerLineIndex + 1).map((line) => {
     const values = parseCsvLine(line);
     const row = {};
 
@@ -66,6 +92,51 @@ function parseCsv(content) {
 
 function clean(value) {
   return String(value || "").trim();
+}
+
+function pick(row, keys) {
+  for (const key of keys) {
+    const normalized = normalizeHeader(key);
+    if (row[normalized]) return clean(row[normalized]);
+  }
+
+  return "";
+}
+
+function inferFacilityType(row, fileName) {
+  const rawType = pick(row, [
+    "Facility Type",
+    "facility_type",
+    "facility type",
+  ]).toUpperCase();
+
+  const bmeu = pick(row, [
+    "BMEU",
+    "BMEU Indicator",
+    "bmeu",
+  ]).toUpperCase();
+
+  const name = pick(row, [
+    "Facility Name",
+    "facility_name",
+  ]).toUpperCase();
+
+  const file = fileName.toLowerCase();
+
+  if (file.includes("1")) return "BMEU";
+  if (file.includes("2")) return "SCF";
+  if (file.includes("3")) return "NDC";
+  if (file.includes("4")) return "DDU";
+
+  if (rawType.includes("NDC") || rawType.includes("RPDC")) return "NDC";
+  if (rawType.includes("SCF")) return "SCF";
+  if (rawType.includes("DDU")) return "DDU";
+  if (bmeu === "YES" || bmeu === "Y") return "BMEU";
+  if (name.includes("NDC") || name.includes("RPDC")) return "NDC";
+  if (name.includes("SCF")) return "SCF";
+  if (name.includes("DDU")) return "DDU";
+
+  return "BMEU";
 }
 
 async function ensureTable() {
@@ -106,90 +177,36 @@ async function ensureTable() {
 }
 
 async function importRow(row, fileName) {
+  const facilityType = inferFacilityType(row, fileName);
 
-  // USPS-native column mapping
-  const facilityType =
-    clean(
-      row.facility_type ||
-      row["FACILITY T"] ||
-      row["FACILITY TYPE"]
-    ).toUpperCase();
+  const facilityName = pick(row, [
+    "Facility Name",
+    "facility_name",
+    "Name",
+  ]);
 
-  const facilityName =
-    clean(
-      row.facility_name ||
-      row["FACILITY N"] ||
-      row["FACILITY NAME"]
-    );
+  const facilityAddress = pick(row, [
+    "Address",
+    "Facility Address",
+    "facility_address",
+  ]);
 
-  const facilityAddress =
-    clean(
-      row.facility_address ||
-      row["FACILITY A"] ||
-      row["ADDRESS"]
-    );
+  const city = pick(row, [
+    "City",
+  ]);
 
-  const city =
-    clean(
-      row.city ||
-      row["FACILITY C"] ||
-      row["CITY"]
-    );
+  const state = pick(row, [
+    "State",
+  ]).toUpperCase();
 
-  const state =
-    clean(
-      row.state ||
-      row["FACILITY S"] ||
-      row["STATE"]
-    ).toUpperCase();
+  const zip = pick(row, [
+    "ZIP Code",
+    "Zip",
+    "ZIP",
+  ]);
 
-  const zip =
-    clean(
-      row.zip ||
-      row["ZIP"] ||
-      row["ZIP CODE"]
-    );
-
-  const bmeuIndicator =
-    clean(
-      row["BMEU INDICATOR"]
-    ).toUpperCase();
-
-  // Infer facility type when USPS does not provide it cleanly
-  let normalizedFacilityType = facilityType;
-
-  if (!normalizedFacilityType) {
-    if (bmeuIndicator === "Y") {
-      normalizedFacilityType = "BMEU";
-    } else if (
-      facilityName.includes("NDC")
-    ) {
-      normalizedFacilityType = "NDC";
-    } else if (
-      facilityName.includes("SCF")
-    ) {
-      normalizedFacilityType = "SCF";
-    } else {
-      normalizedFacilityType = "DDU";
-    }
-  }
-
-  const source =
-    clean(row.source) ||
-    `usps_${fileName}`;
-
-  const isActive =
-    clean(row.is_active).toLowerCase() === "false"
-      ? false
-      : true;
-
-  if (
-    !normalizedFacilityType ||
-    !facilityName
-  ) {
-    return {
-      skipped: true
-    };
+  if (!facilityType || !facilityName) {
+    return { skipped: true };
   }
 
   await pool.query(
@@ -206,37 +223,28 @@ async function importRow(row, fileName) {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
-
-      ON CONFLICT (
-        facility_type,
-        facility_name,
-        facility_address
-      )
-
+      VALUES ($1,$2,$3,$4,$5,$6,$7,true,NOW(),NOW())
+      ON CONFLICT (facility_type, facility_name, facility_address)
       DO UPDATE SET
         city = EXCLUDED.city,
         state = EXCLUDED.state,
         zip = EXCLUDED.zip,
         source = EXCLUDED.source,
-        is_active = EXCLUDED.is_active,
+        is_active = true,
         updated_at = NOW()
     `,
     [
-      normalizedFacilityType,
+      facilityType,
       facilityName,
       facilityAddress || null,
       city || null,
       state || null,
       zip || null,
-      source,
-      isActive,
+      `usps_${fileName}`,
     ]
   );
 
-  return {
-    skipped: false
-  };
+  return { skipped: false };
 }
 
 async function importFile(fileName) {
@@ -252,8 +260,7 @@ async function importFile(fileName) {
     };
   }
 
-  const content = fs.readFileSync(fullPath, "utf8");
-  const rows = parseCsv(content);
+  const rows = parseCsv(fs.readFileSync(fullPath, "utf8"));
 
   let imported = 0;
   let skipped = 0;
@@ -276,15 +283,13 @@ async function importFile(fileName) {
 async function main() {
   await ensureTable();
 
-  const results = [];
-
   const importedFiles = [];
 
-for (const file of FILES) {
-  importedFiles.push(await importFile(file));
-}
+  for (const file of FILES) {
+    importedFiles.push(await importFile(file));
+  }
 
-  const summary = await pool.query(`
+  const totals = await pool.query(`
     SELECT facility_type, COUNT(*)::int AS total
     FROM mailops_postal_facilities
     WHERE is_active = true
@@ -293,17 +298,18 @@ for (const file of FILES) {
   `);
 
   console.log(
-    console.log(
-  JSON.stringify(
-    {
-      ok: true,
-      files: importedFiles,
-      totals: totals.rows,
-    },
-    null,
-    2
-  )
-);
+    JSON.stringify(
+      {
+        ok: true,
+        imported_at: new Date().toISOString(),
+        files: importedFiles,
+        totals: totals.rows,
+      },
+      null,
+      2
+    )
+  );
+}
 
 main()
   .catch((error) => {

@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   darkMoneyExposureController,
   darkMoneyExposureProfileController,
@@ -7,6 +8,10 @@ import {
 const router = express.Router();
 
 router.get("/", darkMoneyExposureController);
-router.get("/profile/:id", darkMoneyExposureProfileController);
+
+router.get(
+  "/profile/:id",
+  darkMoneyExposureProfileController
+);
 
 export default router;

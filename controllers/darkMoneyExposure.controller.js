@@ -9,16 +9,22 @@ export async function darkMoneyExposureController(req, res) {
     return res.json(result);
   } catch (error) {
     console.error("Dark money exposure error:", error);
+
     return res.status(error?.statusCode || 500).json({
       ok: false,
-      error: error.message || "Failed to load dark money exposure intelligence",
+      error:
+        error.message ||
+        "Failed to load dark money exposure intelligence",
     });
   }
 }
 
 export async function darkMoneyExposureProfileController(req, res) {
   try {
-    const result = await getDarkMoneyExposureProfile(req.params.id, req.query || {});
+    const result = await getDarkMoneyExposureProfile(
+      req.params.id,
+      req.query || {}
+    );
 
     if (!result) {
       return res.status(404).json({
@@ -30,9 +36,12 @@ export async function darkMoneyExposureProfileController(req, res) {
     return res.json(result);
   } catch (error) {
     console.error("Dark money exposure profile error:", error);
+
     return res.status(error?.statusCode || 500).json({
       ok: false,
-      error: error.message || "Failed to load dark money exposure profile",
+      error:
+        error.message ||
+        "Failed to load dark money exposure profile",
     });
   }
 }

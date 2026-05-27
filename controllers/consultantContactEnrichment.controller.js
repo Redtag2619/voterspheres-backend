@@ -1,24 +1,17 @@
 import {
   getConsultantContactEnrichmentStatus,
   getConsultantsNeedingContactEnrichment,
-  enrichConsultantContact,
   enrichConsultantContactsBatch,
-  getConsultantContactHistory,
+  enrichConsultantContact,
 } from "../services/consultantContactEnrichment.service.js";
 
-function mergeInput(req) {
-  return {
-    ...(req.query || {}),
-    ...(req.body || {}),
-  };
-}
-
-export async function consultantContactStatusController(_req, res) {
+export async function consultantContactStatusController(req, res) {
   try {
-    const result = await getConsultantContactEnrichmentStatus();
+    const result = await getConsultantContactEnrichmentStatus(req.query || {});
     return res.json(result);
   } catch (error) {
     console.error("Consultant contact status error:", error);
+
     return res.status(500).json({
       ok: false,
       error: error.message || "Failed to load consultant contact enrichment status",
@@ -31,10 +24,29 @@ export async function consultantsNeedingContactEnrichmentController(req, res) {
     const result = await getConsultantsNeedingContactEnrichment(req.query || {});
     return res.json(result);
   } catch (error) {
-    console.error("Consultants needing contact enrichment error:", error);
+    console.error("Consultants needing enrichment error:", error);
+
     return res.status(500).json({
       ok: false,
-      error: error.message || "Failed to load consultants needing contact enrichment",
+      error: error.message || "Failed to load consultants needing enrichment",
+    });
+  }
+}
+
+export async function enrichConsultantContactsBatchController(req, res) {
+  try {
+    const result = await enrichConsultantContactsBatch({
+      ...(req.query || {}),
+      ...(req.body || {}),
+    });
+
+    return res.json(result);
+  } catch (error) {
+    console.error("Consultant batch enrichment error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error.message || "Failed to enrich consultant contacts",
     });
   }
 }
@@ -42,33 +54,26 @@ export async function consultantsNeedingContactEnrichmentController(req, res) {
 export async function enrichSingleConsultantContactController(req, res) {
   try {
     const consultantId = Number(req.params.id);
-    const result = await enrichConsultantContact(consultantId, req.body || {}, {
-      dryRun: String(req.query?.dryRun || "false").toLowerCase() === "true",
-    });
 
-    if (!result) {
-      return res.status(404).json({ ok: false, error: "Consultant not found" });
+    if (!Number.isFinite(consultantId) || consultantId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid consultant id",
+      });
     }
 
+    const result = await enrichConsultantContact(consultantId, {
+      ...(req.query || {}),
+      ...(req.body || {}),
+    });
+
     return res.json(result);
   } catch (error) {
-    console.error("Single consultant contact enrichment error:", error);
-    return res.status(error?.statusCode || 500).json({
+    console.error("Single consultant enrichment error:", error);
+
+    return res.status(500).json({
       ok: false,
       error: error.message || "Failed to enrich consultant contact",
-    });
-  }
-}
-
-export async function enrichConsultantContactsBatchController(req, res) {
-  try {
-    const result = await enrichConsultantContactsBatch(mergeInput(req));
-    return res.json(result);
-  } catch (error) {
-    console.error("Batch consultant contact enrichment error:", error);
-    return res.status(error?.statusCode || 500).json({
-      ok: false,
-      error: error.message || "Failed to run consultant contact enrichment batch",
     });
   }
 }
@@ -76,13 +81,24 @@ export async function enrichConsultantContactsBatchController(req, res) {
 export async function consultantContactHistoryController(req, res) {
   try {
     const consultantId = Number(req.params.id);
-    const result = await getConsultantContactHistory(consultantId);
-    return res.json(result);
+
+    if (!Number.isFinite(consultantId) || consultantId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid consultant id",
+      });
+    }
+
+    return res.json({ ok: true, consultant_id: consultantId, results: [] });
   } catch (error) {
     console.error("Consultant contact history error:", error);
-    return res.status(error?.statusCode || 500).json({
+
+    return res.status(500).json({
       ok: false,
-      error: error.message || "Failed to load consultant contact enrichment history",
+      error: error.message || "Failed to load consultant contact history",
     });
   }
 }
+
+
+

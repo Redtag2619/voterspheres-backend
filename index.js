@@ -8,7 +8,9 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js"; 
 import alertsRoutes from "./routes/alerts.routes.js";
-import realtimeRoutes from "./routes/realtime.routes.js"; 
+import executiveAlertEngineRoutes from "./routes/executiveAlertEngine.routes.js";
+import operationsMapRoutes from "./routes/operationsMap.routes.js";
+import realtimeRoutes from "./routes/realtime.routes.js";
 import crmRoutes from "./routes/crm.routes.js"; 
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
@@ -48,9 +50,6 @@ import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
 import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js";
 import committeeIntelRoutes from "./routes/committeeIntel.routes.js";
 import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
-import executiveAlertEngineRoutes from "./routes/executiveAlertEngine.routes.js";
-import vendorPerformanceRoutes from "./routes/vendorPerformance.routes.js";
-import operationsMapRoutes from "./routes/operationsMap.routes.js";
 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -174,10 +173,11 @@ app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes); 
-app.use("/api/workspace-onboarding", workspaceOnboardingRoutes); 
+app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/executive-alerts", requireAuth, executiveAlertEngineRoutes);
+app.use("/api/operations-map", requireAuth, operationsMapRoutes);
 app.use("/api/realtime", requireAuth, realtimeRoutes);
 app.use("/api/crm", requireAuth, crmRoutes);
 app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
@@ -191,7 +191,6 @@ app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/vendors", vendorsRoutes);
-app.use("/api/vendor-performance", requireAuth, vendorPerformanceRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
@@ -207,7 +206,6 @@ app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
 app.use("/api/consultants/contact-enrichment", requireAuth, consultantContactEnrichmentRoutes);
 app.use("/api/committees", requireAuth, committeeIntelRoutes);
 app.use("/api/dark-money-exposure", requireAuth, darkMoneyExposureRoutes);
-app.use("/api/operations-map", requireAuth, operationsMapRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
@@ -372,3 +370,5 @@ server.listen(PORT, "0.0.0.0", () => {
   startCandidateEnrichmentScheduler();
   startConsultantImportJob();
 }); 
+
+
