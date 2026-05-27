@@ -2,6 +2,24 @@ import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
 import { publishRealtimeEvent } from "../lib/realtime.bus.js";
 
+async function ensureMailOpsPostalFacilitiesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mailops_postal_facilities (
+      id SERIAL PRIMARY KEY,
+      facility_type TEXT NOT NULL,
+      facility_name TEXT NOT NULL,
+      facility_address TEXT,
+      city TEXT,
+      state TEXT,
+      zip TEXT,
+      source TEXT DEFAULT 'usps_import',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+
 const USPS_POLITICAL_MAIL_ALERT_URL =
   "https://tools.usps.com/political-mail-alert.htm";
 
