@@ -278,10 +278,11 @@ async function main() {
 
   const results = [];
 
-  for (const file of FILES) {
-    const result = await importFile(file);
-    results.push(result);
-  }
+  const importedFiles = [];
+
+for (const file of FILES) {
+  importedFiles.push(await importFile(file));
+}
 
   const summary = await pool.query(`
     SELECT facility_type, COUNT(*)::int AS total
@@ -292,18 +293,17 @@ async function main() {
   `);
 
   console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        imported_at: new Date().toISOString(),
-        files: results,
-        totals: summary.rows,
-      },
-      null,
-      2
-    )
-  );
-}
+    console.log(
+  JSON.stringify(
+    {
+      ok: true,
+      files: importedFiles,
+      totals: totals.rows,
+    },
+    null,
+    2
+  )
+);
 
 main()
   .catch((error) => {
