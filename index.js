@@ -173,7 +173,7 @@ app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes); 
-app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
+app.use("/api/workspace-onboarding", workspaceOnboardingRoutes); 
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/executive-alerts", requireAuth, executiveAlertEngineRoutes);
