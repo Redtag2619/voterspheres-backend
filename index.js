@@ -8,7 +8,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes from "./routes/billing.routes.js"; 
 import alertsRoutes from "./routes/alerts.routes.js";
-import realtimeRoutes from "./routes/realtime.routes.js";
+import realtimeRoutes from "./routes/realtime.routes.js"; 
 import crmRoutes from "./routes/crm.routes.js"; 
 import crmDashboardRoutes from "./routes/crmDashboard.routes.js";
 import firmWorkspaceRoutes from "./routes/firmWorkspace.routes.js";
