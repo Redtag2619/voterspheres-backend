@@ -190,6 +190,7 @@ app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/vendors", vendorsRoutes);
+app.use("/api/vendor-performance", requireAuth, vendorPerformanceRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
@@ -205,7 +206,6 @@ app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
 app.use("/api/consultants/contact-enrichment", requireAuth, consultantContactEnrichmentRoutes);
 app.use("/api/committees", requireAuth, committeeIntelRoutes);
 app.use("/api/dark-money-exposure", requireAuth, darkMoneyExposureRoutes);
-app.use("/api/vendor-performance", requireAuth, vendorPerformanceRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
