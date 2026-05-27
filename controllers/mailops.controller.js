@@ -18,6 +18,25 @@ async function ensureMailOpsPostalFacilitiesTable() {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mailops_postal_facilities_unique
+    ON mailops_postal_facilities (
+      facility_type,
+      facility_name,
+      facility_address
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_type
+    ON mailops_postal_facilities(facility_type)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_state
+    ON mailops_postal_facilities(state)
+  `);
 }
 
 const USPS_POLITICAL_MAIL_ALERT_URL =
