@@ -1,43 +1,6 @@
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
-import { publishRealtimeEvent } from "../lib/realtime.bus.js"; 
-
-async function ensureMailOpsPostalFacilitiesTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mailops_postal_facilities (
-      id SERIAL PRIMARY KEY,
-      facility_type TEXT NOT NULL,
-      facility_name TEXT NOT NULL,
-      facility_address TEXT,
-      city TEXT,
-      state TEXT,
-      zip TEXT,
-      source TEXT DEFAULT 'usps_import',
-      is_active BOOLEAN DEFAULT true,
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_mailops_postal_facilities_unique
-    ON mailops_postal_facilities (
-      facility_type,
-      facility_name,
-      facility_address
-    )
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_type
-    ON mailops_postal_facilities(facility_type)
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_mailops_postal_facilities_state
-    ON mailops_postal_facilities(state)
-  `);
-}
+import { publishRealtimeEvent } from "../lib/realtime.bus.js";
 
 const USPS_POLITICAL_MAIL_ALERT_URL =
   "https://tools.usps.com/political-mail-alert.htm";
@@ -59,6 +22,7 @@ function nullable(value) {
 
 function normalizeSeverity(value) {
   const severity = text(value || "Medium");
+
   return ["Low", "Medium", "High", "Critical"].includes(severity)
     ? severity
     : "Medium";
@@ -66,6 +30,7 @@ function normalizeSeverity(value) {
 
 function normalizeMailClass(value) {
   const next = text(value || "Marketing Mail");
+
   return ["Marketing Mail", "First-Class Mail"].includes(next)
     ? next
     : "Marketing Mail";
@@ -73,6 +38,7 @@ function normalizeMailClass(value) {
 
 function normalizeMailFormat(value) {
   const next = text(value || "Letter");
+
   return ["Letter", "Flat"].includes(next) ? next : "Letter";
 }
 
@@ -122,9 +88,9 @@ function normalizeEventType(value) {
     : "mail_update";
 }
 
-function toNumber(value, fallback = 0) {
+function toNumber(value) {
   const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
+  return Number.isFinite(next) ? next : null;
 }
 
 function dateOrNull(value) {
@@ -161,7 +127,7 @@ function calculateRisk(row = {}) {
   return "Stable";
 }
 
-function shouldAlert(event) {
+function shouldAlert(event = {}) {
   const status = String(event.status || "").toLowerCase();
   const severity = String(event.severity || "").toLowerCase();
   const deliveryRisk = String(event.delivery_risk || "").toLowerCase();
@@ -180,7 +146,10 @@ function buildRealtimePayload(event) {
       ? {
           id: event.id,
           title: `${event.campaign || "MailOps"} • ${
-            event.location || event.scf || "Operational update"
+            event.location ||
+            event.induction_facility ||
+            event.scf ||
+            "Operational update"
           }`,
           severity: event.severity || "Medium",
           source: "MailOps Intelligence",
@@ -238,11 +207,19 @@ async function ensureMailOpsPostalFacilitiesTable() {
       city TEXT,
       state TEXT,
       zip TEXT,
-      source TEXT DEFAULT 'postalpro_seed',
+      source TEXT DEFAULT 'usps_import',
       is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(facility_type, facility_name, facility_address)
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mailops_postal_facilities_unique
+    ON mailops_postal_facilities (
+      facility_type,
+      facility_name,
+      facility_address
     )
   `);
 
@@ -272,35 +249,12 @@ async function seedMailOpsPostalFacilitiesIfEmpty() {
     VALUES
       ('SCF', 'Atlanta SCF', '1605 Boggs Rd NW, Duluth, GA 30096', 'Duluth', 'GA', '30096', 'seed'),
       ('SCF', 'Philadelphia SCF', '7500 Lindbergh Blvd, Philadelphia, PA 19176', 'Philadelphia', 'PA', '19176', 'seed'),
-      ('SCF', 'Pittsburgh SCF', '1001 California Ave, Pittsburgh, PA 15290', 'Pittsburgh', 'PA', '15290', 'seed'),
-      ('SCF', 'Phoenix SCF', '4949 E Van Buren St, Phoenix, AZ 85026', 'Phoenix', 'AZ', '85026', 'seed'),
-      ('SCF', 'Detroit SCF', '1401 W Fort St, Detroit, MI 48233', 'Detroit', 'MI', '48233', 'seed'),
-      ('SCF', 'Milwaukee SCF', '345 W Saint Paul Ave, Milwaukee, WI 53203', 'Milwaukee', 'WI', '53203', 'seed'),
-      ('SCF', 'Las Vegas SCF', '1001 E Sunset Rd, Las Vegas, NV 89199', 'Las Vegas', 'NV', '89199', 'seed'),
-      ('SCF', 'Charlotte SCF', '2901 Scott Futrell Dr, Charlotte, NC 28228', 'Charlotte', 'NC', '28228', 'seed'),
-      ('SCF', 'Dallas SCF', '401 Tom Landry Hwy, Dallas, TX 75260', 'Dallas', 'TX', '75260', 'seed'),
-      ('SCF', 'Los Angeles SCF', '7001 S Central Ave, Los Angeles, CA 90052', 'Los Angeles', 'CA', '90052', 'seed'),
-      ('SCF', 'New York SCF', '341 9th Ave, New York, NY 10199', 'New York', 'NY', '10199', 'seed'),
-      ('SCF', 'Chicago SCF', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed'),
-
       ('NDC', 'Atlanta NDC', '1800 James Jackson Pkwy NW, Atlanta, GA 30369', 'Atlanta', 'GA', '30369', 'seed'),
       ('NDC', 'Philadelphia NDC', '1900 Byberry Rd, Philadelphia, PA 19116', 'Philadelphia', 'PA', '19116', 'seed'),
-      ('NDC', 'Pittsburgh NDC', '300 Brush Creek Rd, Warrendale, PA 15095', 'Warrendale', 'PA', '15095', 'seed'),
-      ('NDC', 'Dallas NDC', '2400 Tom Landry Hwy, Dallas, TX 75211', 'Dallas', 'TX', '75211', 'seed'),
-      ('NDC', 'Los Angeles NDC', '16800 Valley View Ave, La Mirada, CA 90638', 'La Mirada', 'CA', '90638', 'seed'),
-      ('NDC', 'Chicago NDC', '7500 Roosevelt Rd, Forest Park, IL 60130', 'Forest Park', 'IL', '60130', 'seed'),
-      ('NDC', 'New Jersey NDC', '80 County Rd, Jersey City, NJ 07097', 'Jersey City', 'NJ', '07097', 'seed'),
-      ('NDC', 'Denver NDC', '7755 E 56th Ave, Denver, CO 80266', 'Denver', 'CO', '80266', 'seed'),
-
       ('BMEU', 'Atlanta BMEU', '3900 Crown Rd SW, Atlanta, GA 30304', 'Atlanta', 'GA', '30304', 'seed'),
       ('BMEU', 'Philadelphia BMEU', '3000 Chestnut St, Philadelphia, PA 19104', 'Philadelphia', 'PA', '19104', 'seed'),
-      ('BMEU', 'Pittsburgh BMEU', '1001 California Ave, Pittsburgh, PA 15290', 'Pittsburgh', 'PA', '15290', 'seed'),
-      ('BMEU', 'Phoenix BMEU', '4949 E Van Buren St, Phoenix, AZ 85026', 'Phoenix', 'AZ', '85026', 'seed'),
-      ('BMEU', 'Chicago BMEU', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed'),
-
       ('DDU', 'Atlanta DDU', '3900 Crown Rd SW, Atlanta, GA 30304', 'Atlanta', 'GA', '30304', 'seed'),
-      ('DDU', 'Philadelphia DDU', '3000 Chestnut St, Philadelphia, PA 19104', 'Philadelphia', 'PA', '19104', 'seed'),
-      ('DDU', 'Chicago DDU', '433 W Harrison St, Chicago, IL 60699', 'Chicago', 'IL', '60699', 'seed')
+      ('DDU', 'Philadelphia DDU', '3000 Chestnut St, Philadelphia, PA 19104', 'Philadelphia', 'PA', '19104', 'seed')
     ON CONFLICT DO NOTHING
   `);
 }
@@ -328,7 +282,7 @@ async function ensureMailOpsEventsTable() {
     )
   `);
 
-    const columns = [
+  const columns = [
     ["campaign", "TEXT"],
     ["state", "TEXT"],
     ["office", "TEXT"],
@@ -345,7 +299,6 @@ async function ensureMailOpsEventsTable() {
     ["firm_id", "INTEGER"],
     ["created_at", "TIMESTAMP DEFAULT NOW()"],
     ["updated_at", "TIMESTAMP DEFAULT NOW()"],
-
     ["job_number", "TEXT"],
     ["assigned_to", "TEXT"],
     ["date_submitted", "DATE"],
@@ -372,6 +325,9 @@ async function ensureMailOpsEventsTable() {
     ["scf_address", "TEXT"],
     ["ndc", "TEXT"],
     ["ndc_address", "TEXT"],
+    ["induction_type", "TEXT"],
+    ["induction_facility", "TEXT"],
+    ["induction_facility_address", "TEXT"],
     ["estimated_in_home_date", "DATE"],
     ["actual_in_home_date", "DATE"],
     ["delivery_risk", "TEXT"],
@@ -382,19 +338,17 @@ async function ensureMailOpsEventsTable() {
     ["tracking_source", "TEXT"],
     ["issue_status", "TEXT"],
     ["issue_notes", "TEXT"],
-
     ["political_mail_alert_confirmation", "TEXT"],
     ["political_mail_issue_confirmation", "TEXT"],
     ["informed_delivery_campaign_name", "TEXT"],
     ["informed_delivery_campaign_id", "TEXT"],
     ["informed_delivery_campaign_url", "TEXT"],
-
     ["mail_piece_file_name", "TEXT"],
     ["mail_piece_url", "TEXT"],
     ["ps_form_3602_file_name", "TEXT"],
     ["ps_form_3602_url", "TEXT"],
-    ["ps_form_8125_file_name", "TEXT"],
-    ["ps_form_8125_url", "TEXT"],
+    ["ps_form_3607_file_name", "TEXT"],
+    ["ps_form_3607_url", "TEXT"],
   ];
 
   for (const [name, type] of columns) {
@@ -402,31 +356,6 @@ async function ensureMailOpsEventsTable() {
       `ALTER TABLE mailops_events ADD COLUMN IF NOT EXISTS ${name} ${type}`
     );
   }
-
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_state ON mailops_events(state)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_office ON mailops_events(office)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_risk ON mailops_events(risk)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_time ON mailops_events(event_time DESC)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_job_number ON mailops_events(job_number)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_scf ON mailops_events(scf)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_ndc ON mailops_events(ndc)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_mailops_events_print_vendor ON mailops_events(print_vendor)`
-  );
 }
 
 async function seedMailOpsEventsIfEmpty() {
@@ -443,102 +372,24 @@ async function seedMailOpsEventsIfEmpty() {
       campaign, state, office, risk, location, vendor_name,
       event_type, status, severity, event_time, in_home, note,
       job_number, assigned_to, date_submitted, print_vendor, mail_class,
-      mail_format, quantity, pieces_mailed, postage_statement_id,
-      permit_number, crid, mid, imb_mid, imb_serial_range,
-      usps_status, usps_last_scan_facility, expected_scf_arrival_date,
-      actual_scf_arrival_date, scf, scf_address, ndc, ndc_address,
+      mail_format, quantity, pieces_mailed, permit_number, crid, mid,
+      usps_status, expected_scf_arrival_date, induction_type,
+      induction_facility, induction_facility_address,
       estimated_in_home_date, delivery_risk, tracking_source,
-      political_mail_alert_confirmation,
-      political_mail_issue_confirmation,
-      informed_delivery_campaign_name,
-      informed_delivery_campaign_url
+      informed_delivery_campaign_name, informed_delivery_campaign_url
     )
     VALUES
       (
-        'GA Senate Victory',
-        'GA',
-        'Senate',
-        'Elevated',
-        'Atlanta NDC',
-        'Precision Mail Group',
-        'delay_alert',
-        'Elevated',
-        'High',
-        NOW(),
+        'GA Senate Victory', 'GA', 'Senate', 'Elevated', 'Atlanta, GA',
+        'Precision Mail Group', 'delay_alert', 'Elevated', 'High', NOW(),
         CURRENT_DATE + INTERVAL '3 days',
         'Weekend backlog building. Watch clearance volume and scan latency.',
-        'GA-2026-001',
-        'MailOps Lead',
-        CURRENT_DATE - INTERVAL '2 days',
-        'Precision Mail Group',
-        'Marketing Mail',
-        'Letter',
-        45000,
-        45000,
-        'PS-ATL-1001',
-        'PERMIT-44',
-        'CRID-10001',
-        'MID-90210',
-        '90210',
-        '000001-045000',
-        'Scan Delay',
-        'Atlanta NDC',
-        CURRENT_DATE,
-        NULL,
-        'Atlanta SCF',
-        '1605 Boggs Rd NW, Duluth, GA 30096',
-        'Atlanta NDC',
-        '1800 James Jackson Pkwy NW, Atlanta, GA 30369',
-        CURRENT_DATE + INTERVAL '3 days',
-        'High',
-        'manual',
-        NULL,
-        NULL,
-        'GA Senate Victory ID Campaign',
-        '${USPS_INFORMED_DELIVERY_CAMPAIGN_URL}'
-      ),
-      (
-        'PA Governor Push',
-        'PA',
-        'Governor',
-        'Watch',
-        'Philadelphia P&DC',
-        'Keystone Mail',
-        'scan_update',
-        'On Track',
-        'Medium',
-        NOW(),
-        CURRENT_DATE + INTERVAL '5 days',
-        'Scan recovery improving and vendor scan performance stable.',
-        'PA-2026-004',
-        'Production Desk',
-        CURRENT_DATE - INTERVAL '1 day',
-        'Keystone Mail',
-        'First-Class Mail',
-        'Flat',
-        72500,
-        72500,
-        'PS-PHL-2044',
-        'PERMIT-82',
-        'CRID-20002',
-        'MID-80421',
-        '80421',
-        '000001-072500',
-        'In Transit',
-        'Philadelphia P&DC',
-        CURRENT_DATE + INTERVAL '1 day',
-        NULL,
-        'Philadelphia SCF',
-        '7500 Lindbergh Blvd, Philadelphia, PA 19176',
-        'Philadelphia NDC',
-        '1900 Byberry Rd, Philadelphia, PA 19116',
-        CURRENT_DATE + INTERVAL '5 days',
-        'Watch',
-        'manual',
-        NULL,
-        NULL,
-        'PA Governor Push ID Campaign',
-        '${USPS_INFORMED_DELIVERY_CAMPAIGN_URL}'
+        'GA-2026-001', 'MailOps Lead', CURRENT_DATE - INTERVAL '2 days',
+        'Precision Mail Group', 'Marketing Mail', 'Letter', 45000, 45000,
+        'PERMIT-44', 'CRID-10001', 'MID-90210', 'Scan Delay', CURRENT_DATE,
+        'BMEU', 'Atlanta BMEU', '3900 Crown Rd SW, Atlanta, GA 30304',
+        CURRENT_DATE + INTERVAL '3 days', 'High', 'manual',
+        'GA Senate Victory ID Campaign', '${USPS_INFORMED_DELIVERY_CAMPAIGN_URL}'
       )
   `);
 }
@@ -556,8 +407,8 @@ function buildWhere(query = {}) {
     job_number: "job_number",
     assigned_to: "assigned_to",
     print_vendor: "print_vendor",
-    scf: "scf",
-    ndc: "ndc",
+    induction_type: "induction_type",
+    induction_facility: "induction_facility",
     tracking_source: "tracking_source",
   };
 
@@ -575,9 +426,10 @@ function buildWhere(query = {}) {
       OR job_number ILIKE $${values.length}
       OR print_vendor ILIKE $${values.length}
       OR assigned_to ILIKE $${values.length}
+      OR office ILIKE $${values.length}
       OR location ILIKE $${values.length}
-      OR scf ILIKE $${values.length}
-      OR ndc ILIKE $${values.length}
+      OR induction_facility ILIKE $${values.length}
+      OR induction_facility_address ILIKE $${values.length}
       OR political_mail_alert_confirmation ILIKE $${values.length}
       OR political_mail_issue_confirmation ILIKE $${values.length}
       OR note ILIKE $${values.length}
@@ -594,7 +446,11 @@ function eventToDrop(row) {
   return {
     ...row,
     campaign: row.campaign,
-    location: row.location || row.scf || row.usps_last_scan_facility,
+    location:
+      row.location ||
+      row.induction_facility ||
+      row.usps_last_scan_facility ||
+      "Location TBD",
     in_home: row.actual_in_home_date || row.estimated_in_home_date || row.in_home,
   };
 }
@@ -603,7 +459,7 @@ function eventToAlert(row) {
   return {
     id: row.id,
     title: `${row.campaign || "MailOps"} • ${
-      row.job_number || row.location || "Operational update"
+      row.job_number || row.induction_facility || row.location || "Operational update"
     }`,
     severity: row.severity,
     source: "MailOps Intelligence",
@@ -633,12 +489,6 @@ function buildMetrics(rows) {
     );
   }).length;
 
-  const onTrack = rows.filter((row) =>
-    ["on track", "delivered", "resolved"].includes(
-      String(row.status || "").toLowerCase()
-    )
-  ).length;
-
   const scfPending = rows.filter(
     (row) => row.expected_scf_arrival_date && !row.actual_scf_arrival_date
   ).length;
@@ -665,7 +515,7 @@ function buildMetrics(rows) {
     {
       label: "SCF Pending",
       value: String(scfPending),
-      delta: "Awaiting SCF arrival",
+      delta: "Awaiting induction / SCF movement",
       tone: scfPending ? "neutral" : "up",
     },
     {
@@ -679,25 +529,10 @@ function buildMetrics(rows) {
   ];
 }
 
-await seedMailOpsPostalFacilitiesIfEmpty();
-
-const facilities = await pool.query(`
-  SELECT
-    facility_type,
-    facility_name AS name,
-    facility_address AS address,
-    city,
-    state,
-    zip
-  FROM mailops_postal_facilities
-  WHERE is_active = true
-  ORDER BY facility_type, state, facility_name
-`);
-
 export async function getMailOpsOptions(req, res) {
   try {
     await ensureMailOpsEventsTable();
-    await ensureMailOpsPostalFacilitiesTable();
+    await seedMailOpsPostalFacilitiesIfEmpty();
 
     const [
       assignedTo,
@@ -708,161 +543,6 @@ export async function getMailOpsOptions(req, res) {
       organizations,
       organizationAddresses,
       facilities,
-    ] = await Promise.all([
-      pool.query(`
-        SELECT DISTINCT assigned_to AS value
-        FROM mailops_events
-        WHERE assigned_to IS NOT NULL
-          AND assigned_to <> ''
-        ORDER BY assigned_to
-      `),
-
-      pool.query(`
-        SELECT DISTINCT print_vendor AS value
-        FROM mailops_events
-        WHERE print_vendor IS NOT NULL
-          AND print_vendor <> ''
-        ORDER BY print_vendor
-      `),
-
-      pool.query(`
-        SELECT DISTINCT permit_number AS value
-        FROM mailops_events
-        WHERE permit_number IS NOT NULL
-          AND permit_number <> ''
-        ORDER BY permit_number
-      `),
-
-      pool.query(`
-        SELECT DISTINCT crid AS value
-        FROM mailops_events
-        WHERE crid IS NOT NULL
-          AND crid <> ''
-        ORDER BY crid
-      `),
-
-      pool.query(`
-        SELECT DISTINCT COALESCE(mid, imb_mid) AS value
-        FROM mailops_events
-        WHERE COALESCE(mid, imb_mid) IS NOT NULL
-          AND COALESCE(mid, imb_mid) <> ''
-        ORDER BY value
-      `),
-
-      pool.query(`
-        SELECT DISTINCT office AS value
-        FROM mailops_events
-        WHERE office IS NOT NULL
-          AND office <> ''
-        ORDER BY office
-      `),
-
-      pool.query(`
-        SELECT DISTINCT location AS value
-        FROM mailops_events
-        WHERE location IS NOT NULL
-          AND location <> ''
-        ORDER BY location
-      `),
-
-      pool.query(`
-        SELECT
-          facility_type,
-          facility_name AS name,
-          facility_address AS address,
-          city,
-          state,
-          zip
-        FROM mailops_postal_facilities
-        WHERE is_active = true
-        ORDER BY facility_type, state, facility_name
-      `),
-    ]);
-
-    return res.json({
-      assigned_to: assignedTo.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      print_vendors: printVendors.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      permit_numbers: permits.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      crids: crids.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      mids: mids.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      organizations: organizations.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      organization_addresses: organizationAddresses.rows
-        .map((r) => r.value)
-        .filter(Boolean),
-
-      facilities: facilities.rows,
-
-      scfs: facilities.rows.filter(
-        (row) => row.facility_type === "SCF"
-      ),
-
-      ndcs: facilities.rows.filter(
-        (row) => row.facility_type === "NDC"
-      ),
-
-      bmeus: facilities.rows.filter(
-        (row) => row.facility_type === "BMEU"
-      ),
-
-      ddus: facilities.rows.filter(
-        (row) => row.facility_type === "DDU"
-      ),
-    });
-  } catch (error) {
-    console.error("getMailOpsOptions error:", error.message);
-
-    return res.status(500).json({
-      error:
-        error.message ||
-        "Failed to load MailOps options",
-    });
-  }
-}
-
-export async function getMailOpsOptions(req, res) {
-  try {
-    await ensureMailOpsEventsTable();
-    await ensureMailOpsPostalFacilitiesTable();
-
-    const facilities = await pool.query(`
-      SELECT
-        facility_type,
-        facility_name AS name,
-        facility_address AS address,
-        city,
-        state,
-        zip
-      FROM mailops_postal_facilities
-      WHERE is_active = true
-      ORDER BY facility_type, state, facility_name
-    `);
-
-    const [
-      assignedTo,
-      printVendors,
-      permits,
-      crids,
-      mids,
-      organizations,
-      organizationAddresses
     ] = await Promise.all([
       pool.query(`
         SELECT DISTINCT assigned_to AS value
@@ -906,7 +586,19 @@ export async function getMailOpsOptions(req, res) {
         FROM mailops_events
         WHERE location IS NOT NULL AND location <> ''
         ORDER BY location
-      `)
+      `),
+      pool.query(`
+        SELECT
+          facility_type,
+          facility_name AS name,
+          facility_address AS address,
+          city,
+          state,
+          zip
+        FROM mailops_postal_facilities
+        WHERE is_active = true
+        ORDER BY facility_type, state, facility_name
+      `),
     ]);
 
     return res.json({
@@ -919,18 +611,22 @@ export async function getMailOpsOptions(req, res) {
       organization_addresses: organizationAddresses.rows
         .map((r) => r.value)
         .filter(Boolean),
-
       facilities: facilities.rows,
       scfs: facilities.rows.filter((row) => row.facility_type === "SCF"),
       ndcs: facilities.rows.filter((row) => row.facility_type === "NDC"),
       bmeus: facilities.rows.filter((row) => row.facility_type === "BMEU"),
-      ddus: facilities.rows.filter((row) => row.facility_type === "DDU")
+      ddus: facilities.rows.filter((row) => row.facility_type === "DDU"),
+      usps_links: {
+        political_mail_alert_url: USPS_POLITICAL_MAIL_ALERT_URL,
+        political_mail_issue_url: USPS_POLITICAL_MAIL_ISSUE_URL,
+        informed_delivery_campaign_url: USPS_INFORMED_DELIVERY_CAMPAIGN_URL,
+      },
     });
   } catch (error) {
     console.error("getMailOpsOptions error:", error.message);
 
     return res.status(500).json({
-      error: error.message || "Failed to load MailOps options"
+      error: error.message || "Failed to load MailOps options",
     });
   }
 }
@@ -1034,116 +730,96 @@ export async function createMailOpsEvent(req, res) {
 
     const firmId = req.auth?.firmId ?? req.user?.firm_id ?? null;
     const userId = req.auth?.userId ?? req.user?.id ?? null;
+
     const deliveryRisk = nullable(payload.delivery_risk) || calculateRisk(payload);
+
+    const values = {
+      campaign: text(payload.campaign),
+      state: text(payload.state),
+      office: text(payload.office),
+      risk: nullable(payload.risk),
+      location: text(payload.location),
+      vendor_name: nullable(payload.vendor_name || payload.print_vendor),
+      event_type: normalizeEventType(payload.event_type),
+      status: normalizeStatus(payload.status),
+      severity: normalizeSeverity(payload.severity),
+      event_time: payload.event_time || new Date(),
+      in_home: dateOrNull(payload.in_home || payload.estimated_in_home_date),
+      note: nullable(payload.note || payload.notes),
+      created_by_user_id: userId,
+      firm_id: firmId,
+      job_number: nullable(payload.job_number),
+      assigned_to: nullable(payload.assigned_to),
+      date_submitted: dateOrNull(payload.date_submitted),
+      print_vendor: nullable(payload.print_vendor || payload.vendor_name),
+      mail_class: normalizeMailClass(payload.mail_class),
+      mail_format: normalizeMailFormat(payload.mail_format),
+      quantity: payload.quantity ? toNumber(payload.quantity) : null,
+      pieces_mailed: payload.pieces_mailed ? toNumber(payload.pieces_mailed) : null,
+      postage_statement_id: nullable(payload.postage_statement_id),
+      permit_number: nullable(payload.permit_number),
+      crid: nullable(payload.crid),
+      mid: nullable(payload.mid || payload.imb_mid),
+      imb_mid: nullable(payload.imb_mid || payload.mid),
+      imb_serial_range: nullable(payload.imb_serial_range),
+      usps_job_id: nullable(payload.usps_job_id),
+      usps_status: nullable(payload.usps_status),
+      usps_last_scan_date: payload.usps_last_scan_date || null,
+      usps_last_scan_facility: nullable(payload.usps_last_scan_facility),
+      usps_last_scan_city: nullable(payload.usps_last_scan_city),
+      usps_last_scan_state: nullable(payload.usps_last_scan_state),
+      expected_scf_arrival_date: dateOrNull(payload.expected_scf_arrival_date),
+      actual_scf_arrival_date: dateOrNull(payload.actual_scf_arrival_date),
+      scf: nullable(payload.scf),
+      scf_address: nullable(payload.scf_address),
+      ndc: nullable(payload.ndc),
+      ndc_address: nullable(payload.ndc_address),
+      induction_type: nullable(payload.induction_type),
+      induction_facility: nullable(payload.induction_facility),
+      induction_facility_address: nullable(payload.induction_facility_address),
+      estimated_in_home_date: dateOrNull(payload.estimated_in_home_date || payload.in_home),
+      actual_in_home_date: dateOrNull(payload.actual_in_home_date),
+      delivery_risk: deliveryRisk,
+      snailworks_job_id: nullable(payload.snailworks_job_id),
+      snailworks_campaign_id: nullable(payload.snailworks_campaign_id),
+      snailworks_status: nullable(payload.snailworks_status),
+      snailworks_last_sync_at: payload.snailworks_last_sync_at || null,
+      tracking_source: nullable(payload.tracking_source) || "manual",
+      issue_status: nullable(payload.issue_status),
+      issue_notes: nullable(payload.issue_notes),
+      political_mail_alert_confirmation:
+        nullable(payload.political_mail_alert_confirmation),
+      political_mail_issue_confirmation:
+        nullable(payload.political_mail_issue_confirmation),
+      informed_delivery_campaign_name:
+        nullable(payload.informed_delivery_campaign_name),
+      informed_delivery_campaign_id:
+        nullable(payload.informed_delivery_campaign_id),
+      informed_delivery_campaign_url:
+        nullable(payload.informed_delivery_campaign_url) ||
+        USPS_INFORMED_DELIVERY_CAMPAIGN_URL,
+      mail_piece_file_name: nullable(payload.mail_piece_file_name),
+      mail_piece_url: nullable(payload.mail_piece_url),
+      ps_form_3602_file_name: nullable(payload.ps_form_3602_file_name),
+      ps_form_3602_url: nullable(payload.ps_form_3602_url),
+      ps_form_3607_file_name: nullable(payload.ps_form_3607_file_name),
+      ps_form_3607_url: nullable(payload.ps_form_3607_url),
+    };
+
+    const columns = Object.keys(values);
+    const params = columns.map((_, index) => `$${index + 1}`);
 
     const result = await pool.query(
       `
         INSERT INTO mailops_events (
-          campaign, state, office, risk, location, vendor_name,
-          event_type, status, severity, event_time, in_home, note,
-          created_by_user_id, firm_id,
-          job_number, assigned_to, date_submitted, print_vendor,
-          mail_class, mail_format, quantity, pieces_mailed,
-          postage_statement_id, permit_number, crid, mid, imb_mid,
-          imb_serial_range, usps_job_id, usps_status,
-          usps_last_scan_date, usps_last_scan_facility,
-          usps_last_scan_city, usps_last_scan_state,
-          expected_scf_arrival_date, actual_scf_arrival_date,
-          scf, scf_address, ndc, ndc_address,
-          estimated_in_home_date, actual_in_home_date,
-          delivery_risk, snailworks_job_id, snailworks_campaign_id,
-          snailworks_status, snailworks_last_sync_at, tracking_source,
-          issue_status, issue_notes,
-          political_mail_alert_confirmation,
-          political_mail_issue_confirmation,
-          informed_delivery_campaign_name,
-          informed_delivery_campaign_id,
-          informed_delivery_campaign_url,
-          mail_piece_file_name,
-          mail_piece_url,
-          ps_form_3602_file_name,
-          ps_form_3602_url,
-          ps_form_8125_file_name,
-          ps_form_8125_url,
-          created_at, updated_at
+          ${columns.join(", ")}
         )
         VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,
-          COALESCE($10::timestamp, NOW()),
-          $11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,
-          $28,$29,$30,$31,$32,$33,$34,$35,$36,$37,
-          $38,$39,$40,$41,$42,$43,$44,$45,$46,$47,
-          $48,$49,$50,$51,$52,$53,$54,$55,$56,$57,
-          NOW(), NOW()
+          ${params.join(", ")}
         )
         RETURNING *
       `,
-      [
-        text(payload.campaign),
-        text(payload.state),
-        text(payload.office),
-        nullable(payload.risk),
-        text(payload.location),
-        nullable(payload.vendor_name || payload.print_vendor),
-        normalizeEventType(payload.event_type),
-        normalizeStatus(payload.status),
-        normalizeSeverity(payload.severity),
-        payload.event_time || null,
-        dateOrNull(payload.in_home || payload.estimated_in_home_date),
-        nullable(payload.note || payload.notes),
-        userId,
-        firmId,
-
-        nullable(payload.job_number),
-        nullable(payload.assigned_to),
-        dateOrNull(payload.date_submitted),
-        nullable(payload.print_vendor || payload.vendor_name),
-        normalizeMailClass(payload.mail_class),
-        normalizeMailFormat(payload.mail_format),
-        payload.quantity ? toNumber(payload.quantity) : null,
-        payload.pieces_mailed ? toNumber(payload.pieces_mailed) : null,
-        nullable(payload.postage_statement_id),
-        nullable(payload.permit_number),
-        nullable(payload.crid),
-        nullable(payload.mid),
-        nullable(payload.imb_mid),
-        nullable(payload.imb_serial_range),
-        nullable(payload.usps_job_id),
-        nullable(payload.usps_status),
-        payload.usps_last_scan_date || null,
-        nullable(payload.usps_last_scan_facility),
-        nullable(payload.usps_last_scan_city),
-        nullable(payload.usps_last_scan_state),
-        dateOrNull(payload.expected_scf_arrival_date),
-        dateOrNull(payload.actual_scf_arrival_date),
-        nullable(payload.scf),
-        nullable(payload.scf_address),
-        nullable(payload.ndc),
-        nullable(payload.ndc_address),
-        dateOrNull(payload.estimated_in_home_date || payload.in_home),
-        dateOrNull(payload.actual_in_home_date),
-        deliveryRisk,
-        nullable(payload.snailworks_job_id),
-        nullable(payload.snailworks_campaign_id),
-        nullable(payload.snailworks_status),
-        payload.snailworks_last_sync_at || null,
-        nullable(payload.tracking_source) || "manual",
-        nullable(payload.issue_status),
-        nullable(payload.issue_notes),
-        nullable(payload.political_mail_alert_confirmation),
-        nullable(payload.political_mail_issue_confirmation),
-        nullable(payload.informed_delivery_campaign_name),
-        nullable(payload.informed_delivery_campaign_id),
-        nullable(payload.informed_delivery_campaign_url) ||
-          USPS_INFORMED_DELIVERY_CAMPAIGN_URL,
-        nullable(payload.mail_piece_file_name),
-        nullable(payload.mail_piece_url),
-        nullable(payload.ps_form_3602_file_name),
-        nullable(payload.ps_form_3602_url),
-        nullable(payload.ps_form_8125_file_name),
-        nullable(payload.ps_form_8125_url),
-      ]
+      Object.values(values)
     );
 
     const event = result.rows[0];
@@ -1192,7 +868,6 @@ export async function updateMailOpsEvent(req, res) {
       event_time: payload.event_time,
       in_home: payload.in_home,
       note: payload.note,
-
       job_number: payload.job_number,
       assigned_to: payload.assigned_to,
       date_submitted: payload.date_submitted,
@@ -1225,6 +900,9 @@ export async function updateMailOpsEvent(req, res) {
       scf_address: payload.scf_address,
       ndc: payload.ndc,
       ndc_address: payload.ndc_address,
+      induction_type: payload.induction_type,
+      induction_facility: payload.induction_facility,
+      induction_facility_address: payload.induction_facility_address,
       estimated_in_home_date: payload.estimated_in_home_date,
       actual_in_home_date: payload.actual_in_home_date,
       delivery_risk: payload.delivery_risk,
@@ -1235,7 +913,6 @@ export async function updateMailOpsEvent(req, res) {
       tracking_source: payload.tracking_source,
       issue_status: payload.issue_status,
       issue_notes: payload.issue_notes,
-
       political_mail_alert_confirmation:
         payload.political_mail_alert_confirmation,
       political_mail_issue_confirmation:
@@ -1244,13 +921,12 @@ export async function updateMailOpsEvent(req, res) {
         payload.informed_delivery_campaign_name,
       informed_delivery_campaign_id: payload.informed_delivery_campaign_id,
       informed_delivery_campaign_url: payload.informed_delivery_campaign_url,
-
       mail_piece_file_name: payload.mail_piece_file_name,
       mail_piece_url: payload.mail_piece_url,
       ps_form_3602_file_name: payload.ps_form_3602_file_name,
       ps_form_3602_url: payload.ps_form_3602_url,
-      ps_form_8125_file_name: payload.ps_form_8125_file_name,
-      ps_form_8125_url: payload.ps_form_8125_url,
+      ps_form_3607_file_name: payload.ps_form_3607_file_name,
+      ps_form_3607_url: payload.ps_form_3607_url,
     };
 
     const entries = Object.entries(allowed).filter(([, value]) => value !== undefined);
