@@ -77,6 +77,24 @@ async function ensureSourceTables() {
   `);
 }
 
+  const executiveFeedColumns = [
+    ["type", "TEXT"],
+    ["title", "TEXT"],
+    ["state", "TEXT"],
+    ["office", "TEXT"],
+    ["severity", "TEXT"],
+    ["risk", "TEXT"],
+    ["source", "TEXT"],
+    ["metadata", "JSONB DEFAULT '{}'::jsonb"],
+    ["created_at", "TIMESTAMP DEFAULT NOW()"],
+  ];
+
+  for (const [name, type] of executiveFeedColumns) {
+    await pool.query(
+      `ALTER TABLE executive_feed_events ADD COLUMN IF NOT EXISTS ${name} ${type}`
+    );
+  }
+
 export async function getOperationsMap(options = {}) {
   await ensureSourceTables();
 
