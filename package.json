@@ -1,10 +1,10 @@
 {
   "name": "voterspheres-backend",
   "version": "1.0.0",
-  "type": "module", 
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "node index.js", 
+    "dev": "node index.js",
     "dev:clean": "kill-port 10000 && node index.js",
     "start": "node index.js",
     "start:clean": "kill-port 10000 && node index.js",
@@ -16,8 +16,9 @@
     "ingest:once": "node jobs/providerIngestion.jobRunner.js",
     "sync:fec": "node scripts/syncFecData.js",
     "sync:candidate-contacts": "node scripts/enrich-candidate-contacts.js",
-    "import:consultants": "node scripts/import-consultants-from-fec.js", 
-    "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js"
+    "import:consultants": "node scripts/import-consultants-from-fec.js",
+    "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js",
+    "import:usps-facilities": "node scripts/import-usps-postal-facilities.js"
   },
   "dependencies": {
     "axios": "^1.13.5",
