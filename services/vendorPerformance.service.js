@@ -125,11 +125,11 @@ export async function generateVendorPerformanceScores() {
   await ensureSourceTables();
   await ensureVendorPerformanceTables();
 
-  const result = await pool.query(`
+    const result = await pool.query(`
     SELECT
-     v.id AS vendor_id,
-     COALESCE(v.vendor_name, v.name, 'Unnamed Vendor') AS resolved_vendor_name,
-     v.state,
+      v.id AS vendor_id,
+      COALESCE(v.vendor_name, v.name, 'Unnamed Vendor') AS resolved_vendor_name,
+      v.state AS vendor_state,
 
       COUNT(m.id)::int AS total_jobs,
 
@@ -154,9 +154,12 @@ export async function generateVendorPerformanceScores() {
       ON LOWER(COALESCE(m.print_vendor, m.vendor_name, '')) =
          LOWER(COALESCE(v.vendor_name, v.name, ''))
 
-    GROUP BY v.id, resolved_vendor_name, v.state
+    GROUP BY
+      v.id,
+      COALESCE(v.vendor_name, v.name, 'Unnamed Vendor'),
+      v.state
   `);
-
+  
   const rows = result.rows || [];
 
   for (const row of rows) {
@@ -206,7 +209,7 @@ export async function generateVendorPerformanceScores() {
       [
         row.vendor_id,
         row.resolved_vendor_name,
-        row.state,
+        row.vendor_state,
         Number(row.total_jobs || 0),
         Number(row.completed_jobs || 0),
         Number(row.delayed_jobs || 0),
