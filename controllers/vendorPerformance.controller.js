@@ -5,7 +5,6 @@ import {
 export async function getVendorPerformance(req, res) {
   try {
     const data = await getVendorPerformanceDashboard(req.query || {});
-
     res.json(data);
   } catch (err) {
     console.error("getVendorPerformance error:", err.message);

@@ -23,12 +23,7 @@ function scoreVendor({ totalJobs, completedJobs, delayedJobs, issueCount }) {
     Math.round(onTimeScore * 0.45 + reliabilityScore * 0.4 - riskScore * 0.15)
   );
 
-  return {
-    onTimeScore,
-    reliabilityScore,
-    riskScore,
-    overallScore,
-  };
+  return { onTimeScore, reliabilityScore, riskScore, overallScore };
 }
 
 export async function ensureVendorPerformanceTables() {
@@ -125,44 +120,60 @@ export async function generateVendorPerformanceScores() {
   await ensureSourceTables();
   await ensureVendorPerformanceTables();
 
-    const result = await pool.query(`
+  const result = await pool.query(`
+    WITH vendor_base AS (
+      SELECT
+        v.id AS vendor_id,
+        COALESCE(v.vendor_name, v.name, 'Unnamed Vendor') AS resolved_vendor_name,
+        v.state AS resolved_state
+      FROM vendors v
+    ),
+    mailops_base AS (
+      SELECT
+        m.id,
+        COALESCE(m.print_vendor, m.vendor_name, '') AS resolved_mail_vendor,
+        m.status AS mail_status,
+        m.severity AS mail_severity,
+        m.delivery_risk AS mail_delivery_risk,
+        m.created_at,
+        m.updated_at
+      FROM mailops_events m
+    )
     SELECT
-      v.id AS vendor_id,
-      COALESCE(v.vendor_name, v.name, 'Unnamed Vendor') AS resolved_vendor_name,
-      v.state AS vendor_state,
+      vb.vendor_id,
+      vb.resolved_vendor_name,
+      vb.resolved_state,
 
-      COUNT(m.id)::int AS total_jobs,
+      COUNT(mb.id)::int AS total_jobs,
 
-      COUNT(*) FILTER (
-        WHERE LOWER(COALESCE(m.status, '')) IN ('delivered', 'resolved', 'on track')
+      COUNT(mb.id) FILTER (
+        WHERE LOWER(COALESCE(mb.mail_status, '')) IN ('delivered', 'resolved', 'on track')
       )::int AS completed_jobs,
 
-      COUNT(*) FILTER (
-        WHERE LOWER(COALESCE(m.status, '')) LIKE '%delay%'
-           OR LOWER(COALESCE(m.status, '')) = 'elevated'
+      COUNT(mb.id) FILTER (
+        WHERE LOWER(COALESCE(mb.mail_status, '')) LIKE '%delay%'
+           OR LOWER(COALESCE(mb.mail_status, '')) = 'elevated'
       )::int AS delayed_jobs,
 
-      COUNT(*) FILTER (
-        WHERE LOWER(COALESCE(m.severity, '')) IN ('high', 'critical')
-           OR LOWER(COALESCE(m.delivery_risk, '')) IN ('high', 'critical', 'elevated')
+      COUNT(mb.id) FILTER (
+        WHERE LOWER(COALESCE(mb.mail_severity, '')) IN ('high', 'critical')
+           OR LOWER(COALESCE(mb.mail_delivery_risk, '')) IN ('high', 'critical', 'elevated')
       )::int AS issue_count,
 
-      MAX(COALESCE(m.updated_at, m.created_at)) AS last_job_at
+      MAX(COALESCE(mb.updated_at, mb.created_at)) AS last_job_at
 
-    FROM vendors v
-    LEFT JOIN mailops_events m
-      ON LOWER(COALESCE(m.print_vendor, m.vendor_name, '')) =
-         LOWER(COALESCE(v.vendor_name, v.name, ''))
+    FROM vendor_base vb
+    LEFT JOIN mailops_base mb
+      ON LOWER(COALESCE(mb.resolved_mail_vendor, '')) =
+         LOWER(COALESCE(vb.resolved_vendor_name, ''))
 
     GROUP BY
-      v.id,
-      COALESCE(v.vendor_name, v.name, 'Unnamed Vendor'),
-      v.state
+      vb.vendor_id,
+      vb.resolved_vendor_name,
+      vb.resolved_state
   `);
-  
-  const rows = result.rows || [];
 
-  for (const row of rows) {
+  for (const row of result.rows || []) {
     const scores = scoreVendor({
       totalJobs: row.total_jobs,
       completedJobs: row.completed_jobs,
@@ -187,9 +198,7 @@ export async function generateVendorPerformanceScores() {
           last_job_at,
           updated_at
         )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()
-        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
         ON CONFLICT (vendor_id)
         WHERE vendor_id IS NOT NULL
         DO UPDATE SET
@@ -209,7 +218,7 @@ export async function generateVendorPerformanceScores() {
       [
         row.vendor_id,
         row.resolved_vendor_name,
-        row.vendor_state,
+        row.resolved_state,
         Number(row.total_jobs || 0),
         Number(row.completed_jobs || 0),
         Number(row.delayed_jobs || 0),
@@ -225,7 +234,7 @@ export async function generateVendorPerformanceScores() {
 
   return {
     ok: true,
-    vendors_scored: rows.length,
+    vendors_scored: result.rows?.length || 0,
   };
 }
 
