@@ -18,7 +18,7 @@
     "sync:candidate-contacts": "node scripts/enrich-candidate-contacts.js",
     "import:consultants": "node scripts/import-consultants-from-fec.js",
     "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js",
-    "import:localities": "node scripts/importStateLocalities.js"
+    "import:localities": "node scripts/importStateLocalities.js",
     "import:usps-facilities": "node scripts/import-usps-postal-facilities.js"
   },
   "dependencies": {
