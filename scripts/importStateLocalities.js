@@ -1,26 +1,27 @@
+import "dotenv/config";
 import { pool } from "../db/pool.js";
 
 const CENSUS_GEOINFO_URL = "https://api.census.gov/data/2024/geoinfo";
 
-const STATES = [
-  ["AL", "Alabama", "01"], ["AK", "Alaska", "02"], ["AZ", "Arizona", "04"],
-  ["AR", "Arkansas", "05"], ["CA", "California", "06"], ["CO", "Colorado", "08"],
-  ["CT", "Connecticut", "09"], ["DE", "Delaware", "10"], ["DC", "District of Columbia", "11"],
-  ["FL", "Florida", "12"], ["GA", "Georgia", "13"], ["HI", "Hawaii", "15"],
-  ["ID", "Idaho", "16"], ["IL", "Illinois", "17"], ["IN", "Indiana", "18"],
-  ["IA", "Iowa", "19"], ["KS", "Kansas", "20"], ["KY", "Kentucky", "21"],
-  ["LA", "Louisiana", "22"], ["ME", "Maine", "23"], ["MD", "Maryland", "24"],
-  ["MA", "Massachusetts", "25"], ["MI", "Michigan", "26"], ["MN", "Minnesota", "27"],
-  ["MS", "Mississippi", "28"], ["MO", "Missouri", "29"], ["MT", "Montana", "30"],
-  ["NE", "Nebraska", "31"], ["NV", "Nevada", "32"], ["NH", "New Hampshire", "33"],
-  ["NJ", "New Jersey", "34"], ["NM", "New Mexico", "35"], ["NY", "New York", "36"],
-  ["NC", "North Carolina", "37"], ["ND", "North Dakota", "38"], ["OH", "Ohio", "39"],
-  ["OK", "Oklahoma", "40"], ["OR", "Oregon", "41"], ["PA", "Pennsylvania", "42"],
-  ["RI", "Rhode Island", "44"], ["SC", "South Carolina", "45"], ["SD", "South Dakota", "46"],
-  ["TN", "Tennessee", "47"], ["TX", "Texas", "48"], ["UT", "Utah", "49"],
-  ["VT", "Vermont", "50"], ["VA", "Virginia", "51"], ["WA", "Washington", "53"],
-  ["WV", "West Virginia", "54"], ["WI", "Wisconsin", "55"], ["WY", "Wyoming", "56"],
-];
+const STATE_NAMES = {
+  "01": ["AL", "Alabama"], "02": ["AK", "Alaska"], "04": ["AZ", "Arizona"],
+  "05": ["AR", "Arkansas"], "06": ["CA", "California"], "08": ["CO", "Colorado"],
+  "09": ["CT", "Connecticut"], "10": ["DE", "Delaware"], "11": ["DC", "District of Columbia"],
+  "12": ["FL", "Florida"], "13": ["GA", "Georgia"], "15": ["HI", "Hawaii"],
+  "16": ["ID", "Idaho"], "17": ["IL", "Illinois"], "18": ["IN", "Indiana"],
+  "19": ["IA", "Iowa"], "20": ["KS", "Kansas"], "21": ["KY", "Kentucky"],
+  "22": ["LA", "Louisiana"], "23": ["ME", "Maine"], "24": ["MD", "Maryland"],
+  "25": ["MA", "Massachusetts"], "26": ["MI", "Michigan"], "27": ["MN", "Minnesota"],
+  "28": ["MS", "Mississippi"], "29": ["MO", "Missouri"], "30": ["MT", "Montana"],
+  "31": ["NE", "Nebraska"], "32": ["NV", "Nevada"], "33": ["NH", "New Hampshire"],
+  "34": ["NJ", "New Jersey"], "35": ["NM", "New Mexico"], "36": ["NY", "New York"],
+  "37": ["NC", "North Carolina"], "38": ["ND", "North Dakota"], "39": ["OH", "Ohio"],
+  "40": ["OK", "Oklahoma"], "41": ["OR", "Oregon"], "42": ["PA", "Pennsylvania"],
+  "44": ["RI", "Rhode Island"], "45": ["SC", "South Carolina"], "46": ["SD", "South Dakota"],
+  "47": ["TN", "Tennessee"], "48": ["TX", "Texas"], "49": ["UT", "Utah"],
+  "50": ["VT", "Vermont"], "51": ["VA", "Virginia"], "53": ["WA", "Washington"],
+  "54": ["WV", "West Virginia"], "55": ["WI", "Wisconsin"], "56": ["WY", "Wyoming"],
+};
 
 function localityTypeFromName(name, stateCode) {
   if (stateCode === "LA") return "Parish";
@@ -28,106 +29,132 @@ function localityTypeFromName(name, stateCode) {
   if (name.includes("Census Area")) return "Census Area";
   if (name.includes("City and Borough")) return "City and Borough";
   if (name.includes("Municipality")) return "Municipality";
-  if (name.includes("city")) return "Independent City";
+  if (name.toLowerCase().includes("city")) return "Independent City";
   if (name.includes("District of Columbia")) return "District";
   return "County";
 }
 
-async function fetchCountiesForState([stateCode, stateName, stateFips]) {
-  const url = `${CENSUS_GEOINFO_URL}?get=NAME&for=county:*&in=state:${stateFips}`;
+async function ensureTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS state_localities (
+      id SERIAL PRIMARY KEY,
+      state_code TEXT NOT NULL,
+      state_name TEXT NOT NULL,
+      state_fips TEXT NOT NULL,
+      county_fips TEXT NOT NULL,
+      name TEXT NOT NULL,
+      locality_type TEXT DEFAULT 'County',
+      full_fips TEXT GENERATED ALWAYS AS (state_fips || county_fips) STORED,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(state_fips, county_fips)
+    );
 
-  const response = await fetch(url);
+    CREATE INDEX IF NOT EXISTS idx_state_localities_state_code
+    ON state_localities(state_code);
 
-  if (!response.ok) {
-    throw new Error(`Census request failed for ${stateCode}: ${response.status}`);
-  }
-
-  const rows = await response.json();
-  const [headers, ...records] = rows;
-
-  const nameIndex = headers.indexOf("NAME");
-  const stateIndex = headers.indexOf("state");
-  const countyIndex = headers.indexOf("county");
-
-  return records.map((row) => {
-    const name = row[nameIndex];
-    const censusStateFips = row[stateIndex];
-    const countyFips = row[countyIndex];
-
-    return {
-      stateCode,
-      stateName,
-      stateFips: censusStateFips,
-      countyFips,
-      name,
-      localityType: localityTypeFromName(name, stateCode),
-    };
-  });
+    CREATE INDEX IF NOT EXISTS idx_state_localities_full_fips
+    ON state_localities(full_fips);
+  `);
 }
 
-async function upsertLocality(client, locality) {
-  await client.query(
-    `
-      INSERT INTO state_localities (
-        state_code,
-        state_name,
-        state_fips,
-        county_fips,
-        name,
-        locality_type,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      ON CONFLICT (state_fips, county_fips)
-      DO UPDATE SET
-        state_code = EXCLUDED.state_code,
-        state_name = EXCLUDED.state_name,
-        name = EXCLUDED.name,
-        locality_type = EXCLUDED.locality_type,
-        updated_at = NOW()
-    `,
-    [
-      locality.stateCode,
-      locality.stateName,
-      locality.stateFips,
-      locality.countyFips,
-      locality.name,
-      locality.localityType,
-    ]
-  );
+async function fetchAllCounties() {
+  const params = new URLSearchParams({
+    get: "NAME",
+    for: "county:*",
+    in: "state:*",
+  });
+
+  if (process.env.CENSUS_API_KEY) {
+    params.set("key", process.env.CENSUS_API_KEY);
+  }
+
+  const url = `${CENSUS_GEOINFO_URL}?${params.toString()}`;
+  const response = await fetch(url);
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Census request failed ${response.status}: ${text.slice(0, 500)}`);
+  }
+
+  if (text.trim().startsWith("<")) {
+    throw new Error(`Census returned HTML instead of JSON: ${text.slice(0, 500)}`);
+  }
+
+  return JSON.parse(text);
 }
 
 async function main() {
-  const client = await pool.connect();
-
   try {
-    console.log("🚀 Importing state localities from Census GEOINFO...");
+    console.log("🚀 Preparing state_localities table...");
+    await ensureTable();
+
+    console.log("🚀 Importing all counties/parishes from Census GEOINFO...");
+
+    const rows = await fetchAllCounties();
+    const [headers, ...records] = rows;
+
+    const nameIndex = headers.indexOf("NAME");
+    const stateIndex = headers.indexOf("state");
+    const countyIndex = headers.indexOf("county");
 
     let total = 0;
 
-    for (const state of STATES) {
-      const [stateCode] = state;
-      const localities = await fetchCountiesForState(state);
+    for (const row of records) {
+      const name = row[nameIndex];
+      const stateFips = row[stateIndex];
+      const countyFips = row[countyIndex];
 
-      await client.query("BEGIN");
+      const [stateCode, stateName] = STATE_NAMES[stateFips] || [stateFips, stateFips];
 
-      for (const locality of localities) {
-        await upsertLocality(client, locality);
-      }
+      await pool.query(
+        `
+          INSERT INTO state_localities (
+            state_code,
+            state_name,
+            state_fips,
+            county_fips,
+            name,
+            locality_type,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          ON CONFLICT (state_fips, county_fips)
+          DO UPDATE SET
+            state_code = EXCLUDED.state_code,
+            state_name = EXCLUDED.state_name,
+            name = EXCLUDED.name,
+            locality_type = EXCLUDED.locality_type,
+            updated_at = NOW()
+        `,
+        [
+          stateCode,
+          stateName,
+          stateFips,
+          countyFips,
+          name,
+          localityTypeFromName(name, stateCode),
+        ]
+      );
 
-      await client.query("COMMIT");
-
-      total += localities.length;
-      console.log(`✅ ${stateCode}: ${localities.length} localities imported`);
+      total += 1;
     }
 
     console.log(`✅ Import complete. Total localities imported: ${total}`);
+
+    const verify = await pool.query(`
+      SELECT state_code, COUNT(*)::int AS count
+      FROM state_localities
+      GROUP BY state_code
+      ORDER BY state_code
+      LIMIT 15
+    `);
+
+    console.table(verify.rows);
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
     console.error("❌ Import failed:", error);
     process.exitCode = 1;
   } finally {
-    client.release();
     await pool.end();
   }
 }
