@@ -1,4 +1,4 @@
-import pool from "../db/pool.js";
+import { pool } from "../db/pool.js";
 
 const CENSUS_GEOINFO_URL = "https://api.census.gov/data/2024/geoinfo";
 
