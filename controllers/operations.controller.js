@@ -1,149 +1,173 @@
 import { pool } from "../db/pool.js";
 
-function riskFromPressure(pressure) {
-  if (pressure >= 82) return "Critical";
-  if (pressure >= 65) return "High";
-  if (pressure >= 42) return "Elevated";
-  return "Stable";
-}
-
-function pressureForLocality(row, index) {
-  const seed =
-    Number(row.state_fips || 0) * 7 +
-    Number(row.county_fips || 0) * 3 +
-    index * 5;
-
-  return Math.max(18, Math.min(96, seed % 100));
-}
-
-function fakeDmaName(stateCode, index) {
-  const buckets = ["Metro", "Capital", "North", "South", "Coastal", "Central", "Western", "Eastern"];
-  return `${stateCode} ${buckets[index % buckets.length]} DMA`;
-}
-
 export async function getStateOperationsDrilldown(req, res) {
   try {
-    const stateCode = String(req.params.state || "").toUpperCase();
+    const stateCode = String(req.params.state || "GA").toUpperCase();
+    const workspaceId = req.query.workspace_id || null;
 
-    if (!stateCode || stateCode.length !== 2) {
-      return res.status(400).json({ error: "Valid state code is required." });
-    }
+    console.log(
+      `[operations] loading state=${stateCode} workspace=${workspaceId}`
+    );
 
-    const { rows } = await pool.query(
-      `
+    // ---------------------------------------------------
+    // SAFE COUNTY / PARISH QUERY
+    // ---------------------------------------------------
+
+    let counties = [];
+
+    try {
+      const countyQuery = await pool.query(
+        `
         SELECT
           id,
-          state_code,
-          state_name,
-          state_fips,
-          county_fips,
-          full_fips,
           name,
-          locality_type
+          locality_type,
+          state_code,
+          county_fips,
+          full_fips
         FROM state_localities
         WHERE state_code = $1
         ORDER BY name ASC
-      `,
-      [stateCode]
-    );
+        LIMIT 250
+        `,
+        [stateCode]
+      );
 
-    const counties = rows.map((row, index) => {
-      const pressure = pressureForLocality(row, index);
-      const vendorScore = Math.max(28, Math.min(96, 100 - Math.round(pressure * 0.62)));
-      const mailJobs = Math.max(0, Math.round(pressure / 10));
-      const alerts = pressure >= 82 ? 4 : pressure >= 65 ? 2 : pressure >= 42 ? 1 : 0;
+      counties = countyQuery.rows.map((row, index) => {
+        const pressure = Math.floor(Math.random() * 100);
 
-      return {
-        id: row.id,
-        name: row.name,
-        state: row.state_code,
-        state_name: row.state_name,
-        state_fips: row.state_fips,
-        county_fips: row.county_fips,
-        full_fips: row.full_fips,
-        type: row.locality_type,
-        locality_type: row.locality_type,
-        dma: fakeDmaName(row.state_code, index),
-        pressure,
-        risk: riskFromPressure(pressure),
-        mail_jobs: mailJobs,
-        vendor_score: vendorScore,
-        alerts,
-      };
-    });
+        let risk = "Stable";
 
-    const dmaMap = new Map();
+        if (pressure >= 80) risk = "Critical";
+        else if (pressure >= 65) risk = "High";
+        else if (pressure >= 45) risk = "Elevated";
 
-    for (const county of counties) {
-      const existing = dmaMap.get(county.dma) || {
-        name: county.dma,
-        counties: 0,
-        pressure_total: 0,
-        mail_jobs: 0,
-        vendor_score_total: 0,
-        risk: "Stable",
-        market_type: "Media market",
-      };
+        return {
+          id: row.id,
+          name: row.name,
+          type: row.locality_type || "County",
+          locality_type: row.locality_type || "County",
+          state_code: row.state_code,
+          county_fips: row.county_fips,
+          full_fips: row.full_fips,
 
-      existing.counties += 1;
-      existing.pressure_total += Number(county.pressure || 0);
-      existing.mail_jobs += Number(county.mail_jobs || 0);
-      existing.vendor_score_total += Number(county.vendor_score || 0);
+          dma: [
+            "Atlanta DMA",
+            "Savannah DMA",
+            "Macon DMA",
+            "Baton Rouge DMA",
+            "New Orleans DMA",
+            "Philadelphia DMA",
+            "Phoenix DMA",
+          ][index % 7],
 
-      dmaMap.set(county.dma, existing);
+          pressure,
+          risk,
+
+          mail_jobs: Math.floor(Math.random() * 40),
+          vendor_score: Math.floor(Math.random() * 100),
+          alerts: Math.floor(Math.random() * 8),
+        };
+      });
+    } catch (dbError) {
+      console.error("[operations] county query failed", dbError);
+
+      counties = [];
     }
 
-    const dmas = Array.from(dmaMap.values()).map((item) => {
-      const pressure = Math.round(item.pressure_total / Math.max(1, item.counties));
-      const vendorScore = Math.round(item.vendor_score_total / Math.max(1, item.counties));
+    // ---------------------------------------------------
+    // DMA VIEW
+    // ---------------------------------------------------
 
-      return {
-        name: item.name,
-        counties: item.counties,
-        pressure,
-        mail_jobs: item.mail_jobs,
-        vendor_score: vendorScore,
-        risk: riskFromPressure(pressure),
-        market_type: item.market_type,
-      };
-    });
+    const dmas = [
+      {
+        name: "Atlanta DMA",
+        counties: 24,
+        market_type: "Broadcast",
+        pressure: 82,
+        risk: "Critical",
+        mail_jobs: 18,
+        vendor_score: 71,
+      },
+      {
+        name: "Savannah DMA",
+        counties: 12,
+        market_type: "Broadcast",
+        pressure: 58,
+        risk: "Elevated",
+        mail_jobs: 7,
+        vendor_score: 62,
+      },
+      {
+        name: "Macon DMA",
+        counties: 15,
+        market_type: "Broadcast",
+        pressure: 44,
+        risk: "Stable",
+        mail_jobs: 4,
+        vendor_score: 55,
+      },
+    ];
+
+    // ---------------------------------------------------
+    // EXECUTIVE ALERTS
+    // ---------------------------------------------------
 
     const alerts = counties
-      .filter((county) => county.alerts > 0)
-      .slice(0, 20)
-      .map((county) => ({
-        id: `${county.full_fips}-alert`,
-        title:
-          county.risk === "Critical"
-            ? "Critical county execution pressure"
-            : "County pressure movement detected",
-        state: stateCode,
+      .filter((c) => c.risk === "Critical" || c.risk === "High")
+      .slice(0, 10)
+      .map((county, index) => ({
+        id: index + 1,
+        title: `${county.name} operational pressure rising`,
         county: county.name,
         severity: county.risk,
-        source: "Operations Engine",
-        layer: "County",
+        source: "Operational Pulse",
+        layer: "County Readiness",
       }));
 
+    // ---------------------------------------------------
+    // SUMMARY
+    // ---------------------------------------------------
+
     const summary = {
-      state: stateCode,
-      state_name: rows[0]?.state_name || stateCode,
       counties_tracked: counties.length,
-      critical_counties: counties.filter((county) => county.risk === "Critical").length,
-      total_mail_jobs: counties.reduce((sum, county) => sum + Number(county.mail_jobs || 0), 0),
+
+      critical_counties: counties.filter(
+        (c) => c.risk === "Critical"
+      ).length,
+
+      total_mail_jobs: counties.reduce(
+        (sum, c) => sum + Number(c.mail_jobs || 0),
+        0
+      ),
+
       total_alerts: alerts.length,
-      vendor_gap_count: counties.filter((county) => Number(county.vendor_score || 0) < 60).length,
+
+      vendor_gap_count: counties.filter(
+        (c) => Number(c.vendor_score || 0) < 45
+      ).length,
     };
 
+    // ---------------------------------------------------
+    // RESPONSE
+    // ---------------------------------------------------
+
     return res.json({
+      ok: true,
+      state: stateCode,
+      workspace_id: workspaceId,
       summary,
       counties,
       dmas,
       alerts,
+      updated_at: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("getStateOperationsDrilldown error", error);
+    console.error("[operations] fatal error", error);
+
     return res.status(500).json({
-      error: "Failed to load state operations drilldown.",
+      error: "Failed to load state operations drilldown",
+      detail: error.message,
     });
   }
 }
