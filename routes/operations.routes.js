@@ -3,11 +3,10 @@ import {
   getStateOperationsIndex,
   getStateOperationsDrilldown,
 } from "../controllers/operations.controller.js";
-import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/states", requireAuth, getStateOperationsIndex);
-router.get("/state/:state", requireAuth, getStateOperationsDrilldown);
+router.get("/states", getStateOperationsIndex);
+router.get("/state/:state", getStateOperationsDrilldown);
 
 export default router;
