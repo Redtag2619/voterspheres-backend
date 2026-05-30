@@ -47,7 +47,7 @@ import consultantImportRoutes from "./routes/consultantImport.routes.js";
 import consultantRiskRoutes from "./routes/consultantRisk.routes.js";
 import { startConsultantImportJob } from "./jobs/consultantImport.job.js";
 import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
-import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js";
+import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js"; 
 import committeeIntelRoutes from "./routes/committeeIntel.routes.js";
 import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
 import operationsRoutes from "./routes/operations.routes.js";
