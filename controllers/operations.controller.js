@@ -121,10 +121,25 @@ export async function getStateOperationsIndex(req, res) {
 export async function getStateOperationsDrilldown(req, res) {
   try {
     const stateCode = String(req.params.state || "GA").toUpperCase();
+    const normalizedStateCode = stateCode === "DC" ? "DC" : stateCode;
     const workspaceId = req.query.workspace_id || null;
 
     const signalMaps = await loadOperationsSignalMaps();
-    const localities = await getLocalitiesForState(stateCode);
+    let localities = await getLocalitiesForState(normalizedStateCode);
+
+if (normalizedStateCode === "DC" && !localities.length) {
+  localities = [
+    {
+      id: "dc-001",
+      name: "District of Columbia",
+      locality_type: "District",
+      state_code: "DC",
+      state_name: "District of Columbia",
+      county_fips: "001",
+      full_fips: "11001",
+    },
+  ];
+}
 
     const counties = localities.map((row, index) => {
       const scoring = scoreLocality({ locality: row, index, signalMaps });
@@ -217,7 +232,7 @@ export async function getStateOperationsDrilldown(req, res) {
 
     return res.json({
       ok: true,
-      state: stateCode,
+      state: normalizedStateCode,
       workspace_id: workspaceId,
       summary,
       counties,
