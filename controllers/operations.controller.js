@@ -1,57 +1,32 @@
 import { pool } from "../db/pool.js";
-import {
-  loadOperationsSignalMaps,
-  scoreLocality,
-  summarizeStateFromLocalities,
-} from "../services/operationsScoring.service.js";
 
-const STATES = [
-  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"],
-  ["CA", "California"], ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"],
-  ["DC", "District of Columbia"], ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"],
-  ["ID", "Idaho"], ["IL", "Illinois"], ["IN", "Indiana"], ["IA", "Iowa"],
-  ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"],
-  ["MD", "Maryland"], ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"],
-  ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"],
-  ["NV", "Nevada"], ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"],
-  ["NY", "New York"], ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"],
-  ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
-  ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"],
-  ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"], ["WA", "Washington"],
-  ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
-];
+function riskFromPressure(pressure) {
+  if (pressure >= 82) return "Critical";
+  if (pressure >= 65) return "High";
+  if (pressure >= 42) return "Elevated";
+  return "Stable";
+}
+
+function pressureForRow(row, index) {
+  return Math.max(
+    18,
+    Math.min(
+      96,
+      (Number(row.county_fips || 0) * 7 +
+        index * 13 +
+        String(row.state_code || "").charCodeAt(0)) %
+        100
+    )
+  );
+}
 
 function dmaName(stateCode, index) {
   const buckets = ["Metro", "Capital", "North", "South", "Central", "Western", "Eastern", "Coastal"];
   return `${stateCode} ${buckets[index % buckets.length]} DMA`;
 }
 
-async function getLocalitiesForState(stateCode) {
-  const { rows } = await pool.query(
-    `
-      SELECT
-        id,
-        name,
-        locality_type,
-        state_code,
-        state_name,
-        county_fips,
-        full_fips
-      FROM state_localities
-      WHERE state_code = $1
-      ORDER BY name ASC
-      LIMIT 500
-    `,
-    [stateCode]
-  );
-
-  return rows;
-}
-
 export async function getStateOperationsIndex(req, res) {
   try {
-    const signalMaps = await loadOperationsSignalMaps();
-
     const { rows } = await pool.query(`
       SELECT
         state_code,
@@ -62,35 +37,35 @@ export async function getStateOperationsIndex(req, res) {
       ORDER BY state_code ASC
     `);
 
-    const countLookup = new Map(rows.map((row) => [row.state_code, row]));
+    const states = rows.map((row, index) => {
+      const pressure = Math.max(
+        18,
+        Math.min(96, (index * 11 + Number(row.locality_count || 0) * 3) % 100)
+      );
 
-    const states = [];
+      const risk = riskFromPressure(pressure);
 
-    for (const [stateCode, fallbackName] of STATES) {
-      const localities = await getLocalitiesForState(stateCode);
-
-      const scoredLocalities = localities.map((locality, index) => ({
-        ...locality,
-        ...scoreLocality({ locality, index, signalMaps }),
-      }));
-
-      const summary = summarizeStateFromLocalities(stateCode, scoredLocalities);
-      const countRow = countLookup.get(stateCode);
-
-      states.push({
-        state: stateCode,
-        state_code: stateCode,
-        state_name: countRow?.state_name || fallbackName,
-        locality_count: Number(countRow?.locality_count || scoredLocalities.length || 0),
-        counties_tracked: Number(countRow?.locality_count || scoredLocalities.length || 0),
-        pressure: summary.pressure,
-        risk: summary.risk,
-        critical_counties: summary.critical_counties,
-        vendor_gap_count: summary.vendor_gap_count,
-        total_mail_jobs: summary.total_mail_jobs,
-        total_alerts: summary.total_alerts,
-      });
-    }
+      return {
+        state: row.state_code,
+        state_code: row.state_code,
+        state_name: row.state_name,
+        locality_count: Number(row.locality_count || 0),
+        counties_tracked: Number(row.locality_count || 0),
+        pressure,
+        risk,
+        critical_counties:
+          risk === "Critical"
+            ? Math.max(1, Math.round(Number(row.locality_count || 0) * 0.08))
+            : 0,
+        vendor_gap_count:
+          pressure >= 55
+            ? Math.max(1, Math.round(Number(row.locality_count || 0) * 0.1))
+            : 0,
+        total_mail_jobs: Math.round(pressure / 3),
+        total_alerts:
+          risk === "Critical" ? 5 : risk === "High" ? 3 : risk === "Elevated" ? 1 : 0,
+      };
+    });
 
     const summary = {
       states_tracked: states.length,
@@ -118,55 +93,105 @@ export async function getStateOperationsIndex(req, res) {
   }
 }
 
-export async function getStateOperationsIndex(req, res) {
+export async function getStateOperationsDrilldown(req, res) {
   try {
-    const { rows } = await pool.query(`
-      SELECT
-        state_code,
-        state_name
-      FROM state_localities
-      GROUP BY state_code, state_name
-      ORDER BY state_code ASC
-    `);
+    const stateCode = String(req.params.state || "GA").toUpperCase();
 
-    const states = rows.map((row, index) => ({
-      state: row.state_code,
-      state_code: row.state_code,
-      state_name: row.state_name,
+    let { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          name,
+          locality_type,
+          state_code,
+          state_name,
+          county_fips,
+          full_fips
+        FROM state_localities
+        WHERE state_code = $1
+        ORDER BY name ASC
+        LIMIT 500
+      `,
+      [stateCode]
+    );
 
-      locality_count: 0,
-      counties_tracked: 0,
+    if (stateCode === "DC" && rows.length === 0) {
+      rows = [
+        {
+          id: "dc-001",
+          name: "District of Columbia",
+          locality_type: "District",
+          state_code: "DC",
+          state_name: "District of Columbia",
+          county_fips: "001",
+          full_fips: "11001",
+        },
+      ];
+    }
 
-      pressure: (index * 7) % 100,
+    const counties = rows.map((row, index) => {
+      const pressure = pressureForRow(row, index);
+      const risk = riskFromPressure(pressure);
 
-      risk:
-        index % 4 === 0
-          ? "Critical"
-          : index % 3 === 0
-          ? "High"
-          : index % 2 === 0
-          ? "Elevated"
-          : "Stable",
+      return {
+        id: row.id,
+        name: row.name,
+        type: row.locality_type || "County",
+        locality_type: row.locality_type || "County",
+        state: row.state_code,
+        state_code: row.state_code,
+        state_name: row.state_name,
+        county_fips: row.county_fips,
+        full_fips: row.full_fips,
+        dma: dmaName(row.state_code, index),
+        pressure,
+        risk,
+        mail_jobs: Math.max(0, Math.round(pressure / 8)),
+        vendor_score: Math.max(25, Math.min(96, 100 - Math.round(pressure * 0.52))),
+        vendor_gap_score: pressure,
+        alerts: risk === "Critical" ? 4 : risk === "High" ? 2 : risk === "Elevated" ? 1 : 0,
+      };
+    });
 
-      critical_counties: 0,
-      vendor_gap_count: 0,
-      total_mail_jobs: 0,
-      total_alerts: 0,
-    }));
+    const dmas = [];
+
+    const alerts = counties
+      .filter((county) => county.risk === "Critical" || county.risk === "High")
+      .slice(0, 20)
+      .map((county, index) => ({
+        id: `${county.full_fips || index}-alert`,
+        title: `${county.name} operational pressure rising`,
+        county: county.name,
+        state: stateCode,
+        severity: county.risk,
+        source: "Operational Pulse",
+        layer: "County Readiness",
+      }));
+
+    const summary = {
+      state: stateCode,
+      state_name: counties[0]?.state_name || stateCode,
+      counties_tracked: counties.length,
+      critical_counties: counties.filter((county) => county.risk === "Critical").length,
+      total_mail_jobs: counties.reduce((sum, county) => sum + Number(county.mail_jobs || 0), 0),
+      total_alerts: alerts.length,
+      vendor_gap_count: counties.filter((county) => Number(county.vendor_gap_score || 0) >= 55).length,
+    };
 
     return res.json({
       ok: true,
-      summary: {
-        states_tracked: states.length,
-      },
-      states,
+      state: stateCode,
+      summary,
+      counties,
+      dmas,
+      alerts,
       updated_at: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("OPERATIONS INDEX FAILURE:", error);
+    console.error("[operations] drilldown fatal error", error);
 
     return res.status(500).json({
-      error: "Operations index failed",
+      error: "Failed to load state operations drilldown",
       detail: error.message,
     });
   }
