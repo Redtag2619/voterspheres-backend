@@ -1,4 +1,9 @@
 import { pool } from "../db/pool.js";
+import {
+  loadOperationsSignalMaps,
+  scoreLocality,
+  summarizeStateFromLocalities,
+} from "../services/operationsScoring.service.js";
 
 const STATES = [
   ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"],
@@ -16,69 +21,76 @@ const STATES = [
   ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
 ];
 
-function scoreFromSeed(seed) {
-  return Math.max(18, Math.min(96, seed % 100));
-}
-
-function riskFromPressure(pressure) {
-  if (pressure >= 82) return "Critical";
-  if (pressure >= 65) return "High";
-  if (pressure >= 42) return "Elevated";
-  return "Stable";
-}
-
 function dmaName(stateCode, index) {
   const buckets = ["Metro", "Capital", "North", "South", "Central", "Western", "Eastern", "Coastal"];
   return `${stateCode} ${buckets[index % buckets.length]} DMA`;
 }
 
+async function getLocalitiesForState(stateCode) {
+  const { rows } = await pool.query(
+    `
+      SELECT
+        id,
+        name,
+        locality_type,
+        state_code,
+        state_name,
+        county_fips,
+        full_fips
+      FROM state_localities
+      WHERE state_code = $1
+      ORDER BY name ASC
+      LIMIT 500
+    `,
+    [stateCode]
+  );
+
+  return rows;
+}
+
 export async function getStateOperationsIndex(req, res) {
   try {
-    let rows = [];
+    const signalMaps = await loadOperationsSignalMaps();
 
-    try {
-      const result = await pool.query(`
-        SELECT
-          state_code,
-          MAX(state_name) AS state_name,
-          COUNT(*)::int AS locality_count
-        FROM state_localities
-        GROUP BY state_code
-        ORDER BY state_code ASC
-      `);
+    const { rows } = await pool.query(`
+      SELECT
+        state_code,
+        MAX(state_name) AS state_name,
+        COUNT(*)::int AS locality_count
+      FROM state_localities
+      GROUP BY state_code
+      ORDER BY state_code ASC
+    `);
 
-      rows = result.rows || [];
-    } catch (error) {
-      console.error("[operations] state index query failed", error);
-      rows = [];
-    }
+    const countLookup = new Map(rows.map((row) => [row.state_code, row]));
 
-    const lookup = new Map(rows.map((row) => [row.state_code, row]));
+    const states = [];
 
-    const states = STATES.map(([stateCode, stateName], index) => {
-      const dbRow = lookup.get(stateCode);
-      const localityCount = Number(dbRow?.locality_count || 0);
-      const pressure = scoreFromSeed(index * 11 + localityCount * 3 + stateCode.charCodeAt(0));
-      const risk = riskFromPressure(pressure);
-      const vendorScore = Math.max(25, Math.min(96, 100 - Math.round(pressure * 0.55)));
-      const mailJobs = Math.max(0, Math.round((pressure / 8) + localityCount / 14));
-      const alerts = risk === "Critical" ? 5 : risk === "High" ? 3 : risk === "Elevated" ? 1 : 0;
+    for (const [stateCode, fallbackName] of STATES) {
+      const localities = await getLocalitiesForState(stateCode);
 
-      return {
+      const scoredLocalities = localities.map((locality, index) => ({
+        ...locality,
+        ...scoreLocality({ locality, index, signalMaps }),
+      }));
+
+      const summary = summarizeStateFromLocalities(stateCode, scoredLocalities);
+      const countRow = countLookup.get(stateCode);
+
+      states.push({
         state: stateCode,
         state_code: stateCode,
-        state_name: dbRow?.state_name || stateName,
-        locality_count: localityCount,
-        counties_tracked: localityCount,
-        pressure,
-        risk,
-        critical_counties: risk === "Critical" ? Math.max(1, Math.round(localityCount * 0.08)) : 0,
-        vendor_gap_count: vendorScore < 60 ? Math.max(1, Math.round(localityCount * 0.12)) : 0,
-        total_mail_jobs: mailJobs,
-        total_alerts: alerts,
-        vendor_score: vendorScore,
-      };
-    });
+        state_name: countRow?.state_name || fallbackName,
+        locality_count: Number(countRow?.locality_count || scoredLocalities.length || 0),
+        counties_tracked: Number(countRow?.locality_count || scoredLocalities.length || 0),
+        pressure: summary.pressure,
+        risk: summary.risk,
+        critical_counties: summary.critical_counties,
+        vendor_gap_count: summary.vendor_gap_count,
+        total_mail_jobs: summary.total_mail_jobs,
+        total_alerts: summary.total_alerts,
+      });
+    }
 
     const summary = {
       states_tracked: states.length,
@@ -111,54 +123,39 @@ export async function getStateOperationsDrilldown(req, res) {
     const stateCode = String(req.params.state || "GA").toUpperCase();
     const workspaceId = req.query.workspace_id || null;
 
-    let counties = [];
+    const signalMaps = await loadOperationsSignalMaps();
+    const localities = await getLocalitiesForState(stateCode);
 
-    try {
-      const countyQuery = await pool.query(
-        `
-        SELECT
-          id,
-          name,
-          locality_type,
-          state_code,
-          state_name,
-          county_fips,
-          full_fips
-        FROM state_localities
-        WHERE state_code = $1
-        ORDER BY name ASC
-        LIMIT 500
-        `,
-        [stateCode]
-      );
+    const counties = localities.map((row, index) => {
+      const scoring = scoreLocality({ locality: row, index, signalMaps });
 
-      counties = countyQuery.rows.map((row, index) => {
-        const seed = Number(row.county_fips || 0) * 7 + index * 13 + stateCode.charCodeAt(0);
-        const pressure = scoreFromSeed(seed);
-        const risk = riskFromPressure(pressure);
+      return {
+        id: row.id,
+        name: row.name,
+        type: row.locality_type || "County",
+        locality_type: row.locality_type || "County",
+        state: row.state_code,
+        state_code: row.state_code,
+        state_name: row.state_name,
+        county_fips: row.county_fips,
+        full_fips: row.full_fips,
+        dma: dmaName(row.state_code, index),
 
-        return {
-          id: row.id,
-          name: row.name,
-          type: row.locality_type || "County",
-          locality_type: row.locality_type || "County",
-          state: row.state_code,
-          state_code: row.state_code,
-          state_name: row.state_name,
-          county_fips: row.county_fips,
-          full_fips: row.full_fips,
-          dma: dmaName(row.state_code, index),
-          pressure,
-          risk,
-          mail_jobs: Math.max(0, Math.round(pressure / 8)),
-          vendor_score: Math.max(25, Math.min(96, 100 - Math.round(pressure * 0.52))),
-          alerts: risk === "Critical" ? 4 : risk === "High" ? 2 : risk === "Elevated" ? 1 : 0,
-        };
-      });
-    } catch (dbError) {
-      console.error("[operations] county query failed", dbError);
-      counties = [];
-    }
+        pressure: scoring.pressure,
+        risk: scoring.risk,
+
+        mail_jobs: Math.max(0, Math.round(scoring.mailops_score / 8)),
+        vendor_score: scoring.vendor_score,
+        vendor_gap_score: scoring.vendor_gap_score,
+        alerts: Math.max(0, Math.round(scoring.alert_pressure / 12)),
+
+        mailops_score: scoring.mailops_score,
+        task_pressure: scoring.task_pressure,
+        alert_pressure: scoring.alert_pressure,
+        fundraising_pressure: scoring.fundraising_pressure,
+        scoring_breakdown: scoring.scoring_breakdown,
+      };
+    });
 
     const dmaMap = new Map();
 
@@ -189,7 +186,7 @@ export async function getStateOperationsDrilldown(req, res) {
         counties: item.counties,
         market_type: item.market_type,
         pressure,
-        risk: riskFromPressure(pressure),
+        risk: pressure >= 82 ? "Critical" : pressure >= 65 ? "High" : pressure >= 42 ? "Elevated" : "Stable",
         mail_jobs: item.mail_jobs,
         vendor_score: vendorScore,
       };
@@ -204,7 +201,7 @@ export async function getStateOperationsDrilldown(req, res) {
         county: county.name,
         state: stateCode,
         severity: county.risk,
-        source: "Operational Pulse",
+        source: "Operations Scoring Engine",
         layer: "County Readiness",
       }));
 
@@ -215,7 +212,7 @@ export async function getStateOperationsDrilldown(req, res) {
       critical_counties: counties.filter((county) => county.risk === "Critical").length,
       total_mail_jobs: counties.reduce((sum, county) => sum + Number(county.mail_jobs || 0), 0),
       total_alerts: alerts.length,
-      vendor_gap_count: counties.filter((county) => Number(county.vendor_score || 0) < 60).length,
+      vendor_gap_count: counties.filter((county) => Number(county.vendor_gap_score || 0) >= 55).length,
     };
 
     return res.json({
