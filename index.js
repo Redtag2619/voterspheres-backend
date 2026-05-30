@@ -50,6 +50,7 @@ import consultantDeepIntelRoutes from "./routes/consultantDeepIntel.routes.js";
 import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichment.routes.js";
 import committeeIntelRoutes from "./routes/committeeIntel.routes.js";
 import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
+import operationsRoutes from "./routes/operations.routes.js";
 
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -206,6 +207,7 @@ app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
 app.use("/api/consultants/contact-enrichment", requireAuth, consultantContactEnrichmentRoutes);
 app.use("/api/committees", requireAuth, committeeIntelRoutes);
 app.use("/api/dark-money-exposure", requireAuth, darkMoneyExposureRoutes);
+app.use("/api/operations", operationsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
