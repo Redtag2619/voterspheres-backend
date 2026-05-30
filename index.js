@@ -5,7 +5,7 @@ import cors from "cors";
 import helmet from "helmet"; 
 import morgan from "morgan"; 
 
-import authRoutes from "./routes/auth.routes.js";
+import authRoutes from "./routes/auth.routes.js"; 
 import billingRoutes from "./routes/billing.routes.js"; 
 import alertsRoutes from "./routes/alerts.routes.js";
 import executiveAlertEngineRoutes from "./routes/executiveAlertEngine.routes.js"; 
