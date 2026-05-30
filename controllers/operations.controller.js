@@ -1,4 +1,4 @@
-import pool from "../db/pool.js";
+import { pool } from "../db/pool.js";
 
 function riskFromPressure(pressure) {
   if (pressure >= 82) return "Critical";
