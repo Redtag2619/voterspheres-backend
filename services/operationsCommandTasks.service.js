@@ -20,12 +20,21 @@ function has(columns, name) {
 
 function priorityFromRisk(risk) {
   const value = String(risk || "").toLowerCase();
-
   if (value === "critical") return "critical";
   if (value === "high") return "high";
   if (value === "elevated") return "medium";
-
   return "normal";
+}
+
+function normalizeMetadata(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
 }
 
 export async function createCountyCommandTask({ payload, user }) {
@@ -56,6 +65,7 @@ export async function createCountyCommandTask({ payload, user }) {
   const metadata = {
     source: "state_operations_drilldown",
     tactical_source: "County Heat",
+    task_kind: "county_escalation",
     state: stateCode,
     county: countyName,
     risk,
@@ -67,9 +77,11 @@ export async function createCountyCommandTask({ payload, user }) {
     top_drivers: payload.top_drivers || [],
     scoring_breakdown: payload.scoring_breakdown || {},
     live_signal_counts: payload.live_signal_counts || {},
+    resolved_at: null,
   };
 
   const insert = {};
+
   if (has(columns, "title")) insert.title = title;
   if (has(columns, "name")) insert.name = title;
   if (has(columns, "description")) insert.description = description;
@@ -87,7 +99,6 @@ export async function createCountyCommandTask({ payload, user }) {
   if (has(columns, "created_by")) insert.created_by = user?.id || user?.user_id || null;
   if (has(columns, "user_id")) insert.user_id = user?.id || user?.user_id || null;
   if (has(columns, "workspace_id")) insert.workspace_id = payload.workspace_id || user?.workspace_id || user?.active_workspace_id || null;
-
   if (has(columns, "created_at")) insert.created_at = new Date();
   if (has(columns, "updated_at")) insert.updated_at = new Date();
 
@@ -110,4 +121,69 @@ export async function createCountyCommandTask({ payload, user }) {
   );
 
   return rows[0];
+}
+
+export async function updateCountyCommandTaskStatus({ taskId, status }) {
+  const columns = await getColumns("tasks");
+
+  if (!columns.size) {
+    throw new Error("tasks table was not found.");
+  }
+
+  const nextStatus = String(status || "open").toLowerCase();
+  const isResolved = ["complete", "completed", "done", "resolved"].includes(nextStatus);
+
+  const { rows } = await pool.query(
+    `SELECT * FROM tasks WHERE id = $1 LIMIT 1`,
+    [taskId]
+  );
+
+  if (!rows.length) {
+    throw new Error("Task not found.");
+  }
+
+  const current = rows[0];
+  const metadata = normalizeMetadata(current.metadata);
+
+  const nextMetadata = {
+    ...metadata,
+    resolved_at: isResolved ? new Date().toISOString() : null,
+    task_status_sync: true,
+  };
+
+  const updates = [];
+  const values = [];
+  let index = 1;
+
+  if (has(columns, "status")) {
+    updates.push(`status = $${index++}`);
+    values.push(nextStatus);
+  }
+
+  if (has(columns, "metadata")) {
+    updates.push(`metadata = $${index++}`);
+    values.push(JSON.stringify(nextMetadata));
+  }
+
+  if (has(columns, "updated_at")) {
+    updates.push(`updated_at = NOW()`);
+  }
+
+  if (!updates.length) {
+    throw new Error("No compatible task status columns were found.");
+  }
+
+  values.push(taskId);
+
+  const updated = await pool.query(
+    `
+      UPDATE tasks
+      SET ${updates.join(", ")}
+      WHERE id = $${index}
+      RETURNING *
+    `,
+    values
+  );
+
+  return updated.rows[0];
 }
