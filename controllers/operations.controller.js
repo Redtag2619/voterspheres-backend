@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import { loadOperationsLiveSignals } from "../services/operationsLiveSignals.service.js";
 import {
   buildTacticalFeed,
   riskFromHeat,
@@ -49,6 +50,8 @@ async function getLocalitiesByState(stateCode) {
 
 export async function getStateOperationsIndex(req, res) {
   try {
+    const liveSignals = await loadOperationsLiveSignals();
+
     const { rows } = await pool.query(`
       SELECT
         state_code,
@@ -66,7 +69,7 @@ export async function getStateOperationsIndex(req, res) {
 
       const scored = localities.map((locality, index) => ({
         ...locality,
-        ...scoreCountyHeat(locality, index),
+        ...scoreCountyHeat(locality, index, liveSignals),
       }));
 
       const heatSummary = summarizeHeat(scored);
@@ -99,7 +102,7 @@ export async function getStateOperationsIndex(req, res) {
       .slice(0, 15)
       .map((state, index) => ({
         id: `${state.state_code}-state-feed-${index}`,
-        title: `${state.state_name} tactical pressure ${state.risk.toLowerCase()}`,
+        title: `${state.state_name} tactical pressure ${String(state.risk || "signal").toLowerCase()}`,
         state: state.state_code,
         severity: state.risk,
         source: "National Tactical Feed",
@@ -116,7 +119,7 @@ export async function getStateOperationsIndex(req, res) {
       states_tracked: states.length,
       localities_tracked: states.reduce((sum, item) => sum + Number(item.locality_count || 0), 0),
       national_heat_score: states.length
-        ? Math.round(states.reduce((sum, item) => sum + Number(item.heat_score || 0), 0) / states.length)
+        ? Number((states.reduce((sum, item) => sum + Number(item.heat_score || 0), 0) / states.length).toFixed(2))
         : 0,
       critical_states: states.filter((item) => item.risk === "Critical").length,
       urgent_states: states.filter((item) => ["Critical", "High"].includes(item.risk)).length,
@@ -145,10 +148,11 @@ export async function getStateOperationsIndex(req, res) {
 export async function getStateOperationsDrilldown(req, res) {
   try {
     const stateCode = String(req.params.state || "GA").toUpperCase();
+    const liveSignals = await loadOperationsLiveSignals();
     const rows = await getLocalitiesByState(stateCode);
 
     const counties = rows.map((row, index) => {
-      const scoring = scoreCountyHeat(row, index);
+      const scoring = scoreCountyHeat(row, index, liveSignals);
 
       return {
         id: row.id,
@@ -189,8 +193,8 @@ export async function getStateOperationsDrilldown(req, res) {
     }
 
     const dmas = Array.from(dmaMap.values()).map((item) => {
-      const heat = Math.round(item.heat_total / Math.max(1, item.counties));
-      const vendorScore = Math.round(item.vendor_total / Math.max(1, item.counties));
+      const heat = Number((item.heat_total / Math.max(1, item.counties)).toFixed(2));
+      const vendorScore = Number((item.vendor_total / Math.max(1, item.counties)).toFixed(2));
 
       return {
         name: item.name,
