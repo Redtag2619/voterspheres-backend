@@ -8,6 +8,7 @@
     "dev:clean": "kill-port 10000 && node index.js",
     "start": "node index.js",
     "start:clean": "kill-port 10000 && node index.js",
+    "db:workspaces": "node scripts/createCampaignWorkspaces.js",
     "restart": "npm run start:clean",
     "check:api": "powershell -Command \"Invoke-WebRequest http://127.0.0.1:10000/api/health -UseBasicParsing | Select-Object StatusCode, StatusDescription\"",
     "db:migrate": "node db/runMigrations.js",
@@ -19,7 +20,6 @@
     "import:consultants": "node scripts/import-consultants-from-fec.js",
     "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js",
     "import:localities": "node scripts/importStateLocalities.js",
-    "db:workspaces": "node scripts/createCampaignWorkspaces.js",
     "import:usps-facilities": "node scripts/import-usps-postal-facilities.js"
   },
   "dependencies": {
