@@ -34,30 +34,60 @@ function signalValue(signals, group, stateCode, countyName) {
   return Number(countyValue || 0) + Number(stateValue || 0);
 }
 
+function countyTaskStatus(signals, stateCode, countyName) {
+  const countyKey = signals?.keyFor?.(stateCode, countyName);
+
+  if (!countyKey) {
+    return {
+      activeTaskCount: 0,
+      resolvedTaskCount: 0,
+      command_status: "No Task",
+      task_active: false,
+      task_resolved: false,
+    };
+  }
+
+  const activeTaskCount = Number(signals?.tasks?.activeCountyTasks?.get(countyKey) || 0);
+  const resolvedTaskCount = Number(signals?.tasks?.resolvedCountyTasks?.get(countyKey) || 0);
+
+  return {
+    activeTaskCount,
+    resolvedTaskCount,
+    command_status: activeTaskCount > 0 ? "Task Active" : resolvedTaskCount > 0 ? "Resolved" : "No Task",
+    task_active: activeTaskCount > 0,
+    task_resolved: activeTaskCount === 0 && resolvedTaskCount > 0,
+  };
+}
+
 export function scoreCountyHeat(row, index = 0, signals = null) {
   const stateCode = String(row.state_code || "").toUpperCase();
   const countyName = row.name;
 
   const baseline = deterministicBase(row, index);
+  const taskStatus = countyTaskStatus(signals, stateCode, countyName);
 
   const battlegroundWeight = ["AZ", "GA", "MI", "NV", "NC", "PA", "WI"].includes(stateCode) ? 14 : 4;
 
   const vendorSignal = signalValue(signals, "vendors", stateCode, countyName);
   const mailopsSignal = signalValue(signals, "mailops", stateCode, countyName);
-  const taskSignal = signalValue(signals, "tasks", stateCode, countyName);
+  const taskSignalRaw = signalValue(signals, "tasks", stateCode, countyName);
   const alertSignal = signalValue(signals, "alerts", stateCode, countyName);
   const fundraisingSignal = signalValue(signals, "fundraising", stateCode, countyName);
 
-  const vendorGap = clamp(88 - vendorSignal * 9 + battlegroundWeight * 0.8 + baseline * 0.08);
+  const resolvedRelief = taskStatus.task_resolved ? 18 : 0;
+  const activeTaskBoost = taskStatus.task_active ? 14 : 0;
+  const taskSignal = Math.max(0, taskSignalRaw);
+
+  const vendorGap = clamp(88 - vendorSignal * 9 + battlegroundWeight * 0.8 + baseline * 0.08 - resolvedRelief * 0.25);
   const vendorReadiness = clamp(100 - vendorGap, 5, 96);
 
-  const mailPressure = clamp(mailopsSignal * 9 + baseline * 0.42 + battlegroundWeight);
-  const turnoutPressure = clamp(baseline * 0.62 + battlegroundWeight * 1.7 + taskSignal * 4);
-  const taskPressure = clamp(taskSignal * 12 + baseline * 0.18);
-  const alertPressure = clamp(alertSignal * 15 + baseline * 0.16);
+  const mailPressure = clamp(mailopsSignal * 9 + baseline * 0.42 + battlegroundWeight - resolvedRelief * 0.2);
+  const turnoutPressure = clamp(baseline * 0.62 + battlegroundWeight * 1.7 + taskSignal * 4 + activeTaskBoost - resolvedRelief * 0.25);
+  const taskPressure = clamp(taskSignal * 12 + baseline * 0.18 + activeTaskBoost - resolvedRelief);
+  const alertPressure = clamp(alertSignal * 15 + baseline * 0.16 - resolvedRelief * 0.2);
   const fundraisingPressure = clamp(fundraisingSignal * 1.8 + baseline * 0.22);
 
-  const heat_score = clamp(
+  const heatBeforeResolution = clamp(
     baseline * 0.18 +
       vendorGap * 0.22 +
       mailPressure * 0.18 +
@@ -67,10 +97,18 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
       fundraisingPressure * 0.06
   );
 
+  const heat_score = clamp(heatBeforeResolution - resolvedRelief);
+
   return {
     heat_score: round2(heat_score),
     pressure: round2(heat_score),
     risk: riskFromHeat(heat_score),
+
+    command_status: taskStatus.command_status,
+    task_active: taskStatus.task_active,
+    task_resolved: taskStatus.task_resolved,
+    active_task_count: taskStatus.activeTaskCount,
+    resolved_task_count: taskStatus.resolvedTaskCount,
 
     vendor_score: round2(vendorReadiness),
     vendor_gap_score: round2(vendorGap),
@@ -87,6 +125,8 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
       vendors: vendorSignal,
       mailops: mailopsSignal,
       tasks: taskSignal,
+      active_county_tasks: taskStatus.activeTaskCount,
+      resolved_county_tasks: taskStatus.resolvedTaskCount,
       alerts: alertSignal,
       fundraising: fundraisingSignal,
     },
@@ -105,6 +145,8 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
     scoring_breakdown: {
       baseline: round2(baseline),
       battleground_weight: round2(battlegroundWeight),
+      resolved_task_relief: round2(resolvedRelief),
+      active_task_boost: round2(activeTaskBoost),
       vendor_gap_score: round2(vendorGap),
       vendor_score: round2(vendorReadiness),
       mailops_score: round2(mailPressure),
@@ -120,22 +162,27 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
 
 export function buildTacticalFeed({ stateCode = null, counties = [], limit = 20 }) {
   return counties
-    .filter((county) => county.risk === "Critical" || county.risk === "High")
+    .filter((county) => county.risk === "Critical" || county.risk === "High" || county.task_active)
     .sort((a, b) => Number(b.heat_score || b.pressure || 0) - Number(a.heat_score || a.pressure || 0))
     .slice(0, limit)
     .map((county, index) => ({
       id: `${county.full_fips || county.id || index}-tactical-feed`,
-      title: `${county.name} tactical pressure ${String(county.risk || "signal").toLowerCase()}`,
+      title: county.task_active
+        ? `${county.name} has active command escalation`
+        : `${county.name} tactical pressure ${String(county.risk || "signal").toLowerCase()}`,
       state: stateCode || county.state_code || county.state,
       county: county.name,
-      severity: county.risk,
+      severity: county.task_active ? "High" : county.risk,
       source: "Tactical Intelligence Engine",
       layer: "County Heat",
       recommendation:
-        county.risk === "Critical"
-          ? "Immediate escalation recommended. Review vendor coverage, MailOps timing, and deployment readiness."
-          : "Monitor closely. Pressure is elevated across operational indicators.",
+        county.task_active
+          ? "Command task is active. Track owner progress and complete once pressure has been addressed."
+          : county.risk === "Critical"
+            ? "Immediate escalation recommended. Review vendor coverage, MailOps timing, and deployment readiness."
+            : "Monitor closely. Pressure is elevated across operational indicators.",
       heat_score: county.heat_score || county.pressure || 0,
+      command_status: county.command_status,
       top_drivers: county.top_drivers || [],
       created_at: new Date().toISOString(),
     }));
@@ -155,6 +202,8 @@ export function summarizeHeat(counties = []) {
     high_counties: counties.filter((county) => county.risk === "High").length,
     elevated_counties: counties.filter((county) => county.risk === "Elevated").length,
     stable_counties: counties.filter((county) => county.risk === "Stable").length,
+    active_task_count: counties.reduce((sum, county) => sum + Number(county.active_task_count || 0), 0),
+    resolved_task_count: counties.reduce((sum, county) => sum + Number(county.resolved_task_count || 0), 0),
     vendor_gap_count: counties.filter((county) => Number(county.vendor_gap_score || 0) >= 55).length,
     total_mail_jobs: counties.reduce((sum, county) => sum + Number(county.mail_jobs || 0), 0),
     total_alerts: counties.reduce((sum, county) => sum + Number(county.alerts || 0), 0),
