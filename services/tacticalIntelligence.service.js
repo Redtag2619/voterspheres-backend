@@ -14,14 +14,24 @@ export function riskFromHeat(score) {
 }
 
 function deterministicBase(row, index = 0) {
+  const stateCode = String(row.state_code || "").toUpperCase();
+
   const stateSeed =
-    String(row.state_code || "")
+    stateCode
       .split("")
       .reduce((sum, char) => sum + char.charCodeAt(0), 0) || 10;
 
   const countySeed = Number(row.county_fips || 0);
 
-  return clamp((stateSeed * 7 + countySeed * 3 + index * 11) % 100, 18, 96);
+  const battlegroundBase = ["AZ", "GA", "MI", "NV", "NC", "PA", "WI"].includes(stateCode)
+    ? 42
+    : 26;
+
+  return clamp(
+    battlegroundBase + ((stateSeed * 3 + countySeed * 5 + index * 9) % 48),
+    22,
+    94
+  );
 }
 
 function signalValue(signals, group, stateCode, countyName) {
@@ -59,6 +69,18 @@ function countyTaskStatus(signals, stateCode, countyName) {
   };
 }
 
+function dataCoverageScore({ vendorSignal, mailopsSignal, taskSignal, alertSignal, fundraisingSignal }) {
+  return clamp(
+    vendorSignal * 8 +
+      mailopsSignal * 8 +
+      taskSignal * 10 +
+      alertSignal * 12 +
+      fundraisingSignal * 2,
+    0,
+    100
+  );
+}
+
 export function scoreCountyHeat(row, index = 0, signals = null) {
   const stateCode = String(row.state_code || "").toUpperCase();
   const countyName = row.name;
@@ -66,7 +88,7 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
   const baseline = deterministicBase(row, index);
   const taskStatus = countyTaskStatus(signals, stateCode, countyName);
 
-  const battlegroundWeight = ["AZ", "GA", "MI", "NV", "NC", "PA", "WI"].includes(stateCode) ? 14 : 4;
+  const battlegroundWeight = ["AZ", "GA", "MI", "NV", "NC", "PA", "WI"].includes(stateCode) ? 18 : 7;
 
   const vendorSignal = signalValue(signals, "vendors", stateCode, countyName);
   const mailopsSignal = signalValue(signals, "mailops", stateCode, countyName);
@@ -74,35 +96,85 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
   const alertSignal = signalValue(signals, "alerts", stateCode, countyName);
   const fundraisingSignal = signalValue(signals, "fundraising", stateCode, countyName);
 
-  const resolvedRelief = taskStatus.task_resolved ? 18 : 0;
-  const activeTaskBoost = taskStatus.task_active ? 14 : 0;
+  const coverage = dataCoverageScore({
+    vendorSignal,
+    mailopsSignal,
+    taskSignal: taskSignalRaw,
+    alertSignal,
+    fundraisingSignal,
+  });
+
+  const sparseDataBoost = coverage < 10 ? 8 : 0;
+  const resolvedRelief = taskStatus.task_resolved ? 16 : 0;
+  const activeTaskBoost = taskStatus.task_active ? 24 : 0;
   const taskSignal = Math.max(0, taskSignalRaw);
 
-  const vendorGap = clamp(88 - vendorSignal * 9 + battlegroundWeight * 0.8 + baseline * 0.08 - resolvedRelief * 0.25);
-  const vendorReadiness = clamp(100 - vendorGap, 5, 96);
-
-  const mailPressure = clamp(mailopsSignal * 9 + baseline * 0.42 + battlegroundWeight - resolvedRelief * 0.2);
-  const turnoutPressure = clamp(baseline * 0.62 + battlegroundWeight * 1.7 + taskSignal * 4 + activeTaskBoost - resolvedRelief * 0.25);
-  const taskPressure = clamp(taskSignal * 12 + baseline * 0.18 + activeTaskBoost - resolvedRelief);
-  const alertPressure = clamp(alertSignal * 15 + baseline * 0.16 - resolvedRelief * 0.2);
-  const fundraisingPressure = clamp(fundraisingSignal * 1.8 + baseline * 0.22);
-
-  const heatBeforeResolution = clamp(
-    baseline * 0.18 +
-      vendorGap * 0.22 +
-      mailPressure * 0.18 +
-      turnoutPressure * 0.16 +
-      taskPressure * 0.1 +
-      alertPressure * 0.1 +
-      fundraisingPressure * 0.06
+  const vendorGap = clamp(
+    74 -
+      vendorSignal * 7 +
+      battlegroundWeight * 0.95 +
+      baseline * 0.16 +
+      sparseDataBoost -
+      resolvedRelief * 0.3
   );
 
-  const heat_score = clamp(heatBeforeResolution - resolvedRelief);
+  const vendorReadiness = clamp(100 - vendorGap, 5, 96);
+
+  const mailPressure = clamp(
+    mailopsSignal * 11 +
+      baseline * 0.5 +
+      battlegroundWeight +
+      sparseDataBoost -
+      resolvedRelief * 0.2
+  );
+
+  const turnoutPressure = clamp(
+    baseline * 0.72 +
+      battlegroundWeight * 1.8 +
+      taskSignal * 5 +
+      activeTaskBoost -
+      resolvedRelief * 0.25
+  );
+
+  const taskPressure = clamp(
+    taskSignal * 14 +
+      baseline * 0.28 +
+      activeTaskBoost -
+      resolvedRelief
+  );
+
+  const alertPressure = clamp(
+    alertSignal * 18 +
+      baseline * 0.24 +
+      sparseDataBoost -
+      resolvedRelief * 0.2
+  );
+
+  const fundraisingPressure = clamp(
+    fundraisingSignal * 2.4 +
+      baseline * 0.3 +
+      battlegroundWeight * 0.4
+  );
+
+  const heatBeforeResolution = clamp(
+    baseline * 0.16 +
+      vendorGap * 0.2 +
+      mailPressure * 0.18 +
+      turnoutPressure * 0.18 +
+      taskPressure * 0.14 +
+      alertPressure * 0.1 +
+      fundraisingPressure * 0.04
+  );
+
+  const heat_score = clamp(heatBeforeResolution - resolvedRelief * 0.65);
 
   return {
     heat_score: round2(heat_score),
     pressure: round2(heat_score),
     risk: riskFromHeat(heat_score),
+
+    data_coverage_score: round2(coverage),
+    data_coverage_label: coverage >= 45 ? "Live Rich" : coverage >= 15 ? "Partial Live" : "Sparse Live",
 
     command_status: taskStatus.command_status,
     task_active: taskStatus.task_active,
@@ -145,8 +217,10 @@ export function scoreCountyHeat(row, index = 0, signals = null) {
     scoring_breakdown: {
       baseline: round2(baseline),
       battleground_weight: round2(battlegroundWeight),
+      sparse_data_boost: round2(sparseDataBoost),
       resolved_task_relief: round2(resolvedRelief),
       active_task_boost: round2(activeTaskBoost),
+      data_coverage_score: round2(coverage),
       vendor_gap_score: round2(vendorGap),
       vendor_score: round2(vendorReadiness),
       mailops_score: round2(mailPressure),
@@ -183,6 +257,7 @@ export function buildTacticalFeed({ stateCode = null, counties = [], limit = 20 
             : "Monitor closely. Pressure is elevated across operational indicators.",
       heat_score: county.heat_score || county.pressure || 0,
       command_status: county.command_status,
+      data_coverage_label: county.data_coverage_label,
       top_drivers: county.top_drivers || [],
       created_at: new Date().toISOString(),
     }));
@@ -195,15 +270,45 @@ export function summarizeHeat(counties = []) {
     ? counties.reduce((sum, county) => sum + Number(county.heat_score || county.pressure || 0), 0) / total
     : 0;
 
+  const maxHeat = total
+    ? Math.max(...counties.map((county) => Number(county.heat_score || county.pressure || 0)))
+    : 0;
+
+  const urgentCount = counties.filter((county) =>
+    ["Critical", "High"].includes(county.risk)
+  ).length;
+
+  const activeTaskCount = counties.reduce((sum, county) => sum + Number(county.active_task_count || 0), 0);
+  const resolvedTaskCount = counties.reduce((sum, county) => sum + Number(county.resolved_task_count || 0), 0);
+
+  const avgCoverage = total
+    ? counties.reduce((sum, county) => sum + Number(county.data_coverage_score || 0), 0) / total
+    : 0;
+
+  let blendedHeat = avgHeat * 0.58 + maxHeat * 0.32 + Math.min(20, urgentCount * 2.5);
+
+  if (activeTaskCount > 0) blendedHeat = Math.max(blendedHeat, 68 + Math.min(18, activeTaskCount * 3));
+  if (maxHeat >= 82) blendedHeat = Math.max(blendedHeat, 72);
+  if (resolvedTaskCount > 0 && activeTaskCount === 0) blendedHeat = Math.max(20, blendedHeat - 6);
+
+  const finalHeat = clamp(blendedHeat, 0, 100);
+
   return {
-    heat_score: round2(avgHeat),
-    risk: riskFromHeat(avgHeat),
+    heat_score: round2(finalHeat),
+    average_heat_score: round2(avgHeat),
+    max_county_heat_score: round2(maxHeat),
+    risk: riskFromHeat(finalHeat),
+
+    data_coverage_score: round2(avgCoverage),
+    data_coverage_label: avgCoverage >= 45 ? "Live Rich" : avgCoverage >= 15 ? "Partial Live" : "Sparse Live",
+
     critical_counties: counties.filter((county) => county.risk === "Critical").length,
     high_counties: counties.filter((county) => county.risk === "High").length,
     elevated_counties: counties.filter((county) => county.risk === "Elevated").length,
     stable_counties: counties.filter((county) => county.risk === "Stable").length,
-    active_task_count: counties.reduce((sum, county) => sum + Number(county.active_task_count || 0), 0),
-    resolved_task_count: counties.reduce((sum, county) => sum + Number(county.resolved_task_count || 0), 0),
+
+    active_task_count: activeTaskCount,
+    resolved_task_count: resolvedTaskCount,
     vendor_gap_count: counties.filter((county) => Number(county.vendor_gap_score || 0) >= 55).length,
     total_mail_jobs: counties.reduce((sum, county) => sum + Number(county.mail_jobs || 0), 0),
     total_alerts: counties.reduce((sum, county) => sum + Number(county.alerts || 0), 0),
