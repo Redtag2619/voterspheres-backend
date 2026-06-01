@@ -401,6 +401,106 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+router.get("/:id/intelligence", async (req, res) => {
+  try {
+    const access = await requireWorkspaceAccess(req, res);
+    if (!access) return;
+
+    const taskResult = await query(
+      `
+        SELECT *
+        FROM tasks
+        WHERE firm_id = $1
+          AND workspace_id = $2
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 250
+      `,
+      [access.firmId, access.workspaceId]
+    );
+
+    const tasks = taskResult.rows || [];
+
+    const openTasks = tasks.filter(
+      (task) => !["complete", "completed", "done", "resolved"].includes(
+        String(task.status || "").toLowerCase()
+      )
+    );
+
+    const completedTasks = tasks.filter(
+      (task) => ["complete", "completed", "done", "resolved"].includes(
+        String(task.status || "").toLowerCase()
+      )
+    );
+
+    const criticalTasks = tasks.filter(
+      (task) => ["critical", "high"].includes(String(task.priority || "").toLowerCase())
+    );
+
+    const countyEscalations = tasks.filter((task) => {
+      const metadata = task.metadata || {};
+      const source = String(task.source || metadata.source || "").toLowerCase();
+      return (
+        source.includes("state_operations") ||
+        source.includes("county") ||
+        Boolean(metadata.county || metadata.county_name || metadata.heat_score)
+      );
+    });
+
+    const activeCountyEscalations = countyEscalations.filter(
+      (task) => !["complete", "completed", "done", "resolved"].includes(
+        String(task.status || "").toLowerCase()
+      )
+    );
+
+    const completionRate = tasks.length
+      ? Math.round((completedTasks.length / tasks.length) * 100)
+      : 0;
+
+    const pressureScore = Math.min(
+      100,
+      Math.round(
+        openTasks.length * 6 +
+          criticalTasks.length * 10 +
+          activeCountyEscalations.length * 14
+      )
+    );
+
+    const risk =
+      pressureScore >= 82
+        ? "Critical"
+        : pressureScore >= 65
+          ? "High"
+          : pressureScore >= 42
+            ? "Elevated"
+            : "Stable";
+
+    return res.json({
+      ok: true,
+      workspace: access.workspace,
+      summary: {
+        workspace_id: access.workspaceId,
+        workspace_name: access.workspace.name,
+        pressure_score: pressureScore,
+        risk,
+        total_tasks: tasks.length,
+        open_tasks: openTasks.length,
+        completed_tasks: completedTasks.length,
+        critical_tasks: criticalTasks.length,
+        county_escalations: countyEscalations.length,
+        active_county_escalations: activeCountyEscalations.length,
+        completion_rate: completionRate,
+      },
+      tasks: tasks.slice(0, 25),
+      countyEscalations: countyEscalations.slice(0, 25),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error.message || "Failed to load workspace intelligence",
+    });
+  }
+});
+
 router.get("/:id/reports", async (req, res) => {
   try {
     await ensureReportTables();
