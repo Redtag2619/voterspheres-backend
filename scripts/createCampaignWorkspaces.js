@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import { pool } from "../db/pool.js";
 
 async function main() {
