@@ -51,6 +51,7 @@ import consultantContactEnrichmentRoutes from "./routes/consultantContactEnrichm
 import committeeIntelRoutes from "./routes/committeeIntel.routes.js";
 import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
 import operationsRoutes from "./routes/operations.routes.js";
+import workspaceIntelligenceRoutes from "./routes/workspaceIntelligence.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -208,6 +209,7 @@ app.use("/api/committees", requireAuth, committeeIntelRoutes);
 app.use("/api/dark-money-exposure", requireAuth, darkMoneyExposureRoutes);
 app.use("/api/operations", operationsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
+app.use("/api/workspace-intelligence", workspaceIntelligenceRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
