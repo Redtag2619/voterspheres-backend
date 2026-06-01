@@ -61,24 +61,78 @@ async function buildScoredState(stateRow, liveSignals) {
 
   const heatSummary = summarizeHeat(counties);
 
+  const maxCountyHeat = counties.length
+    ? Math.max(...counties.map((c) => Number(c.heat_score || c.pressure || 0)))
+    : 0;
+
+  const activeTaskCount = counties.reduce(
+    (sum, c) => sum + Number(c.active_task_count || 0),
+    0
+  );
+
+  const urgentCountyCount = counties.filter((c) =>
+    ["Critical", "High"].includes(c.risk)
+  ).length;
+
+  const battlegroundBoost = ["AZ", "GA", "MI", "NV", "NC", "PA", "WI"].includes(
+    String(stateRow.state_code || "").toUpperCase()
+  )
+    ? 10
+    : 0;
+
+  let stateHeat = Math.max(
+    Number(heatSummary.heat_score || 0),
+    maxCountyHeat * 0.72,
+    Number(heatSummary.average_heat_score || 0) + battlegroundBoost
+  );
+
+  if (activeTaskCount > 0) {
+    stateHeat = Math.max(stateHeat, 72);
+  }
+
+  if (urgentCountyCount >= 3) {
+    stateHeat = Math.max(stateHeat, 68);
+  }
+
+  if (maxCountyHeat >= 82) {
+    stateHeat = Math.max(stateHeat, 82);
+  } else if (maxCountyHeat >= 65) {
+    stateHeat = Math.max(stateHeat, 66);
+  } else if (maxCountyHeat >= 42) {
+    stateHeat = Math.max(stateHeat, 44);
+  }
+
+  stateHeat = Number(Math.min(100, Math.max(0, stateHeat)).toFixed(2));
+
+  const stateRisk = riskFromHeat(stateHeat);
+
   return {
     state: stateRow.state_code,
     state_code: stateRow.state_code,
     state_name: stateRow.state_name,
     locality_count: Number(stateRow.locality_count || 0),
     counties_tracked: Number(stateRow.locality_count || 0),
-    pressure: heatSummary.heat_score,
-    heat_score: heatSummary.heat_score,
-    risk: heatSummary.risk,
+
+    pressure: stateHeat,
+    heat_score: stateHeat,
+    risk: stateRisk,
+
+    average_heat_score: heatSummary.average_heat_score || heatSummary.heat_score || 0,
+    max_county_heat_score: Number(maxCountyHeat.toFixed(2)),
+    data_coverage_score: heatSummary.data_coverage_score || 0,
+    data_coverage_label: heatSummary.data_coverage_label || "Sparse Live",
+
     critical_counties: heatSummary.critical_counties,
     high_counties: heatSummary.high_counties,
     elevated_counties: heatSummary.elevated_counties,
     stable_counties: heatSummary.stable_counties,
-    active_task_count: heatSummary.active_task_count || 0,
+
+    active_task_count: activeTaskCount,
     resolved_task_count: heatSummary.resolved_task_count || 0,
     vendor_gap_count: heatSummary.vendor_gap_count,
     total_mail_jobs: heatSummary.total_mail_jobs,
     total_alerts: heatSummary.total_alerts,
+
     counties,
   };
 }
