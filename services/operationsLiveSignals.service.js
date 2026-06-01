@@ -46,6 +46,23 @@ function addToMap(map, key, amount = 1) {
   map.set(key, Number(map.get(key) || 0) + Number(amount || 0));
 }
 
+function safeJson(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function isResolvedStatus(status) {
+  return ["complete", "completed", "done", "resolved", "archived"].includes(
+    String(status || "").toLowerCase()
+  );
+}
+
 async function loadVendorSignals() {
   const stateMap = new Map();
   const countyMap = new Map();
@@ -60,7 +77,9 @@ async function loadVendorSignals() {
   if (!stateCol) return { stateMap, countyMap };
 
   const selectCounty = countyCol ? `, ${countyCol} AS county_name` : `, NULL::text AS county_name`;
-  const whereStatus = statusCol ? `AND COALESCE(${statusCol}, 'active') NOT IN ('inactive', 'disabled', 'archived')` : "";
+  const whereStatus = statusCol
+    ? `AND COALESCE(${statusCol}, 'active') NOT IN ('inactive', 'disabled', 'archived')`
+    : "";
 
   const { rows } = await pool.query(`
     SELECT UPPER(${stateCol}) AS state_code ${selectCounty}, COUNT(*)::int AS total
@@ -93,8 +112,12 @@ async function loadMailOpsSignals() {
   if (!stateCol) return { stateMap, countyMap };
 
   const selectCounty = countyCol ? `, ${countyCol} AS county_name` : `, NULL::text AS county_name`;
-  const amount = volumeCol ? `GREATEST(1, CEIL(SUM(COALESCE(${volumeCol}, 1)) / 1000.0))::int` : `COUNT(*)::int`;
-  const whereStatus = statusCol ? `AND COALESCE(${statusCol}, 'active') NOT IN ('cancelled', 'canceled', 'archived')` : "";
+  const amount = volumeCol
+    ? `GREATEST(1, CEIL(SUM(COALESCE(${volumeCol}, 1)) / 1000.0))::int`
+    : `COUNT(*)::int`;
+  const whereStatus = statusCol
+    ? `AND COALESCE(${statusCol}, 'active') NOT IN ('cancelled', 'canceled', 'archived')`
+    : "";
 
   const { rows } = await pool.query(`
     SELECT UPPER(${stateCol}) AS state_code ${selectCounty}, ${amount} AS total
@@ -115,38 +138,71 @@ async function loadMailOpsSignals() {
 async function loadTaskSignals() {
   const stateMap = new Map();
   const countyMap = new Map();
+  const activeCountyTasks = new Map();
+  const resolvedCountyTasks = new Map();
 
-  if (!(await tableExists("tasks"))) return { stateMap, countyMap };
+  if (!(await tableExists("tasks"))) {
+    return { stateMap, countyMap, activeCountyTasks, resolvedCountyTasks };
+  }
 
   const columns = await getColumns("tasks");
   const stateCol = firstExisting(columns, ["state_code", "state"]);
   const countyCol = firstExisting(columns, ["county", "county_name", "locality"]);
   const statusCol = firstExisting(columns, ["status"]);
+  const metadataCol = columns.has("metadata") ? "metadata" : null;
 
   const stateExpr = stateCol
-    ? `COALESCE(${stateCol}, metadata->>'state', metadata->>'state_code', '')`
-    : `COALESCE(metadata->>'state', metadata->>'state_code', '')`;
+    ? `COALESCE(${stateCol}, ${metadataCol ? "metadata->>'state'" : "''"}, ${metadataCol ? "metadata->>'state_code'" : "''"}, '')`
+    : metadataCol
+      ? `COALESCE(metadata->>'state', metadata->>'state_code', '')`
+      : `''`;
 
   const countyExpr = countyCol
-    ? `COALESCE(${countyCol}, metadata->>'county', metadata->>'county_name', '')`
-    : `COALESCE(metadata->>'county', metadata->>'county_name', '')`;
+    ? `COALESCE(${countyCol}, ${metadataCol ? "metadata->>'county'" : "''"}, ${metadataCol ? "metadata->>'county_name'" : "''"}, '')`
+    : metadataCol
+      ? `COALESCE(metadata->>'county', metadata->>'county_name', '')`
+      : `''`;
 
-  const whereStatus = statusCol ? `AND COALESCE(${statusCol}, 'open') NOT IN ('done', 'complete', 'completed', 'archived')` : "";
+  const statusExpr = statusCol ? `COALESCE(${statusCol}, 'open')` : `'open'`;
+  const metadataSelect = metadataCol ? `metadata` : `NULL::jsonb AS metadata`;
 
   const { rows } = await pool.query(`
-    SELECT UPPER(${stateExpr}) AS state_code, ${countyExpr} AS county_name, COUNT(*)::int AS total
+    SELECT
+      id,
+      UPPER(${stateExpr}) AS state_code,
+      ${countyExpr} AS county_name,
+      ${statusExpr} AS status,
+      ${metadataSelect}
     FROM tasks
     WHERE COALESCE(${stateExpr}, '') <> ''
-    ${whereStatus}
-    GROUP BY UPPER(${stateExpr}), county_name
   `);
 
   for (const row of rows) {
-    addToMap(stateMap, norm(row.state_code), row.total);
-    if (row.county_name) addToMap(countyMap, keyFor(row.state_code, row.county_name), row.total);
+    const metadata = safeJson(row.metadata);
+    const stateCode = norm(row.state_code || metadata.state || metadata.state_code);
+    const countyName = row.county_name || metadata.county || metadata.county_name;
+    const taskKey = countyName ? keyFor(stateCode, countyName) : null;
+    const isCountyTask =
+      metadata.task_kind === "county_escalation" ||
+      metadata.source === "state_operations_drilldown" ||
+      metadata.tactical_source === "County Heat" ||
+      Boolean(metadata.county && metadata.heat_score);
+
+    if (!stateCode) continue;
+
+    if (isResolvedStatus(row.status)) {
+      if (isCountyTask && taskKey) {
+        addToMap(resolvedCountyTasks, taskKey, 1);
+      }
+      continue;
+    }
+
+    addToMap(stateMap, stateCode, 1);
+    if (countyName) addToMap(countyMap, taskKey, 1);
+    if (isCountyTask && taskKey) addToMap(activeCountyTasks, taskKey, 1);
   }
 
-  return { stateMap, countyMap };
+  return { stateMap, countyMap, activeCountyTasks, resolvedCountyTasks };
 }
 
 async function loadFundraisingSignals() {
