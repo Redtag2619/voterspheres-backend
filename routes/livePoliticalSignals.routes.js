@@ -2,6 +2,7 @@ import express from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { emitRealtimeEvent } from "../services/realtime.service.js";
+import { importPoliticalSignalsFromFec } from "../services/politicalSignalIngestion.service.js";
 
 const router = express.Router();
 
@@ -258,6 +259,25 @@ router.post("/", requireAuth, async (req, res) => {
     return res.status(201).json({ ok: true, signal });
   } catch (error) {
     res.status(500).json({ error: "Failed to create political signal.", detail: error.message });
+  }
+});
+
+router.post("/ingest/fec", requireAuth, async (req, res) => {
+  try {
+    const firmId = getFirmId(req);
+    if (!firmId) return res.status(401).json({ error: "Missing firm context" });
+
+    const result = await importPoliticalSignalsFromFec({
+      firmId,
+      limit: Number(req.body?.limit || 500),
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to import FEC political signals.",
+      detail: error.message,
+    });
   }
 });
 
