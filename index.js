@@ -53,6 +53,7 @@ import darkMoneyExposureRoutes from "./routes/darkMoneyExposure.routes.js";
 import operationsRoutes from "./routes/operations.routes.js";
 import workspaceIntelligenceRoutes from "./routes/workspaceIntelligence.routes.js";
 import realtimeTacticalRoutes from "./routes/realtimeTactical.routes.js";
+import workspaceOperatingRoomRoutes from "./routes/workspaceOperatingRoom.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -212,6 +213,7 @@ app.use("/api/operations", operationsRoutes);
 app.use("/api/consultants", requireAuth, consultantsRoutes);
 app.use("/api/workspace-intelligence", workspaceIntelligenceRoutes);
 app.use("/api/realtime-tactical", realtimeTacticalRoutes);
+app.use("/api/workspace-operating-room", workspaceOperatingRoomRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
