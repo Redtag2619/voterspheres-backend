@@ -1,13 +1,12 @@
 import axios from "axios";
 import { pool } from "../db/pool.js";
-import { emitRealtimeEvent } from "./realtime.service.js";
 import { ensurePoliticalSignalsTable } from "./politicalSignalIngestion.service.js";
 
 const DEFAULT_FEEDS = [
-  "https://news.google.com/rss/search?q=2026+election+campaign+politics&hl=en-US&gl=US&ceid=US:en", 
+  "https://news.google.com/rss/search?q=2026+election+campaign+politics&hl=en-US&gl=US&ceid=US:en",
   "https://news.google.com/rss/search?q=Senate+race+2026+politics&hl=en-US&gl=US&ceid=US:en",
   "https://news.google.com/rss/search?q=governor+race+2026+politics&hl=en-US&gl=US&ceid=US:en",
-  "https://news.google.com/rss/search?q=campaign+fundraising+FEC+politics&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=campaign+fundraising+FEC+politics&hl=en-US&gl=US&ceid=US:en"
 ];
 
 const NEGATIVE_TERMS = [
@@ -46,16 +45,40 @@ function text(value = "") {
   return String(value ?? "").trim();
 }
 
-function stripXml(value = "") {
-  return text(value)
-    .replace(/<!\[CDATA\[/g, "")
-    .replace(/\]\]>/g, "")
-    .replace(/<[^>]+>/g, "")
+function decodeEntities(value = "") {
+  return String(value || "")
+    .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
+}
+
+function stripXml(value = "") {
+  return decodeEntities(value)
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .replace(/<a\b[^>]*>(.*?)<\/a>/gi, "$1")
+    .replace(/<font\b[^>]*>(.*?)<\/font>/gi, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanTitle(value = "") {
+  return stripXml(value)
+    .replace(/\s+-\s+[^-]+$/g, "")
+    .replace(/\s+\|\s+[^|]+$/g, "")
+    .trim();
+}
+
+function cleanSummary(value = "") {
+  return stripXml(value)
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractTag(itemXml, tag) {
@@ -66,17 +89,19 @@ function extractTag(itemXml, tag) {
 function parseRssItems(xml = "") {
   const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
 
-  return items.map((item) => ({
-    title: extractTag(item, "title"),
-    summary: extractTag(item, "description"),
-    url: extractTag(item, "link"),
-    published_at: extractTag(item, "pubDate"),
-    source: extractTag(item, "source") || "News RSS",
-  })).filter((item) => item.title);
+  return items
+    .map((item) => ({
+      title: cleanTitle(extractTag(item, "title")),
+      summary: cleanSummary(extractTag(item, "description")),
+      url: extractTag(item, "link"),
+      published_at: extractTag(item, "pubDate"),
+      source: cleanTitle(extractTag(item, "source")) || "News RSS"
+    }))
+    .filter((item) => item.title);
 }
 
 function detectState(content = "") {
-  const lower = content.toLowerCase();
+  const lower = ` ${content.toLowerCase()} `;
 
   for (const [abbr, name] of Object.entries(STATE_NAMES)) {
     if (lower.includes(name.toLowerCase()) || lower.includes(` ${abbr.toLowerCase()} `)) {
@@ -98,21 +123,29 @@ function scoreNarrative(item = {}) {
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   const direction =
-    negativeHits.length > positiveHits.length ? "negative" :
-    positiveHits.length > negativeHits.length ? "positive" :
-    "neutral";
+    negativeHits.length > positiveHits.length
+      ? "negative"
+      : positiveHits.length > negativeHits.length
+        ? "positive"
+        : "neutral";
 
   const severity =
-    score >= 82 ? "critical" :
-    score >= 65 ? "high" :
-    score >= 42 ? "medium" :
-    "low";
+    score >= 82
+      ? "critical"
+      : score >= 65
+        ? "high"
+        : score >= 42
+          ? "medium"
+          : "low";
 
   const risk =
-    score >= 82 ? "Critical" :
-    score >= 65 ? "High" :
-    score >= 42 ? "Elevated" :
-    "Stable";
+    score >= 82
+      ? "Critical"
+      : score >= 65
+        ? "High"
+        : score >= 42
+          ? "Elevated"
+          : "Stable";
 
   return {
     score,
@@ -121,16 +154,23 @@ function scoreNarrative(item = {}) {
     direction,
     negativeHits,
     positiveHits,
-    issueHits,
+    issueHits
   };
 }
 
 async function getDefaultFirmId() {
-  const { rows } = await pool.query(`SELECT id FROM firms ORDER BY id ASC LIMIT 1`).catch(() => ({ rows: [] }));
+  const { rows } = await pool
+    .query(`SELECT id FROM firms ORDER BY id ASC LIMIT 1`)
+    .catch(() => ({ rows: [] }));
+
   return rows[0]?.id || 1;
 }
 
-export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAULT_FEEDS, limitPerFeed = 25 } = {}) {
+export async function importNewsNarrativeSignals({
+  firmId = null,
+  feeds = DEFAULT_FEEDS,
+  limitPerFeed = 25
+} = {}) {
   await ensurePoliticalSignalsTable();
 
   const resolvedFirmId = firmId || await getDefaultFirmId();
@@ -143,7 +183,7 @@ export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAUL
     try {
       const { data } = await axios.get(feed, {
         timeout: 15000,
-        headers: { "User-Agent": "VoterSpheres/1.0" },
+        headers: { "User-Agent": "VoterSpheres/1.0" }
       });
 
       const items = parseRssItems(data).slice(0, limitPerFeed);
@@ -166,10 +206,15 @@ export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAUL
           continue;
         }
 
-        const title = `Narrative signal: ${item.title}`;
-        const summary = item.summary || `News narrative signal detected from ${item.source}.`;
+        const publisher = item.source || "News RSS";
+        const title = `News narrative: ${item.title}`;
 
-        const result = await pool.query(
+        const summary =
+          item.summary && item.summary !== item.title
+            ? item.summary
+            : `Political narrative signal detected from ${publisher}.`;
+
+        await pool.query(
           `
             INSERT INTO political_signals (
               firm_id, workspace_id, signal_type, source, title, summary,
@@ -177,11 +222,10 @@ export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAUL
               observed_at, created_at, updated_at
             )
             VALUES ($1,NULL,'news',$2,$3,$4,$5,NULL,$6,$7,$8,$9,$10::jsonb,$11,NOW(),NOW())
-            RETURNING *
           `,
           [
             resolvedFirmId,
-            item.source || "News RSS",
+            publisher,
             title,
             summary,
             state,
@@ -196,21 +240,13 @@ export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAUL
               negative_terms: narrative.negativeHits,
               positive_terms: narrative.positiveHits,
               issue_terms: narrative.issueHits,
-              published_at: item.published_at || null,
+              published_at: item.published_at || null
             }),
-            item.published_at ? new Date(item.published_at) : new Date(),
+            item.published_at ? new Date(item.published_at) : new Date()
           ]
         );
 
         inserted += 1;
-
-        emitRealtimeEvent({
-          type: "political.news_narrative.created",
-          channel: "political-signals",
-          firm_id: resolvedFirmId,
-          state,
-          payload: { signal: result.rows[0] },
-        });
       }
     } catch (error) {
       console.warn("[news-narrative] feed failed", feed, error.message);
@@ -224,7 +260,7 @@ export async function importNewsNarrativeSignals({ firmId = null, feeds = DEFAUL
     inserted,
     skipped,
     firm_id: resolvedFirmId,
-    updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
 }
 
@@ -258,9 +294,9 @@ export async function getNarrativeDashboard({ firmId }) {
       critical: rows.filter((row) => row.risk === "Critical").length,
       high: rows.filter((row) => row.risk === "High").length,
       average_score: avg,
-      risk: avg >= 82 ? "Critical" : avg >= 65 ? "High" : avg >= 42 ? "Elevated" : "Stable",
+      risk: avg >= 82 ? "Critical" : avg >= 65 ? "High" : avg >= 42 ? "Elevated" : "Stable"
     },
     signals: rows,
-    updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
 }
