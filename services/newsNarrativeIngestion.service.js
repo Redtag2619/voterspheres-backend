@@ -4,7 +4,7 @@ import { emitRealtimeEvent } from "./realtime.service.js";
 import { ensurePoliticalSignalsTable } from "./politicalSignalIngestion.service.js";
 
 const DEFAULT_FEEDS = [
-  "https://news.google.com/rss/search?q=2026+election+campaign+politics&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=2026+election+campaign+politics&hl=en-US&gl=US&ceid=US:en", 
   "https://news.google.com/rss/search?q=Senate+race+2026+politics&hl=en-US&gl=US&ceid=US:en",
   "https://news.google.com/rss/search?q=governor+race+2026+politics&hl=en-US&gl=US&ceid=US:en",
   "https://news.google.com/rss/search?q=campaign+fundraising+FEC+politics&hl=en-US&gl=US&ceid=US:en",
