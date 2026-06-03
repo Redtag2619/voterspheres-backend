@@ -1,6 +1,6 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import { pool } from "../db/pool.js";
-import { importNewsNarrativeSignals } from "../services/newsNarrativeIngestion.service.js"; 
+import { importNewsNarrativeSignals } from "../services/newsNarrativeIngestion.service.js";
 
 async function main() {
   console.log("🚀 Importing news narrative signals...");

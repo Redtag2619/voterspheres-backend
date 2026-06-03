@@ -21,8 +21,8 @@
     "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js",
     "import:localities": "node scripts/importStateLocalities.js",
     "import:usps-facilities": "node scripts/import-usps-postal-facilities.js",
-    "db:workspaces": "node scripts/createCampaignWorkspaces.js",
-    "signals:fec": "node scripts/importPoliticalSignalsFromFec.js"
+    "signals:fec": "node scripts/importPoliticalSignalsFromFec.js",
+    "signals:news": "node scripts/importNewsNarrativeSignals.js"
   },
   "dependencies": {
     "axios": "^1.13.5",

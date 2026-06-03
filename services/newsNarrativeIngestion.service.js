@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { pool } from "../db/pool.js";
 import { ensurePoliticalSignalsTable } from "./politicalSignalIngestion.service.js";
 
@@ -41,34 +41,20 @@ const STATE_NAMES = {
   WY: "Wyoming"
 };
 
-function decodeEntities(value = "") {
-  return String(value || "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+function text(value = "") {
+  return String(value ?? "").trim();
 }
 
 function stripXml(value = "") {
-  return decodeEntities(value)
+  return text(value)
     .replace(/<!\[CDATA\[/g, "")
     .replace(/\]\]>/g, "")
-    .replace(/<a\b[^>]*>(.*?)<\/a>/gi, "$1")
-    .replace(/<font\b[^>]*>(.*?)<\/font>/gi, "$1")
     .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanTitle(value = "") {
-  return stripXml(value)
-    .replace(/\s+-\s+[^-]+$/g, "")
-    .replace(/\s+\|\s+[^|]+$/g, "")
-    .trim();
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
 function extractTag(itemXml, tag) {
@@ -81,17 +67,17 @@ function parseRssItems(xml = "") {
 
   return items
     .map((item) => ({
-      title: cleanTitle(extractTag(item, "title")),
-      summary: stripXml(extractTag(item, "description")),
+      title: extractTag(item, "title"),
+      summary: extractTag(item, "description"),
       url: extractTag(item, "link"),
       published_at: extractTag(item, "pubDate"),
-      source: cleanTitle(extractTag(item, "source")) || "News RSS"
+      source: extractTag(item, "source") || "News RSS"
     }))
     .filter((item) => item.title);
 }
 
 function detectState(content = "") {
-  const lower = ` ${String(content || "").toLowerCase()} `;
+  const lower = content.toLowerCase();
 
   for (const [abbr, name] of Object.entries(STATE_NAMES)) {
     if (lower.includes(name.toLowerCase()) || lower.includes(` ${abbr.toLowerCase()} `)) {
@@ -113,11 +99,9 @@ function scoreNarrative(item = {}) {
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   const direction =
-    negativeHits.length > positiveHits.length
-      ? "negative"
-      : positiveHits.length > negativeHits.length
-        ? "positive"
-        : "neutral";
+    negativeHits.length > positiveHits.length ? "negative" :
+    positiveHits.length > negativeHits.length ? "positive" :
+    "neutral";
 
   const severity =
     score >= 82 ? "critical" :
@@ -190,13 +174,8 @@ export async function importNewsNarrativeSignals({
           continue;
         }
 
-        const publisher = item.source || "News RSS";
-        const title = `News narrative: ${item.title}`;
-
-        const summary =
-          item.summary && item.summary !== item.title
-            ? item.summary
-            : `Political narrative signal detected from ${publisher}.`;
+        const title = `Narrative signal: ${item.title}`;
+        const summary = item.summary || `News narrative signal detected from ${item.source}.`;
 
         await pool.query(
           `
@@ -209,7 +188,7 @@ export async function importNewsNarrativeSignals({
           `,
           [
             resolvedFirmId,
-            publisher,
+            item.source || "News RSS",
             title,
             summary,
             state,
@@ -257,7 +236,7 @@ export async function getNarrativeDashboard({ firmId }) {
       FROM political_signals
       WHERE firm_id = $1
         AND signal_type = 'news'
-      ORDER BY observed_at DESC NULLS LAST, created_at DESC NULLS LAST
+      ORDER BY observed_at DESC, created_at DESC
       LIMIT 250
     `,
     [firmId]
