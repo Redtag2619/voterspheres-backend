@@ -41,10 +41,6 @@ const STATE_NAMES = {
   WY: "Wyoming"
 };
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function decodeEntities(value = "") {
   return String(value || "")
     .replace(/&nbsp;/g, " ")
@@ -75,12 +71,6 @@ function cleanTitle(value = "") {
     .trim();
 }
 
-function cleanSummary(value = "") {
-  return stripXml(value)
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function extractTag(itemXml, tag) {
   const match = itemXml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return stripXml(match?.[1] || "");
@@ -92,7 +82,7 @@ function parseRssItems(xml = "") {
   return items
     .map((item) => ({
       title: cleanTitle(extractTag(item, "title")),
-      summary: cleanSummary(extractTag(item, "description")),
+      summary: stripXml(extractTag(item, "description")),
       url: extractTag(item, "link"),
       published_at: extractTag(item, "pubDate"),
       source: cleanTitle(extractTag(item, "source")) || "News RSS"
@@ -101,7 +91,7 @@ function parseRssItems(xml = "") {
 }
 
 function detectState(content = "") {
-  const lower = ` ${content.toLowerCase()} `;
+  const lower = ` ${String(content || "").toLowerCase()} `;
 
   for (const [abbr, name] of Object.entries(STATE_NAMES)) {
     if (lower.includes(name.toLowerCase()) || lower.includes(` ${abbr.toLowerCase()} `)) {
@@ -130,22 +120,16 @@ function scoreNarrative(item = {}) {
         : "neutral";
 
   const severity =
-    score >= 82
-      ? "critical"
-      : score >= 65
-        ? "high"
-        : score >= 42
-          ? "medium"
-          : "low";
+    score >= 82 ? "critical" :
+    score >= 65 ? "high" :
+    score >= 42 ? "medium" :
+    "low";
 
   const risk =
-    score >= 82
-      ? "Critical"
-      : score >= 65
-        ? "High"
-        : score >= 42
-          ? "Elevated"
-          : "Stable";
+    score >= 82 ? "Critical" :
+    score >= 65 ? "High" :
+    score >= 42 ? "Elevated" :
+    "Stable";
 
   return {
     score,
@@ -273,7 +257,7 @@ export async function getNarrativeDashboard({ firmId }) {
       FROM political_signals
       WHERE firm_id = $1
         AND signal_type = 'news'
-      ORDER BY observed_at DESC, created_at DESC
+      ORDER BY observed_at DESC NULLS LAST, created_at DESC NULLS LAST
       LIMIT 250
     `,
     [firmId]
