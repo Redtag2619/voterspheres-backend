@@ -7,58 +7,20 @@ function normalizeText(value = "") {
 
 function normalizeStateName(value = "") {
   const raw = String(value || "").trim().toUpperCase();
+
   const map = {
-    AL: "Alabama",
-    AK: "Alaska",
-    AZ: "Arizona",
-    AR: "Arkansas",
-    CA: "California",
-    CO: "Colorado",
-    CT: "Connecticut",
-    DE: "Delaware",
-    FL: "Florida",
-    GA: "Georgia",
-    HI: "Hawaii",
-    ID: "Idaho",
-    IL: "Illinois",
-    IN: "Indiana",
-    IA: "Iowa",
-    KS: "Kansas",
-    KY: "Kentucky",
-    LA: "Louisiana",
-    ME: "Maine",
-    MD: "Maryland",
-    MA: "Massachusetts",
-    MI: "Michigan",
-    MN: "Minnesota",
-    MS: "Mississippi",
-    MO: "Missouri",
-    MT: "Montana",
-    NE: "Nebraska",
-    NV: "Nevada",
-    NH: "New Hampshire",
-    NJ: "New Jersey",
-    NM: "New Mexico",
-    NY: "New York",
-    NC: "North Carolina",
-    ND: "North Dakota",
-    OH: "Ohio",
-    OK: "Oklahoma",
-    OR: "Oregon",
-    PA: "Pennsylvania",
-    RI: "Rhode Island",
-    SC: "South Carolina",
-    SD: "South Dakota",
-    TN: "Tennessee",
-    TX: "Texas",
-    UT: "Utah",
-    VT: "Vermont",
-    VA: "Virginia",
-    WA: "Washington",
-    WV: "West Virginia",
-    WI: "Wisconsin",
-    WY: "Wyoming",
-    DC: "District of Columbia"
+    AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+    CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida",
+    GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana",
+    IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine",
+    MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
+    MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska",
+    NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico",
+    NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+    OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island",
+    SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas",
+    UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+    WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia"
   };
 
   return map[raw] || value || "";
@@ -69,70 +31,32 @@ function stateCode(value = "") {
   if (raw.length === 2) return raw.toUpperCase();
 
   const reverse = {
-    Alabama: "AL",
-    Alaska: "AK",
-    Arizona: "AZ",
-    Arkansas: "AR",
-    California: "CA",
-    Colorado: "CO",
-    Connecticut: "CT",
-    Delaware: "DE",
-    Florida: "FL",
-    Georgia: "GA",
-    Hawaii: "HI",
-    Idaho: "ID",
-    Illinois: "IL",
-    Indiana: "IN",
-    Iowa: "IA",
-    Kansas: "KS",
-    Kentucky: "KY",
-    Louisiana: "LA",
-    Maine: "ME",
-    Maryland: "MD",
-    Massachusetts: "MA",
-    Michigan: "MI",
-    Minnesota: "MN",
-    Mississippi: "MS",
-    Missouri: "MO",
-    Montana: "MT",
-    Nebraska: "NE",
-    Nevada: "NV",
-    "New Hampshire": "NH",
-    "New Jersey": "NJ",
-    "New Mexico": "NM",
-    "New York": "NY",
-    "North Carolina": "NC",
-    "North Dakota": "ND",
-    Ohio: "OH",
-    Oklahoma: "OK",
-    Oregon: "OR",
-    Pennsylvania: "PA",
-    "Rhode Island": "RI",
-    "South Carolina": "SC",
-    "South Dakota": "SD",
-    Tennessee: "TN",
-    Texas: "TX",
-    Utah: "UT",
-    Vermont: "VT",
-    Virginia: "VA",
-    Washington: "WA",
-    "West Virginia": "WV",
-    Wisconsin: "WI",
-    Wyoming: "WY",
-    "District of Columbia": "DC"
+    Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
+    Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL",
+    Georgia: "GA", Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN",
+    Iowa: "IA", Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME",
+    Maryland: "MD", Massachusetts: "MA", Michigan: "MI", Minnesota: "MN",
+    Mississippi: "MS", Missouri: "MO", Montana: "MT", Nebraska: "NE",
+    Nevada: "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+    "New Mexico": "NM", "New York": "NY", "North Carolina": "NC",
+    "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK", Oregon: "OR",
+    Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC",
+    "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT",
+    Vermont: "VT", Virginia: "VA", Washington: "WA", "West Virginia": "WV",
+    Wisconsin: "WI", Wyoming: "WY", "District of Columbia": "DC"
   };
 
   return reverse[raw] || raw;
 }
 
 function buildNewsQuery(row) {
-  const bits = [
+  return [
     normalizeText(row.candidate),
     normalizeText(row.office),
     normalizeText(stateCode(row.state))
-  ].filter(Boolean);
-
-  return bits.join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function extractItems(payload) {
@@ -212,44 +136,44 @@ export async function ensureNewsSignalsTable() {
 
 export async function getNewsIngestionTargets(limit = 8) {
   const query = `
-    with vendor_counts as (
-      select upper(state) as state_code, count(*)::int as vendor_count
-      from vendors
-      where state is not null and state <> ''
-      group by upper(state)
+    WITH vendor_counts AS (
+      SELECT upper(state) AS state_code, count(*)::int AS vendor_count
+      FROM vendors
+      WHERE state IS NOT NULL AND state <> ''
+      GROUP BY upper(state)
     ),
-    finance as (
-      select
+    finance AS (
+      SELECT
         candidate_id,
-        coalesce(receipts, 0) as receipts,
-        coalesce(cash_on_hand, 0) as cash_on_hand
-      from fundraising_live
+        coalesce(receipts, 0) AS receipts,
+        coalesce(cash_on_hand, 0) AS cash_on_hand
+      FROM fundraising_live
     )
-    select
+    SELECT
       c.id,
       c.external_id,
-      c.full_name as candidate,
+      c.full_name AS candidate,
       c.state,
       c.office,
       c.party,
-      coalesce(f.receipts, 0) as receipts,
-      coalesce(v.vendor_count, 0) as vendor_count
-    from candidates c
-    left join finance f
-      on f.candidate_id = c.external_id
-    left join vendor_counts v
-      on v.state_code = upper(c.state)
-    where c.state is not null
-      and c.state <> ''
-      and c.office is not null
-      and c.office <> ''
-      and c.office in ('Senate', 'House', 'Governor', 'President')
-    order by
-      coalesce(f.receipts, 0) desc,
-      c.state asc,
-      c.office asc,
-      c.full_name asc
-    limit $1
+      coalesce(f.receipts, 0) AS receipts,
+      coalesce(v.vendor_count, 0) AS vendor_count
+    FROM candidates c
+    LEFT JOIN finance f
+      ON f.candidate_id = c.external_id
+    LEFT JOIN vendor_counts v
+      ON v.state_code = upper(c.state)
+    WHERE c.state IS NOT NULL
+      AND c.state <> ''
+      AND c.office IS NOT NULL
+      AND c.office <> ''
+      AND c.office IN ('Senate', 'House', 'Governor', 'President')
+    ORDER BY
+      coalesce(f.receipts, 0) DESC,
+      c.state ASC,
+      c.office ASC,
+      c.full_name ASC
+    LIMIT $1
   `;
 
   const { rows } = await pool.query(query, [limit]);
@@ -267,6 +191,7 @@ export async function getNewsIngestionTargets(limit = 8) {
 
 export async function fetchBraveNewsForQuery(query, count = 5) {
   const apiKey = normalizeText(process.env.BRAVE_SEARCH_API_KEY || "");
+
   if (!apiKey) {
     throw new Error("Missing BRAVE_SEARCH_API_KEY");
   }
@@ -306,11 +231,11 @@ export async function upsertNewsSignal({
 }) {
   const existing = await pool.query(
     `
-      select id
-      from news_signals
-      where coalesce(source, '') = coalesce($1, '')
-        and coalesce(external_id, '') = coalesce($2, '')
-      limit 1
+      SELECT id
+      FROM news_signals
+      WHERE coalesce(source, '') = coalesce($1, '')
+        AND coalesce(external_id, '') = coalesce($2, '')
+      LIMIT 1
     `,
     [source, external_id]
   );
@@ -333,8 +258,8 @@ export async function upsertNewsSignal({
   if (existing.rows.length) {
     await pool.query(
       `
-        update news_signals
-        set
+        UPDATE news_signals
+        SET
           title = $3,
           url = $4,
           description = $5,
@@ -345,18 +270,19 @@ export async function upsertNewsSignal({
           candidate_id = $10,
           query = $11,
           raw_payload = $12::jsonb,
-          updated_at = now()
-        where coalesce(source, '') = coalesce($1, '')
-          and coalesce(external_id, '') = coalesce($2, '')
+          updated_at = NOW()
+        WHERE coalesce(source, '') = coalesce($1, '')
+          AND coalesce(external_id, '') = coalesce($2, '')
       `,
       params
     );
+
     return "updated";
   }
 
   await pool.query(
     `
-      insert into news_signals (
+      INSERT INTO news_signals (
         source,
         external_id,
         title,
@@ -372,8 +298,8 @@ export async function upsertNewsSignal({
         created_at,
         updated_at
       )
-      values (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,now(),now()
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,NOW(),NOW()
       )
     `,
     params
@@ -437,7 +363,7 @@ export async function getRecentNewsSignals(limit = 10) {
 
   const result = await pool.query(
     `
-      select
+      SELECT
         id,
         source,
         external_id,
@@ -453,49 +379,12 @@ export async function getRecentNewsSignals(limit = 10) {
         raw_payload,
         created_at,
         updated_at
-      from news_signals
-      order by coalesce(published_at, updated_at, created_at) desc, id desc
-      limit $1
+      FROM news_signals
+      ORDER BY coalesce(published_at, updated_at, created_at) DESC, id DESC
+      LIMIT $1
     `,
     [limit]
   );
-
-  export async function getNarrativeDashboard({ firmId }) {
-  await ensurePoliticalSignalsTable();
-
-  const { rows } = await pool.query(
-    `
-      SELECT *
-      FROM political_signals
-      WHERE firm_id = $1
-        AND signal_type = 'news'
-      ORDER BY observed_at DESC NULLS LAST, created_at DESC NULLS LAST
-      LIMIT 250
-    `,
-    [firmId]
-  );
-
-  const negative = rows.filter((row) => row.metadata?.narrative_direction === "negative");
-  const positive = rows.filter((row) => row.metadata?.narrative_direction === "positive");
-
-  const avg = rows.length
-    ? Math.round(rows.reduce((sum, row) => sum + Number(row.signal_score || 0), 0) / rows.length)
-    : 0;
-
-  return {
-    summary: {
-      total: rows.length,
-      negative: negative.length,
-      positive: positive.length,
-      critical: rows.filter((row) => row.risk === "Critical").length,
-      high: rows.filter((row) => row.risk === "High").length,
-      average_score: avg,
-      risk: avg >= 82 ? "Critical" : avg >= 65 ? "High" : avg >= 42 ? "Elevated" : "Stable",
-    },
-    signals: rows,
-    updated_at: new Date().toISOString(),
-  };
-}
 
   return result.rows || [];
 }
