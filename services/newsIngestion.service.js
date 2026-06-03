@@ -460,5 +460,42 @@ export async function getRecentNewsSignals(limit = 10) {
     [limit]
   );
 
+  export async function getNarrativeDashboard({ firmId }) {
+  await ensurePoliticalSignalsTable();
+
+  const { rows } = await pool.query(
+    `
+      SELECT *
+      FROM political_signals
+      WHERE firm_id = $1
+        AND signal_type = 'news'
+      ORDER BY observed_at DESC NULLS LAST, created_at DESC NULLS LAST
+      LIMIT 250
+    `,
+    [firmId]
+  );
+
+  const negative = rows.filter((row) => row.metadata?.narrative_direction === "negative");
+  const positive = rows.filter((row) => row.metadata?.narrative_direction === "positive");
+
+  const avg = rows.length
+    ? Math.round(rows.reduce((sum, row) => sum + Number(row.signal_score || 0), 0) / rows.length)
+    : 0;
+
+  return {
+    summary: {
+      total: rows.length,
+      negative: negative.length,
+      positive: positive.length,
+      critical: rows.filter((row) => row.risk === "Critical").length,
+      high: rows.filter((row) => row.risk === "High").length,
+      average_score: avg,
+      risk: avg >= 82 ? "Critical" : avg >= 65 ? "High" : avg >= 42 ? "Elevated" : "Stable",
+    },
+    signals: rows,
+    updated_at: new Date().toISOString(),
+  };
+}
+
   return result.rows || [];
 }
