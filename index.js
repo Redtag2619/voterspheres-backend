@@ -64,6 +64,7 @@ import { initSocket } from "./lib/socket.js";
 import { publishEvent } from "./lib/intelligence.events.js";
 import { handleStripeWebhook } from "./services/billing.service.js";
 import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
+import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.routes.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -220,6 +221,7 @@ app.use("/api/realtime-tactical", realtimeTacticalRoutes);
 app.use("/api/workspace-operating-room", workspaceOperatingRoomRoutes);
 app.use("/api/ai-tactical", aiTacticalIntelligenceRoutes);
 app.use("/api/political-signals", livePoliticalSignalsRoutes);
+app.use("/api/signal-workspace-matching", signalWorkspaceMatchingRoutes);
 app.use("/api/news-narrative", newsNarrativeRoutes);
 app.use("/api/ai-tactical/actions", aiTacticalActionsRoutes);
 
