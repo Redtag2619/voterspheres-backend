@@ -57,6 +57,7 @@ import workspaceOperatingRoomRoutes from "./routes/workspaceOperatingRoom.routes
 import aiTacticalIntelligenceRoutes from "./routes/aiTacticalIntelligence.routes.js";
 import livePoliticalSignalsRoutes from "./routes/livePoliticalSignals.routes.js";
 import newsNarrativeRoutes from "./routes/newsNarrative.routes.js";
+import aiTacticalActionsRoutes from "./routes/aiTacticalActions.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -220,6 +221,7 @@ app.use("/api/workspace-operating-room", workspaceOperatingRoomRoutes);
 app.use("/api/ai-tactical", aiTacticalIntelligenceRoutes);
 app.use("/api/political-signals", livePoliticalSignalsRoutes);
 app.use("/api/news-narrative", newsNarrativeRoutes);
+app.use("/api/ai-tactical/actions", aiTacticalActionsRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
