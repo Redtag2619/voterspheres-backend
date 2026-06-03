@@ -61,6 +61,7 @@ import newsNarrativeRoutes from "./routes/newsNarrative.routes.js";
 import aiTacticalActionsRoutes from "./routes/aiTacticalActions.routes.js";
 import narrativeRapidResponseRoutes from "./routes/narrativeRapidResponse.routes.js";
 import taskOwnershipRoutes from "./routes/taskOwnership.routes.js";
+import executiveMapSignalOverlayRoutes from "./routes/executiveMapSignalOverlay.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -229,6 +230,7 @@ app.use("/api/signal-workspace-matching", signalWorkspaceMatchingRoutes);
 app.use("/api/news-narrative", newsNarrativeRoutes);
 app.use("/api/ai-tactical/actions", aiTacticalActionsRoutes);
 app.use("/api/narrative-rapid-response", narrativeRapidResponseRoutes);
+app.use("/api/executive-map-signal-overlay", executiveMapSignalOverlayRoutes);
 app.use("/api/task-ownership", taskOwnershipRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
