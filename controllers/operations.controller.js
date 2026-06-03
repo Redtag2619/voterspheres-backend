@@ -86,24 +86,13 @@ async function buildScoredState(stateRow, liveSignals) {
     Number(heatSummary.average_heat_score || 0) + battlegroundBoost
   );
 
-  if (activeTaskCount > 0) {
-    stateHeat = Math.max(stateHeat, 72);
-  }
-
-  if (urgentCountyCount >= 3) {
-    stateHeat = Math.max(stateHeat, 68);
-  }
-
-  if (maxCountyHeat >= 82) {
-    stateHeat = Math.max(stateHeat, 82);
-  } else if (maxCountyHeat >= 65) {
-    stateHeat = Math.max(stateHeat, 66);
-  } else if (maxCountyHeat >= 42) {
-    stateHeat = Math.max(stateHeat, 44);
-  }
+  if (activeTaskCount > 0) stateHeat = Math.max(stateHeat, 72);
+  if (urgentCountyCount >= 3) stateHeat = Math.max(stateHeat, 68);
+  if (maxCountyHeat >= 82) stateHeat = Math.max(stateHeat, 82);
+  else if (maxCountyHeat >= 65) stateHeat = Math.max(stateHeat, 66);
+  else if (maxCountyHeat >= 42) stateHeat = Math.max(stateHeat, 44);
 
   stateHeat = Number(Math.min(100, Math.max(0, stateHeat)).toFixed(2));
-
   const stateRisk = riskFromHeat(stateHeat);
 
   return {
@@ -112,27 +101,22 @@ async function buildScoredState(stateRow, liveSignals) {
     state_name: stateRow.state_name,
     locality_count: Number(stateRow.locality_count || 0),
     counties_tracked: Number(stateRow.locality_count || 0),
-
     pressure: stateHeat,
     heat_score: stateHeat,
     risk: stateRisk,
-
     average_heat_score: heatSummary.average_heat_score || heatSummary.heat_score || 0,
     max_county_heat_score: Number(maxCountyHeat.toFixed(2)),
     data_coverage_score: heatSummary.data_coverage_score || 0,
     data_coverage_label: heatSummary.data_coverage_label || "Sparse Live",
-
     critical_counties: heatSummary.critical_counties,
     high_counties: heatSummary.high_counties,
     elevated_counties: heatSummary.elevated_counties,
     stable_counties: heatSummary.stable_counties,
-
     active_task_count: activeTaskCount,
     resolved_task_count: heatSummary.resolved_task_count || 0,
     vendor_gap_count: heatSummary.vendor_gap_count,
     total_mail_jobs: heatSummary.total_mail_jobs,
     total_alerts: heatSummary.total_alerts,
-
     counties,
   };
 }
@@ -310,7 +294,6 @@ export async function getOperationsMap(req, res) {
     for (const row of rows) {
       const scored = await buildScoredState(row, liveSignals);
       const { counties, ...stateSummary } = scored;
-
       states.push(stateSummary);
 
       for (const county of counties) {
@@ -340,18 +323,18 @@ export async function getOperationsMap(req, res) {
       }
     }
 
-    const topHeatCounties = allCounties
-      .sort((a, b) => Number(b.heat_score || 0) - Number(a.heat_score || 0))
-      .slice(0, 25);
+    const sortedCounties = [...allCounties].sort(
+      (a, b) => Number(b.heat_score || 0) - Number(a.heat_score || 0)
+    );
 
-    const activeEscalations = allCounties
+    const topHeatCounties = sortedCounties.slice(0, 25);
+
+    const activeEscalations = sortedCounties
       .filter((county) => county.task_active)
-      .sort((a, b) => Number(b.heat_score || 0) - Number(a.heat_score || 0))
       .slice(0, 30);
 
-    const resolvedEscalations = allCounties
+    const resolvedEscalations = sortedCounties
       .filter((county) => county.task_resolved)
-      .sort((a, b) => Number(b.heat_score || 0) - Number(a.heat_score || 0))
       .slice(0, 30);
 
     const tacticalFeed = [
