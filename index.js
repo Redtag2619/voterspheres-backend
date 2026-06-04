@@ -63,6 +63,7 @@ import narrativeRapidResponseRoutes from "./routes/narrativeRapidResponse.routes
 import taskOwnershipRoutes from "./routes/taskOwnership.routes.js";
 import executiveMapSignalOverlayRoutes from "./routes/executiveMapSignalOverlay.routes.js";
 import campaignWorkspaceCrmRoutes from "./routes/campaignWorkspaceCrm.routes.js";
+import executiveMissionControlRoutes from "./routes/executiveMissionControl.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -234,6 +235,7 @@ app.use("/api/narrative-rapid-response", narrativeRapidResponseRoutes);
 app.use("/api/executive-map-signal-overlay", executiveMapSignalOverlayRoutes);
 app.use("/api/task-ownership", taskOwnershipRoutes);
 app.use("/api/campaign-crm", campaignWorkspaceCrmRoutes);
+app.use("/api/executive-mission-control", executiveMissionControlRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
