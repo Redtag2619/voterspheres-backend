@@ -126,10 +126,16 @@ export async function getExecutiveMissionControl({ user = {} }) {
   );
 
   const criticalSignals = signals.filter((signal) => {
-    const risk = String(signal.risk || signal.severity || "").toLowerCase();
-    const score = Number(signal.signal_score || 0);
-    return risk === "critical" || risk === "high" || score >= 65;
-  });
+  const risk = String(signal.risk || signal.severity || "").toLowerCase();
+  const score = Number(signal.signal_score || 0);
+
+  return (
+    risk === "critical" ||
+    risk === "high" ||
+    risk === "elevated" ||
+    score >= 30
+  );
+});
 
   const openResponses = rapidResponses.filter(
     (item) =>
@@ -159,7 +165,7 @@ export async function getExecutiveMissionControl({ user = {} }) {
       type: "Political Signal",
       title: signal.title || "Political signal",
       description: signal.summary || signal.source || "Review political signal.",
-      priority: signal.risk || signal.severity || riskTone(signal.signal_score || 0),
+      priority: signal.risk && signal.risk !== "Stable" ? signal.risk: Number(signal.signal_score || 0) >= 30? "Elevated": riskTone(signal.signal_score || 0),
       state: signal.state || "National",
       source: signal.source || signal.signal_type || "Signal Engine",
       action: "Review signal and assign response.",
