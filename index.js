@@ -72,6 +72,7 @@ import { publishEvent } from "./lib/intelligence.events.js";
 import { handleStripeWebhook } from "./services/billing.service.js";
 import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.routes.js";
+import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -237,6 +238,7 @@ app.use("/api/executive-map-signal-overlay", executiveMapSignalOverlayRoutes);
 app.use("/api/task-ownership", taskOwnershipRoutes);
 app.use("/api/campaign-crm", campaignWorkspaceCrmRoutes);
 app.use("/api/executive-mission-control", executiveMissionControlRoutes);
+app.use("/api/intelligence-reports", intelligenceReportsRoutes);
 app.use("/api/ai-strategic-advisor", aiStrategicAdvisorRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
