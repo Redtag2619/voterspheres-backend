@@ -65,6 +65,7 @@ import executiveMapSignalOverlayRoutes from "./routes/executiveMapSignalOverlay.
 import campaignWorkspaceCrmRoutes from "./routes/campaignWorkspaceCrm.routes.js";
 import executiveMissionControlRoutes from "./routes/executiveMissionControl.routes.js";
 import aiStrategicAdvisorRoutes from "./routes/aiStrategicAdvisor.routes.js";
+import electionWarRoomRoutes from "./routes/electionWarRoom.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
 import { initSocket } from "./lib/socket.js";
@@ -240,6 +241,7 @@ app.use("/api/campaign-crm", campaignWorkspaceCrmRoutes);
 app.use("/api/executive-mission-control", executiveMissionControlRoutes);
 app.use("/api/intelligence-reports", intelligenceReportsRoutes);
 app.use("/api/ai-strategic-advisor", aiStrategicAdvisorRoutes);
+app.use("/api/election-war-room", electionWarRoomRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
