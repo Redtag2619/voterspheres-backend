@@ -77,6 +77,7 @@ import { publishEvent } from "./lib/intelligence.events.js";
 import { handleStripeWebhook } from "./services/billing.service.js";
 import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.routes.js";
+import consultantBusinessSuiteRoutes from "./routes/consultantBusinessSuite.routes.js";
 import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
@@ -249,6 +250,7 @@ app.use("/api/election-war-room", electionWarRoomRoutes);
 app.use("/api/client-portal", clientPortalRoutes);
 app.use("/api/report-exports", reportExportRoutes);
 app.use("/api/national-election-command-center", nationalElectionCommandCenterRoutes);
+app.use("/api/consultant-business-suite", consultantBusinessSuiteRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
