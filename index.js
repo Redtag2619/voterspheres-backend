@@ -72,6 +72,7 @@ import nationalElectionCommandCenterRoutes from "./routes/nationalElectionComman
 import executiveRevenueRoutes from "./routes/executiveRevenue.routes.js";
 import politicalIntelligenceRoutes from "./routes/politicalIntelligence.routes.js";
 import notificationCenterRoutes from "./routes/notificationCenter.routes.js";
+import executiveWorkspaceRoutes from "./routes/executiveWorkspace.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -257,6 +258,7 @@ app.use("/api/consultant-business-suite", consultantBusinessSuiteRoutes);
 app.use("/api/executive-revenue", executiveRevenueRoutes);
 app.use("/api/political-intelligence", politicalIntelligenceRoutes);
 app.use("/api/notifications", notificationCenterRoutes);
+app.use("/api/executive-workspace", executiveWorkspaceRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
