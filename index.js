@@ -82,6 +82,7 @@ import { handleStripeWebhook } from "./services/billing.service.js";
 import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.service.js";
 import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.routes.js";
 import consultantBusinessSuiteRoutes from "./routes/consultantBusinessSuite.routes.js";
+import universalSearchRoutes from "./routes/universalSearch.routes.js";
 import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
@@ -259,6 +260,7 @@ app.use("/api/executive-revenue", executiveRevenueRoutes);
 app.use("/api/political-intelligence", politicalIntelligenceRoutes);
 app.use("/api/notifications", notificationCenterRoutes);
 app.use("/api/executive-workspace", executiveWorkspaceRoutes);
+app.use("/api/search", universalSearchRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
