@@ -84,6 +84,7 @@ import { runLiveIntelligenceRefresh } from "./services/intelligenceRefresh.servi
 import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.routes.js";
 import consultantBusinessSuiteRoutes from "./routes/consultantBusinessSuite.routes.js";
 import universalSearchRoutes from "./routes/universalSearch.routes.js";
+import opportunityEngineRoutes from "./routes/opportunityEngine.routes.js";
 import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
@@ -263,6 +264,7 @@ app.use("/api/notifications", notificationCenterRoutes);
 app.use("/api/executive-workspace", executiveWorkspaceRoutes);
 app.use("/api/search", universalSearchRoutes);
 app.use("/api/live-intelligence-layer", liveIntelligenceLayerRoutes);
+app.use("/api/opportunity-engine", opportunityEngineRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
