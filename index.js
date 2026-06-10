@@ -75,6 +75,7 @@ import notificationCenterRoutes from "./routes/notificationCenter.routes.js";
 import executiveWorkspaceRoutes from "./routes/executiveWorkspace.routes.js";
 import liveIntelligenceLayerRoutes from "./routes/liveIntelligenceLayer.routes.js";
 import productionHardeningRoutes from "./routes/productionHardening.routes.js";
+import executiveKpiRoutes from "./routes/executiveKpi.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -266,6 +267,7 @@ app.use("/api/executive-workspace", executiveWorkspaceRoutes);
 app.use("/api/search", universalSearchRoutes);
 app.use("/api/live-intelligence-layer", liveIntelligenceLayerRoutes);
 app.use("/api/opportunity-engine", opportunityEngineRoutes);
+app.use("/api/executive-kpis", executiveKpiRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
