@@ -74,6 +74,7 @@ import politicalIntelligenceRoutes from "./routes/politicalIntelligence.routes.j
 import notificationCenterRoutes from "./routes/notificationCenter.routes.js";
 import executiveWorkspaceRoutes from "./routes/executiveWorkspace.routes.js";
 import liveIntelligenceLayerRoutes from "./routes/liveIntelligenceLayer.routes.js";
+import productionHardeningRoutes from "./routes/productionHardening.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -270,6 +271,7 @@ app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
 app.use("/api/firm-users", requireAuth, firmUsersRoutes);
 app.use("/api/firm-invites", requireAuth, firmInvitesRoutes);
+app.use("/api/production-hardening", productionHardeningRoutes);
 app.use("/api/enterprise-leads-admin", requireAuth, enterpriseLeadsAdminRoutes);
 
 app.post("/api/live/test/forecast", requireAuth, (req, res) => {
