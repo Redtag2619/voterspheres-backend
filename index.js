@@ -80,6 +80,7 @@ import launchQaRoutes from "./routes/launchQa.routes.js";
 import launchReadinessRoutes from "./routes/launchReadiness.routes.js";
 import databaseStabilityRoutes from "./routes/databaseStability.routes.js";
 import revenuePipelineRoutes from "./routes/revenuePipeline.routes.js";
+import launchAssetsRoutes from "./routes/launchAssets.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -276,6 +277,7 @@ app.use("/api/launch-qa", launchQaRoutes);
 app.use("/api/launch-readiness", launchReadinessRoutes);
 app.use("/api/database-stability", databaseStabilityRoutes);
 app.use("/api/revenue-pipeline", revenuePipelineRoutes);
+app.use("/api/launch-assets", launchAssetsRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
