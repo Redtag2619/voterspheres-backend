@@ -77,6 +77,7 @@ import liveIntelligenceLayerRoutes from "./routes/liveIntelligenceLayer.routes.j
 import productionHardeningRoutes from "./routes/productionHardening.routes.js";
 import executiveKpiRoutes from "./routes/executiveKpi.routes.js";
 import launchQaRoutes from "./routes/launchQa.routes.js";
+import launchReadinessRoutes from "./routes/launchReadiness.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -270,6 +271,7 @@ app.use("/api/live-intelligence-layer", liveIntelligenceLayerRoutes);
 app.use("/api/opportunity-engine", opportunityEngineRoutes);
 app.use("/api/executive-kpis", executiveKpiRoutes);
 app.use("/api/launch-qa", launchQaRoutes);
+app.use("/api/launch-readiness", launchReadinessRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
