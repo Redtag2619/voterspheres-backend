@@ -49,13 +49,13 @@ async function ensureRefreshTables() {
 
 const FEEDS = [
   {
-    key: "fec_candidates",
-    label: "FEC Candidate Feed",
-    table: "fec_candidates",
-    route: "/fundraising",
-    firmScoped: false,
-    minCount: 100,
-  },
+  key: "fundraising_live",
+  label: "FEC Finance Feed",
+  table: "fundraising_live",
+  route: "/fundraising",
+  firmScoped: false,
+  minCount: 250,
+},
   {
     key: "political_signals",
     label: "Political Signals",
