@@ -83,6 +83,7 @@ import revenuePipelineRoutes from "./routes/revenuePipeline.routes.js";
 import launchAssetsRoutes from "./routes/launchAssets.routes.js";
 import betaOnboardingRoutes from "./routes/betaOnboarding.routes.js";
 import launchDataSeederRoutes from "./routes/launchDataSeeder.routes.js";
+import liveDataRefreshRoutes from "./routes/liveDataRefresh.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -282,6 +283,7 @@ app.use("/api/revenue-pipeline", revenuePipelineRoutes);
 app.use("/api/launch-assets", launchAssetsRoutes);
 app.use("/api/beta-onboarding", betaOnboardingRoutes);
 app.use("/api/launch-data-seeder", launchDataSeederRoutes);
+app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
