@@ -59,7 +59,7 @@ async function safeQuery(sql, params = []) {
   }
 }
 
-export async function getLiveFundraising(limit = 25) {
+export async function getLiveFundraising(limit = 250) {
   return safeQuery(
     `
       SELECT
@@ -79,7 +79,7 @@ export async function getLiveFundraising(limit = 25) {
   );
 }
 
-export async function getFundraisingLeaderboard(limit = 25) {
+export async function getFundraisingLeaderboard(limit = 250) {
   const rows = await getLiveFundraising(limit);
 
   const leaderboard = rows.map((row, index) => ({
@@ -328,7 +328,7 @@ export async function getBattlegroundDashboardData() {
 
 export async function getIntelligenceSummary() {
   const [fundraisingPayload, feed, vendors, consultants, donors, mailops, map] = await Promise.all([
-    getFundraisingLeaderboard(25),
+    getFundraisingLeaderboard(250),
     getExecutiveFeedEvents(25),
     getVendorSignals(25),
     getConsultantSignals(25),
@@ -365,7 +365,7 @@ export async function getIntelligenceDashboard() {
   ] = await Promise.all([
     getIntelligenceSummary(),
     getBattlegroundDashboardData(),
-    getFundraisingLeaderboard(8),
+    getFundraisingLeaderboard(25),
     getExecutiveFeedEvents(12),
     getVendorSignals(8),
     getDonorSignals(8),
