@@ -62,10 +62,12 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     FROM candidates
   `);
 
-  const fecCandidates = await safeQuery(`
-    SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
-    FROM fec_candidates
-  `);
+  const fecFinance = await safeQuery(`
+  SELECT
+    COUNT(*)::int AS count,
+    MAX(COALESCE(source_updated_at, updated_at, created_at)) AS last_seen
+  FROM fundraising_live
+`);
 
   const signals = firmId
     ? await safeQuery(
@@ -166,11 +168,11 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
       owner: "Data",
     }),
     buildFeedStatus({
-      key: "fec_candidates",
-      label: "FEC Candidate Feed",
-      description: "FEC candidate ingestion layer used for candidate and fundraising intelligence.",
-      count: fecCandidates[0]?.count,
-      lastSeen: fecCandidates[0]?.last_seen,
+      key: "fundraising_live",
+      label: "FEC Finance Feed",
+      description: "Live FEC fundraising layer powering finance leaders, fundraising dashboard, and campaign money intelligence.",
+      count: fecFinance[0]?.count,
+      lastSeen: fecFinance[0]?.last_seen,
       route: "/fundraising",
       owner: "Data",
     }),
