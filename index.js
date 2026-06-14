@@ -285,7 +285,7 @@ app.use("/api/revenue-pipeline", revenuePipelineRoutes);
 app.use("/api/launch-assets", launchAssetsRoutes);
 app.use("/api/beta-onboarding", betaOnboardingRoutes);
 app.use("/api/launch-data-seeder", launchDataSeederRoutes);
-app.use("/api/launch-automation", launchAutomationRoutes);
+app.use("/api/launch-automation", launchAutomationRoutes); 
 app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/workspace-activity", workspaceActivityRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
