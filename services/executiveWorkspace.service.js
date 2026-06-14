@@ -252,6 +252,28 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
     )
   );
 
+  const workspaceActivityCount =
+     tasks.length +
+     contacts.length +
+     activities.length +
+     reports.length +
+     vendors.length +
+     clients.length +
+     invoices.length;
+
+const workspaceReadinessScore = Math.min(
+  100,
+  Math.round(
+    (workspaces.length > 0 ? 15 : 0) +
+      (tasks.length >= 10 ? 15 : tasks.length * 1.5) +
+      (contacts.length >= 10 ? 15 : contacts.length * 1.5) +
+      (reports.length >= 3 ? 15 : reports.length * 5) +
+      (clients.length >= 5 ? 15 : clients.length * 3) +
+      (vendors.length >= 10 ? 10 : vendors.length) +
+      (workspaceActivityCount >= 30 ? 15 : workspaceActivityCount * 0.5)
+  )
+);
+
   const executiveActions = [
     ...criticalSignals.slice(0, 3).map((s) => ({
       id: `signal-${s.id}`,
@@ -308,6 +330,8 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
     })),
     summary: {
       pressure_score: pressureScore,
+      workspace_readiness_score: workspaceReadinessScore,
+      workspace_activity_count: workspaceActivityCount,
       pressure_status: pressureScore >= 70 ? "Critical" : pressureScore >= 40 ? "Watch" : "Stable",
       open_tasks: openTasks.length,
       critical_signals: criticalSignals.length,
