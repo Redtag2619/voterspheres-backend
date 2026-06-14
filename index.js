@@ -84,6 +84,7 @@ import launchAssetsRoutes from "./routes/launchAssets.routes.js";
 import betaOnboardingRoutes from "./routes/betaOnboarding.routes.js";
 import launchDataSeederRoutes from "./routes/launchDataSeeder.routes.js";
 import liveDataRefreshRoutes from "./routes/liveDataRefresh.routes.js";
+import launchAutomationRoutes from "./routes/launchAutomation.routes.js";
 import workspaceActivityRoutes from "./routes/workspaceActivity.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
@@ -284,6 +285,7 @@ app.use("/api/revenue-pipeline", revenuePipelineRoutes);
 app.use("/api/launch-assets", launchAssetsRoutes);
 app.use("/api/beta-onboarding", betaOnboardingRoutes);
 app.use("/api/launch-data-seeder", launchDataSeederRoutes);
+app.use("/api/launch-automation", launchAutomationRoutes);
 app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/workspace-activity", workspaceActivityRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
