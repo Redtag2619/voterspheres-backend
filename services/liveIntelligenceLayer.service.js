@@ -58,128 +58,122 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
   const firmId = getFirmId(user);
 
   const candidates = await safeQuery(`
-    SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
     FROM candidates
   `);
 
-  const fecFinance = await safeQuery(`
-  SELECT
-    COUNT(*)::int AS count,
-    MAX(COALESCE(source_updated_at, updated_at, created_at)) AS last_seen
-  FROM fundraising_live
-`);
+  const fundraisingLive = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(source_updated_at, updated_at, created_at)) AS last_seen
+    FROM fundraising_live
+  `);
 
-  const signals = firmId
-    ? await safeQuery(
-        `
-          SELECT COUNT(*)::int AS count, MAX(created_at) AS last_seen
-          FROM political_signals
-          WHERE firm_id = $1
-        `,
-        [firmId]
-      )
-    : [];
+  const fecCandidates = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+    FROM fec_candidates
+  `);
 
-  const vendors = firmId
-    ? await safeQuery(
-        `
-          SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
-          FROM vendors
-          WHERE firm_id = $1
-        `,
-        [firmId]
-      )
-    : [];
+  const signals = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+    FROM political_signals
+  `);
+
+  const vendors = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, last_imported_at, created_at)) AS last_seen
+    FROM vendors
+  `);
 
   const tasks = firmId
     ? await safeQuery(
         `
-          SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
+          SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
           FROM tasks
           WHERE firm_id = $1
         `,
         [firmId]
       )
-    : [];
+    : await safeQuery(`
+        SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+        FROM tasks
+      `);
 
   const workspaces = firmId
     ? await safeQuery(
         `
-          SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
+          SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
           FROM workspaces
           WHERE firm_id = $1
         `,
         [firmId]
       )
-    : [];
+    : await safeQuery(`
+        SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+        FROM workspaces
+      `);
 
   const crmContacts = firmId
     ? await safeQuery(
         `
-          SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
+          SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
           FROM campaign_crm_contacts
           WHERE firm_id = $1
         `,
         [firmId]
       )
-    : [];
+    : await safeQuery(`
+        SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+        FROM campaign_crm_contacts
+      `);
 
-  const reports = firmId
-    ? await safeQuery(
-        `
-          SELECT COUNT(*)::int AS count, MAX(created_at) AS last_seen
-          FROM intelligence_reports
-          WHERE firm_id = $1
-        `,
-        [firmId]
-      )
-    : [];
+  const reports = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+    FROM intelligence_reports
+  `);
 
-  const notifications = firmId
-    ? await safeQuery(
-        `
-          SELECT COUNT(*)::int AS count, MAX(created_at) AS last_seen
-          FROM notification_events
-          WHERE firm_id = $1
-        `,
-        [firmId]
-      )
-    : [];
+  const notifications = await safeQuery(`
+    SELECT COUNT(*)::int AS count, MAX(COALESCE(created_at, updated_at)) AS last_seen
+    FROM notification_events
+  `);
 
   const clients = firmId
     ? await safeQuery(
         `
-          SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen
+          SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
           FROM consultant_clients
           WHERE firm_id = $1
         `,
         [firmId]
       )
-    : [];
+    : await safeQuery(`
+        SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
+        FROM consultant_clients
+      `);
 
   const feeds = [
     buildFeedStatus({
       key: "candidates",
       label: "Candidate Intelligence",
-      description: "Candidate records, profiles, offices, states, party, election cycle, and enrichment status.",
+      description:
+        "Candidate records, profiles, offices, states, party, election cycle, and enrichment status.",
       count: candidates[0]?.count,
       lastSeen: candidates[0]?.last_seen,
       route: "/candidates",
       owner: "Data",
     }),
     buildFeedStatus({
-      key: "fundraising_live",
+      key: "fec_finance",
       label: "FEC Finance Feed",
-      description: "Live FEC fundraising layer powering finance leaders, fundraising dashboard, and campaign money intelligence.",
-      count: fecFinance[0]?.count,
-      lastSeen: fecFinance[0]?.last_seen,
+      description:
+        "Live FEC fundraising layer powering finance leaders, fundraising dashboard, and campaign money intelligence.",
+      count: fundraisingLive[0]?.count || fecCandidates[0]?.count,
+      lastSeen: fundraisingLive[0]?.last_seen || fecCandidates[0]?.last_seen,
       route: "/fundraising",
       owner: "Data",
     }),
     buildFeedStatus({
       key: "political_signals",
       label: "Political Signals",
-      description: "Live signal layer powering Mission Control, War Room, National Command, and Executive Workspace.",
+      description:
+        "Live signal layer powering Mission Control, War Room, National Command, and Executive Workspace.",
       count: signals[0]?.count,
       lastSeen: signals[0]?.last_seen,
       route: "/political-signals",
@@ -188,7 +182,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "vendors",
       label: "Vendor Network",
-      description: "Consultant, vendor, direct mail, digital, and operational coverage records.",
+      description:
+        "Consultant, vendor, direct mail, digital, and operational coverage records.",
       count: vendors[0]?.count,
       lastSeen: vendors[0]?.last_seen,
       route: "/vendors",
@@ -197,7 +192,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "tasks",
       label: "Execution Tasks",
-      description: "Execution board tasks, escalations, workspace assignments, and ownership status.",
+      description:
+        "Execution board tasks, escalations, workspace assignments, and ownership status.",
       count: tasks[0]?.count,
       lastSeen: tasks[0]?.last_seen,
       route: "/command-center",
@@ -206,7 +202,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "workspaces",
       label: "Executive Workspaces",
-      description: "Workspace system connecting campaigns, clients, signals, CRM, tasks, reports, and revenue.",
+      description:
+        "Workspace system connecting campaigns, clients, signals, CRM, tasks, reports, and revenue.",
       count: workspaces[0]?.count,
       lastSeen: workspaces[0]?.last_seen,
       route: "/executive-workspace",
@@ -215,7 +212,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "campaign_crm_contacts",
       label: "Campaign CRM",
-      description: "Campaign relationship contacts, organizations, activities, and follow-up surface.",
+      description:
+        "Campaign relationship contacts, organizations, activities, and follow-up surface.",
       count: crmContacts[0]?.count,
       lastSeen: crmContacts[0]?.last_seen,
       route: "/campaign-crm",
@@ -224,7 +222,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "intelligence_reports",
       label: "Intelligence Reports",
-      description: "Generated intelligence reports and export-ready strategic deliverables.",
+      description:
+        "Generated intelligence reports and export-ready strategic deliverables.",
       count: reports[0]?.count,
       lastSeen: reports[0]?.last_seen,
       route: "/intelligence-reports",
@@ -233,7 +232,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "notification_events",
       label: "Notification Center",
-      description: "Unified alert and notification stream across platform modules.",
+      description:
+        "Unified alert and notification stream across platform modules.",
       count: notifications[0]?.count,
       lastSeen: notifications[0]?.last_seen,
       route: "/notifications",
@@ -242,7 +242,8 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     buildFeedStatus({
       key: "consultant_clients",
       label: "Client / Revenue Layer",
-      description: "Client health, revenue records, retainers, invoices, and business suite records.",
+      description:
+        "Client health, revenue records, retainers, invoices, and business suite records.",
       count: clients[0]?.count,
       lastSeen: clients[0]?.last_seen,
       route: "/business-suite",
@@ -257,7 +258,9 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
   const missing = feeds.filter((feed) => feed.status === "missing").length;
   const launchReady = feeds.filter((feed) => feed.launch_ready).length;
 
-  const readinessScore = Math.round((launchReady / Math.max(1, feeds.length)) * 100);
+  const readinessScore = Math.round(
+    (launchReady / Math.max(1, feeds.length)) * 100
+  );
 
   return {
     summary: {
@@ -288,6 +291,7 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
             : "Feed is stale. Refresh ingestion or confirm live update path.",
         route: feed.route,
         status: feed.status,
+        priority: feed.status === "missing" ? "High" : "Medium",
       })),
     updated_at: new Date().toISOString(),
   };
