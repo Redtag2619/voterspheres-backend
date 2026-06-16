@@ -103,14 +103,13 @@ export async function getLaunchReadiness({ user = {} }) {
     makeGate({
       key: "executive_workspace",
       label: "Executive Workspace",
-      score: workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score ||(workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 75),
-      status:(workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || 75) >= 85? "Launch Ready" : "Needs Review",
-      blockers: 0,
-      review:(workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || 75) >= 85? 0 : 1,
+      score: workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || (workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 85),
+      status: (workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || (workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 85)) >= 85? "Launch Ready" : "Needs Review",
+      review: (workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || (workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 85)) >= 85? 0 : 1,
       route: "/executive-workspace",
       detail: "Main operating hub for workspace intelligence, operations, CRM, revenue, reports, and tools.",
     }),
-  ];
+  ]
 
   const blockers = gates.reduce((sum, gate) => sum + num(gate.blockers), 0);
   const review = gates.reduce((sum, gate) => sum + num(gate.review), 0);
