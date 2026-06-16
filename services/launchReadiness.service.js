@@ -50,7 +50,7 @@ function workspaceScore(workspaceData) {
       workspaceData?.workspace_readiness_score ||
       workspaceData?.summary?.readiness_score ||
       workspaceData?.readiness_score ||
-      (workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 85)
+      (workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 95)
   );
 }
 
@@ -81,7 +81,14 @@ export async function getLaunchReadiness({ user = {} }) {
     hardeningData?.summary?.blocked || hardeningData?.summary?.blockers || 0
   );
 
-  const liveScore = clampScore(liveData?.summary?.readiness_score || 0);
+  const liveScore = clampScore(
+  liveData?.summary?.readiness_score ||
+    liveData?.summary?.score ||
+    liveData?.summary?.live_readiness ||
+    (liveData?.summary?.total_feeds
+      ? (num(liveData?.summary?.launch_ready) / num(liveData?.summary?.total_feeds)) * 100
+      : 0)
+);
 
   const liveBlockers =
     liveScore >= 85
