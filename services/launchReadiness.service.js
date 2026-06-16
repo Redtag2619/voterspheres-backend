@@ -72,7 +72,7 @@ export async function getLaunchReadiness({ user = {} }) {
       label: "Live Intelligence",
       score: liveData?.summary?.readiness_score || 0,
       status: liveData?.summary?.readiness_status || "Not Ready",
-      blockers: liveData?.summary?.readiness_score >= 85 ? 0 : num(liveData?.summary?.critical) + num(liveData?.summary?.missing),,
+      blockers: liveData?.summary?.readiness_score >= 85 ? 0 : num(liveData?.summary?.critical) + num(liveData?.summary?.missing),
       review: liveData?.summary?.stale || 0,
       route: "/live-intelligence-layer",
       detail: "Candidate, FEC, signal, vendor, CRM, report, alert, workspace, and revenue feed freshness.",
