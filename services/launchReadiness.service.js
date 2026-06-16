@@ -103,10 +103,10 @@ export async function getLaunchReadiness({ user = {} }) {
     makeGate({
       key: "executive_workspace",
       label: "Executive Workspace",
-      score: workspaceData?.selected_workspace ? 95 : 45,
-      status: workspaceData?.selected_workspace ? "Launch Ready" : "Needs Review",
+      score: workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score ||(workspaceData?.selected_workspace || workspaceData?.workspace ? 95 : 75),
+      status:(workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || 75) >= 85? "Launch Ready" : "Needs Review",
       blockers: 0,
-      review: workspaceData?.selected_workspace ? 0 : 1,
+      review:(workspaceData?.summary?.workspace_readiness_score || workspaceData?.workspace_readiness_score || 75) >= 85? 0 : 1,
       route: "/executive-workspace",
       detail: "Main operating hub for workspace intelligence, operations, CRM, revenue, reports, and tools.",
     }),
