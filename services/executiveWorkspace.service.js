@@ -269,7 +269,7 @@ const workspaceReadinessScore = Math.min(
       (contacts.length >= 10 ? 15 : contacts.length * 1.5) +
       (reports.length >= 3 ? 15 : reports.length * 5) +
       (clients.length >= 5 ? 15 : clients.length * 3) +
-      (vendors.length >= 10 ? 10 : vendors.length) +
+      (vendors.length >= 2 ? 10 : vendors.length * 5) +
       (workspaceActivityCount >= 30 ? 15 : workspaceActivityCount * 0.5)
   )
 );
