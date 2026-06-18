@@ -86,6 +86,7 @@ import launchDataSeederRoutes from "./routes/launchDataSeeder.routes.js";
 import liveDataRefreshRoutes from "./routes/liveDataRefresh.routes.js";
 import launchAutomationRoutes from "./routes/launchAutomation.routes.js";
 import workspaceActivityRoutes from "./routes/workspaceActivity.routes.js";
+import tourRoutes from "./routes/tour.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -288,6 +289,7 @@ app.use("/api/launch-data-seeder", launchDataSeederRoutes);
 app.use("/api/launch-automation", launchAutomationRoutes); 
 app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/workspace-activity", workspaceActivityRoutes);
+app.use("/api/tour", tourRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
