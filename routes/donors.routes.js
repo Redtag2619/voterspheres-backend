@@ -213,6 +213,19 @@ function normalizeFecRows(rows = []) {
 async function upsertFecDonors(rows = []) {
   if (!rows.length) return;
 
+  const states = [...new Set(rows.map((row) => row.state).filter(Boolean))];
+
+  if (states.length) {
+    await pool.query(
+      `
+        DELETE FROM donors
+        WHERE source = 'fec_schedule_a'
+        AND state = ANY($1)
+      `,
+      [states]
+    );
+  }
+
   for (const row of rows) {
     await pool.query(
       `
