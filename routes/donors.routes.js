@@ -1,5 +1,5 @@
 import express from "express";
-import { pool } from "../db/pool.js"; 
+import { pool } from "../db/pool.js";
 
 const router = express.Router();
 
@@ -53,6 +53,17 @@ async function ensureDonorsTable() {
       city TEXT,
       source TEXT DEFAULT 'manual',
       source_updated_at TIMESTAMP,
+      website_url TEXT,
+      linkedin_url TEXT,
+      x_url TEXT,
+      facebook_url TEXT,
+      phone TEXT,
+      address_line1 TEXT,
+      address_line2 TEXT,
+      postal_code TEXT,
+      contact_source TEXT DEFAULT 'fec_disclosure',
+      contact_verified BOOLEAN DEFAULT false,
+      contribution_count INTEGER DEFAULT 1,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -73,11 +84,23 @@ async function ensureDonorsTable() {
   await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS city TEXT`);
   await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'`);
   await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS website_url TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS linkedin_url TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS x_url TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS facebook_url TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS phone TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS address_line1 TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS address_line2 TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS postal_code TEXT`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS contact_source TEXT DEFAULT 'fec_disclosure'`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS contact_verified BOOLEAN DEFAULT false`);
+  await pool.query(`ALTER TABLE donors ADD COLUMN IF NOT EXISTS contribution_count INTEGER DEFAULT 1`);
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_donors_state ON donors(state)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_donors_candidate_id ON donors(candidate_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_donors_source ON donors(source)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_donors_committee_id ON donors(committee_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_donors_contact_verified ON donors(contact_verified)`);
 }
 
 async function seedDonorsIfEmpty() {
@@ -88,13 +111,26 @@ async function seedDonorsIfEmpty() {
 
   await pool.query(`
     INSERT INTO donors (
-      donor_name, name, donor_type, state, amount, relationship_strength,
-      candidate_id, candidate_name, committee_name, city, source, source_updated_at
+      donor_name,
+      name,
+      donor_type,
+      state,
+      amount,
+      relationship_strength,
+      candidate_id,
+      candidate_name,
+      committee_name,
+      city,
+      source,
+      source_updated_at,
+      contact_source,
+      contact_verified,
+      contribution_count
     )
     VALUES
-      ('Atlantic Leadership Fund', 'Atlantic Leadership Fund', 'PAC', 'GA', 250000, 'High', 'GA-SEN-1', 'Live Candidate', 'Georgia Senate Victory Committee', 'Atlanta', 'manual_live_seed', NOW()),
-      ('Keystone Civic Network', 'Keystone Civic Network', 'Individual Network', 'PA', 175000, 'Medium', 'PA-SEN-1', 'Live Candidate', 'Pennsylvania Senate Program', 'Philadelphia', 'manual_live_seed', NOW()),
-      ('Great Lakes Action Council', 'Great Lakes Action Council', 'PAC', 'MI', 120000, 'Growing', 'MI-HOUSE-1', 'Live Candidate', 'Great Lakes House Committee', 'Detroit', 'manual_live_seed', NOW())
+      ('Atlantic Leadership Fund', 'Atlantic Leadership Fund', 'PAC', 'GA', 250000, 'High', 'GA-SEN-1', 'Live Candidate', 'Georgia Senate Victory Committee', 'Atlanta', 'manual_live_seed', NOW(), 'manual_seed', false, 1),
+      ('Keystone Civic Network', 'Keystone Civic Network', 'Individual Network', 'PA', 175000, 'Medium', 'PA-SEN-1', 'Live Candidate', 'Pennsylvania Senate Program', 'Philadelphia', 'manual_live_seed', NOW(), 'manual_seed', false, 1),
+      ('Great Lakes Action Council', 'Great Lakes Action Council', 'PAC', 'MI', 120000, 'Growing', 'MI-HOUSE-1', 'Live Candidate', 'Great Lakes House Committee', 'Detroit', 'manual_live_seed', NOW(), 'manual_seed', false, 1)
   `);
 }
 
@@ -129,6 +165,7 @@ async function fetchFecContributions(query = {}) {
   }
 
   const url = buildFecUrl(query);
+
   const response = await fetch(url, {
     headers: {
       accept: "application/json",
@@ -147,6 +184,7 @@ async function fetchFecContributions(query = {}) {
   }
 
   const payload = raw ? JSON.parse(raw) : {};
+
   return {
     ok: true,
     rows: Array.isArray(payload.results) ? payload.results : [],
@@ -173,7 +211,7 @@ function normalizeFecRows(rows = []) {
         ""
     );
 
-    const key = `${donorName}|${state}|${committeeId || committeeName}`;
+    const key = `${donorName}|${state}`;
     const amount = money(row.contribution_receipt_amount || row.amount || 0);
 
     if (!grouped.has(key)) {
@@ -194,6 +232,18 @@ function normalizeFecRows(rows = []) {
         city: text(row.contributor_city || ""),
         source: "fec_schedule_a",
         source_updated_at: new Date(),
+
+        website_url: "",
+        linkedin_url: "",
+        x_url: "",
+        facebook_url: "",
+        phone: "",
+        address_line1: text(row.contributor_street_1 || ""),
+        address_line2: text(row.contributor_street_2 || ""),
+        postal_code: text(row.contributor_zip || ""),
+        contact_source: "fec_disclosure",
+        contact_verified: false,
+
         fallback_id: `fec-${index}`,
       });
     }
@@ -201,122 +251,144 @@ function normalizeFecRows(rows = []) {
     const item = grouped.get(key);
     item.amount += amount;
     item.contribution_count += 1;
-    item.relationship_strength = relationshipStrength(
-      item.amount,
-      item.contribution_count
-    );
+    item.relationship_strength = relationshipStrength(item.amount, item.contribution_count);
+
+    if (!item.committee_name && committeeName) item.committee_name = committeeName;
+    if (!item.committee_id && committeeId) item.committee_id = committeeId;
+    if (!item.occupation && row.contributor_occupation) item.occupation = text(row.contributor_occupation);
+    if (!item.employer && row.contributor_employer) item.employer = text(row.contributor_employer);
+    if (!item.city && row.contributor_city) item.city = text(row.contributor_city);
+    if (!item.postal_code && row.contributor_zip) item.postal_code = text(row.contributor_zip);
+    if (!item.address_line1 && row.contributor_street_1) item.address_line1 = text(row.contributor_street_1);
+    if (!item.address_line2 && row.contributor_street_2) item.address_line2 = text(row.contributor_street_2);
   });
 
   return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
 }
 
-async function upsertFecDonors(rows = []) {
-  if (!rows.length) return;
+async function refreshFecDonors(req) {
+  const result = await fetchFecContributions(req.query || {});
 
-  const states = [...new Set(rows.map((row) => row.state).filter(Boolean))];
+  if (!result.ok) {
+    return result;
+  }
+
+  const donors = normalizeFecRows(result.rows);
+
+  const states = [
+    ...new Set(
+      donors
+        .map((d) => d.state)
+        .filter(Boolean)
+    ),
+  ];
 
   if (states.length) {
     await pool.query(
       `
-        DELETE FROM donors
-        WHERE source = 'fec_schedule_a'
-        AND state = ANY($1)
-      `,
+      DELETE FROM donors
+      WHERE source = 'fec_schedule_a'
+      AND state = ANY($1)
+    `,
       [states]
     );
   }
 
-  for (const row of rows) {
+  for (const donor of donors) {
     await pool.query(
       `
-        INSERT INTO donors (
-          donor_name,
-          name,
-          donor_type,
-          state,
-          amount,
-          relationship_strength,
-          candidate_id,
-          candidate_name,
-          committee_name,
-          committee_id,
-          occupation,
-          employer,
-          city,
-          source,
-          source_updated_at,
-          updated_at
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, $9, $10, $11, $12,
-          $13, $14, NOW(), NOW()
-        )
-      `,
+      INSERT INTO donors (
+        donor_name,
+        name,
+        donor_type,
+        state,
+        amount,
+        relationship_strength,
+        candidate_id,
+        candidate_name,
+        committee_name,
+        committee_id,
+        occupation,
+        employer,
+        city,
+        source,
+        source_updated_at,
+        website_url,
+        linkedin_url,
+        x_url,
+        facebook_url,
+        phone,
+        address_line1,
+        address_line2,
+        postal_code,
+        contact_source,
+        contact_verified,
+        contribution_count,
+        updated_at
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,NOW(),
+        $15,$16,$17,$18,$19,$20,$21,$22,
+        $23,$24,$25,NOW()
+      )
+    `,
       [
-        row.donor_name,
-        row.name,
-        row.donor_type,
-        row.state,
-        row.amount,
-        row.relationship_strength,
-        row.candidate_id,
-        row.candidate_name,
-        row.committee_name,
-        row.committee_id,
-        row.occupation,
-        row.employer,
-        row.city,
-        row.source,
+        donor.donor_name,
+        donor.name,
+        donor.donor_type,
+        donor.state,
+        donor.amount,
+        donor.relationship_strength,
+        donor.candidate_id,
+        donor.candidate_name,
+        donor.committee_name,
+        donor.committee_id,
+        donor.occupation,
+        donor.employer,
+        donor.city,
+        donor.source,
+        donor.website_url,
+        donor.linkedin_url,
+        donor.x_url,
+        donor.facebook_url,
+        donor.phone,
+        donor.address_line1,
+        donor.address_line2,
+        donor.postal_code,
+        donor.contact_source,
+        donor.contact_verified,
+        donor.contribution_count,
       ]
     );
   }
-}
-
-async function refreshFecDonors(req) {
-  const {
-    state = "",
-    search = "",
-    cycle = DEFAULT_CYCLE,
-    limit = 100,
-  } = req.query;
-
-  const fec = await fetchFecContributions({
-    state,
-    search,
-    cycle,
-    limit,
-  });
-
-  if (!fec.ok) return fec;
-
-  const normalized = normalizeFecRows(fec.rows);
-  await upsertFecDonors(normalized);
 
   return {
     ok: true,
-    imported: normalized.length,
-    pagination: fec.pagination,
+    imported: donors.length,
   };
 }
 
-router.get("/health", (_req, res) => {
+router.get("/health", async (_req, res) => {
   res.json({
     ok: true,
     service: "donors",
-    fec_configured: Boolean(FEC_API_KEY),
+    source: "fec",
   });
 });
 
 router.post("/refresh", async (req, res) => {
   try {
     await ensureDonorsTable();
+
     const result = await refreshFecDonors(req);
+
     res.json(result);
   } catch (error) {
-    console.error("FEC donor refresh failed:", error);
+    console.error(error);
+
     res.status(500).json({
-      error: error.message || "Failed to refresh FEC donors",
+      error: error.message || "Failed donor refresh",
     });
   }
 });
@@ -358,121 +430,124 @@ async function handleDonorNetwork(req, res) {
     state = "",
     search = "",
     candidate_id = "",
-    limit = 100,
+    limit = 250,
   } = req.query;
 
-  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 250));
-  const term = text(search);
-  const normalizedState = normalizeState(state);
+  const safeLimit = Math.max(
+    1,
+    Math.min(Number(limit) || 250, 500)
+  );
 
   const values = [
-    normalizedState,
-    term,
+    text(state),
+    text(search),
     text(candidate_id),
     safeLimit,
   ];
 
   const whereSql = `
     WHERE
-      ($1 = '' OR UPPER(COALESCE(state, '')) = $1)
-      AND ($2 = '' OR (
-        COALESCE(donor_name, name, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(donor_type, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(relationship_strength, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(state, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(candidate_name, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(committee_name, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(occupation, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(employer, '') ILIKE '%' || $2 || '%'
-        OR COALESCE(city, '') ILIKE '%' || $2 || '%'
-      ))
-      AND ($3 = '' OR COALESCE(candidate_id, '') = $3)
+      ($1 = '' OR COALESCE(state,'') = $1)
+
+      AND (
+        $2 = ''
+        OR COALESCE(donor_name,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(donor_type,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(state,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(candidate_name,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(committee_name,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(occupation,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(employer,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(city,'') ILIKE '%' || $2 || '%'
+        OR COALESCE(postal_code,'') ILIKE '%' || $2 || '%'
+      )
+
+      AND (
+        $3 = ''
+        OR COALESCE(candidate_id,'') = $3
+      )
   `;
 
   const result = await pool.query(
     `
-      SELECT
-        id,
-        COALESCE(donor_name, name, 'Unknown Donor') AS donor_name,
-        COALESCE(name, donor_name, 'Unknown Donor') AS name,
-        COALESCE(donor_type, 'Donor') AS donor_type,
-        state,
-        COALESCE(amount, 0)::numeric AS amount,
-        COALESCE(relationship_strength, 'Growing') AS relationship_strength,
-        candidate_id,
-        candidate_name,
-        committee_name,
-        committee_id,
-        occupation,
-        employer,
-        city,
-        source,
-        source_updated_at,
-        created_at,
-        updated_at
-      FROM donors
-      ${whereSql}
-      ORDER BY COALESCE(amount, 0) DESC, donor_name ASC
-      LIMIT $4
-    `,
+    SELECT
+      id,
+      donor_name,
+      name,
+      donor_type,
+      state,
+      amount,
+      relationship_strength,
+      candidate_id,
+      candidate_name,
+      committee_name,
+      committee_id,
+      occupation,
+      employer,
+      city,
+      source,
+      source_updated_at,
+
+      website_url,
+      linkedin_url,
+      x_url,
+      facebook_url,
+      phone,
+      address_line1,
+      address_line2,
+      postal_code,
+
+      contact_source,
+      contact_verified,
+      contribution_count
+
+    FROM donors
+    ${whereSql}
+    ORDER BY amount DESC
+    LIMIT $4
+  `,
     values
   );
 
   const summaryResult = await pool.query(
     `
-      SELECT
-        COUNT(*)::int AS total_donors,
-        COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric AS total_amount
-      FROM donors
-      ${whereSql}
-    `,
-    values.slice(0, 3)
-  );
-
-  const stateResult = await pool.query(
-    `
-      SELECT
-        state,
-        COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric AS total
-      FROM donors
-      ${whereSql}
-      GROUP BY state
-      ORDER BY total DESC
-      LIMIT 1
-    `,
+    SELECT
+      COUNT(*)::int AS total_donors,
+      COALESCE(SUM(amount),0)::numeric AS total_amount
+    FROM donors
+    ${whereSql}
+  `,
     values.slice(0, 3)
   );
 
   const stateBreakdownResult = await pool.query(
     `
-      SELECT
-        COALESCE(state, 'Unknown') AS state,
-        COUNT(*)::int AS donor_count,
-        COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric AS total_amount,
-        COALESCE(AVG(COALESCE(amount, 0)), 0)::numeric AS average_amount
-      FROM donors
-      ${whereSql}
-      GROUP BY state
-      ORDER BY total_amount DESC
-      LIMIT 12
-    `,
+    SELECT
+      state,
+      COUNT(*)::int AS donor_count,
+      COALESCE(SUM(amount),0)::numeric AS total_amount
+    FROM donors
+    ${whereSql}
+    GROUP BY state
+    ORDER BY total_amount DESC
+    LIMIT 50
+  `,
     values.slice(0, 3)
   );
 
   const committeeBreakdownResult = await pool.query(
     `
-      SELECT
-        committee_id,
-        COALESCE(committee_name, 'Unknown Committee') AS committee_name,
-        COALESCE(state, 'National') AS state,
-        COUNT(*)::int AS donor_count,
-        COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric AS total_amount
-      FROM donors
-      ${whereSql}
-      GROUP BY committee_id, committee_name, state
-      ORDER BY total_amount DESC
-      LIMIT 12
-    `,
+    SELECT
+      committee_id,
+      committee_name,
+      COUNT(*)::int AS donor_count,
+      COALESCE(SUM(amount),0)::numeric AS total_amount
+    FROM donors
+    ${whereSql}
+    GROUP BY committee_id, committee_name
+    ORDER BY total_amount DESC
+    LIMIT 25
+  `,
     values.slice(0, 3)
   );
 
@@ -480,22 +555,39 @@ async function handleDonorNetwork(req, res) {
     results: result.rows.map((row) => ({
       ...row,
       amount: Number(row.amount || 0),
+      contribution_count: Number(
+        row.contribution_count || 1
+      ),
     })),
-    stateBreakdown: stateBreakdownResult.rows.map((row) => ({
-      ...row,
-      total_amount: Number(row.total_amount || 0),
-      average_amount: Number(row.average_amount || 0),
-    })),
-    committeeBreakdown: committeeBreakdownResult.rows.map((row) => ({
-      ...row,
-      total_amount: Number(row.total_amount || 0),
-    })),
+
     summary: {
-      total_donors: summaryResult.rows[0]?.total_donors || 0,
-      total_amount: Number(summaryResult.rows[0]?.total_amount || 0),
-      top_state: stateResult.rows[0]?.state || "N/A",
-      source: FEC_API_KEY ? "FEC Schedule A + cached donors" : "Cached donors only",
+      total_donors:
+        Number(
+          summaryResult.rows?.[0]?.total_donors || 0
+        ),
+      total_amount:
+        Number(
+          summaryResult.rows?.[0]?.total_amount || 0
+        ),
     },
+
+    stateBreakdown: stateBreakdownResult.rows.map(
+      (row) => ({
+        ...row,
+        total_amount: Number(
+          row.total_amount || 0
+        ),
+      })
+    ),
+
+    committeeBreakdown:
+      committeeBreakdownResult.rows.map((row) => ({
+        ...row,
+        total_amount: Number(
+          row.total_amount || 0
+        ),
+      })),
+
     _demo: false,
   });
 }
