@@ -236,7 +236,7 @@ app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
-app.use("/api/endorsements", requireAuth, requireEnterprise, endorsementsRoutes);
+app.use("/api/endorsements", requireAuth, endorsementsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/vendor-fec", requireAuth, vendorFecRoutes);
