@@ -1,5 +1,14 @@
 import { pool } from "../db/pool.js";
 
+const ALL_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+  "DC"
+];
+
 const SEED = [
   [
     "National Teachers Coalition", 
@@ -542,6 +551,18 @@ export async function getEndorsementOptions() {
       ORDER BY status
     `),
   ]);
+
+  const dbStates = states.rows.map((row) => row.state).filter(Boolean);
+  const mergedStates = Array.from(new Set([...ALL_STATES, ...dbStates])).sort();
+
+  return {
+    states: mergedStates,
+    offices: offices.rows.map((row) => row.office),
+    types: types.rows.map((row) => row.endorser_type),
+    statuses: statuses.rows.map((row) => row.status),
+    default_types: ENDORSEMENT_TYPES,
+  };
+}
 
   return {
     states: states.rows.map((row) => row.state),
