@@ -208,20 +208,19 @@ router.post("/sync-modeled", async (req, res) => {
 
 router.post("/sync-all-states", async (_req, res) => {
   try {
-    const result =
-      await syncAllStateModeledEndorsements();
+    const result = await syncAllStateModeledEndorsements();
 
-    res.json({
+    return res.json({
       ok: true,
-      ...result
+      ...result,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("All-state endorsement sync error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error:
-        err.message ||
-        "Failed to sync all states"
+        error.message ||
+        "Failed to sync all-state modeled endorsements",
     });
   }
 });
