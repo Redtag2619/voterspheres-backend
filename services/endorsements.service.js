@@ -2,7 +2,7 @@ import { pool } from "../db/pool.js";
 
 const SEED = [
   [
-    "National Teachers Coalition",
+    "National Teachers Coalition", 
     "Labor",
     "PA",
     "Senate",
