@@ -10,6 +10,59 @@ const ALL_STATES = [
 ];
 
 const SEED = [
+  const STATE_NAMES = {
+  AL: "Alabama",
+  AK: "Alaska",
+  AZ: "Arizona",
+  AR: "Arkansas",
+  CA: "California",
+  CO: "Colorado",
+  CT: "Connecticut",
+  DE: "Delaware",
+  FL: "Florida",
+  GA: "Georgia",
+  HI: "Hawaii",
+  ID: "Idaho",
+  IL: "Illinois",
+  IN: "Indiana",
+  IA: "Iowa",
+  KS: "Kansas",
+  KY: "Kentucky",
+  LA: "Louisiana",
+  ME: "Maine",
+  MD: "Maryland",
+  MA: "Massachusetts",
+  MI: "Michigan",
+  MN: "Minnesota",
+  MS: "Mississippi",
+  MO: "Missouri",
+  MT: "Montana",
+  NE: "Nebraska",
+  NV: "Nevada",
+  NH: "New Hampshire",
+  NJ: "New Jersey",
+  NM: "New Mexico",
+  NY: "New York",
+  NC: "North Carolina",
+  ND: "North Dakota",
+  OH: "Ohio",
+  OK: "Oklahoma",
+  OR: "Oregon",
+  PA: "Pennsylvania",
+  RI: "Rhode Island",
+  SC: "South Carolina",
+  SD: "South Dakota",
+  TN: "Tennessee",
+  TX: "Texas",
+  UT: "Utah",
+  VT: "Vermont",
+  VA: "Virginia",
+  WA: "Washington",
+  WV: "West Virginia",
+  WI: "Wisconsin",
+  WY: "Wyoming",
+  DC: "District of Columbia"
+};
   [
     "National Teachers Coalition", 
     "Labor",
@@ -159,6 +212,59 @@ function normalized(row = {}) {
     row.endorsement_score || scoreEndorsement(row)
   );
 
+  function buildModeledStateEndorsements() {
+  return ALL_STATES.flatMap((state) => {
+    const stateName = STATE_NAMES[state] || state;
+
+    return [
+      [
+        `${state} Civic Leadership Council`,
+        "Coalition",
+        state,
+        "Statewide",
+        `${stateName} Statewide Candidate`,
+        "Nonpartisan",
+        68,
+        62,
+        66,
+        42,
+        "Modeled",
+        `Modeled civic endorsement signal for ${stateName}.`
+      ],
+
+      [
+        `${state} Working Families Alliance`,
+        "Labor",
+        state,
+        "Statewide",
+        `${stateName} Statewide Candidate`,
+        "Nonpartisan",
+        76,
+        72,
+        70,
+        48,
+        "Modeled",
+        `Modeled labor endorsement signal for ${stateName}.`
+      ],
+
+      [
+        `${state} Business Leadership Network`,
+        "Business Group",
+        state,
+        "Statewide",
+        `${stateName} Statewide Candidate`,
+        "Nonpartisan",
+        64,
+        61,
+        67,
+        55,
+        "Modeled",
+        `Modeled business endorsement signal for ${stateName}.`
+      ]
+    ];
+  });
+}
+
   return {
     ...row,
     endorsement_score: score,
@@ -266,7 +372,12 @@ export async function seedEndorsementsIfEmpty() {
 
   let inserted = 0;
 
-  for (const row of SEED) {
+  const seedRows = [
+  ...SEED,
+  ...buildModeledStateEndorsements()
+];
+
+for (const row of seedRows) {
     const [
       endorser_name,
       endorser_type,
@@ -558,15 +669,6 @@ export async function getEndorsementOptions() {
   };
 }
 
-  return {
-    states: states.rows.map((row) => row.state),
-    offices: offices.rows.map((row) => row.office),
-    types: types.rows.map((row) => row.endorser_type),
-    statuses: statuses.rows.map((row) => row.status),
-    default_types: ENDORSEMENT_TYPES,
-  };
-}
-
 export async function createEndorsement(payload = {}) {
   await ensureEndorsementsTable();
 
@@ -782,6 +884,113 @@ function nameSql(columns) {
   }
 
   return "NULL";
+}
+
+export async function syncAllStateModeledEndorsements() {
+  await ensureEndorsementsTable();
+
+  const seedRows = buildModeledStateEndorsements();
+
+  let inserted = 0;
+
+  for (const row of seedRows) {
+    const [endorser_name, , state] = row;
+
+    const exists = await pool.query(
+      `
+      SELECT id
+      FROM endorsements
+      WHERE LOWER(COALESCE(endorser_name,'')) = LOWER($1)
+      AND UPPER(COALESCE(state,'')) = UPPER($2)
+      LIMIT 1
+      `,
+      [endorser_name, state]
+    );
+
+    if (exists.rows[0]) continue;
+
+    const [
+      ,
+      endorser_type,
+      ,
+      office,
+      candidate_name,
+      candidate_party,
+      influence_score,
+      reach_score,
+      network_score,
+      financial_signal_score,
+      status,
+      summary
+    ] = row;
+
+    const score = scoreEndorsement({
+      influence_score,
+      reach_score,
+      network_score,
+      financial_signal_score
+    });
+
+    await pool.query(
+      `
+      INSERT INTO endorsements (
+        endorser_name,
+        endorser_type,
+        state,
+        office,
+        candidate_name,
+        candidate_party,
+        influence_score,
+        reach_score,
+        network_score,
+        financial_signal_score,
+        endorsement_score,
+        endorsement_tier,
+        risk_label,
+        status,
+        source,
+        summary,
+        notes,
+        source_updated_at,
+        updated_at
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,
+        $7,$8,$9,$10,
+        $11,$12,$13,$14,
+        'state_modeled_baseline',
+        $15,
+        'Generated statewide endorsement baseline',
+        NOW(),
+        NOW()
+      )
+      `,
+      [
+        endorser_name,
+        endorser_type,
+        state,
+        office,
+        candidate_name,
+        candidate_party,
+        influence_score,
+        reach_score,
+        network_score,
+        financial_signal_score,
+        score,
+        tier(score),
+        risk(score, status),
+        status,
+        summary
+      ]
+    );
+
+    inserted++;
+  }
+
+  return {
+    inserted,
+    states_processed: ALL_STATES.length
+  };
 }
 
 export async function syncModeledEndorsements({ limit = 50 } = {}) {
