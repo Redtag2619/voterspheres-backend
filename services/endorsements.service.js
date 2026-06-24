@@ -645,6 +645,12 @@ export async function getEndorsementOptions() {
       ORDER BY state
     `),
     pool.query(`
+      SELECT DISTINCT office
+      FROM endorsements
+      WHERE COALESCE(office,'') <> ''
+      ORDER BY office
+    `),
+    pool.query(`
       SELECT DISTINCT endorser_type
       FROM endorsements
       WHERE COALESCE(endorser_type,'') <> ''
@@ -657,6 +663,18 @@ export async function getEndorsementOptions() {
       ORDER BY status
     `),
   ]);
+
+  const dbStates = states.rows.map((row) => row.state).filter(Boolean);
+  const mergedStates = Array.from(new Set([...ALL_STATES, ...dbStates])).sort();
+
+  return {
+    states: mergedStates,
+    offices: offices.rows.map((row) => row.office),
+    types: types.rows.map((row) => row.endorser_type),
+    statuses: statuses.rows.map((row) => row.status),
+    default_types: ENDORSEMENT_TYPES,
+  };
+}
 
   const dbStates = states.rows.map((row) => row.state).filter(Boolean);
   const mergedStates = Array.from(new Set([...ALL_STATES, ...dbStates])).sort();
