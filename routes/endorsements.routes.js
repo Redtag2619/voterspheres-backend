@@ -9,7 +9,7 @@ import {
   seedEndorsementsIfEmpty,
   syncModeledEndorsements,
   syncAllStateModeledEndorsements,
-  updateEndorsement
+  updateEndorsement 
 } from "../services/endorsements.service.js";
 
 const router = express.Router();
