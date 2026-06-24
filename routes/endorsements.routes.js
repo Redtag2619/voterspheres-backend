@@ -8,6 +8,7 @@ import {
   listEndorsements,
   seedEndorsementsIfEmpty,
   syncModeledEndorsements,
+  syncAllStateModeledEndorsements,
   updateEndorsement
 } from "../services/endorsements.service.js";
 
@@ -201,6 +202,26 @@ router.post("/sync-modeled", async (req, res) => {
       error:
         error.message ||
         "Failed to sync modeled endorsements",
+    });
+  }
+});
+
+router.post("/sync-all-states", async (_req, res) => {
+  try {
+    const result =
+      await syncAllStateModeledEndorsements();
+
+    res.json({
+      ok: true,
+      ...result
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error:
+        err.message ||
+        "Failed to sync all states"
     });
   }
 });
