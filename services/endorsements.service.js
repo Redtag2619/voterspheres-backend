@@ -533,12 +533,6 @@ export async function getEndorsementOptions() {
       ORDER BY state
     `),
     pool.query(`
-      SELECT DISTINCT office
-      FROM endorsements
-      WHERE COALESCE(office,'') <> ''
-      ORDER BY office
-    `),
-    pool.query(`
       SELECT DISTINCT endorser_type
       FROM endorsements
       WHERE COALESCE(endorser_type,'') <> ''
