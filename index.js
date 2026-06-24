@@ -87,6 +87,7 @@ import launchDataSeederRoutes from "./routes/launchDataSeeder.routes.js";
 import liveDataRefreshRoutes from "./routes/liveDataRefresh.routes.js";
 import launchAutomationRoutes from "./routes/launchAutomation.routes.js";
 import workspaceActivityRoutes from "./routes/workspaceActivity.routes.js";
+import endorsementsRoutes from "./routes/endorsements.routes.js";
 import tourRoutes from "./routes/tour.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
@@ -235,6 +236,7 @@ app.use("/api/candidates", requireAuth, candidatesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
+app.use("/api/endorsements", requireAuth, requireEnterprise, endorsementsRoutes);
 app.use("/api/consultant-opportunities", requireAuth, consultantOpportunityRoutes);
 app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/vendor-fec", requireAuth, vendorFecRoutes);
