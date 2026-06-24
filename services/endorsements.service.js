@@ -676,19 +676,7 @@ export async function getEndorsementOptions() {
   };
 }
 
-  const dbStates = states.rows.map((row) => row.state).filter(Boolean);
-  const mergedStates = Array.from(new Set([...ALL_STATES, ...dbStates])).sort();
-
-  return {
-    states: mergedStates,
-    offices: offices.rows.map((row) => row.office),
-    types: types.rows.map((row) => row.endorser_type),
-    statuses: statuses.rows.map((row) => row.status),
-    default_types: ENDORSEMENT_TYPES,
-  };
-}
-
-export async function createEndorsement(payload = {}) {
+ export async function createEndorsement(payload = {}) {
   await ensureEndorsementsTable();
 
   const score = scoreEndorsement(payload);
