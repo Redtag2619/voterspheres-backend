@@ -9,8 +9,7 @@ const ALL_STATES = [
   "DC"
 ];
 
-const SEED = [
-  const STATE_NAMES = {
+const STATE_NAMES = {
   AL: "Alabama",
   AK: "Alaska",
   AZ: "Arizona",
@@ -63,6 +62,8 @@ const SEED = [
   WY: "Wyoming",
   DC: "District of Columbia"
 };
+
+const SEED = [
   [
     "National Teachers Coalition", 
     "Labor",
