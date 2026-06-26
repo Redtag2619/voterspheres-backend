@@ -90,6 +90,7 @@ import workspaceActivityRoutes from "./routes/workspaceActivity.routes.js";
 import endorsementsRoutes from "./routes/endorsements.routes.js";
 import platformIntelligenceRoutes from "./routes/platformIntelligence.routes.js";
 import tourRoutes from "./routes/tour.routes.js";
+import politicalGraphRoutes from "./routes/politicalGraph.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -249,6 +250,7 @@ app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
 app.use("/api/relationships", relationshipGraphRoutes);
+app.use("/api/political-graph", requireAuth, politicalGraphRoutes);
 app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
 app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
 app.use("/api/consultants/deep-intel", requireAuth, consultantDeepIntelRoutes);
