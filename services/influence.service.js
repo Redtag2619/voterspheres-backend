@@ -68,7 +68,7 @@ function firstCol(columns, options = []) {
   return options.find((item) => columns.has(item)) || null;
 }
 
-async function ensureInfluenceSchema(client = pool) {
+export async function ensureInfluenceSchema(client = pool) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS influence_entities (
       id SERIAL PRIMARY KEY,
