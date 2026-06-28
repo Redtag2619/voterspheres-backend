@@ -14,6 +14,7 @@
     "db:migrate": "node db/runMigrations.js",
     "db:seed": "node db/seed.js",
     "db:init": "npm run db:migrate && npm run db:seed",
+    "db:migrate:influence": "node scripts/migrateInfluenceEngine.js",
     "ingest:once": "node jobs/providerIngestion.jobRunner.js",
     "sync:fec": "node scripts/syncFecData.js",
     "sync:candidate-contacts": "node scripts/enrich-candidate-contacts.js",
