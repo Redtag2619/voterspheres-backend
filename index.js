@@ -92,6 +92,7 @@ import platformIntelligenceRoutes from "./routes/platformIntelligence.routes.js"
 import tourRoutes from "./routes/tour.routes.js";
 import politicalGraphRoutes from "./routes/politicalGraph.routes.js";
 import influenceRoutes from "./routes/influence.routes.js"; 
+import coalitionRoutes from "./routes/coalition.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -231,6 +232,7 @@ app.use("/api/crm-dashboard", requireAuth, crmDashboardRoutes);
 app.use("/api/firms", requireAuth, firmWorkspaceRoutes);
 app.use("/api/campaigns", requireAuth, campaignCommandRoutes);
 app.use("/api/mail", requireAuth, mailRoutes);
+app.use("/api/coalitions", requireAuth, coalitionRoutes);
 app.use("/api/platform", requireAuth, platformRoutes);
 app.use("/api/intelligence", requireAuth, intelligenceRoutes);
 app.use("/api/influence", requireAuth, influenceRoutes);
