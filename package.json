@@ -23,6 +23,7 @@
     "import:localities": "node scripts/importStateLocalities.js",
     "import:usps-facilities": "node scripts/import-usps-postal-facilities.js",
     "signals:fec": "node scripts/importPoliticalSignalsFromFec.js",
+    "db:migrate:influence-forecasts": "node scripts/migrateInfluenceForecasts.js",
     "signals:news": "node scripts/importNewsNarrativeSignals.js"
   },
   "dependencies": {
