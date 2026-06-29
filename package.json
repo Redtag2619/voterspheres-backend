@@ -22,6 +22,7 @@
     "enrich:consultant-contacts": "node scripts/enrich-consultant-contacts.js",
     "import:localities": "node scripts/importStateLocalities.js",
     "import:usps-facilities": "node scripts/import-usps-postal-facilities.js",
+    "db:migrate:coalitions": "node scripts/migrateCoalitionIntelligence.js",
     "signals:fec": "node scripts/importPoliticalSignalsFromFec.js",
     "db:migrate:influence-forecasts": "node scripts/migrateInfluenceForecasts.js",
     "signals:news": "node scripts/importNewsNarrativeSignals.js"
