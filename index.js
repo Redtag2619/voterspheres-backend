@@ -93,6 +93,7 @@ import tourRoutes from "./routes/tour.routes.js";
 import politicalGraphRoutes from "./routes/politicalGraph.routes.js";
 import influenceRoutes from "./routes/influence.routes.js"; 
 import coalitionRoutes from "./routes/coalition.routes.js";
+import strategyRoutes from "./routes/strategy.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -254,6 +255,7 @@ app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
 app.use("/api/scheduled-reports", requireAuth, scheduledReportsRoutes);
 app.use("/api/relationships", relationshipGraphRoutes);
+app.use("/api/strategy", requireAuth, strategyRoutes);
 app.use("/api/political-graph", requireAuth, politicalGraphRoutes);
 app.use("/api/consultants/import", requireAuth, consultantImportRoutes);
 app.use("/api/consultants/risk", requireAuth, consultantRiskRoutes);
