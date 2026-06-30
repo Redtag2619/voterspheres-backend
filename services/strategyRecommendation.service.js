@@ -5,7 +5,7 @@ import { ensureCoalitionSchema } from "./coalitionIntelligence.service.js";
 
 function n(value, fallback = 0) {
   const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
+  return Number.isFinite(next) ? next : fallback; 
 }
 
 function clamp(value, min = 0, max = 100) {
