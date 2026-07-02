@@ -3,11 +3,10 @@ import {
   getExecutiveDecisionIntelligence,
   seedExecutiveDecisionIntelligence,
 } from "../controllers/decisionIntelligence.controller.js";
-import { requireAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/", requireAuth, getExecutiveDecisionIntelligence);
-router.post("/seed", requireAuth, seedExecutiveDecisionIntelligence);
+router.get("/", getExecutiveDecisionIntelligence);
+router.post("/seed", seedExecutiveDecisionIntelligence);
 
 export default router;
