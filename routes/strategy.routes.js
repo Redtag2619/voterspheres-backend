@@ -1,5 +1,4 @@
 import express from "express";
-
 import {
   strategyDetail,
   strategyHealth,
@@ -15,7 +14,6 @@ router.get("/health", strategyHealth);
 router.get("/summary", strategySummary);
 router.get("/recommendations", strategyRecommendations);
 router.get("/:key", strategyDetail);
-
 router.post("/recalculate", strategyRecalculate);
 router.post("/:key/queue-action", strategyQueueAction);
 

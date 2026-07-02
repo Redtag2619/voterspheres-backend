@@ -5,7 +5,7 @@ import { ensureCoalitionSchema } from "./coalitionIntelligence.service.js";
 
 function n(value, fallback = 0) {
   const next = Number(value);
-  return Number.isFinite(next) ? next : fallback; 
+  return Number.isFinite(next) ? next : fallback;
 }
 
 function clamp(value, min = 0, max = 100) {
@@ -93,35 +93,36 @@ export async function ensureStrategySchema(client = pool) {
     );
   `);
 
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_state
-    ON strategy_recommendations(state);
-  `);
-
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_type
-    ON strategy_recommendations(strategy_type);
-  `);
-
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_score
-    ON strategy_recommendations(strategy_score DESC);
-  `);
-
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_priority
-    ON strategy_recommendations(priority);
-  `);
-
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_strategy_action_conversions_key
-    ON strategy_action_conversions(recommendation_key);
-  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_state ON strategy_recommendations(state);`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_type ON strategy_recommendations(strategy_type);`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_score ON strategy_recommendations(strategy_score DESC);`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_strategy_recommendations_priority ON strategy_recommendations(priority);`);
 }
 
-/* ============================================================
-   Recommendation Builders
-============================================================ */
+function baseRecommendation(overrides) {
+  const impact = clamp(overrides.impact_score);
+  const urgency = clamp(overrides.urgency_score);
+  const feasibility = clamp(overrides.feasibility_score);
+  const confidence = clamp(overrides.confidence_score);
+  const risk = clamp(overrides.risk_score);
+  const score = clamp(overrides.strategy_score ?? impact * 0.38 + urgency * 0.26 + feasibility * 0.22 + confidence * 0.14);
+
+  return {
+    priority: priorityFromScore(score),
+    confidence_score: Math.round(confidence),
+    impact_score: Math.round(impact),
+    urgency_score: Math.round(urgency),
+    feasibility_score: Math.round(feasibility),
+    risk_score: Math.round(risk),
+    strategy_score: Math.round(score),
+    ...overrides,
+    priority: overrides.priority || priorityFromScore(score),
+    metadata: {
+      tone: recommendationTone(overrides.strategy_type),
+      ...(overrides.metadata || {}),
+    },
+  };
+}
 
 function buildForecastRecommendation(row) {
   const probability = n(row.probability);
@@ -129,498 +130,163 @@ function buildForecastRecommendation(row) {
   const risk = n(row.risk_score);
   const momentum = n(row.momentum_score);
   const confidence = n(row.confidence_score);
-
   const type = clean(row.forecast_type || "forecast");
 
   let strategyType = "forecast_opportunity";
-  let ownerRole = "Strategy Director";
+  let ownerRole = "Strategy Lead";
+  let title = `Act on ${row.entity_name || row.title || "forecast signal"}`;
+  let recommendedAction = row.recommended_action || "Assign a strategy owner to review this forecast and define the next action.";
   let timeHorizon = "7 days";
-
-  let title = `Capitalize on ${row.entity_name || row.title}`;
-  let recommendedAction =
-    "Review forecast and assign operational ownership.";
 
   if (type.includes("decline") || risk >= 70) {
     strategyType = "risk_defense";
-    ownerRole = "Risk Director";
-    timeHorizon = risk >= 85 ? "24 Hours" : "72 Hours";
-
-    title = `Defend ${row.entity_name || row.title}`;
-    recommendedAction =
-      "Deploy defensive messaging, reinforce coalition partners, and activate rapid response.";
-  }
-
-  if (type.includes("donor")) {
+    title = `Defend against risk signal: ${row.entity_name || row.title}`;
+    recommendedAction = `Create a defensive plan for ${row.entity_name || "this entity"} and identify the strongest counter-relationship.`;
+    ownerRole = "Risk Lead";
+    timeHorizon = risk >= 85 ? "24 hours" : "72 hours";
+  } else if (type.includes("donor")) {
     strategyType = "donor_growth";
-    ownerRole = "Finance Director";
-
-    title = `Expand donor network around ${row.entity_name}`;
-    recommendedAction =
-      "Prioritize donor cultivation and assign fundraising outreach.";
-  }
-
-  if (type.includes("endorsement")) {
+    title = `Prioritize donor movement: ${row.entity_name || row.title}`;
+    recommendedAction = `Route ${row.entity_name || "this donor signal"} to fundraising leadership and map candidate alignment.`;
+    ownerRole = "Fundraising Lead";
+    timeHorizon = "72 hours";
+  } else if (type.includes("endorsement")) {
     strategyType = "endorsement_capture";
-    ownerRole = "Political Director";
-
-    title = `Secure endorsement pathway`;
-    recommendedAction =
-      "Identify strongest relationship bridge and initiate endorsement plan.";
-  }
-
-  if (type.includes("vendor")) {
+    title = `Pursue endorsement path: ${row.entity_name || row.title}`;
+    recommendedAction = "Identify the top relationship bridge and prepare endorsement outreach.";
+    ownerRole = "Endorsement Lead";
+    timeHorizon = "5 days";
+  } else if (type.includes("vendor")) {
     strategyType = "vendor_execution";
-    ownerRole = "Operations Director";
-
-    title = `Optimize execution resources`;
-    recommendedAction =
-      "Compare vendor capacity against operational gaps.";
+    title = `Review vendor execution fit: ${row.entity_name || row.title}`;
+    recommendedAction = "Compare this vendor signal against state operating gaps and assign procurement review.";
+    ownerRole = "Operations Lead";
   }
 
-  const impact =
-    clamp(
-      probability * .35 +
-      opportunity * .35 +
-      momentum * .15 +
-      confidence * .15
-    );
+  const impact = clamp(probability * 0.35 + opportunity * 0.35 + momentum * 0.15 + confidence * 0.15);
+  const urgency = clamp(risk * 0.45 + probability * 0.25 + momentum * 0.2 + (type.includes("decline") ? 15 : 0));
+  const feasibility = clamp(confidence * 0.55 + opportunity * 0.25 + probability * 0.2);
 
-  const urgency =
-    clamp(
-      risk * .45 +
-      probability * .25 +
-      momentum * .20 +
-      (type.includes("decline") ? 15 : 0)
-    );
-
-  const feasibility =
-    clamp(
-      confidence * .55 +
-      opportunity * .25 +
-      probability * .20
-    );
-
-  const strategyScore =
-    clamp(
-      impact * .38 +
-      urgency * .28 +
-      feasibility * .22 +
-      confidence * .12
-    );
-
-  return {
-    recommendation_key:
-      stableKey("forecast", row.prediction_key || row.id),
-
-    source_key:
-      row.prediction_key || row.id,
-
+  return baseRecommendation({
+    recommendation_key: stableKey("strategy", "forecast", row.prediction_key || row.id),
+    source_key: row.prediction_key || String(row.id),
     source_type: "forecast",
-
     entity_key: row.entity_key,
-
     entity_type: row.entity_type,
-
-    entity_name:
-      row.entity_name || row.title,
-
+    entity_name: row.entity_name || row.title,
     state: row.state,
-
     strategy_type: strategyType,
-
-    priority:
-      priorityFromScore(strategyScore),
-
-    confidence_score: Math.round(confidence),
-
-    impact_score: Math.round(impact),
-
-    urgency_score: Math.round(urgency),
-
-    feasibility_score: Math.round(feasibility),
-
-    risk_score: Math.round(risk),
-
-    strategy_score: Math.round(strategyScore),
-
+    confidence_score: confidence,
+    impact_score: impact,
+    urgency_score: urgency,
+    feasibility_score: feasibility,
+    risk_score: risk,
     title,
-
-    summary:
-      row.detail ||
-      `Probability ${Math.round(probability)}%, Opportunity ${Math.round(opportunity)}%, Risk ${Math.round(risk)}%.`,
-
-    recommended_action:
-      recommendedAction,
-
-    rationale:
-      `Generated from Forecast Intelligence Engine.`,
-
-    owner_role:
-      ownerRole,
-
-    time_horizon:
-      timeHorizon,
-
-    command_center_payload: {
-      state: row.state,
-      entity_name: row.entity_name,
-      type: strategyType,
-      priority:
-        priorityFromScore(strategyScore)
-    },
-
-    metadata: {
-      tone:
-        recommendationTone(strategyType),
-
-      forecast_probability:
-        probability,
-
-      opportunity,
-
-      momentum
-    }
-  };
+    summary: row.detail || `Forecast probability ${Math.round(probability)}%, opportunity ${Math.round(opportunity)}%, risk ${Math.round(risk)}%.`,
+    recommended_action: recommendedAction,
+    rationale: `Generated from forecast probability ${Math.round(probability)}%, opportunity ${Math.round(opportunity)}%, momentum ${Math.round(momentum)}%, risk ${Math.round(risk)}%, and confidence ${Math.round(confidence)}%.`,
+    owner_role: ownerRole,
+    time_horizon: timeHorizon,
+    command_center_payload: { title, state: row.state, type: strategyType, source: "strategy-engine", entity_name: row.entity_name || row.title, recommended_action: recommendedAction },
+    metadata: { forecast_type: row.forecast_type, probability, opportunity, momentum },
+  });
 }
-
-/* ============================================================
-   Coalition Recommendation Builder
-============================================================ */
 
 function buildCoalitionRecommendation(row) {
+  const score = n(row.coalition_score);
+  const opportunity = n(row.opportunity_score);
+  const risk = n(row.risk_score);
+  const confidence = n(row.confidence_score);
+  const forecast = n(row.forecast_probability);
+  const impact = clamp(score * 0.4 + opportunity * 0.3 + forecast * 0.2 + confidence * 0.1);
+  const urgency = clamp(risk * 0.35 + forecast * 0.25 + score * 0.25 + opportunity * 0.15);
+  const feasibility = clamp(confidence * 0.4 + score * 0.35 + opportunity * 0.25);
+  const title = `Activate coalition strategy: ${row.coalition_name}`;
+  const recommendedAction = row.recommended_action || `Assign a coalition owner for ${row.coalition_name} and convert top members into outreach actions.`;
 
-  const coalition =
-    n(row.coalition_score);
-
-  const opportunity =
-    n(row.opportunity_score);
-
-  const risk =
-    n(row.risk_score);
-
-  const confidence =
-    n(row.confidence_score);
-
-  const forecast =
-    n(row.forecast_probability);
-
-  const impact =
-    clamp(
-      coalition*.40+
-      opportunity*.30+
-      forecast*.20+
-      confidence*.10
-    );
-
-  const urgency =
-    clamp(
-      risk*.35+
-      forecast*.25+
-      coalition*.25+
-      opportunity*.15
-    );
-
-  const feasibility =
-    clamp(
-      confidence*.40+
-      coalition*.35+
-      opportunity*.25
-    );
-
-  const score =
-    clamp(
-      impact*.40+
-      urgency*.25+
-      feasibility*.25+
-      confidence*.10
-    );
-
-  return {
-
-    recommendation_key:
-      stableKey("coalition",row.coalition_key||row.id),
-
-    source_key:
-      row.coalition_key,
-
-    source_type:"coalition",
-
-    entity_key:
-      row.lead_entity_key,
-
-    entity_type:
-      row.coalition_type,
-
-    entity_name:
-      row.coalition_name,
-
-    state:
-      row.state,
-
-    strategy_type:
-      "coalition_activation",
-
-    priority:
-      priorityFromScore(score),
-
-    confidence_score:
-      Math.round(confidence),
-
-    impact_score:
-      Math.round(impact),
-
-    urgency_score:
-      Math.round(urgency),
-
-    feasibility_score:
-      Math.round(feasibility),
-
-    risk_score:
-      Math.round(risk),
-
-    strategy_score:
-      Math.round(score),
-
-    title:
-      `Activate Coalition ${row.coalition_name}`,
-
-    summary:
-      `${row.coalition_name} Coalition Score ${Math.round(coalition)}%.`,
-
-    recommended_action:
-      row.recommended_action ||
-      "Assign coalition manager and execute engagement campaign.",
-
-    rationale:
-      "Generated from Coalition Intelligence Engine.",
-
-    owner_role:
-      "Coalition Director",
-
-    time_horizon:
-      score>=85 ? "24 Hours" : "7 Days",
-
-    command_center_payload:{
-      state:row.state,
-      coalition_key:row.coalition_key
-    },
-
-    metadata:{
-      tone:
-        recommendationTone("coalition"),
-      entity_count:
-        row.entity_count,
-      relationship_count:
-        row.relationship_count
-    }
-
-  };
-
+  return baseRecommendation({
+    recommendation_key: stableKey("strategy", "coalition", row.coalition_key || row.id),
+    source_key: row.coalition_key || String(row.id),
+    source_type: "coalition",
+    entity_key: row.lead_entity_key,
+    entity_type: row.coalition_type,
+    entity_name: row.lead_entity_name || row.coalition_name,
+    state: row.state,
+    strategy_type: "coalition_activation",
+    confidence_score: confidence,
+    impact_score: impact,
+    urgency_score: urgency,
+    feasibility_score: feasibility,
+    risk_score: risk,
+    title,
+    summary: `${row.coalition_name} has coalition score ${Math.round(score)}%, opportunity ${Math.round(opportunity)}%, and forecast probability ${Math.round(forecast)}%.`,
+    recommended_action: recommendedAction,
+    rationale: "Generated from coalition score, cohesion, forecast probability, entity count, and member influence density.",
+    owner_role: "Coalition Lead",
+    time_horizon: score >= 85 ? "24 hours" : "7 days",
+    command_center_payload: { title, state: row.state, type: "coalition_activation", source: "strategy-engine", entity_name: row.coalition_name, recommended_action: recommendedAction, coalition_key: row.coalition_key },
+    metadata: { coalition_type: row.coalition_type, entity_count: row.entity_count, relationship_count: row.relationship_count },
+  });
 }
 
-/* ============================================================
-   Influence Recommendation Builder
-============================================================ */
+function buildInfluenceRecommendation(row) {
+  const influence = n(row.influence_score);
+  const centrality = n(row.centrality_score);
+  const reach = n(row.reach_score);
+  const momentum = n(row.momentum_score);
+  const risk = n(row.risk_score);
+  const connections = n(row.total_connections);
+  const impact = clamp(influence * 0.35 + centrality * 0.25 + reach * 0.25 + Math.min(15, connections));
+  const urgency = clamp(momentum * 0.3 + risk * 0.35 + influence * 0.2 + centrality * 0.15);
+  const feasibility = clamp(centrality * 0.35 + reach * 0.25 + Math.min(30, connections * 3) + influence * 0.1);
+  const confidence = clamp(45 + Math.min(35, connections * 4) + Math.min(20, n(row.source_count) * 5));
 
-function buildInfluenceRecommendation(row){
+  let strategyType = "relationship_growth";
+  let ownerRole = "Political Director";
+  if (row.entity_type === "donor") { strategyType = "donor_growth"; ownerRole = "Fundraising Lead"; }
+  else if (row.entity_type === "vendor") { strategyType = "vendor_execution"; ownerRole = "Operations Lead"; }
+  else if (row.entity_type === "candidate") { strategyType = "candidate_positioning"; ownerRole = "Candidate Lead"; }
+  else if (row.entity_type === "endorsement" || row.entity_type === "organization") { strategyType = "endorsement_capture"; ownerRole = "Endorsement Lead"; }
 
-  const influence=n(row.influence_score);
-  const centrality=n(row.centrality_score);
-  const reach=n(row.reach_score);
-  const momentum=n(row.momentum_score);
-  const risk=n(row.risk_score);
-  const connections=n(row.total_connections);
+  const title = `Develop strategic relationship: ${row.entity_name}`;
+  const recommendedAction = `Assign ${row.entity_name} to ${ownerRole} for relationship mapping and next-step conversion.`;
 
-  const impact=
-    clamp(
-      influence*.35+
-      centrality*.25+
-      reach*.25+
-      Math.min(15,connections)
-    );
-
-  const urgency=
-    clamp(
-      momentum*.30+
-      risk*.35+
-      influence*.20+
-      centrality*.15
-    );
-
-  const feasibility=
-    clamp(
-      centrality*.35+
-      reach*.25+
-      Math.min(30,connections*3)+
-      influence*.10
-    );
-
-  const confidence=
-    clamp(
-      45+
-      Math.min(35,connections*4)+
-      Math.min(20,n(row.source_count)*5)
-    );
-
-  const strategyScore=
-    clamp(
-      impact*.38+
-      urgency*.22+
-      feasibility*.25+
-      confidence*.15
-    );
-
-  let strategyType="relationship_growth";
-  let ownerRole="Political Director";
-
-  if(row.entity_type==="candidate"){
-      strategyType="candidate_positioning";
-      ownerRole="Campaign Director";
-  }
-
-  if(row.entity_type==="donor"){
-      strategyType="donor_growth";
-      ownerRole="Finance Director";
-  }
-
-  if(row.entity_type==="vendor"){
-      strategyType="vendor_execution";
-      ownerRole="Operations Director";
-  }
-
-  if(
-      row.entity_type==="organization" ||
-      row.entity_type==="endorsement"
-  ){
-      strategyType="endorsement_capture";
-      ownerRole="Political Director";
-  }
-
-  return{
-
-      recommendation_key:
-          stableKey("influence",row.entity_key),
-
-      source_key:
-          row.entity_key,
-
-      source_type:
-          "influence",
-
-      entity_key:
-          row.entity_key,
-
-      entity_type:
-          row.entity_type,
-
-      entity_name:
-          row.entity_name,
-
-      state:
-          row.state,
-
-      strategy_type:
-          strategyType,
-
-      priority:
-          priorityFromScore(strategyScore),
-
-      confidence_score:
-          Math.round(confidence),
-
-      impact_score:
-          Math.round(impact),
-
-      urgency_score:
-          Math.round(urgency),
-
-      feasibility_score:
-          Math.round(feasibility),
-
-      risk_score:
-          Math.round(risk),
-
-      strategy_score:
-          Math.round(strategyScore),
-
-      title:
-          `Develop Strategic Relationship: ${row.entity_name}`,
-
-      summary:
-          `${row.entity_name} Influence ${Math.round(influence)}%, Centrality ${Math.round(centrality)}%, Reach ${Math.round(reach)}%.`,
-
-      recommended_action:
-          `Assign ${row.entity_name} to ${ownerRole} for relationship expansion.`,
-
-      rationale:
-          "Generated from Influence Intelligence Engine.",
-
-      owner_role:
-          ownerRole,
-
-      time_horizon:
-          strategyScore>=85 ? "48 Hours":"7 Days",
-
-      command_center_payload:{
-          state:row.state,
-          entity_name:row.entity_name,
-          priority:priorityFromScore(strategyScore)
-      },
-
-      metadata:{
-          tone:
-              recommendationTone(strategyType),
-          influence,
-          centrality,
-          reach,
-          connections
-      }
-
-  };
-
+  return baseRecommendation({
+    recommendation_key: stableKey("strategy", "influence", row.entity_key || row.id),
+    source_key: row.entity_key || String(row.id),
+    source_type: "influence",
+    entity_key: row.entity_key,
+    entity_type: row.entity_type,
+    entity_name: row.entity_name,
+    state: row.state,
+    strategy_type: strategyType,
+    confidence_score: confidence,
+    impact_score: impact,
+    urgency_score: urgency,
+    feasibility_score: feasibility,
+    risk_score: risk,
+    title,
+    summary: `${row.entity_name} has influence ${Math.round(influence)}%, centrality ${Math.round(centrality)}%, reach ${Math.round(reach)}%, and ${connections} graph connections.`,
+    recommended_action: recommendedAction,
+    rationale: "Generated from entity influence, centrality, reach, momentum, risk, and relationship count.",
+    owner_role: ownerRole,
+    time_horizon: influence >= 85 ? "48 hours" : "7 days",
+    command_center_payload: { title, state: row.state, type: strategyType, source: "strategy-engine", entity_name: row.entity_name, recommended_action: recommendedAction },
+    metadata: { influence, centrality, reach, connections },
+  });
 }
-
-/* ============================================================
-   Persistence Layer
-============================================================ */
 
 async function persistRecommendation(client, item) {
   await client.query(
     `
       INSERT INTO strategy_recommendations (
-        recommendation_key,
-        source_key,
-        source_type,
-        entity_key,
-        entity_type,
-        entity_name,
-        state,
-        strategy_type,
-        priority,
-        confidence_score,
-        impact_score,
-        urgency_score,
-        feasibility_score,
-        risk_score,
-        strategy_score,
-        title,
-        summary,
-        recommended_action,
-        rationale,
-        owner_role,
-        time_horizon,
-        command_center_payload,
-        metadata,
-        updated_at,
-        calculated_at
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22::jsonb,$23::jsonb,NOW(),NOW()
-      )
-      ON CONFLICT (recommendation_key)
-      DO UPDATE SET
+        recommendation_key, source_key, source_type, entity_key, entity_type, entity_name, state,
+        strategy_type, priority, confidence_score, impact_score, urgency_score, feasibility_score,
+        risk_score, strategy_score, title, summary, recommended_action, rationale, owner_role,
+        time_horizon, command_center_payload, metadata, updated_at, calculated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23::jsonb,NOW(),NOW()
+      ) ON CONFLICT (recommendation_key) DO UPDATE SET
         source_key = EXCLUDED.source_key,
         source_type = EXCLUDED.source_type,
         entity_key = EXCLUDED.entity_key,
@@ -648,116 +314,38 @@ async function persistRecommendation(client, item) {
         calculated_at = NOW()
     `,
     [
-      item.recommendation_key,
-      item.source_key,
-      item.source_type,
-      item.entity_key,
-      item.entity_type,
-      item.entity_name,
-      item.state,
-      item.strategy_type,
-      item.priority,
-      item.confidence_score,
-      item.impact_score,
-      item.urgency_score,
-      item.feasibility_score,
-      item.risk_score,
-      item.strategy_score,
-      item.title,
-      item.summary,
-      item.recommended_action,
-      item.rationale,
-      item.owner_role,
-      item.time_horizon,
-      JSON.stringify(item.command_center_payload || {}),
-      JSON.stringify(item.metadata || {}),
+      item.recommendation_key, item.source_key, item.source_type, item.entity_key, item.entity_type, item.entity_name, item.state,
+      item.strategy_type, item.priority, item.confidence_score, item.impact_score, item.urgency_score, item.feasibility_score,
+      item.risk_score, item.strategy_score, item.title, item.summary, item.recommended_action, item.rationale, item.owner_role,
+      item.time_horizon, JSON.stringify(item.command_center_payload || {}), JSON.stringify(item.metadata || {}),
     ]
   );
 }
 
-function dedupeRecommendations(items = []) {
-  const unique = new Map();
-
-  for (const item of items) {
-    if (!item?.recommendation_key) continue;
-
-    const existing = unique.get(item.recommendation_key);
-
-    if (!existing || n(item.strategy_score) > n(existing.strategy_score)) {
-      unique.set(item.recommendation_key, item);
-    }
-  }
-
-  return [...unique.values()].sort((a, b) => n(b.strategy_score) - n(a.strategy_score));
-}
-
-/* ============================================================
-   Data Loaders
-============================================================ */
-
-async function loadForecastRows(client) {
-  const result = await client.query(`
-    SELECT *
-    FROM influence_predictions
-    WHERE status = 'active'
-    ORDER BY probability DESC, opportunity_score DESC
-    LIMIT 250
-  `);
-
-  return result.rows;
-}
-
-async function loadCoalitionRows(client) {
-  const result = await client.query(`
-    SELECT *
-    FROM coalition_intelligence
-    WHERE status = 'active'
-    ORDER BY coalition_score DESC, opportunity_score DESC
-    LIMIT 250
-  `);
-
-  return result.rows;
-}
-
-async function loadInfluenceRows(client) {
-  const result = await client.query(`
-    SELECT *
-    FROM influence_entities
-    WHERE influence_score >= 45
-    ORDER BY influence_score DESC, centrality_score DESC
-    LIMIT 350
-  `);
-
-  return result.rows;
-}
-
-/* ============================================================
-   Recalculation Engine
-============================================================ */
-
 export async function recalculateStrategyRecommendations() {
   const client = await pool.connect();
-
   try {
     await client.query("BEGIN");
-
     await ensureStrategySchema(client);
 
-    const forecastRows = await loadForecastRows(client);
-    const coalitionRows = await loadCoalitionRows(client);
-    const influenceRows = await loadInfluenceRows(client);
+    const forecastRows = await client.query(`SELECT * FROM influence_predictions WHERE status = 'active' ORDER BY probability DESC, opportunity_score DESC LIMIT 250`);
+    const coalitionRows = await client.query(`SELECT * FROM coalition_intelligence WHERE status = 'active' ORDER BY coalition_score DESC, opportunity_score DESC LIMIT 250`);
+    const influenceRows = await client.query(`SELECT * FROM influence_entities WHERE influence_score >= 45 ORDER BY influence_score DESC, centrality_score DESC LIMIT 350`);
 
     const recommendations = [
-      ...forecastRows.map(buildForecastRecommendation),
-      ...coalitionRows.map(buildCoalitionRecommendation),
-      ...influenceRows.map(buildInfluenceRecommendation),
+      ...forecastRows.rows.map(buildForecastRecommendation),
+      ...coalitionRows.rows.map(buildCoalitionRecommendation),
+      ...influenceRows.rows.map(buildInfluenceRecommendation),
     ];
 
-    const sorted = dedupeRecommendations(recommendations);
-
-    for (const recommendation of sorted) {
-      await persistRecommendation(client, recommendation);
+    const unique = new Map();
+    for (const recommendation of recommendations) {
+      const existing = unique.get(recommendation.recommendation_key);
+      if (!existing || n(recommendation.strategy_score) > n(existing.strategy_score)) unique.set(recommendation.recommendation_key, recommendation);
     }
+
+    const sorted = [...unique.values()].sort((a, b) => b.strategy_score - a.strategy_score);
+    for (const recommendation of sorted) await persistRecommendation(client, recommendation);
 
     await client.query("COMMIT");
 
@@ -767,8 +355,6 @@ export async function recalculateStrategyRecommendations() {
         recommendations: sorted.length,
         critical: sorted.filter((item) => item.priority === "critical").length,
         high: sorted.filter((item) => item.priority === "high").length,
-        medium: sorted.filter((item) => item.priority === "medium").length,
-        low: sorted.filter((item) => item.priority === "low").length,
         states_covered: new Set(sorted.map((item) => item.state).filter(Boolean)).size,
         calculated_at: new Date().toISOString(),
       },
@@ -782,10 +368,6 @@ export async function recalculateStrategyRecommendations() {
   }
 }
 
-/* ============================================================
-   Public Query Functions
-============================================================ */
-
 export async function getStrategySummary() {
   await ensureStrategySchema(pool);
 
@@ -794,8 +376,6 @@ export async function getStrategySummary() {
       COUNT(*)::int AS total_recommendations,
       COUNT(*) FILTER (WHERE priority = 'critical')::int AS critical_recommendations,
       COUNT(*) FILTER (WHERE priority = 'high')::int AS high_recommendations,
-      COUNT(*) FILTER (WHERE priority = 'medium')::int AS medium_recommendations,
-      COUNT(*) FILTER (WHERE priority = 'low')::int AS low_recommendations,
       COUNT(DISTINCT state)::int AS states_covered,
       ROUND(AVG(strategy_score), 2) AS avg_strategy_score,
       MAX(strategy_score) AS top_strategy_score
@@ -804,11 +384,7 @@ export async function getStrategySummary() {
   `);
 
   const byType = await pool.query(`
-    SELECT
-      strategy_type,
-      COUNT(*)::int AS count,
-      ROUND(AVG(strategy_score), 2) AS avg_score,
-      MAX(strategy_score) AS top_score
+    SELECT strategy_type, COUNT(*)::int AS count, ROUND(AVG(strategy_score), 2) AS avg_score, MAX(strategy_score) AS top_score
     FROM strategy_recommendations
     WHERE status = 'active'
     GROUP BY strategy_type
@@ -816,205 +392,56 @@ export async function getStrategySummary() {
   `);
 
   const byState = await pool.query(`
-    SELECT
-      state,
-      COUNT(*)::int AS recommendations,
-      ROUND(AVG(strategy_score), 2) AS avg_score,
-      MAX(strategy_score) AS top_score
+    SELECT state, COUNT(*)::int AS recommendations, ROUND(AVG(strategy_score), 2) AS avg_score, MAX(strategy_score) AS top_score
     FROM strategy_recommendations
-    WHERE status = 'active'
-    AND state IS NOT NULL
+    WHERE status = 'active' AND state IS NOT NULL
     GROUP BY state
     ORDER BY top_score DESC NULLS LAST
   `);
 
-  const byPriority = await pool.query(`
-    SELECT
-      priority,
-      COUNT(*)::int AS count,
-      ROUND(AVG(strategy_score), 2) AS avg_score,
-      MAX(strategy_score) AS top_score
-    FROM strategy_recommendations
-    WHERE status = 'active'
-    GROUP BY priority
-    ORDER BY
-      CASE priority
-        WHEN 'critical' THEN 1
-        WHEN 'high' THEN 2
-        WHEN 'medium' THEN 3
-        WHEN 'low' THEN 4
-        ELSE 5
-      END
-  `);
-
-  return {
-    summary: summary.rows[0] || {},
-    by_type: byType.rows,
-    by_state: byState.rows,
-    by_priority: byPriority.rows,
-  };
+  return { summary: summary.rows[0] || {}, by_type: byType.rows, by_state: byState.rows };
 }
 
-export async function getStrategyRecommendations({
-  state = "",
-  type = "",
-  priority = "",
-  limit = 75,
-} = {}) {
+export async function getStrategyRecommendations({ state = "", type = "", priority = "", limit = 75 } = {}) {
   await ensureStrategySchema(pool);
 
   const params = [];
   const where = [`status = 'active'`];
 
-  if (state) {
-    params.push(String(state).toUpperCase());
-    where.push(`state = $${params.length}`);
-  }
-
-  if (type) {
-    params.push(String(type).toLowerCase());
-    where.push(`strategy_type = $${params.length}`);
-  }
-
-  if (priority) {
-    params.push(String(priority).toLowerCase());
-    where.push(`priority = $${params.length}`);
-  }
+  if (state) { params.push(String(state).toUpperCase()); where.push(`state = $${params.length}`); }
+  if (type) { params.push(String(type).toLowerCase()); where.push(`strategy_type = $${params.length}`); }
+  if (priority) { params.push(String(priority).toLowerCase()); where.push(`priority = $${params.length}`); }
 
   params.push(Math.min(300, Math.max(1, n(limit, 75))));
 
   const result = await pool.query(
-    `
-      SELECT *
-      FROM strategy_recommendations
-      WHERE ${where.join(" AND ")}
-      ORDER BY strategy_score DESC, urgency_score DESC, impact_score DESC
-      LIMIT $${params.length}
-    `,
+    `SELECT * FROM strategy_recommendations WHERE ${where.join(" AND ")} ORDER BY strategy_score DESC, urgency_score DESC, impact_score DESC LIMIT $${params.length}`,
     params
   );
 
-  return {
-    results: result.rows,
-    count: result.rows.length,
-  };
+  return { results: result.rows, count: result.rows.length };
 }
 
 export async function getStrategyDetail({ key = "" } = {}) {
   await ensureStrategySchema(pool);
-
-  const result = await pool.query(
-    `
-      SELECT *
-      FROM strategy_recommendations
-      WHERE recommendation_key = $1
-      LIMIT 1
-    `,
-    [key]
-  );
-
-  return {
-    recommendation: result.rows[0] || null,
-  };
+  const result = await pool.query(`SELECT * FROM strategy_recommendations WHERE recommendation_key = $1 LIMIT 1`, [key]);
+  return { recommendation: result.rows[0] || null };
 }
-
-/* ============================================================
-   Command Center Conversion Queue
-============================================================ */
 
 export async function queueStrategyAction({ recommendationKey = "" } = {}) {
   await ensureStrategySchema(pool);
-
-  const result = await pool.query(
-    `
-      SELECT *
-      FROM strategy_recommendations
-      WHERE recommendation_key = $1
-      LIMIT 1
-    `,
-    [recommendationKey]
-  );
-
+  const result = await pool.query(`SELECT * FROM strategy_recommendations WHERE recommendation_key = $1 LIMIT 1`, [recommendationKey]);
   const recommendation = result.rows[0];
 
-  if (!recommendation) {
-    return {
-      ok: false,
-      error: "Strategy recommendation not found.",
-    };
-  }
+  if (!recommendation) return { ok: false, error: "Strategy recommendation not found." };
 
-  const conversionKey = stableKey(
-    "strategy_conversion",
-    recommendation.recommendation_key
-  );
-
-  const payload = {
-    ...(recommendation.command_center_payload || {}),
-    recommendation_key: recommendation.recommendation_key,
-    strategy_type: recommendation.strategy_type,
-    priority: recommendation.priority,
-    state: recommendation.state,
-    title: recommendation.title,
-    detail: recommendation.recommended_action || recommendation.summary,
-    owner_role: recommendation.owner_role,
-    time_horizon: recommendation.time_horizon,
-    source: "strategy-engine",
-  };
-
+  const conversionKey = stableKey("strategy_conversion", recommendation.recommendation_key);
   await pool.query(
-    `
-      INSERT INTO strategy_action_conversions (
-        conversion_key,
-        recommendation_key,
-        state,
-        status,
-        payload,
-        updated_at
-      )
-      VALUES ($1,$2,$3,$4,$5::jsonb,NOW())
-      ON CONFLICT (conversion_key)
-      DO UPDATE SET
-        status = EXCLUDED.status,
-        payload = EXCLUDED.payload,
-        updated_at = NOW()
-    `,
-    [
-      conversionKey,
-      recommendation.recommendation_key,
-      recommendation.state,
-      "queued",
-      JSON.stringify(payload),
-    ]
+    `INSERT INTO strategy_action_conversions (conversion_key, recommendation_key, state, status, payload, updated_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,NOW())
+     ON CONFLICT (conversion_key) DO UPDATE SET status = EXCLUDED.status, payload = EXCLUDED.payload, updated_at = NOW()`,
+    [conversionKey, recommendation.recommendation_key, recommendation.state, "queued", JSON.stringify(recommendation.command_center_payload || {})]
   );
 
-  return {
-    ok: true,
-    conversion_key: conversionKey,
-    recommendation_key: recommendation.recommendation_key,
-    payload,
-  };
-}
-
-/* ============================================================
-   Lightweight Health Check
-============================================================ */
-
-export async function getStrategyHealth() {
-  await ensureStrategySchema(pool);
-
-  const result = await pool.query(`
-    SELECT
-      COUNT(*)::int AS recommendation_count,
-      MAX(updated_at) AS last_updated
-    FROM strategy_recommendations
-  `);
-
-  return {
-    ok: true,
-    service: "strategy-recommendation-engine",
-    recommendation_count: result.rows[0]?.recommendation_count || 0,
-    last_updated: result.rows[0]?.last_updated || null,
-    timestamp: new Date().toISOString(),
-  };
+  return { ok: true, conversion_key: conversionKey, recommendation_key: recommendation.recommendation_key, payload: recommendation.command_center_payload || {} };
 }

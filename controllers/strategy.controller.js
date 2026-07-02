@@ -1,17 +1,16 @@
 import {
   ensureStrategySchema,
   getStrategyDetail,
-  getStrategyHealth,
   getStrategyRecommendations,
   getStrategySummary,
   queueStrategyAction,
   recalculateStrategyRecommendations,
-} from "../services/strategyRecommendation.service.js"; 
+} from "../services/strategyRecommendation.service.js";
 
 export async function strategyHealth(req, res, next) {
   try {
-    const result = await getStrategyHealth();
-    res.json(result);
+    await ensureStrategySchema();
+    res.json({ ok: true, service: "strategy-recommendation-engine", timestamp: new Date().toISOString() });
   } catch (error) {
     next(error);
   }
@@ -19,8 +18,7 @@ export async function strategyHealth(req, res, next) {
 
 export async function strategyRecalculate(req, res, next) {
   try {
-    const result = await recalculateStrategyRecommendations();
-    res.json(result);
+    res.json(await recalculateStrategyRecommendations());
   } catch (error) {
     next(error);
   }
@@ -28,9 +26,7 @@ export async function strategyRecalculate(req, res, next) {
 
 export async function strategySummary(req, res, next) {
   try {
-    await ensureStrategySchema();
-    const result = await getStrategySummary();
-    res.json(result);
+    res.json(await getStrategySummary());
   } catch (error) {
     next(error);
   }
@@ -38,14 +34,12 @@ export async function strategySummary(req, res, next) {
 
 export async function strategyRecommendations(req, res, next) {
   try {
-    const result = await getStrategyRecommendations({
+    res.json(await getStrategyRecommendations({
       state: req.query.state,
       type: req.query.type,
       priority: req.query.priority,
       limit: req.query.limit,
-    });
-
-    res.json(result);
+    }));
   } catch (error) {
     next(error);
   }
@@ -53,11 +47,7 @@ export async function strategyRecommendations(req, res, next) {
 
 export async function strategyDetail(req, res, next) {
   try {
-    const result = await getStrategyDetail({
-      key: req.params.key,
-    });
-
-    res.json(result);
+    res.json(await getStrategyDetail({ key: req.params.key }));
   } catch (error) {
     next(error);
   }
@@ -65,15 +55,7 @@ export async function strategyDetail(req, res, next) {
 
 export async function strategyQueueAction(req, res, next) {
   try {
-    const result = await queueStrategyAction({
-      recommendationKey: req.params.key || req.body?.recommendation_key,
-    });
-
-    if (!result.ok) {
-      return res.status(404).json(result);
-    }
-
-    res.json(result);
+    res.json(await queueStrategyAction({ recommendationKey: req.params.key || req.body?.recommendation_key }));
   } catch (error) {
     next(error);
   }
