@@ -105,6 +105,7 @@ import signalWorkspaceMatchingRoutes from "./routes/signalWorkspaceMatching.rout
 import consultantBusinessSuiteRoutes from "./routes/consultantBusinessSuite.routes.js";
 import universalSearchRoutes from "./routes/universalSearch.routes.js";
 import opportunityEngineRoutes from "./routes/opportunityEngine.routes.js";
+import decisionIntelligenceRoutes from "./routes/decisionIntelligence.routes.js";
 import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
@@ -303,6 +304,7 @@ app.use("/api/launch-data-seeder", launchDataSeederRoutes);
 app.use("/api/launch-automation", launchAutomationRoutes); 
 app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/workspace-activity", workspaceActivityRoutes);
+app.use("/api/decision-intelligence", decisionIntelligenceRoutes);
 app.use("/api/tour", tourRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
