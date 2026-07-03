@@ -94,6 +94,7 @@ import politicalGraphRoutes from "./routes/politicalGraph.routes.js";
 import influenceRoutes from "./routes/influence.routes.js"; 
 import coalitionRoutes from "./routes/coalition.routes.js";
 import strategyRoutes from "./routes/strategy.routes.js";
+import nationalDigitalTwinRoutes from "./routes/nationalDigitalTwin.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -307,6 +308,7 @@ app.use("/api/live-data-refresh", liveDataRefreshRoutes);
 app.use("/api/workspace-activity", workspaceActivityRoutes);
 app.use("/api/decision-intelligence", decisionIntelligenceRoutes);
 app.use("/api/campaign-simulation", campaignSimulationRoutes);
+app.use("/api/national-digital-twin", nationalDigitalTwinRoutes);
 app.use("/api/tour", tourRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
