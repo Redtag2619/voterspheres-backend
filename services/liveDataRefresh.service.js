@@ -1,7 +1,20 @@
 import { pool } from "../db/pool.js";
+import { syncFundraisingFromFec } from "./fec.service.js";
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
+}
+
+function number(value = 0) {
+  return Number(value || 0);
+}
+
+function liveFecCycle() {
+  return Number(process.env.FEC_DEFAULT_CYCLE || process.env.FEC_CYCLE || 2026);
+}
+
+function contactSyncLimit() {
+  return Math.max(1, Math.min(Number(process.env.FEC_CONTACT_SYNC_LIMIT || 500), 5000));
 }
 
 async function safeQuery(label, sql, params = []) {
@@ -9,6 +22,7 @@ async function safeQuery(label, sql, params = []) {
 
   try {
     const result = await pool.query(sql, params);
+
     return {
       label,
       ok: true,
@@ -19,6 +33,7 @@ async function safeQuery(label, sql, params = []) {
     };
   } catch (error) {
     console.warn(`[live-data-refresh] ${label} skipped:`, error.message);
+
     return {
       label,
       ok: false,
@@ -28,10 +43,6 @@ async function safeQuery(label, sql, params = []) {
       error: error.message,
     };
   }
-}
-
-function number(value = 0) {
-  return Number(value || 0);
 }
 
 async function ensureRefreshTables() {
@@ -49,13 +60,14 @@ async function ensureRefreshTables() {
 
 const FEEDS = [
   {
-  key: "fundraising_live",
-  label: "FEC Finance Feed",
-  table: "fundraising_live",
-  route: "/fundraising",
-  firmScoped: false,
-  minCount: 250,
-},
+    key: "fundraising_live",
+    label: "FEC Finance Feed",
+    table: "fundraising_live",
+    route: "/fundraising",
+    firmScoped: false,
+    minCount: 250,
+    liveImporter: "fec",
+  },
   {
     key: "political_signals",
     label: "Political Signals",
@@ -162,16 +174,19 @@ async function inspectFeed(feed, firmId) {
 
   const hasUpdatedAt = columns.has("updated_at");
   const hasCreatedAt = columns.has("created_at");
+  const hasSourceUpdatedAt = columns.has("source_updated_at");
   const hasFirmId = columns.has("firm_id");
 
   const where = feed.firmScoped && hasFirmId && firmId ? "WHERE firm_id = $1" : "";
   const params = feed.firmScoped && hasFirmId && firmId ? [firmId] : [];
 
-  const timestampExpr = hasUpdatedAt
-    ? "MAX(updated_at)"
-    : hasCreatedAt
-    ? "MAX(created_at)"
-    : "NULL";
+  const timestampExpr = hasSourceUpdatedAt
+    ? "MAX(source_updated_at)"
+    : hasUpdatedAt
+      ? "MAX(updated_at)"
+      : hasCreatedAt
+        ? "MAX(created_at)"
+        : "NULL";
 
   const result = await safeQuery(
     `${feed.label} inspect`,
@@ -239,7 +254,46 @@ async function inspectFeed(feed, firmId) {
   };
 }
 
+async function refreshFecFinanceFeed(feed, firmId) {
+  try {
+    const cycle = liveFecCycle();
+
+    const syncResult = await syncFundraisingFromFec({
+      cycle,
+      syncContacts: true,
+      contactLimit: contactSyncLimit(),
+      contactOffset: 0,
+    });
+
+    const inspected = await inspectFeed(feed, firmId);
+
+    return {
+      ...inspected,
+      refreshed: true,
+      refreshed_rows: syncResult?.fundraising_stored || 0,
+      message: `FEC finance feed synced for ${cycle}. ${syncResult?.fundraising_stored || 0} fundraising records imported and ${syncResult?.candidates_stored || 0} candidate records updated.`,
+      sync_result: syncResult,
+    };
+  } catch (error) {
+    return {
+      ...feed,
+      ok: false,
+      refreshed: false,
+      status: "failed",
+      count: 0,
+      last_updated_at: null,
+      freshness_hours: null,
+      refreshed_rows: 0,
+      message: error.message || "FEC finance sync failed.",
+    };
+  }
+}
+
 async function refreshFeed(feed, firmId) {
+  if (feed.liveImporter === "fec" || feed.key === "fundraising_live") {
+    return refreshFecFinanceFeed(feed, firmId);
+  }
+
   const columns = await getTableColumns(feed.table);
 
   if (!columns.size) {
@@ -247,12 +301,16 @@ async function refreshFeed(feed, firmId) {
       ...feed,
       refreshed: false,
       status: "missing_table",
+      count: 0,
+      last_updated_at: null,
+      freshness_hours: null,
       message: `Table ${feed.table} does not exist.`,
     };
   }
 
   if (!columns.has("updated_at")) {
     const inspected = await inspectFeed(feed, firmId);
+
     return {
       ...inspected,
       refreshed: false,
@@ -299,7 +357,9 @@ export async function getLiveDataRefreshStatus({ user = {} }) {
   }
 
   const healthy = feeds.filter((f) => f.status === "healthy").length;
-  const review = feeds.filter((f) => ["stale", "low_count", "no_timestamp"].includes(f.status)).length;
+  const review = feeds.filter((f) =>
+    ["stale", "low_count", "no_timestamp"].includes(f.status)
+  ).length;
   const blocked = feeds.filter((f) =>
     ["missing", "critical", "failed", "missing_table"].includes(f.status)
   ).length;
@@ -331,7 +391,9 @@ export async function getLiveDataRefreshStatus({ user = {} }) {
     blockers: feeds.filter((f) =>
       ["missing", "critical", "failed", "missing_table"].includes(f.status)
     ),
-    review_items: feeds.filter((f) => ["stale", "low_count", "no_timestamp"].includes(f.status)),
+    review_items: feeds.filter((f) =>
+      ["stale", "low_count", "no_timestamp"].includes(f.status)
+    ),
     last_run: lastRun.rows?.[0] || null,
     updated_at: new Date().toISOString(),
   };
@@ -350,7 +412,9 @@ export async function runLiveDataRefresh({ user = {} }) {
   }
 
   const healthy = results.filter((f) => f.status === "healthy").length;
-  const review = results.filter((f) => ["stale", "low_count", "no_timestamp"].includes(f.status)).length;
+  const review = results.filter((f) =>
+    ["stale", "low_count", "no_timestamp"].includes(f.status)
+  ).length;
   const blocked = results.filter((f) =>
     ["missing", "critical", "failed", "missing_table"].includes(f.status)
   ).length;
@@ -362,6 +426,8 @@ export async function runLiveDataRefresh({ user = {} }) {
     review,
     blocked,
     refreshed: results.filter((f) => f.refreshed).length,
+    fec_records_imported:
+      results.find((f) => f.key === "fundraising_live")?.refreshed_rows || 0,
   };
 
   await pool.query(
@@ -384,7 +450,9 @@ export async function runLiveDataRefresh({ user = {} }) {
     blockers: results.filter((f) =>
       ["missing", "critical", "failed", "missing_table"].includes(f.status)
     ),
-    review_items: results.filter((f) => ["stale", "low_count", "no_timestamp"].includes(f.status)),
+    review_items: results.filter((f) =>
+      ["stale", "low_count", "no_timestamp"].includes(f.status)
+    ),
     updated_at: new Date().toISOString(),
   };
 }
