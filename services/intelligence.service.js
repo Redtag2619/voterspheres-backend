@@ -105,103 +105,189 @@ export async function getFundraisingLeaderboard(input = {}) {
     ];
   }
 
+  async function tableExists(name) {
+    const result = await pool.query(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+          AND table_name = $1
+        ) AS exists
+      `,
+      [name]
+    );
+
+    return Boolean(result.rows?.[0]?.exists);
+  }
+
+  async function getColumns(tableName) {
+    const result = await pool.query(
+      `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = $1
+      `,
+      [tableName]
+    );
+
+    return new Set(result.rows.map((row) => row.column_name));
+  }
+
+  function pick(columns, ...names) {
+    return names.find((name) => columns.has(name)) || null;
+  }
+
+  function safeExpr(column, fallback = "''") {
+    return column ? `COALESCE(${column}::text, ${fallback})` : fallback;
+  }
+
+  function safeNum(column) {
+    return column ? `COALESCE(${column}, 0)::numeric` : `0::numeric`;
+  }
+
   try {
-    const columnResult = await pool.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'candidates'
-    `);
+    const fecTableCandidates = [
+      "fec_candidate_financials",
+      "fec_candidate_finance",
+      "fec_financials",
+      "fec_candidate_totals",
+      "fec_candidates",
+      "candidate_financials",
+      "candidate_finance"
+    ];
 
-    const columns = new Set(columnResult.rows.map((row) => row.column_name));
+    let fecTable = null;
 
-    const pick = (...names) => {
-      const found = names.find((name) => columns.has(name));
-      return found || null;
-    };
+    for (const tableName of fecTableCandidates) {
+      if (await tableExists(tableName)) {
+        fecTable = tableName;
+        break;
+      }
+    }
 
-    const idCol = pick("id", "candidate_id", "fec_candidate_id") || "id";
-    const nameCol = pick("name", "candidate_name", "full_name", "display_name");
-    const stateCol = pick("state", "state_code", "candidate_state");
-    const officeCol = pick("office", "race", "office_sought", "candidate_office");
-    const partyCol = pick("party", "party_full", "party_name", "party_code");
-    const receiptsCol = pick(
+    if (!fecTable) {
+      throw new Error(
+        "No FEC finance table found. Expected one of: fec_candidate_financials, fec_candidate_finance, fec_financials, fec_candidate_totals, fec_candidates, candidate_financials, candidate_finance."
+      );
+    }
+
+    const fecColumns = await getColumns(fecTable);
+
+    const fecCandidateIdCol = pick(
+      fecColumns,
+      "candidate_id",
+      "fec_candidate_id",
+      "cand_id",
+      "candidate_fec_id",
+      "candidate_id_fec"
+    );
+
+    const fecNameCol = pick(
+      fecColumns,
+      "name",
+      "candidate_name",
+      "cand_name",
+      "full_name",
+      "display_name"
+    );
+
+    const fecStateCol = pick(
+      fecColumns,
+      "state",
+      "state_code",
+      "cand_office_st",
+      "candidate_state"
+    );
+
+    const fecOfficeCol = pick(
+      fecColumns,
+      "office",
+      "race",
+      "office_sought",
+      "cand_office",
+      "candidate_office"
+    );
+
+    const fecPartyCol = pick(
+      fecColumns,
+      "party",
+      "party_full",
+      "party_name",
+      "party_code",
+      "cand_pty_affiliation"
+    );
+
+    const fecReceiptsCol = pick(
+      fecColumns,
       "receipts",
       "total_receipts",
+      "ttl_receipts",
       "raised_total",
       "total_raised",
       "fundraising_total",
       "contributions_total"
     );
-    const cashCol = pick(
+
+    const fecCashCol = pick(
+      fecColumns,
       "cash_on_hand",
       "cash_on_hand_total",
       "ending_cash",
-      "cash_on_hand_end_period"
+      "cash_on_hand_end_period",
+      "cash_on_hand_end"
     );
 
-    const selectName = nameCol
-      ? `COALESCE(${nameCol}::text, 'Unknown Candidate')`
-      : `'Unknown Candidate'`;
-
-    const selectState = stateCol
-      ? `COALESCE(${stateCol}::text, 'N/A')`
-      : `'N/A'`;
-
-    const selectOffice = officeCol
-      ? `COALESCE(${officeCol}::text, 'Race')`
-      : `'Race'`;
-
-    const selectParty = partyCol
-      ? `COALESCE(${partyCol}::text, 'N/A')`
-      : `'N/A'`;
-
-    const selectReceipts = receiptsCol
-      ? `COALESCE(${receiptsCol}, 0)::numeric`
-      : `0::numeric`;
-
-    const selectCash = cashCol
-      ? `COALESCE(${cashCol}, 0)::numeric`
-      : `0::numeric`;
+    if (!fecReceiptsCol) {
+      throw new Error(
+        `FEC table "${fecTable}" exists, but no receipts column was found. Add one of: receipts, total_receipts, ttl_receipts, raised_total, total_raised, fundraising_total, contributions_total.`
+      );
+    }
 
     const where = [];
     const params = [];
 
-    if (state && stateCol) {
+    if (state && fecStateCol) {
       params.push(state);
-      where.push(`UPPER(COALESCE(${stateCol}::text, '')) = $${params.length}`);
+      where.push(`UPPER(COALESCE(${fecStateCol}::text, '')) = $${params.length}`);
     }
 
-    if (office && officeCol) {
+    if (office && fecOfficeCol) {
       params.push(`%${office}%`);
-      where.push(`COALESCE(${officeCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${fecOfficeCol}::text, '') ILIKE $${params.length}`);
     }
 
-    if (party && partyCol) {
+    if (party && fecPartyCol) {
       params.push(`%${party}%`);
-      where.push(`COALESCE(${partyCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${fecPartyCol}::text, '') ILIKE $${params.length}`);
     }
 
-    if (candidate && nameCol) {
+    if (candidate && fecNameCol) {
       params.push(`%${candidate}%`);
-      where.push(`COALESCE(${nameCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${fecNameCol}::text, '') ILIKE $${params.length}`);
     }
 
     params.push(limit);
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
+    const idExpr = fecCandidateIdCol
+      ? `${fecCandidateIdCol}::text`
+      : `ROW_NUMBER() OVER ()::text`;
+
     const query = `
       SELECT
-        ${idCol} AS candidate_id,
-        ${selectName} AS name,
-        ${selectState} AS state,
-        ${selectOffice} AS office,
-        ${selectParty} AS party,
-        ${selectReceipts} AS receipts,
-        ${selectCash} AS cash_on_hand
-      FROM candidates
+        ${idExpr} AS candidate_id,
+        ${safeExpr(fecNameCol, "'Unknown Candidate'")} AS name,
+        ${safeExpr(fecStateCol, "'N/A'")} AS state,
+        ${safeExpr(fecOfficeCol, "'Race'")} AS office,
+        ${safeExpr(fecPartyCol, "'N/A'")} AS party,
+        ${safeNum(fecReceiptsCol)} AS receipts,
+        ${safeNum(fecCashCol)} AS cash_on_hand
+      FROM ${fecTable}
       ${whereSql}
-      ORDER BY ${selectReceipts} DESC NULLS LAST
+      ORDER BY ${safeNum(fecReceiptsCol)} DESC NULLS LAST
       LIMIT $${params.length};
     `;
 
@@ -236,18 +322,19 @@ export async function getFundraisingLeaderboard(input = {}) {
 
     return {
       ok: true,
-      source: "database",
+      source: "fec",
+      fec_table: fecTable,
+      detected_columns: {
+        candidate_id: fecCandidateIdCol,
+        name: fecNameCol,
+        state: fecStateCol,
+        office: fecOfficeCol,
+        party: fecPartyCol,
+        receipts: fecReceiptsCol,
+        cash_on_hand: fecCashCol
+      },
       limit,
       count: leaderboard.length,
-      detected_columns: {
-        id: idCol,
-        name: nameCol,
-        state: stateCol,
-        office: officeCol,
-        party: partyCol,
-        receipts: receiptsCol,
-        cash_on_hand: cashCol
-      },
       leaderboard,
       summary: {
         tracked_candidates: leaderboard.length,
@@ -259,11 +346,11 @@ export async function getFundraisingLeaderboard(input = {}) {
       }
     };
   } catch (error) {
-    console.error("[Intelligence] Fundraising leaderboard failed:", error);
+    console.error("[Intelligence] FEC fundraising leaderboard failed:", error);
 
     return {
       ok: false,
-      source: "fallback",
+      source: "fec-error",
       error: error.message,
       limit,
       count: 0,
