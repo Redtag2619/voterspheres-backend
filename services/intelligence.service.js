@@ -106,27 +106,84 @@ export async function getFundraisingLeaderboard(input = {}) {
   }
 
   try {
+    const columnResult = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'candidates'
+    `);
+
+    const columns = new Set(columnResult.rows.map((row) => row.column_name));
+
+    const pick = (...names) => {
+      const found = names.find((name) => columns.has(name));
+      return found || null;
+    };
+
+    const idCol = pick("id", "candidate_id", "fec_candidate_id") || "id";
+    const nameCol = pick("name", "candidate_name", "full_name", "display_name");
+    const stateCol = pick("state", "state_code", "candidate_state");
+    const officeCol = pick("office", "race", "office_sought", "candidate_office");
+    const partyCol = pick("party", "party_full", "party_name", "party_code");
+    const receiptsCol = pick(
+      "receipts",
+      "total_receipts",
+      "raised_total",
+      "total_raised",
+      "fundraising_total",
+      "contributions_total"
+    );
+    const cashCol = pick(
+      "cash_on_hand",
+      "cash_on_hand_total",
+      "ending_cash",
+      "cash_on_hand_end_period"
+    );
+
+    const selectName = nameCol
+      ? `COALESCE(${nameCol}::text, 'Unknown Candidate')`
+      : `'Unknown Candidate'`;
+
+    const selectState = stateCol
+      ? `COALESCE(${stateCol}::text, 'N/A')`
+      : `'N/A'`;
+
+    const selectOffice = officeCol
+      ? `COALESCE(${officeCol}::text, 'Race')`
+      : `'Race'`;
+
+    const selectParty = partyCol
+      ? `COALESCE(${partyCol}::text, 'N/A')`
+      : `'N/A'`;
+
+    const selectReceipts = receiptsCol
+      ? `COALESCE(${receiptsCol}, 0)::numeric`
+      : `0::numeric`;
+
+    const selectCash = cashCol
+      ? `COALESCE(${cashCol}, 0)::numeric`
+      : `0::numeric`;
+
     const where = [];
     const params = [];
 
-    if (state) {
+    if (state && stateCol) {
       params.push(state);
-      where.push(`UPPER(COALESCE(state, '')) = $${params.length}`);
+      where.push(`UPPER(COALESCE(${stateCol}::text, '')) = $${params.length}`);
     }
 
-    if (office) {
+    if (office && officeCol) {
       params.push(`%${office}%`);
-      where.push(`COALESCE(office, race, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${officeCol}::text, '') ILIKE $${params.length}`);
     }
 
-    if (party) {
+    if (party && partyCol) {
       params.push(`%${party}%`);
-      where.push(`COALESCE(party, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${partyCol}::text, '') ILIKE $${params.length}`);
     }
 
-    if (candidate) {
+    if (candidate && nameCol) {
       params.push(`%${candidate}%`);
-      where.push(`COALESCE(name, candidate_name, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(${nameCol}::text, '') ILIKE $${params.length}`);
     }
 
     params.push(limit);
@@ -135,16 +192,16 @@ export async function getFundraisingLeaderboard(input = {}) {
 
     const query = `
       SELECT
-        id AS candidate_id,
-        COALESCE(name, candidate_name, 'Unknown Candidate') AS name,
-        COALESCE(state, 'N/A') AS state,
-        COALESCE(office, race, 'Race') AS office,
-        COALESCE(party, 'N/A') AS party,
-        COALESCE(receipts, total_receipts, raised_total, 0)::numeric AS receipts,
-        COALESCE(cash_on_hand, cash_on_hand_total, 0)::numeric AS cash_on_hand
+        ${idCol} AS candidate_id,
+        ${selectName} AS name,
+        ${selectState} AS state,
+        ${selectOffice} AS office,
+        ${selectParty} AS party,
+        ${selectReceipts} AS receipts,
+        ${selectCash} AS cash_on_hand
       FROM candidates
       ${whereSql}
-      ORDER BY COALESCE(receipts, total_receipts, raised_total, 0)::numeric DESC NULLS LAST
+      ORDER BY ${selectReceipts} DESC NULLS LAST
       LIMIT $${params.length};
     `;
 
@@ -182,6 +239,15 @@ export async function getFundraisingLeaderboard(input = {}) {
       source: "database",
       limit,
       count: leaderboard.length,
+      detected_columns: {
+        id: idCol,
+        name: nameCol,
+        state: stateCol,
+        office: officeCol,
+        party: partyCol,
+        receipts: receiptsCol,
+        cash_on_hand: cashCol
+      },
       leaderboard,
       summary: {
         tracked_candidates: leaderboard.length,
