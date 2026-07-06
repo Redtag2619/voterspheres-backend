@@ -782,3 +782,70 @@ export async function syncFundraisingFromFec({
     contact_sync: contactResult,
   };
 }
+
+export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
+  await ensureCandidateProfilesSchema();
+
+  const candidateId = candidate.id || candidate.candidate_id || null;
+  const fecCandidateId =
+    candidate.fec_candidate_id ||
+    candidate.fecCandidateId ||
+    candidate.external_id ||
+    null;
+
+  if (!candidateId) {
+    return {
+      ok: false,
+      enriched: false,
+      reason: "Missing candidate id.",
+    };
+  }
+
+  const existing = await pool.query(
+    `
+      SELECT *
+      FROM candidate_profiles
+      WHERE candidate_id = $1
+      LIMIT 1
+    `,
+    [candidateId]
+  );
+
+  if (!existing.rows.length) {
+    await pool.query(
+      `
+        INSERT INTO candidate_profiles (
+          candidate_id,
+          source_label,
+          contact_confidence,
+          contact_source_url,
+          last_scraped_at,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())
+        ON CONFLICT (candidate_id)
+        DO UPDATE SET
+          source_label = COALESCE(candidate_profiles.source_label, EXCLUDED.source_label),
+          contact_source_url = COALESCE(candidate_profiles.contact_source_url, EXCLUDED.contact_source_url),
+          updated_at = NOW()
+      `,
+      [
+        candidateId,
+        "fec_committee_contact",
+        0,
+        fecCandidateId
+          ? `https://www.fec.gov/data/candidate/${fecCandidateId}/`
+          : null,
+      ]
+    );
+  }
+
+  return {
+    ok: true,
+    enriched: true,
+    candidate_id: candidateId,
+    fec_candidate_id: fecCandidateId,
+    source: "fec_committee_contact",
+  };
+}
