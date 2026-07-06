@@ -59,12 +59,48 @@ async function safeQuery(sql, params = []) {
   }
 }
 
+function getPacContributions(row = {}) {
+  const payload =
+    row.source_payload && typeof row.source_payload === "object"
+      ? row.source_payload
+      : {};
+
+  const pacs = payload.pac_contributions || row.pac_contributions || [];
+
+  if (!Array.isArray(pacs)) return [];
+
+  return pacs
+    .map((pac, index) => ({
+      id: pac.committee_id || pac.id || `pac-${index}`,
+      committee_id: pac.committee_id || pac.id || "N/A",
+      committee_name:
+        pac.committee_name ||
+        pac.name ||
+        pac.contributor_name ||
+        "Unknown PAC / Committee",
+      committee_type: pac.committee_type || pac.type || "Committee",
+      committee_party: pac.committee_party || pac.party || "N/A",
+      amount: Number(pac.amount || pac.total || pac.contribution_amount || 0),
+      city: pac.city || "",
+      state: pac.state || "",
+      fec_url: pac.fec_url || "",
+    }))
+    .filter((pac) => pac.committee_name && pac.committee_name !== "Unknown PAC / Committee")
+    .sort((a, b) => b.amount - a.amount);
+}
+
 function buildFundingSources(row = {}) {
   const receipts = Number(row.receipts || 0);
   const payload =
     row.source_payload && typeof row.source_payload === "object"
       ? row.source_payload
       : {};
+
+  const pacCommittees = getPacContributions(row);
+  const pacCommitteeTotal = pacCommittees.reduce(
+    (sum, pac) => sum + Number(pac.amount || 0),
+    0
+  );
 
   const individual =
     Number(payload.individual_contributions || 0) ||
@@ -78,7 +114,8 @@ function buildFundingSources(row = {}) {
     Math.round(receipts * 0.21);
 
   const pac =
-    Number(payload.pac_contributions || 0) ||
+    Number(payload.pac_contributions_total || 0) ||
+    pacCommitteeTotal ||
     Number(payload.other_political_committee_contributions || 0) ||
     Math.round(receipts * 0.16);
 
@@ -93,7 +130,7 @@ function buildFundingSources(row = {}) {
   return [
     { source: "Individual Contributions", amount: individual },
     { source: "Small-Dollar Contributions", amount: smallDollar },
-    { source: "PAC Contributions", amount: pac },
+    { source: "PAC Contributions", amount: pac, committees: pacCommittees },
     { source: "Candidate Committee Transfers", amount: transfers },
     { source: "Other Receipts", amount: other },
   ];
@@ -128,6 +165,7 @@ export async function getFundraisingLeaderboard(input = {}) {
   const office = String(filters.office || "").trim();
   const party = String(filters.party || "").trim();
   const candidate = String(filters.candidate || "").trim();
+  const pac = String(filters.pac || "").trim();
   const cycle = Number(
     filters.cycle ||
       process.env.FEC_DEFAULT_CYCLE ||
@@ -164,6 +202,17 @@ export async function getFundraisingLeaderboard(input = {}) {
       where.push(`COALESCE(name, '') ILIKE $${params.length}`);
     }
 
+    if (pac) {
+      params.push(`%${pac}%`);
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(source_payload->'pac_contributions', '[]'::jsonb)) AS pac_item
+          WHERE COALESCE(pac_item->>'committee_name', '') ILIKE $${params.length}
+        )
+      `);
+    }
+
     params.push(limit);
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -196,23 +245,28 @@ export async function getFundraisingLeaderboard(input = {}) {
       params
     );
 
-    const leaderboard = result.rows.map((row, index) => ({
-      rank: index + 1,
-      candidate_id: row.candidate_id,
-      name: row.name || "Unknown Candidate",
-      state: row.state || "N/A",
-      office: row.office || "Race",
-      district: row.district || "Statewide",
-      party: row.party || "N/A",
-      receipts: Number(row.receipts || 0),
-      cash_on_hand: Number(row.cash_on_hand || 0),
-      coverage_end_date: row.coverage_end_date || null,
-      election_year: Number(row.election_year || cycle),
-      source: row.source || "FEC",
-      source_updated_at:
-        row.source_updated_at || row.updated_at || row.created_at || null,
-      funding_sources: buildFundingSources(row),
-    }));
+    const leaderboard = result.rows.map((row, index) => {
+      const pacContributions = getPacContributions(row);
+
+      return {
+        rank: index + 1,
+        candidate_id: row.candidate_id,
+        name: row.name || "Unknown Candidate",
+        state: row.state || "N/A",
+        office: row.office || "Race",
+        district: row.district || "Statewide",
+        party: row.party || "N/A",
+        receipts: Number(row.receipts || 0),
+        cash_on_hand: Number(row.cash_on_hand || 0),
+        coverage_end_date: row.coverage_end_date || null,
+        election_year: Number(row.election_year || cycle),
+        source: row.source || "FEC",
+        source_updated_at:
+          row.source_updated_at || row.updated_at || row.created_at || null,
+        pac_contributions: pacContributions,
+        funding_sources: buildFundingSources(row),
+      };
+    });
 
     const totalReceipts = leaderboard.reduce(
       (sum, row) => sum + Number(row.receipts || 0),
@@ -222,6 +276,12 @@ export async function getFundraisingLeaderboard(input = {}) {
     const totalCashOnHand = leaderboard.reduce(
       (sum, row) => sum + Number(row.cash_on_hand || 0),
       0
+    );
+
+    const pacCommittees = new Set(
+      leaderboard.flatMap((row) =>
+        (row.pac_contributions || []).map((pacRow) => pacRow.committee_name)
+      )
     );
 
     return {
@@ -239,6 +299,7 @@ export async function getFundraisingLeaderboard(input = {}) {
         average_receipts: leaderboard.length
           ? Math.round(totalReceipts / leaderboard.length)
           : 0,
+        pac_committees: pacCommittees.size,
       },
       updated_at: new Date().toISOString(),
     };
@@ -259,6 +320,7 @@ export async function getFundraisingLeaderboard(input = {}) {
         total_receipts: 0,
         total_cash_on_hand: 0,
         average_receipts: 0,
+        pac_committees: 0,
       },
       updated_at: new Date().toISOString(),
     };
@@ -410,6 +472,7 @@ export async function getIntelligenceMap() {
       party: row.party || "N/A",
       receipts: n(row.receipts),
       cash_on_hand: n(row.cash_on_hand),
+      pac_count: row.pac_contributions?.length || 0,
       rank: 0,
     });
   }
@@ -520,6 +583,7 @@ export async function getIntelligenceSummary() {
     generated_at: new Date().toISOString(),
     summary: {
       fundraising_records: fundraisingPayload.leaderboard.length,
+      pac_committees: fundraisingPayload.summary?.pac_committees || 0,
       feed_events: feed.length,
       vendors: vendors.length,
       consultants: consultants.length,
@@ -578,9 +642,9 @@ export async function getIntelligenceDashboard() {
         tone: "up",
       },
       {
-        label: "Active Signals",
-        value: String(executiveFeed.length),
-        delta: "Executive feed events",
+        label: "PAC Committees",
+        value: String(fundraisingPayload.summary?.pac_committees || 0),
+        delta: "Named committee records",
         tone: "up",
       },
     ],
