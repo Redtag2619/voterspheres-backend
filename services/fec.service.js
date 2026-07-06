@@ -266,26 +266,6 @@ function aggregatePacContributions(rows = [], limit = 25) {
     .slice(0, limit);
 }
 
-async function fetchPacContributionsForCandidate({ candidateId, cycle, limit = 25 }) {
-  if (!candidateId) return [];
-
-  try {
-    const payload = await fecGet("/schedules/schedule_a/", {
-      candidate_id: candidateId,
-      two_year_transaction_period: cycle,
-      per_page: 100,
-      sort: "-contribution_receipt_amount",
-      sort_hide_null: "false",
-    });
-
-    const rows = Array.isArray(payload?.results) ? payload.results : [];
-    return aggregatePacContributions(rows, limit);
-  } catch (error) {
-    console.warn(`[FEC] PAC contribution sync skipped for ${candidateId}:`, error.message);
-    return [];
-  }
-}
-
 export async function ensureFundraisingLiveTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS fundraising_live (
