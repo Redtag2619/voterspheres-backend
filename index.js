@@ -97,6 +97,7 @@ import strategyRoutes from "./routes/strategy.routes.js";
 import nationalDigitalTwinRoutes from "./routes/nationalDigitalTwin.routes.js";
 import autonomousCampaignOperationsRoutes from "./routes/autonomousCampaignOperations.routes.js";
 import executiveAiCommandRoutes from "./routes/executiveAiCommand.routes.js";
+import campaignFinanceIntelligenceRoutes from "./routes/campaignFinanceIntelligence.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -314,6 +315,7 @@ app.use("/api/national-digital-twin", nationalDigitalTwinRoutes);
 app.use("/api/autonomous-campaign-operations", autonomousCampaignOperationsRoutes);
 app.use("/api/tour", tourRoutes);
 app.use("/api/executive-ai-command", executiveAiCommandRoutes);
+app.use("/api/campaign-finance-intelligence", campaignFinanceIntelligenceRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
