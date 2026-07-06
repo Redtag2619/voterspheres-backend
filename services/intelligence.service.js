@@ -5,7 +5,7 @@ function n(value) {
 }
 
 function fmtMoney(value) {
-  return `$${n(value).toLocaleString()}`;
+  return `$${n(value).toLocaleString()}`; 
 }
 
 function normalizeStateName(value = "") {
