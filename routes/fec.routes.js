@@ -1,22 +1,13 @@
 import express from "express";
-import { requireEnterprise } from "../middleware/requirePlan.js";
 
 import {
   getFundraisingLeaderboard,
   getLiveFundraising,
 } from "../services/intelligence.service.js";
 
-import {
-  syncFundraisingFromFec,
-} from "../services/fec.service.js";
+import { syncFundraisingFromFec } from "../services/fec.service.js";
 
 const router = express.Router();
-
-/*
-|--------------------------------------------------------------------------
-| Helper
-|--------------------------------------------------------------------------
-*/
 
 function asyncHandler(handler) {
   return async (req, res) => {
@@ -24,7 +15,6 @@ function asyncHandler(handler) {
       await handler(req, res);
     } catch (error) {
       console.error("[FEC]", error);
-
       res.status(500).json({
         ok: false,
         error: error.message || "FEC request failed.",
@@ -33,21 +23,10 @@ function asyncHandler(handler) {
   };
 }
 
-/*
-|--------------------------------------------------------------------------
-| GET LIVE FUNDRAISING FEED
-|--------------------------------------------------------------------------
-*/
-
 router.get(
   "/fundraising/live",
-  requireEnterprise,
   asyncHandler(async (req, res) => {
-    const limit = Math.min(
-      Number(req.query.limit || 1000),
-      5000
-    );
-
+    const limit = Math.min(Number(req.query.limit || 1000), 5000);
     const results = await getLiveFundraising(limit);
 
     res.json({
@@ -59,20 +38,10 @@ router.get(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| GET LEADERBOARD
-|--------------------------------------------------------------------------
-*/
-
 router.get(
   "/fundraising/leaderboard",
-  requireEnterprise,
   asyncHandler(async (req, res) => {
-    const limit = Math.min(
-      Number(req.query.limit || 1000),
-      5000
-    );
+    const limit = Math.min(Number(req.query.limit || 1000), 5000);
 
     const results = await getFundraisingLeaderboard({
       limit,
@@ -91,19 +60,12 @@ router.get(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| MANUAL FEC IMPORT
-|--------------------------------------------------------------------------
-*/
-
 router.post(
   "/sync/candidate-financials",
-  requireEnterprise,
   asyncHandler(async (req, res) => {
     const cycle = Number(
-      req.body.cycle ||
-        req.query.cycle ||
+      req.body?.cycle ||
+        req.query?.cycle ||
         process.env.FEC_DEFAULT_CYCLE ||
         2026
     );
@@ -111,7 +73,7 @@ router.post(
     const result = await syncFundraisingFromFec({
       cycle,
       syncContacts: true,
-      contactLimit: 500,
+      contactLimit: Number(process.env.FEC_CONTACT_SYNC_LIMIT || 500),
       contactOffset: 0,
     });
 
@@ -124,12 +86,6 @@ router.post(
     });
   })
 );
-
-/*
-|--------------------------------------------------------------------------
-| HEALTH CHECK
-|--------------------------------------------------------------------------
-*/
 
 router.get("/health", (_req, res) => {
   res.json({
