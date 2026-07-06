@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import {
   getBattlegroundDashboardData,
   getCandidateIntelligenceSummary,
@@ -21,12 +21,19 @@ const router = express.Router();
 
 function sendError(res, error, fallback) {
   res.status(500).json({
+    ok: false,
     error: error.message || fallback
   });
 }
 
 function liveRefreshEnabled() {
   return String(process.env.LIVE_REFRESH_ENABLED || "false").toLowerCase() === "true";
+}
+
+function normalizeLimit(value, fallback = 500, max = 1000) {
+  const parsed = Number(value || fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(parsed, max));
 }
 
 router.get("/status", async (_req, res) => {
@@ -120,7 +127,7 @@ router.get("/map", async (_req, res) => {
 
 router.get("/feed", async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+    const limit = normalizeLimit(req.query.limit, 25, 100);
     res.json({ results: await getExecutiveFeedEvents(limit) });
   } catch (error) {
     sendError(res, error, "Failed to load intelligence feed");
@@ -137,7 +144,7 @@ router.get("/command", async (_req, res) => {
 
 router.get("/fundraising/live", async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
+    const limit = normalizeLimit(req.query.limit, 100, 1000);
     res.json(await getLiveFundraising(limit));
   } catch (error) {
     sendError(res, error, "Failed to load live fundraising");
@@ -146,8 +153,16 @@ router.get("/fundraising/live", async (req, res) => {
 
 router.get("/fundraising/leaderboard", async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(Number(req.query.limit || 25), 100));
-    res.json(await getFundraisingLeaderboard(limit));
+    const filters = {
+      limit: normalizeLimit(req.query.limit, 500, 1000),
+      state: req.query.state || "",
+      office: req.query.office || "",
+      party: req.query.party || "",
+      candidate: req.query.candidate || "",
+      source: req.query.source || ""
+    };
+
+    res.json(await getFundraisingLeaderboard(filters));
   } catch (error) {
     sendError(res, error, "Failed to load fundraising leaderboard");
   }
@@ -169,22 +184,4 @@ router.get("/battlegrounds", async (_req, res) => {
   }
 });
 
-
-router.get("/cross-signal", async (_req, res) => {
-  try {
-    res.json(await getCrossSignalIntelligence());
-  } catch (error) {
-    sendError(res, error, "Failed to load cross-signal intelligence");
-  }
-});
-
-router.post("/cross-signal/dispatch-alerts", async (_req, res) => {
-  try {
-    res.json(await dispatchCrossSignalAlerts());
-  } catch (error) {
-    sendError(res, error, "Failed to dispatch cross-signal alerts");
-  }
-});
-
 export default router;
-
