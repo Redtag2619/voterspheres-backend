@@ -849,3 +849,94 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
     source: "fec_committee_contact",
   };
 }
+
+async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
+  if (!candidateId) return [];
+
+  try {
+    const payload = await fecGet(`/candidate/${candidateId}/committees/`, {
+      cycle,
+      per_page: 100,
+      designation: "P",
+    });
+
+    const rows = Array.isArray(payload?.results) ? payload.results : [];
+
+    return rows
+      .map((row) => ({
+        committee_id: clean(row.committee_id),
+        committee_name: clean(row.name) || clean(row.committee_name),
+        designation: clean(row.designation),
+        organization_type: clean(row.organization_type),
+      }))
+      .filter((row) => row.committee_id);
+  } catch (error) {
+    console.warn(`[FEC] committee lookup skipped for ${candidateId}:`, error.message);
+    return [];
+  }
+}
+
+async function fetchScheduleAForCommittee({ committeeId, cycle }) {
+  if (!committeeId) return [];
+
+  try {
+    const payload = await fecGet("/schedules/schedule_a/", {
+      committee_id: committeeId,
+      two_year_transaction_period: cycle,
+      per_page: 100,
+      sort: "-contribution_receipt_amount",
+      sort_hide_null: "false",
+    });
+
+    return Array.isArray(payload?.results) ? payload.results : [];
+  } catch (error) {
+    console.warn(`[FEC] Schedule A lookup skipped for committee ${committeeId}:`, error.message);
+    return [];
+  }
+}
+
+async function fetchPacContributionsForCandidate({ candidateId, cycle, limit = 25 }) {
+  if (!candidateId) return [];
+
+  try {
+    const committees = await fetchCandidateCommitteesForCandidate({
+      candidateId,
+      cycle,
+    });
+
+    const allScheduleARows = [];
+
+    for (const committee of committees.slice(0, 3)) {
+      const rows = await fetchScheduleAForCommittee({
+        committeeId: committee.committee_id,
+        cycle,
+      });
+
+      allScheduleARows.push(
+        ...rows.map((row) => ({
+          ...row,
+          recipient_committee_id: committee.committee_id,
+          recipient_committee_name: committee.committee_name,
+        }))
+      );
+    }
+
+    if (!allScheduleARows.length) {
+      const payload = await fecGet("/schedules/schedule_a/", {
+        candidate_id: candidateId,
+        two_year_transaction_period: cycle,
+        per_page: 100,
+        sort: "-contribution_receipt_amount",
+        sort_hide_null: "false",
+      });
+
+      const rows = Array.isArray(payload?.results) ? payload.results : [];
+      allScheduleARows.push(...rows);
+    }
+
+    return aggregatePacContributions(allScheduleARows, limit);
+  } catch (error) {
+    console.warn(`[FEC] PAC contribution sync skipped for ${candidateId}:`, error.message);
+    return [];
+  }
+}
