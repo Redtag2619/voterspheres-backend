@@ -59,24 +59,60 @@ async function safeQuery(sql, params = []) {
   }
 }
 
-export async function getLiveFundraising(limit = 250) {
-  return safeQuery(
-    `
-      SELECT
-        candidate_id,
-        name,
-        state,
-        office,
-        party,
-        COALESCE(receipts, 0) AS receipts,
-        COALESCE(cash_on_hand, 0) AS cash_on_hand,
-        source_updated_at
-      FROM fundraising_live
-      ORDER BY COALESCE(receipts, 0) DESC, COALESCE(cash_on_hand, 0) DESC
-      LIMIT $1
-    `,
-    [limit]
-  );
+function buildFundingSources(row = {}) {
+  const receipts = Number(row.receipts || 0);
+  const payload =
+    row.source_payload && typeof row.source_payload === "object"
+      ? row.source_payload
+      : {};
+
+  const individual =
+    Number(payload.individual_contributions || 0) ||
+    Number(payload.individual_itemized_contributions || 0) ||
+    Number(payload.individual_unitemized_contributions || 0) ||
+    Math.round(receipts * 0.52);
+
+  const smallDollar =
+    Number(payload.small_dollar_contributions || 0) ||
+    Number(payload.individual_unitemized_contributions || 0) ||
+    Math.round(receipts * 0.21);
+
+  const pac =
+    Number(payload.pac_contributions || 0) ||
+    Number(payload.other_political_committee_contributions || 0) ||
+    Math.round(receipts * 0.16);
+
+  const transfers =
+    Number(payload.transfers_from_other_authorized_committee || 0) ||
+    Number(payload.transfers || 0) ||
+    Math.round(receipts * 0.07);
+
+  const known = individual + smallDollar + pac + transfers;
+  const other = Math.max(0, receipts - known);
+
+  return [
+    { source: "Individual Contributions", amount: individual },
+    { source: "Small-Dollar Contributions", amount: smallDollar },
+    { source: "PAC Contributions", amount: pac },
+    { source: "Candidate Committee Transfers", amount: transfers },
+    { source: "Other Receipts", amount: other },
+  ];
+}
+
+export async function getLiveFundraising(input = 250) {
+  const filters =
+    typeof input === "number"
+      ? { limit: input }
+      : input && typeof input === "object"
+        ? input
+        : {};
+
+  const payload = await getFundraisingLeaderboard({
+    ...filters,
+    limit: Math.max(1, Math.min(Number(filters.limit || 250), 5000)),
+  });
+
+  return payload.leaderboard || [];
 }
 
 export async function getFundraisingLeaderboard(input = {}) {
@@ -87,228 +123,96 @@ export async function getFundraisingLeaderboard(input = {}) {
         ? input
         : {};
 
-  const limit = Math.max(1, Math.min(Number(filters.limit || 500), 1000));
+  const limit = Math.max(1, Math.min(Number(filters.limit || 1000), 5000));
   const state = String(filters.state || "").trim().toUpperCase();
   const office = String(filters.office || "").trim();
   const party = String(filters.party || "").trim();
   const candidate = String(filters.candidate || "").trim();
-
-  function buildFundingSources(receipts = 0) {
-    const total = Number(receipts || 0);
-
-    return [
-      { source: "Individual Contributions", amount: Math.round(total * 0.52) },
-      { source: "Small-Dollar Contributions", amount: Math.round(total * 0.21) },
-      { source: "PAC Contributions", amount: Math.round(total * 0.16) },
-      { source: "Candidate Committee Transfers", amount: Math.round(total * 0.07) },
-      { source: "Other Receipts", amount: Math.round(total * 0.04) }
-    ];
-  }
-
-  async function tableExists(name) {
-    const result = await pool.query(
-      `
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_schema = 'public'
-          AND table_name = $1
-        ) AS exists
-      `,
-      [name]
-    );
-
-    return Boolean(result.rows?.[0]?.exists);
-  }
-
-  async function getColumns(tableName) {
-    const result = await pool.query(
-      `
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        AND table_name = $1
-      `,
-      [tableName]
-    );
-
-    return new Set(result.rows.map((row) => row.column_name));
-  }
-
-  function pick(columns, ...names) {
-    return names.find((name) => columns.has(name)) || null;
-  }
-
-  function safeExpr(column, fallback = "''") {
-    return column ? `COALESCE(${column}::text, ${fallback})` : fallback;
-  }
-
-  function safeNum(column) {
-    return column ? `COALESCE(${column}, 0)::numeric` : `0::numeric`;
-  }
+  const cycle = Number(
+    filters.cycle ||
+      process.env.FEC_DEFAULT_CYCLE ||
+      process.env.FEC_CYCLE ||
+      2026
+  );
 
   try {
-    const fecTableCandidates = [
-      "fec_candidate_financials",
-      "fec_candidate_finance",
-      "fec_financials",
-      "fec_candidate_totals",
-      "fec_candidates",
-      "candidate_financials",
-      "candidate_finance"
-    ];
-
-    let fecTable = null;
-
-    for (const tableName of fecTableCandidates) {
-      if (await tableExists(tableName)) {
-        fecTable = tableName;
-        break;
-      }
-    }
-
-    if (!fecTable) {
-      throw new Error(
-        "No FEC finance table found. Expected one of: fec_candidate_financials, fec_candidate_finance, fec_financials, fec_candidate_totals, fec_candidates, candidate_financials, candidate_finance."
-      );
-    }
-
-    const fecColumns = await getColumns(fecTable);
-
-    const fecCandidateIdCol = pick(
-      fecColumns,
-      "candidate_id",
-      "fec_candidate_id",
-      "cand_id",
-      "candidate_fec_id",
-      "candidate_id_fec"
-    );
-
-    const fecNameCol = pick(
-      fecColumns,
-      "name",
-      "candidate_name",
-      "cand_name",
-      "full_name",
-      "display_name"
-    );
-
-    const fecStateCol = pick(
-      fecColumns,
-      "state",
-      "state_code",
-      "cand_office_st",
-      "candidate_state"
-    );
-
-    const fecOfficeCol = pick(
-      fecColumns,
-      "office",
-      "race",
-      "office_sought",
-      "cand_office",
-      "candidate_office"
-    );
-
-    const fecPartyCol = pick(
-      fecColumns,
-      "party",
-      "party_full",
-      "party_name",
-      "party_code",
-      "cand_pty_affiliation"
-    );
-
-    const fecReceiptsCol = pick(
-      fecColumns,
-      "receipts",
-      "total_receipts",
-      "ttl_receipts",
-      "raised_total",
-      "total_raised",
-      "fundraising_total",
-      "contributions_total"
-    );
-
-    const fecCashCol = pick(
-      fecColumns,
-      "cash_on_hand",
-      "cash_on_hand_total",
-      "ending_cash",
-      "cash_on_hand_end_period",
-      "cash_on_hand_end"
-    );
-
-    if (!fecReceiptsCol) {
-      throw new Error(
-        `FEC table "${fecTable}" exists, but no receipts column was found. Add one of: receipts, total_receipts, ttl_receipts, raised_total, total_raised, fundraising_total, contributions_total.`
-      );
-    }
-
     const where = [];
     const params = [];
 
-    if (state && fecStateCol) {
+    if (cycle) {
+      params.push(cycle);
+      where.push(`election_year = $${params.length}`);
+    }
+
+    if (state) {
       params.push(state);
-      where.push(`UPPER(COALESCE(${fecStateCol}::text, '')) = $${params.length}`);
+      where.push(`UPPER(COALESCE(state, '')) = $${params.length}`);
     }
 
-    if (office && fecOfficeCol) {
+    if (office) {
       params.push(`%${office}%`);
-      where.push(`COALESCE(${fecOfficeCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(office, '') ILIKE $${params.length}`);
     }
 
-    if (party && fecPartyCol) {
+    if (party) {
       params.push(`%${party}%`);
-      where.push(`COALESCE(${fecPartyCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(party, '') ILIKE $${params.length}`);
     }
 
-    if (candidate && fecNameCol) {
+    if (candidate) {
       params.push(`%${candidate}%`);
-      where.push(`COALESCE(${fecNameCol}::text, '') ILIKE $${params.length}`);
+      where.push(`COALESCE(name, '') ILIKE $${params.length}`);
     }
 
     params.push(limit);
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    const idExpr = fecCandidateIdCol
-      ? `${fecCandidateIdCol}::text`
-      : `ROW_NUMBER() OVER ()::text`;
+    const result = await pool.query(
+      `
+        SELECT
+          candidate_id,
+          name,
+          state,
+          office,
+          district,
+          party,
+          COALESCE(receipts, 0)::numeric AS receipts,
+          COALESCE(cash_on_hand, 0)::numeric AS cash_on_hand,
+          coverage_end_date,
+          election_year,
+          source,
+          source_updated_at,
+          source_payload,
+          created_at,
+          updated_at
+        FROM fundraising_live
+        ${whereSql}
+        ORDER BY COALESCE(receipts, 0)::numeric DESC NULLS LAST,
+                 COALESCE(cash_on_hand, 0)::numeric DESC NULLS LAST,
+                 name ASC
+        LIMIT $${params.length}
+      `,
+      params
+    );
 
-    const query = `
-      SELECT
-        ${idExpr} AS candidate_id,
-        ${safeExpr(fecNameCol, "'Unknown Candidate'")} AS name,
-        ${safeExpr(fecStateCol, "'N/A'")} AS state,
-        ${safeExpr(fecOfficeCol, "'Race'")} AS office,
-        ${safeExpr(fecPartyCol, "'N/A'")} AS party,
-        ${safeNum(fecReceiptsCol)} AS receipts,
-        ${safeNum(fecCashCol)} AS cash_on_hand
-      FROM ${fecTable}
-      ${whereSql}
-      ORDER BY ${safeNum(fecReceiptsCol)} DESC NULLS LAST
-      LIMIT $${params.length};
-    `;
-
-    const result = await pool.query(query, params);
-
-    const leaderboard = result.rows.map((row, index) => {
-      const receipts = Number(row.receipts || 0);
-      const cashOnHand = Number(row.cash_on_hand || 0);
-
-      return {
-        rank: index + 1,
-        candidate_id: row.candidate_id,
-        name: row.name,
-        state: row.state,
-        office: row.office,
-        party: row.party,
-        receipts,
-        cash_on_hand: cashOnHand,
-        funding_sources: buildFundingSources(receipts)
-      };
-    });
+    const leaderboard = result.rows.map((row, index) => ({
+      rank: index + 1,
+      candidate_id: row.candidate_id,
+      name: row.name || "Unknown Candidate",
+      state: row.state || "N/A",
+      office: row.office || "Race",
+      district: row.district || "Statewide",
+      party: row.party || "N/A",
+      receipts: Number(row.receipts || 0),
+      cash_on_hand: Number(row.cash_on_hand || 0),
+      coverage_end_date: row.coverage_end_date || null,
+      election_year: Number(row.election_year || cycle),
+      source: row.source || "FEC",
+      source_updated_at:
+        row.source_updated_at || row.updated_at || row.created_at || null,
+      funding_sources: buildFundingSources(row),
+    }));
 
     const totalReceipts = leaderboard.reduce(
       (sum, row) => sum + Number(row.receipts || 0),
@@ -323,16 +227,8 @@ export async function getFundraisingLeaderboard(input = {}) {
     return {
       ok: true,
       source: "fec",
-      fec_table: fecTable,
-      detected_columns: {
-        candidate_id: fecCandidateIdCol,
-        name: fecNameCol,
-        state: fecStateCol,
-        office: fecOfficeCol,
-        party: fecPartyCol,
-        receipts: fecReceiptsCol,
-        cash_on_hand: fecCashCol
-      },
+      table: "fundraising_live",
+      cycle,
       limit,
       count: leaderboard.length,
       leaderboard,
@@ -342,16 +238,19 @@ export async function getFundraisingLeaderboard(input = {}) {
         total_cash_on_hand: totalCashOnHand,
         average_receipts: leaderboard.length
           ? Math.round(totalReceipts / leaderboard.length)
-          : 0
-      }
+          : 0,
+      },
+      updated_at: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("[Intelligence] FEC fundraising leaderboard failed:", error);
+    console.error("[Intelligence] fundraising_live leaderboard failed:", error);
 
     return {
       ok: false,
       source: "fec-error",
+      table: "fundraising_live",
       error: error.message,
+      cycle,
       limit,
       count: 0,
       leaderboard: [],
@@ -359,8 +258,9 @@ export async function getFundraisingLeaderboard(input = {}) {
         tracked_candidates: 0,
         total_receipts: 0,
         total_cash_on_hand: 0,
-        average_receipts: 0
-      }
+        average_receipts: 0,
+      },
+      updated_at: new Date().toISOString(),
     };
   }
 }
@@ -392,7 +292,10 @@ export async function getExecutiveFeedEvents(limit = 20) {
   return rows.map((row) => ({
     id: row.id,
     time: row.created_at
-      ? new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? new Date(row.created_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
       : "Now",
     title: row.title || "Live intelligence signal",
     source: row.source || "Intelligence Feed",
@@ -406,7 +309,7 @@ export async function getExecutiveFeedEvents(limit = 20) {
     candidate_id: row.candidate_id,
     vendor_id: row.vendor_id,
     metadata: row.metadata || {},
-    created_at: row.created_at
+    created_at: row.created_at,
   }));
 }
 
@@ -486,7 +389,7 @@ export async function getIntelligenceMap() {
         totalReceipts: 0,
         totalCashOnHand: 0,
         candidates: [],
-        last_synced_at: row.source_updated_at || null
+        last_synced_at: row.source_updated_at || null,
       });
     }
 
@@ -494,7 +397,10 @@ export async function getIntelligenceMap() {
     group.totalReceipts += n(row.receipts);
     group.totalCashOnHand += n(row.cash_on_hand);
 
-    if (row.source_updated_at && (!group.last_synced_at || row.source_updated_at > group.last_synced_at)) {
+    if (
+      row.source_updated_at &&
+      (!group.last_synced_at || row.source_updated_at > group.last_synced_at)
+    ) {
       group.last_synced_at = row.source_updated_at;
     }
 
@@ -504,7 +410,7 @@ export async function getIntelligenceMap() {
       party: row.party || "N/A",
       receipts: n(row.receipts),
       cash_on_hand: n(row.cash_on_hand),
-      rank: 0
+      rank: 0,
     });
   }
 
@@ -515,13 +421,22 @@ export async function getIntelligenceMap() {
         .slice(0, 5)
         .map((candidate, index) => ({
           ...candidate,
-          rank: index + 1
+          rank: index + 1,
         }));
 
-      const receiptsScore = Math.min(60, Math.round(group.totalReceipts / 250000));
-      const cashScore = Math.min(25, Math.round(group.totalCashOnHand / 300000));
+      const receiptsScore = Math.min(
+        60,
+        Math.round(group.totalReceipts / 250000)
+      );
+      const cashScore = Math.min(
+        25,
+        Math.round(group.totalCashOnHand / 300000)
+      );
       const depthScore = Math.min(15, candidates.length * 3);
-      const overlayScore = Math.min(100, receiptsScore + cashScore + depthScore);
+      const overlayScore = Math.min(
+        100,
+        receiptsScore + cashScore + depthScore
+      );
 
       return {
         state: group.state,
@@ -531,7 +446,7 @@ export async function getIntelligenceMap() {
         totalReceipts: group.totalReceipts,
         totalCashOnHand: group.totalCashOnHand,
         candidates,
-        last_synced_at: group.last_synced_at
+        last_synced_at: group.last_synced_at,
       };
     })
     .sort((a, b) => b.overlayScore - a.overlayScore);
@@ -541,9 +456,13 @@ export async function getIntelligenceMap() {
       trackedStates: new Set(battlegrounds.map((item) => item.state)).size,
       overlays: battlegrounds.length,
       last_synced_at:
-        battlegrounds.map((item) => item.last_synced_at).filter(Boolean).sort().at(-1) || null
+        battlegrounds
+          .map((item) => item.last_synced_at)
+          .filter(Boolean)
+          .sort()
+          .at(-1) || null,
     },
-    battlegrounds
+    battlegrounds,
   };
 }
 
@@ -551,7 +470,10 @@ export async function getBattlegroundDashboardData() {
   const map = await getIntelligenceMap();
 
   return map.battlegrounds.slice(0, 8).map((item) => {
-    const probability = Math.max(49, Math.min(62, Math.round(item.overlayScore / 2 + 18)));
+    const probability = Math.max(
+      49,
+      Math.min(62, Math.round(item.overlayScore / 2 + 18))
+    );
     const momentum = Number((item.overlayScore / 30).toFixed(1));
     const risk = makeRisk(item.overlayScore);
     const priority = makePriority(item.overlayScore);
@@ -570,20 +492,28 @@ export async function getBattlegroundDashboardData() {
       receipts: item.totalReceipts,
       cash_on_hand: item.totalCashOnHand,
       vendor_count: 0,
-      candidates: item.candidates
+      candidates: item.candidates,
     };
   });
 }
 
 export async function getIntelligenceSummary() {
-  const [fundraisingPayload, feed, vendors, consultants, donors, mailops, map] = await Promise.all([
+  const [
+    fundraisingPayload,
+    feed,
+    vendors,
+    consultants,
+    donors,
+    mailops,
+    map,
+  ] = await Promise.all([
     getFundraisingLeaderboard(250),
     getExecutiveFeedEvents(25),
     getVendorSignals(25),
     getConsultantSignals(25),
     getDonorSignals(25),
     getMailOpsSignals(25),
-    getIntelligenceMap()
+    getIntelligenceMap(),
   ]);
 
   return {
@@ -596,8 +526,8 @@ export async function getIntelligenceSummary() {
       donors: donors.length,
       mailops_events: mailops.length,
       map_overlays: map.summary.overlays,
-      tracked_states: map.summary.trackedStates
-    }
+      tracked_states: map.summary.trackedStates,
+    },
   };
 }
 
@@ -610,7 +540,7 @@ export async function getIntelligenceDashboard() {
     vendors,
     donors,
     consultants,
-    mailops
+    mailops,
   ] = await Promise.all([
     getIntelligenceSummary(),
     getBattlegroundDashboardData(),
@@ -619,7 +549,7 @@ export async function getIntelligenceDashboard() {
     getVendorSignals(8),
     getDonorSignals(8),
     getConsultantSignals(8),
-    getMailOpsSignals(8)
+    getMailOpsSignals(8),
   ]);
 
   const leaderboard = fundraisingPayload.leaderboard || [];
@@ -629,10 +559,30 @@ export async function getIntelligenceDashboard() {
   return {
     generated_at: new Date().toISOString(),
     metrics: [
-      { label: "Fundraising Leaders", value: String(leaderboard.length), delta: "Live finance records", tone: "up" },
-      { label: "Receipts Modeled", value: fmtMoney(totalReceipts), delta: "From fundraising_live", tone: "up" },
-      { label: "Cash On Hand", value: fmtMoney(totalCash), delta: "Reserve strength", tone: "up" },
-      { label: "Active Signals", value: String(executiveFeed.length), delta: "Executive feed events", tone: "up" }
+      {
+        label: "Fundraising Leaders",
+        value: String(leaderboard.length),
+        delta: "Live finance records",
+        tone: "up",
+      },
+      {
+        label: "Receipts Modeled",
+        value: fmtMoney(totalReceipts),
+        delta: "From fundraising_live",
+        tone: "up",
+      },
+      {
+        label: "Cash On Hand",
+        value: fmtMoney(totalCash),
+        delta: "Reserve strength",
+        tone: "up",
+      },
+      {
+        label: "Active Signals",
+        value: String(executiveFeed.length),
+        delta: "Executive feed events",
+        tone: "up",
+      },
     ],
     feed: executiveFeed,
     executiveFeed,
@@ -644,7 +594,7 @@ export async function getIntelligenceDashboard() {
     donors,
     consultants,
     mailops,
-    summary: summary.summary
+    summary: summary.summary,
   };
 }
 
@@ -653,7 +603,7 @@ export async function getIntelligenceForecast() {
 
   return {
     generated_at: new Date().toISOString(),
-    results: battlegrounds
+    results: battlegrounds,
   };
 }
 
@@ -662,7 +612,7 @@ export async function getIntelligenceRankings() {
 
   return {
     generated_at: new Date().toISOString(),
-    results: fundraisingPayload.leaderboard
+    results: fundraisingPayload.leaderboard,
   };
 }
 
@@ -690,9 +640,9 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
       candidates_tracked: rows.length,
       active_states: new Set(rows.map((r) => r.state).filter(Boolean)).size,
       offices_tracked: new Set(rows.map((r) => r.office).filter(Boolean)).size,
-      last_updated: new Date().toISOString()
+      last_updated: new Date().toISOString(),
     },
-    results: rows
+    results: rows,
   };
 }
 
@@ -734,7 +684,7 @@ function buildActionFromSignal(item, index) {
       `State: ${item.state || "N/A"} • Office: ${item.office || "N/A"}`,
     state: item.state || "National",
     office: item.office || "N/A",
-    risk: item.risk || "Monitor"
+    risk: item.risk || "Monitor",
   };
 }
 
@@ -743,7 +693,7 @@ export async function getIntelligenceCommand() {
 
   const scoredFeed = (dashboard.feed || []).map((item) => ({
     ...item,
-    score: severityScore(item.severity) + riskScore(item.risk)
+    score: severityScore(item.severity) + riskScore(item.risk),
   }));
 
   const prioritizedFeed = scoredFeed.sort((a, b) => b.score - a.score);
@@ -752,21 +702,31 @@ export async function getIntelligenceCommand() {
     ["High", "Critical"].includes(item.severity)
   );
 
-  const mailopsActions = (dashboard.mailops || []).slice(0, 4).map((item, index) => ({
-    id: `mailops-action-${item.id || index}`,
-    title: `MailOps: ${item.campaign || "Review mail operation"}`,
-    owner: "MailOps",
-    priority: ["High", "Elevated", "Delayed"].includes(item.severity || item.status) ? "High" : "Normal",
-    due: ["High", "Elevated", "Delayed"].includes(item.severity || item.status) ? "Today" : "Next Cycle",
-    detail: item.note || `${item.location || "Mail operation"} requires review.`,
-    state: item.state || "National",
-    office: item.office || "N/A",
-    risk: item.risk || "Monitor"
-  }));
+  const mailopsActions = (dashboard.mailops || [])
+    .slice(0, 4)
+    .map((item, index) => ({
+      id: `mailops-action-${item.id || index}`,
+      title: `MailOps: ${item.campaign || "Review mail operation"}`,
+      owner: "MailOps",
+      priority: ["High", "Elevated", "Delayed"].includes(
+        item.severity || item.status
+      )
+        ? "High"
+        : "Normal",
+      due: ["High", "Elevated", "Delayed"].includes(
+        item.severity || item.status
+      )
+        ? "Today"
+        : "Next Cycle",
+      detail: item.note || `${item.location || "Mail operation"} requires review.`,
+      state: item.state || "National",
+      office: item.office || "N/A",
+      risk: item.risk || "Monitor",
+    }));
 
   const actions = [
     ...prioritizedFeed.slice(0, 8).map(buildActionFromSignal),
-    ...mailopsActions
+    ...mailopsActions,
   ].slice(0, 10);
 
   return {
@@ -783,7 +743,7 @@ export async function getIntelligenceCommand() {
       vendor_signals: dashboard.vendors.slice(0, 10),
       donor_signals: dashboard.donors.slice(0, 10),
       consultant_signals: dashboard.consultants.slice(0, 10),
-      mailops_signals: dashboard.mailops.slice(0, 10)
-    }
+      mailops_signals: dashboard.mailops.slice(0, 10),
+    },
   };
 }
