@@ -33,6 +33,19 @@ function numberOrNull(value) {
   return Number.isFinite(next) ? next : null;
 }
 
+function safeIntegerSql(columnName, fallback = 0) {
+  return `COALESCE(NULLIF(REGEXP_REPLACE(${columnName}::text, '[^0-9\\-]', '', 'g'), '')::integer, ${fallback})`;
+}
+
+function safeNullableIntegerSql(columnName) {
+  return `NULLIF(REGEXP_REPLACE(${columnName}::text, '[^0-9\\-]', '', 'g'), '')::integer`;
+}
+
+const FIRM_ID_SQL = safeNullableIntegerSql("firm_id");
+const ASSIGNED_USER_ID_SQL = safeNullableIntegerSql("assigned_user_id");
+const CAMPAIGN_COUNT_SQL = safeIntegerSql("campaign_count", 0);
+const TEAM_SIZE_SQL = safeIntegerSql("team_size", 1);
+
 function normalizeStage(value = "new") {
   const clean = text(value).toLowerCase();
   return VALID_STAGES.includes(clean) ? clean : "new";
@@ -149,7 +162,7 @@ async function ensureEnterpriseLeadTables() {
       full_name = COALESCE(full_name, contact_name, email, firm_name, 'Unknown Lead'),
       contact_name = COALESCE(contact_name, full_name, email, firm_name, 'Unknown Lead'),
       firm_name = COALESCE(firm_name, 'Enterprise Prospect'),
-      team_size = COALESCE(team_size, 1),
+      team_size = ${TEAM_SIZE_SQL},
       message = COALESCE(message, use_case, notes, 'Enterprise intake request'),
       notes = COALESCE(notes, message, use_case, 'Enterprise intake request'),
       updated_at = COALESCE(updated_at, NOW())
@@ -478,8 +491,8 @@ router.patch("/admin/:id", requireAuth, async (req, res) => {
           stage = COALESCE($2, stage),
           status = COALESCE($2, status),
           priority = COALESCE($3, priority),
-          assigned_user_id = COALESCE($4, assigned_user_id),
-          firm_id = COALESCE($5, firm_id),
+          assigned_user_id = COALESCE($4::integer, ${ASSIGNED_USER_ID_SQL}),
+          firm_id = COALESCE($5::integer, ${FIRM_ID_SQL}),
           firm_name = COALESCE($6, firm_name),
           full_name = COALESCE($7, full_name),
           contact_name = COALESCE($8, contact_name),
@@ -490,8 +503,8 @@ router.patch("/admin/:id", requireAuth, async (req, res) => {
           organization_type = COALESCE($13, organization_type),
           states = COALESCE($14::text[], states),
           cycle = COALESCE($15, cycle),
-          campaign_count = COALESCE($16, campaign_count),
-          team_size = COALESCE($17, team_size),
+          campaign_count = COALESCE($16::integer, ${CAMPAIGN_COUNT_SQL}),
+          team_size = COALESCE($17::integer, ${TEAM_SIZE_SQL}),
           budget_range = COALESCE($18, budget_range),
           timeline = COALESCE($19, timeline),
           use_case = COALESCE($20, use_case),
