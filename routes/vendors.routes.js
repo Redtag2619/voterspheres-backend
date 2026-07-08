@@ -8,6 +8,18 @@ function text(value = "") {
   return String(value || "").trim();
 }
 
+function safeNumericSql(columnName, fallback = 0) {
+  return `COALESCE(
+    NULLIF(
+      REGEXP_REPLACE(${columnName}::text, '[^0-9.\\-]', '', 'g'),
+      ''
+    )::numeric,
+    ${fallback}
+  )`;
+}
+
+const CONTRACT_VALUE_SQL = safeNumericSql("contract_value");
+
 function normalizeState(value = "") {
   const v = text(value);
   return v.length === 2 ? v.toUpperCase() : v;
@@ -163,7 +175,7 @@ router.get("/intelligence/scoring", async (_req, res) => {
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'active')::int AS active_count,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) <> 'active')::int AS watch_count,
         COUNT(DISTINCT NULLIF(category, ''))::int AS category_count,
-        COALESCE(SUM(COALESCE(contract_value, 0)), 0)::numeric AS total_contract_value
+        COALESCE(SUM(${CONTRACT_VALUE_SQL}), 0)::numeric AS total_contract_value
       FROM vendors
       GROUP BY COALESCE(NULLIF(state, ''), 'Unknown')
       ORDER BY vendor_count DESC, state ASC
@@ -460,7 +472,7 @@ router.get("/", async (req, res) => {
         candidate_name,
         firm_name,
         office,
-        COALESCE(contract_value, 0)::numeric AS contract_value,
+        ${CONTRACT_VALUE_SQL}::numeric AS contract_value,
         notes,
         source,
         source_updated_at,
