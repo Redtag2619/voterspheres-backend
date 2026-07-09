@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { pool } from "../db/pool.js";
 import { getElectionWarRoom } from "./electionWarRoom.service.js";
 import { getAiStrategicAdvisor } from "./aiStrategicAdvisor.service.js";
-import { getExecutiveMissionControl } from "./executiveMissionControl.service.js";
+import { getExecutiveMissionControl } from "./executiveMissionControl.service.js"; 
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
