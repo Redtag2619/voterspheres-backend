@@ -169,3 +169,12 @@ export async function getAiCampaignCopilotThread({ user = {}, threadId }) {
 export function listAiCampaignCopilotAgents() {
   return listAgents();
 }
+
+export {
+  askAiCampaignCopilot,
+  getAiCampaignCopilotThread,
+  listAiCampaignCopilotAgents,
+  listAiCampaignCopilotThreads,
+} from "./aiCampaignCopilot/service.js";
+
+export { ensureAiCampaignCopilotTables } from "./aiCampaignCopilot/schema.js";
