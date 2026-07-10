@@ -3,26 +3,10 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import {
   askAiCampaignCopilot,
   getAiCampaignCopilotThread,
-  listAiCampaignCopilotAgents,
   listAiCampaignCopilotThreads,
 } from "../services/aiCampaignCopilot.service.js";
 
 const router = express.Router();
-
-router.get("/agents", requireAuth, async (_req, res) => {
-  try {
-    return res.json({
-      ok: true,
-      agents: listAiCampaignCopilotAgents(),
-    });
-  } catch (error) {
-    console.error("[ai-campaign-copilot] agents failed", error);
-    return res.status(500).json({
-      error: "Failed to load Co-Pilot agents.",
-      detail: error.message,
-    });
-  }
-});
 
 router.get("/threads", requireAuth, async (req, res) => {
   try {
@@ -74,4 +58,4 @@ router.post("/ask", requireAuth, async (req, res) => {
   }
 });
 
-export default router;
+export default router
