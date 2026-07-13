@@ -7,15 +7,31 @@ const router = express.Router();
 router.get("/", requireAuth, async (req, res) => {
   try {
     const data = await getExecutiveKpis({
-      user: req.user || req.auth || {},
+      user: {
+        ...(req.user || {}),
+        ...(req.auth || {}),
+        firm_id:
+          req.auth?.firmId ||
+          req.auth?.firm_id ||
+          req.user?.firm_id ||
+          null,
+      },
     });
 
-    return res.json({ ok: true, ...data });
+    return res.status(200).json({
+      ok: true,
+      ...data,
+    });
   } catch (error) {
-    console.error("[executive-kpi] failed", error);
+    console.error("[executive-kpi] failed:", error);
+
     return res.status(500).json({
+      ok: false,
       error: "Failed to load Executive KPI Layer.",
-      detail: error.message,
+      detail:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : error.message,
     });
   }
 });
