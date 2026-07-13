@@ -1,7 +1,7 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { pool } from "../db/pool.js";
-import { getUnifiedExecutiveIntelligence } from "../services/unifiedExecutiveIntelligence.service.js";
+import { getUnifiedExecutiveIntelligence } from "../services/unifiedExecutiveIntelligence.service.js"; 
 
 const router = express.Router();
 
