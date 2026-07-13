@@ -1,4 +1,3 @@
-```js
 import { pool } from "../db/pool.js";
 import { getExecutiveKpis } from "./executiveKpi.service.js";
 
@@ -1176,4 +1175,4 @@ export async function getUnifiedExecutiveIntelligence(
       statusRows,
   };
 }
-```
+
