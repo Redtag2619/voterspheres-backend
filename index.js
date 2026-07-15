@@ -113,6 +113,7 @@ import universalSearchRoutes from "./routes/universalSearch.routes.js";
 import opportunityEngineRoutes from "./routes/opportunityEngine.routes.js";
 import decisionIntelligenceRoutes from "./routes/decisionIntelligence.routes.js";
 import campaignSimulationRoutes from "./routes/campaignSimulation.routes.js";
+import executiveVoiceToolsRoutes from "./routes/executiveVoiceTools.routes.js";
 import intelligenceReportsRoutes from "./routes/intelligenceReports.routes.js";
 
 const app = express();
@@ -320,6 +321,7 @@ app.use("/api/executive-ai-command", executiveAiCommandRoutes);
 app.use("/api/campaign-finance-intelligence", campaignFinanceIntelligenceRoutes);
 app.use("/api/executive-voice", executiveVoiceRoutes);
 app.use("/api/unified-executive-intelligence", unifiedExecutiveIntelligenceRoutes);
+app.use("/api/executive-voice-tools", executiveVoiceToolsRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
