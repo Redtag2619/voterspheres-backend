@@ -6,39 +6,100 @@ const openai = process.env.OPENAI_API_KEY
     })
   : null;
 
-const cache = new Map();
+const CACHE = new Map();
 
-const now = () => new Date().toISOString();
+const now = () =>
+  new Date().toISOString();
 
 const clean = (value = "") =>
   String(value || "").trim();
 
-function clampLimit(
+function clamp(
   value,
   fallback = 6,
+  min = 1,
   max = 25
 ) {
-  const parsed = Number.parseInt(
-    value,
-    10
-  );
+  const parsed =
+    Number.parseInt(
+      value,
+      10
+    );
 
-  return Number.isFinite(parsed)
+  return Number.isFinite(
+    parsed
+  )
     ? Math.min(
         max,
-        Math.max(1, parsed)
+        Math.max(
+          min,
+          parsed
+        )
       )
     : fallback;
 }
 
-function getCached(key) {
-  const entry = cache.get(key);
+function timestamp(
+  value
+) {
+  const parsed =
+    new Date(
+      value || ""
+    ).getTime();
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : 0;
+}
+
+function freshness(
+  value
+) {
+  const stamp =
+    timestamp(value);
+
+  if (!stamp) {
+    return "unknown";
+  }
+
+  const age =
+    Date.now() - stamp;
+
+  const hour =
+    60 * 60 * 1000;
+
+  const day =
+    24 * hour;
+
+  if (age <= hour) {
+    return "live";
+  }
+
+  if (age <= day) {
+    return "fresh";
+  }
+
+  if (age <= 7 * day) {
+    return "recent";
+  }
+
+  return "historical";
+}
+
+function getCached(
+  key
+) {
+  const entry =
+    CACHE.get(key);
 
   if (
     !entry ||
-    entry.expires_at <= Date.now()
+    entry.expires_at <=
+      Date.now()
   ) {
-    cache.delete(key);
+    CACHE.delete(key);
     return null;
   }
 
@@ -53,10 +114,12 @@ function setCached(
   value,
   ttlMs
 ) {
-  cache.set(key, {
+  CACHE.set(key, {
     value,
+
     expires_at:
-      Date.now() + ttlMs,
+      Date.now() +
+      ttlMs,
   });
 
   return value;
@@ -64,35 +127,36 @@ function setCached(
 
 async function fetchJson(
   url,
-  options = {}
+  {
+    method = "GET",
+    headers = {},
+    body,
+    timeoutMs = 12000,
+  } = {}
 ) {
   const controller =
     new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs || 12000
-  );
+  const timer =
+    setTimeout(
+      () =>
+        controller.abort(),
+      timeoutMs
+    );
 
   try {
-    const response = await fetch(
-      url,
-      {
-        method:
-          options.method ||
-          "GET",
+    const response =
+      await fetch(
+        url,
+        {
+          method,
+          headers,
+          body,
 
-        headers:
-          options.headers ||
-          {},
-
-        body:
-          options.body,
-
-        signal:
-          controller.signal,
-      }
-    );
+          signal:
+            controller.signal,
+        }
+      );
 
     const text =
       await response.text();
@@ -102,13 +166,17 @@ async function fetchJson(
     try {
       payload =
         text
-          ? JSON.parse(text)
+          ? JSON.parse(
+              text
+            )
           : null;
     } catch {
       payload = text;
     }
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         payload?.message ||
           payload?.error ||
@@ -118,29 +186,10 @@ async function fetchJson(
 
     return payload;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(
+      timer
+    );
   }
-}
-
-function makeResult({
-  provider,
-  ok = true,
-  summary = "",
-  data = null,
-  warnings = [],
-  sources = [],
-  degraded = false,
-} = {}) {
-  return {
-    ok,
-    provider,
-    summary,
-    data,
-    warnings,
-    sources,
-    degraded,
-    generated_at: now(),
-  };
 }
 
 function sourceMeta({
@@ -149,88 +198,121 @@ function sourceMeta({
   published_at = null,
   reporting_period = null,
   confidence = 85,
-  freshness = "unknown",
   note = null,
 } = {}) {
   return {
     name,
     url,
-    fetched_at: now(),
+
+    fetched_at:
+      now(),
+
     published_at,
+
     reporting_period,
+
+    freshness:
+      freshness(
+        published_at ||
+          reporting_period
+      ),
+
     confidence,
-    freshness,
+
     note,
   };
 }
 
-function parseWebResults(
-  response,
-  limit
+function result({
+  provider,
+  ok = true,
+  summary = "",
+  data = null,
+  sources = [],
+  warnings = [],
+  degraded = false,
+} = {}) {
+  return {
+    ok,
+    provider,
+    summary,
+    data,
+    sources,
+    warnings,
+    degraded,
+
+    generated_at:
+      now(),
+  };
+}
+
+function safeJson(
+  value
 ) {
-  const rows = [];
-  const seen = new Set();
-
-  for (
-    const output
-    of response?.output || []
-  ) {
-    for (
-      const content
-      of output?.content || []
-    ) {
-      const summary =
-        clean(content?.text);
-
-      for (
-        const annotation
-        of content?.annotations ||
-        []
-      ) {
-        const url =
-          annotation?.url ||
-          annotation
-            ?.url_citation
-            ?.url ||
-          null;
-
-        if (
-          !url ||
-          seen.has(url)
-        ) {
-          continue;
-        }
-
-        seen.add(url);
-
-        rows.push({
-          title:
-            annotation?.title ||
-            annotation
-              ?.url_citation
-              ?.title ||
-            "Current political report",
-
-          url,
-
-          summary:
-            summary.slice(
-              0,
-              900
-            ),
-        });
-
-        if (
-          rows.length >=
-          limit
-        ) {
-          return rows;
-        }
-      }
-    }
+  try {
+    return JSON.parse(
+      value
+    );
+  } catch {
+    return null;
   }
+}
 
-  return rows;
+function sortByNewest(
+  rows = []
+) {
+  return [
+    ...rows,
+  ].sort(
+    (a, b) =>
+      timestamp(
+        b.published_at ||
+          b.field_end ||
+          b.updated_at
+      ) -
+      timestamp(
+        a.published_at ||
+          a.field_end ||
+          a.updated_at
+      )
+  );
+}
+
+function normalizeArticle(
+  article = {}
+) {
+  return {
+    title:
+      clean(
+        article.title
+      ),
+
+    publisher:
+      clean(
+        article.publisher
+      ) ||
+      null,
+
+    published_at:
+      clean(
+        article.published_at
+      ) ||
+      null,
+
+    url:
+      clean(
+        article.url
+      ),
+
+    summary:
+      clean(
+        article.summary
+      ),
+
+    source_type:
+      article.source_type ||
+      "public_web",
+  };
 }
 
 export async function searchCurrentPoliticalNews({
@@ -240,9 +322,10 @@ export async function searchCurrentPoliticalNews({
   limit = 6,
 } = {}) {
   const normalizedLimit =
-    clampLimit(
+    clamp(
       limit,
       6,
+      1,
       10
     );
 
@@ -269,14 +352,14 @@ export async function searchCurrentPoliticalNews({
   }
 
   if (!openai) {
-    return makeResult({
+    return result({
       provider:
         "openai_web_search",
 
       ok: false,
 
       summary:
-        "Live web search is not configured.",
+        "Live public web search is not configured.",
 
       warnings: [
         "OPENAI_API_KEY is missing on the backend.",
@@ -288,6 +371,14 @@ export async function searchCurrentPoliticalNews({
   }
 
   try {
+    const today =
+      new Date()
+        .toISOString()
+        .slice(
+          0,
+          10
+        );
+
     const response =
       await openai.responses.create({
         model:
@@ -306,39 +397,73 @@ export async function searchCurrentPoliticalNews({
           "auto",
 
         input:
-          `Find the newest reliable political reporting for ${[
-            clean(query),
-            clean(state),
-            clean(locality),
-          ]
-            .filter(Boolean)
-            .join(" ")}. ` +
-          "Prefer official government sources, election administrators, " +
-          "established newsrooms, pollsters, and campaign-finance authorities.",
+          "Search the public web for the newest reliable political reporting. " +
+          `Topic: ${clean(query)}. ` +
+          `State: ${clean(state) || "any"}. ` +
+          `Locality: ${clean(locality) || "any"}. ` +
+          `Today is ${today}. ` +
+          "Prefer articles published during the last 24 hours, then the last 7 days. " +
+          "Prefer official government sources, election administrators, established newsrooms, " +
+          "pollsters, campaigns, and campaign-finance authorities. " +
+          "Do not return old background articles when newer reporting exists. " +
+          "Return ONLY valid JSON with this exact shape: " +
+          '{"articles":[{"title":"","publisher":"","published_at":"","url":"","summary":""}]}. ' +
+          "Use ISO-8601 publication dates when available. Do not include markdown.",
       });
 
-    const articles =
-      parseWebResults(
-        response,
-        normalizedLimit
+    const parsed =
+      safeJson(
+        response.output_text ||
+          ""
       );
 
-    return setCached(
-      key,
+    const articles =
+      sortByNewest(
+        Array.isArray(
+          parsed?.articles
+        )
+          ? parsed.articles
+          : []
+      )
+        .map(
+          normalizeArticle
+        )
+        .filter(
+          (article) =>
+            article.title &&
+            article.url
+        )
+        .slice(
+          0,
+          normalizedLimit
+        );
 
-      makeResult({
+    const output =
+      result({
         provider:
           "openai_web_search",
 
         ok:
-          articles.length > 0,
+          articles.length >
+          0,
 
         summary:
           articles.length
-            ? `Found ${articles.length} current political reports.`
-            : "No current political reports were found.",
+            ? `Found ${articles.length} current public political reports.`
+            : "No current public political reports were returned.",
 
         data: {
+          query:
+            clean(query),
+
+          state:
+            clean(state) ||
+            null,
+
+          locality:
+            clean(locality) ||
+            null,
+
           articles,
         },
 
@@ -347,31 +472,56 @@ export async function searchCurrentPoliticalNews({
             (article) =>
               sourceMeta({
                 name:
-                  "OpenAI web search result",
+                  article.publisher ||
+                  "Public web source",
 
                 url:
                   article.url,
 
-                confidence:
-                  82,
+                published_at:
+                  article.published_at,
 
-                freshness:
-                  "live-search",
+                confidence:
+                  article.published_at
+                    ? 88
+                    : 74,
+
+                note:
+                  article.published_at
+                    ? "Publication date supplied by the public source."
+                    : "Publication date was unavailable; freshness is uncertain.",
               })
           ),
-      }),
 
+        warnings:
+          articles.some(
+            (article) =>
+              !article.published_at
+          )
+            ? [
+                "Some public articles did not include a verifiable publication timestamp.",
+              ]
+            : [],
+
+        degraded:
+          articles.length ===
+          0,
+      });
+
+    return setCached(
+      key,
+      output,
       5 * 60 * 1000
     );
   } catch (error) {
-    return makeResult({
+    return result({
       provider:
         "openai_web_search",
 
       ok: false,
 
       summary:
-        "Live political news search failed.",
+        "Live public political news search failed.",
 
       warnings: [
         error.message,
@@ -390,11 +540,12 @@ export async function getOpenFecFinance({
 } = {}) {
   const apiKey =
     clean(
-      process.env.FEC_API_KEY
+      process.env
+        .FEC_API_KEY
     );
 
   if (!apiKey) {
-    return makeResult({
+    return result({
       provider:
         "openfec",
 
@@ -412,11 +563,17 @@ export async function getOpenFecFinance({
     });
   }
 
+  const candidate =
+    clean(candidateId);
+
+  const committee =
+    clean(committeeId);
+
   if (
-    !clean(candidateId) &&
-    !clean(committeeId)
+    !candidate &&
+    !committee
   ) {
-    return makeResult({
+    return result({
       provider:
         "openfec",
 
@@ -432,6 +589,18 @@ export async function getOpenFecFinance({
       degraded:
         true,
     });
+  }
+
+  const key =
+    `fec:${candidate}:${committee}:${clean(
+      cycle
+    )}`;
+
+  const cached =
+    getCached(key);
+
+  if (cached) {
+    return cached;
   }
 
   const params =
@@ -451,16 +620,12 @@ export async function getOpenFecFinance({
   }
 
   const endpoint =
-    clean(committeeId)
+    committee
       ? `https://api.open.fec.gov/v1/committee/${encodeURIComponent(
-          clean(
-            committeeId
-          )
+          committee
         )}/totals/?${params.toString()}`
       : `https://api.open.fec.gov/v1/candidate/${encodeURIComponent(
-          clean(
-            candidateId
-          )
+          candidate
         )}/totals/?${params.toString()}`;
 
   try {
@@ -473,63 +638,68 @@ export async function getOpenFecFinance({
       payload?.results ||
       [];
 
-    return makeResult({
-      provider:
-        "openfec",
+    const output =
+      result({
+        provider:
+          "openfec",
 
-      ok:
-        records.length > 0,
+        ok:
+          records.length >
+          0,
 
-      summary:
-        records.length
-          ? `Found ${records.length} official FEC finance records.`
-          : "No official FEC finance record matched the request.",
+        summary:
+          records.length
+            ? `Found ${records.length} official FEC finance records.`
+            : "No official FEC finance record matched the request.",
 
-      data: {
-        candidate_id:
-          clean(candidateId) ||
-          null,
+        data: {
+          candidate_id:
+            candidate ||
+            null,
 
-        committee_id:
-          clean(committeeId) ||
-          null,
+          committee_id:
+            committee ||
+            null,
 
-        cycle:
-          clean(cycle) ||
-          null,
-
-        records,
-      },
-
-      sources: [
-        sourceMeta({
-          name:
-            "Federal Election Commission OpenFEC API",
-
-          url:
-            "https://api.open.fec.gov/",
-
-          reporting_period:
-            records[0]
-              ?.coverage_end_date ||
-            records[0]
-              ?.coverage_start_date ||
+          cycle:
             clean(cycle) ||
             null,
 
-          confidence:
-            97,
+          records,
+        },
 
-          freshness:
-            "latest-official-filing",
+        sources: [
+          sourceMeta({
+            name:
+              "Federal Election Commission OpenFEC API",
 
-          note:
-            "FEC totals reflect the latest official filing period, not second-by-second activity.",
-        }),
-      ],
-    });
+            url:
+              "https://api.open.fec.gov/",
+
+            reporting_period:
+              records[0]
+                ?.coverage_end_date ||
+              records[0]
+                ?.coverage_start_date ||
+              clean(cycle) ||
+              null,
+
+            confidence:
+              97,
+
+            note:
+              "Official filing data reflects the latest available filing period, not second-by-second activity.",
+          }),
+        ],
+      });
+
+    return setCached(
+      key,
+      output,
+      15 * 60 * 1000
+    );
   } catch (error) {
-    return makeResult({
+    return result({
       provider:
         "openfec",
 
@@ -559,7 +729,7 @@ export async function getCongressUpdates({
     );
 
   if (!apiKey) {
-    return makeResult({
+    return result({
       provider:
         "congress_gov",
 
@@ -588,9 +758,10 @@ export async function getCongressUpdates({
 
         limit:
           String(
-            clampLimit(
+            clamp(
               limit,
               10,
+              1,
               25
             )
           ),
@@ -635,12 +806,28 @@ export async function getCongressUpdates({
         );
     }
 
-    return makeResult({
+    bills =
+      sortByNewest(
+        bills.map(
+          (bill) => ({
+            ...bill,
+
+            published_at:
+              bill.updateDate ||
+              bill.latestAction
+                ?.actionDate ||
+              null,
+          })
+        )
+      );
+
+    return result({
       provider:
         "congress_gov",
 
       ok:
-        bills.length > 0,
+        bills.length >
+        0,
 
       summary:
         bills.length
@@ -648,6 +835,10 @@ export async function getCongressUpdates({
           : "No legislative updates matched the request.",
 
       data: {
+        query:
+          clean(query) ||
+          null,
+
         bills,
       },
 
@@ -661,19 +852,22 @@ export async function getCongressUpdates({
 
           published_at:
             bills[0]
-              ?.updateDate ||
+              ?.published_at ||
             null,
 
           confidence:
             96,
 
-          freshness:
-            "latest-official-update",
+          note:
+            "Official legislative updates from Congress.gov.",
         }),
       ],
+
+      degraded:
+        false,
     });
   } catch (error) {
-    return makeResult({
+    return result({
       provider:
         "congress_gov",
 
@@ -707,7 +901,7 @@ export async function getWeatherFieldRisk({
     !Number.isFinite(lat) ||
     !Number.isFinite(lon)
   ) {
-    return makeResult({
+    return result({
       provider:
         "nws",
 
@@ -758,6 +952,9 @@ export async function getWeatherFieldRisk({
       point?.properties
         ?.forecast;
 
+    const alertsUrl =
+      `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
+
     const [
       forecast,
       alerts,
@@ -774,7 +971,7 @@ export async function getWeatherFieldRisk({
           ),
 
       fetchJson(
-        `https://api.weather.gov/alerts/active?point=${lat},${lon}`,
+        alertsUrl,
         {
           headers,
         }
@@ -826,7 +1023,7 @@ export async function getWeatherFieldRisk({
           : "Stable";
 
     const output =
-      makeResult({
+      result({
         provider:
           "nws",
 
@@ -867,7 +1064,7 @@ export async function getWeatherFieldRisk({
 
             url:
               forecastUrl ||
-              "https://api.weather.gov/",
+              alertsUrl,
 
             published_at:
               forecast
@@ -881,8 +1078,8 @@ export async function getWeatherFieldRisk({
             confidence:
               97,
 
-            freshness:
-              "live-official",
+            note:
+              "Live official weather alerts and forecast data.",
           }),
         ],
       });
@@ -893,7 +1090,7 @@ export async function getWeatherFieldRisk({
       5 * 60 * 1000
     );
   } catch (error) {
-    return makeResult({
+    return result({
       provider:
         "nws",
 
@@ -928,7 +1125,7 @@ export async function getPollingProviderData(
     );
 
   if (!baseUrl) {
-    return makeResult({
+    return result({
       provider:
         "polling_provider",
 
@@ -950,7 +1147,10 @@ export async function getPollingProviderData(
     new URLSearchParams();
 
   for (
-    const [key, value]
+    const [
+      key,
+      value,
+    ]
     of Object.entries(
       args || {}
     )
@@ -967,11 +1167,13 @@ export async function getPollingProviderData(
     }
   }
 
-  const cacheId =
+  const cacheKey =
     `polling:${baseUrl}:${params.toString()}`;
 
   const cached =
-    getCached(cacheId);
+    getCached(
+      cacheKey
+    );
 
   if (cached) {
     return cached;
@@ -1001,7 +1203,7 @@ export async function getPollingProviderData(
         }
       );
 
-    const polls =
+    const rawPolls =
       payload?.polls ||
       payload?.results ||
       payload?.data ||
@@ -1013,21 +1215,25 @@ export async function getPollingProviderData(
           : []
       );
 
+    const polls =
+      sortByNewest(
+        Array.isArray(
+          rawPolls
+        )
+          ? rawPolls
+          : []
+      );
+
     const output =
-      makeResult({
+      result({
         provider:
           "polling_provider",
 
         ok:
-          Array.isArray(
-            polls
-          ) &&
-          polls.length > 0,
+          polls.length >
+          0,
 
         summary:
-          Array.isArray(
-            polls
-          ) &&
           polls.length
             ? `Found ${polls.length} external polling records.`
             : "No external polling records matched the request.",
@@ -1047,33 +1253,45 @@ export async function getPollingProviderData(
               baseUrl,
 
             published_at:
-              polls?.[0]
+              polls[0]
                 ?.published_at ||
-              polls?.[0]
+              polls[0]
                 ?.field_end ||
-              polls?.[0]
+              polls[0]
                 ?.updated_at ||
               null,
 
             confidence:
               84,
 
-            freshness:
-              "provider-latest",
-
             note:
               "Polling responses should include pollster, field dates, sample size, population, and margin of error when available.",
           }),
         ],
+
+        warnings:
+          polls.some(
+            (poll) =>
+              !poll.field_end &&
+              !poll.published_at
+          )
+            ? [
+                "Some polling records did not include field dates or publication dates.",
+              ]
+            : [],
+
+        degraded:
+          polls.length ===
+          0,
       });
 
     return setCached(
-      cacheId,
+      cacheKey,
       output,
       10 * 60 * 1000
     );
   } catch (error) {
-    return makeResult({
+    return result({
       provider:
         "polling_provider",
 
@@ -1215,7 +1433,7 @@ export async function getExecutiveVoiceSourceHealth() {
       providers.length,
 
     cache_entries:
-      cache.size,
+      CACHE.size,
 
     generated_at:
       now(),
@@ -1223,7 +1441,7 @@ export async function getExecutiveVoiceSourceHealth() {
 }
 
 export function clearExecutiveVoiceSourceCache() {
-  cache.clear();
+  CACHE.clear();
 
   return {
     ok: true,
