@@ -1,42 +1,113 @@
-import OpenAI from "openai";
 import { pool } from "../db/pool.js";
 import { getUnifiedExecutiveIntelligence } from "./unifiedExecutiveIntelligence.service.js";
 
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
-  : null;
+import {
+  getCongressUpdates,
+  getElectionAdministrationUpdates,
+  getOpenFecFinance,
+  getPollingProviderData,
+  getWeatherFieldRisk,
+  searchCurrentPoliticalNews,
+} from "./executiveVoiceLiveSources.service.js";
 
-const now = () => new Date().toISOString();
+const now = () =>
+  new Date().toISOString();
 
 const clean = (value = "") =>
   String(value || "").trim();
 
-const num = (value = 0) =>
-  Number.isFinite(Number(value))
-    ? Number(value)
-    : 0;
-
-const limitValue = (
+function clamp(
   value,
   fallback = 5,
+  min = 1,
   max = 20
-) => {
-  const parsed = Number.parseInt(
-    value,
-    10
-  );
+) {
+  const parsed =
+    Number.parseInt(
+      value,
+      10
+    );
 
-  return Number.isFinite(parsed)
+  return Number.isFinite(
+    parsed
+  )
     ? Math.min(
         max,
-        Math.max(1, parsed)
+        Math.max(
+          min,
+          parsed
+        )
       )
     : fallback;
-};
+}
 
-function firmId(user = {}) {
+function timestamp(
+  value
+) {
+  const parsed =
+    new Date(
+      value || ""
+    ).getTime();
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : 0;
+}
+
+function sortNewest(
+  rows = []
+) {
+  return [
+    ...rows,
+  ].sort(
+    (a, b) =>
+      timestamp(
+        b.published_at ||
+          b.field_end ||
+          b.updated_at
+      ) -
+      timestamp(
+        a.published_at ||
+          a.field_end ||
+          a.updated_at
+      )
+  );
+}
+
+function dedupe(
+  rows = []
+) {
+  const seen =
+    new Set();
+
+  return rows.filter(
+    (row) => {
+      const key =
+        clean(
+          row.url ||
+            row.source_url ||
+            row.title ||
+            row.id
+        ).toLowerCase();
+
+      if (
+        !key ||
+        seen.has(key)
+      ) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    }
+  );
+}
+
+function getFirmId(
+  user = {}
+) {
   return (
     user.firmId ||
     user.firm_id ||
@@ -45,67 +116,7 @@ function firmId(user = {}) {
   );
 }
 
-function freshness(value) {
-  if (!value) {
-    return "unknown";
-  }
-
-  const stamp =
-    new Date(value).getTime();
-
-  if (!Number.isFinite(stamp)) {
-    return "unknown";
-  }
-
-  const age =
-    Date.now() - stamp;
-
-  if (age <= 3600000) {
-    return "live";
-  }
-
-  if (age <= 86400000) {
-    return "fresh";
-  }
-
-  if (age <= 604800000) {
-    return "recent";
-  }
-
-  return "historical";
-}
-
-function sourceMeta({
-  source,
-  url = null,
-  publishedAt = null,
-  reportingPeriod = null,
-  confidence = 85,
-  modeled = false,
-  note = null,
-}) {
-  return {
-    source,
-    source_url: url,
-    fetched_at: now(),
-    published_at:
-      publishedAt,
-    reporting_period:
-      reportingPeriod,
-    freshness: freshness(
-      publishedAt ||
-        reportingPeriod ||
-        now()
-    ),
-    confidence:
-      num(confidence),
-    modeled:
-      Boolean(modeled),
-    note,
-  };
-}
-
-function result({
+function toolResult({
   tool,
   ok = true,
   summary = "",
@@ -113,7 +124,7 @@ function result({
   sources = [],
   warnings = [],
   degraded = false,
-}) {
+} = {}) {
   return {
     ok,
     tool,
@@ -122,7 +133,9 @@ function result({
     sources,
     warnings,
     degraded,
-    generated_at: now(),
+
+    generated_at:
+      now(),
   };
 }
 
@@ -141,15 +154,17 @@ async function safeQuery(
     return {
       key,
       ok: true,
+
       rows:
-        response.rows || [],
-      error: null,
+        response.rows ||
+        [],
+
+      error:
+        null,
     };
   } catch (error) {
     console.warn(
-      "[executive-voice-tools] " +
-        key +
-        " unavailable:",
+      `[executive-voice-tools] ${key} unavailable:`,
       error.message
     );
 
@@ -157,6 +172,7 @@ async function safeQuery(
       key,
       ok: false,
       rows: [],
+
       error:
         error.message,
     };
@@ -174,7 +190,8 @@ async function firstAvailable(
       await safeQuery(
         candidate.key,
         candidate.sql,
-        candidate.params || []
+        candidate.params ||
+          []
       );
 
     if (response.ok) {
@@ -186,8 +203,10 @@ async function firstAvailable(
     key:
       candidates[0]?.key ||
       "unknown",
+
     ok: false,
     rows: [],
+
     error:
       "No compatible data source is available.",
   };
@@ -196,13 +215,19 @@ async function firstAvailable(
 export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
   [
     {
-      type: "function",
+      type:
+        "function",
+
       name:
         "get_unified_executive_intelligence",
+
       description:
         "Get the current VoterSpheres executive operating picture, including health, workspaces, tasks, alerts, recommendations, and source freshness.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           workspace_id: {
             type: [
@@ -211,103 +236,161 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
               "null",
             ],
           },
+
           state: {
-            type: "string",
+            type:
+              "string",
           },
+
           office: {
-            type: "string",
+            type:
+              "string",
           },
+
           risk: {
-            type: "string",
+            type:
+              "string",
           },
         },
+
         additionalProperties:
           false,
       },
     },
 
     {
-      type: "function",
+      type:
+        "function",
+
       name:
         "search_live_news",
+
       description:
-        "Search current political news and recent sourced articles. Use for latest, today, breaking, current coverage, or recent developments.",
+        "Search the public web for the newest political reporting. Always use this for current, latest, today, breaking, recent articles, or public political developments.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           query: {
-            type: "string",
+            type:
+              "string",
           },
+
           state: {
-            type: "string",
+            type:
+              "string",
           },
+
           locality: {
-            type: "string",
+            type:
+              "string",
           },
+
           limit: {
-            type: "integer",
-            minimum: 1,
-            maximum: 10,
+            type:
+              "integer",
+
+            minimum:
+              1,
+
+            maximum:
+              10,
           },
         },
+
         required: [
           "query",
         ],
+
         additionalProperties:
           false,
       },
     },
 
     {
-      type: "function",
+      type:
+        "function",
+
       name:
         "get_latest_polling",
+
       description:
-        "Get the latest available polling for a candidate, race, state, office, or locality. Distinguish individual polls from aggregates.",
+        "Get the newest available polling. Use the configured external polling provider first and local polling tables only as fallback.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           state: {
-            type: "string",
+            type:
+              "string",
           },
+
           office: {
-            type: "string",
+            type:
+              "string",
           },
+
           candidate: {
-            type: "string",
+            type:
+              "string",
           },
+
           locality: {
-            type: "string",
+            type:
+              "string",
           },
+
           limit: {
-            type: "integer",
-            minimum: 1,
-            maximum: 20,
+            type:
+              "integer",
+
+            minimum:
+              1,
+
+            maximum:
+              20,
           },
         },
+
         additionalProperties:
           false,
       },
     },
 
     {
-      type: "function",
+      type:
+        "function",
+
       name:
         "get_fec_finance",
+
       description:
-        "Get the latest available official federal campaign-finance totals and reporting period for a candidate or committee.",
+        "Get the latest official federal campaign-finance totals and reporting period from OpenFEC, with local database fallback.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           candidate: {
-            type: "string",
+            type:
+              "string",
           },
+
           candidate_id: {
-            type: "string",
+            type:
+              "string",
           },
+
           committee_id: {
-            type: "string",
+            type:
+              "string",
           },
+
           cycle: {
             type: [
               "integer",
@@ -315,26 +398,162 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
             ],
           },
         },
+
         additionalProperties:
           false,
       },
     },
 
     {
-      type: "function",
+      type:
+        "function",
+
+      name:
+        "get_legislative_updates",
+
+      description:
+        "Get the newest official legislative updates from Congress.gov.",
+
+      parameters: {
+        type:
+          "object",
+
+        properties: {
+          query: {
+            type:
+              "string",
+          },
+
+          limit: {
+            type:
+              "integer",
+
+            minimum:
+              1,
+
+            maximum:
+              25,
+          },
+        },
+
+        additionalProperties:
+          false,
+      },
+    },
+
+    {
+      type:
+        "function",
+
+      name:
+        "get_weather_field_risk",
+
+      description:
+        "Get live official National Weather Service alerts and field-operation risk for coordinates.",
+
+      parameters: {
+        type:
+          "object",
+
+        properties: {
+          latitude: {
+            type:
+              "number",
+          },
+
+          longitude: {
+            type:
+              "number",
+          },
+
+          location: {
+            type:
+              "string",
+          },
+        },
+
+        required: [
+          "latitude",
+          "longitude",
+        ],
+
+        additionalProperties:
+          false,
+      },
+    },
+
+    {
+      type:
+        "function",
+
+      name:
+        "get_election_administration_updates",
+
+      description:
+        "Search for the newest public election-administration developments, deadlines, voting-system updates, and election-official announcements.",
+
+      parameters: {
+        type:
+          "object",
+
+        properties: {
+          query: {
+            type:
+              "string",
+          },
+
+          state: {
+            type:
+              "string",
+          },
+
+          locality: {
+            type:
+              "string",
+          },
+
+          limit: {
+            type:
+              "integer",
+
+            minimum:
+              1,
+
+            maximum:
+              10,
+          },
+        },
+
+        additionalProperties:
+          false,
+      },
+    },
+
+    {
+      type:
+        "function",
+
       name:
         "get_state_operations",
+
       description:
         "Get state, county, parish, workspace, task, and operational intelligence for a U.S. state or locality.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           state: {
-            type: "string",
+            type:
+              "string",
           },
+
           locality: {
-            type: "string",
+            type:
+              "string",
           },
+
           workspace_id: {
             type: [
               "number",
@@ -343,38 +562,53 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
             ],
           },
         },
+
         required: [
           "state",
         ],
+
         additionalProperties:
           false,
       },
     },
 
     {
-      type: "function",
+      type:
+        "function",
+
       name:
         "get_candidate_statistics",
+
       description:
-        "Get current VoterSpheres candidate profile, race, contact, finance, and campaign statistics.",
+        "Get current VoterSpheres candidate profile and campaign statistics.",
+
       parameters: {
-        type: "object",
+        type:
+          "object",
+
         properties: {
           candidate: {
-            type: "string",
+            type:
+              "string",
           },
+
           candidate_id: {
             type: [
               "number",
               "string",
             ],
           },
+
           state: {
-            type: "string",
+            type:
+              "string",
           },
+
           office: {
-            type: "string",
+            type:
+              "string",
           },
+
           cycle: {
             type: [
               "integer",
@@ -382,6 +616,7 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
             ],
           },
         },
+
         additionalProperties:
           false,
       },
@@ -395,18 +630,28 @@ async function unifiedTool(
   const data =
     await getUnifiedExecutiveIntelligence({
       user,
+
       workspaceId:
         args.workspace_id ||
         null,
+
       state:
-        clean(args.state),
+        clean(
+          args.state
+        ),
+
       office:
-        clean(args.office),
+        clean(
+          args.office
+        ),
+
       risk:
-        clean(args.risk),
+        clean(
+          args.risk
+        ),
     });
 
-  return result({
+  return toolResult({
     tool:
       "get_unified_executive_intelligence",
 
@@ -418,18 +663,21 @@ async function unifiedTool(
     data,
 
     sources: [
-      sourceMeta({
+      {
         source:
           "VoterSpheres Unified Executive Intelligence",
 
-        publishedAt:
+        published_at:
           data.generated_at,
+
+        fetched_at:
+          now(),
 
         confidence:
           data?.health
             ?.intelligence_confidence ||
           80,
-      }),
+      },
     ],
 
     warnings:
@@ -452,87 +700,6 @@ async function unifiedTool(
   });
 }
 
-function webRows(
-  response,
-  maxRows
-) {
-  const rows = [];
-  const seen = new Set();
-
-  for (
-    const item
-    of response?.output || []
-  ) {
-    for (
-      const content
-      of item?.content || []
-    ) {
-      const text =
-        clean(content?.text);
-
-      for (
-        const annotation
-        of content?.annotations ||
-        []
-      ) {
-        const url =
-          annotation?.url ||
-          annotation
-            ?.url_citation
-            ?.url ||
-          null;
-
-        const title =
-          annotation?.title ||
-          annotation
-            ?.url_citation
-            ?.title ||
-          url;
-
-        if (
-          !url ||
-          seen.has(url)
-        ) {
-          continue;
-        }
-
-        seen.add(url);
-
-        rows.push({
-          title:
-            title ||
-            "Current political report",
-
-          url,
-
-          summary:
-            text.slice(
-              0,
-              700
-            ),
-
-          publisher: null,
-
-          published_at:
-            null,
-
-          source_type:
-            "openai_web_search",
-        });
-
-        if (
-          rows.length >=
-          maxRows
-        ) {
-          return rows;
-        }
-      }
-    }
-  }
-
-  return rows;
-}
-
 async function databaseNews({
   query,
   state,
@@ -541,7 +708,7 @@ async function databaseNews({
   user,
 }) {
   const params = [
-    "%" + query + "%",
+    `%${query}%`,
   ];
 
   let where = `
@@ -552,12 +719,12 @@ async function databaseNews({
     )
   `;
 
-  const resolvedFirmId =
-    firmId(user);
+  const firmId =
+    getFirmId(user);
 
-  if (resolvedFirmId) {
+  if (firmId) {
     params.push(
-      resolvedFirmId
+      firmId
     );
 
     where += `
@@ -582,7 +749,7 @@ async function databaseNews({
 
   if (locality) {
     params.push(
-      "%" + locality + "%"
+      `%${locality}%`
     );
 
     where += `
@@ -594,11 +761,14 @@ async function databaseNews({
     `;
   }
 
-  params.push(limit);
+  params.push(
+    limit
+  );
 
   const response =
     await safeQuery(
       "political_signals_news",
+
       `
         SELECT *
         FROM political_signals
@@ -611,12 +781,14 @@ async function databaseNews({
           ) DESC
         LIMIT $${params.length}
       `,
+
       params
     );
 
   return response.rows.map(
     (row) => ({
-      id: row.id,
+      id:
+        row.id,
 
       title:
         row.title ||
@@ -671,109 +843,67 @@ async function newsTool(
   user
 ) {
   const query =
-    clean(args.query);
+    clean(
+      args.query
+    );
 
   const state =
-    clean(args.state);
+    clean(
+      args.state
+    );
 
   const locality =
-    clean(args.locality);
+    clean(
+      args.locality
+    );
 
   const limit =
-    limitValue(
+    clamp(
       args.limit,
       5,
+      1,
       10
     );
 
-  const localRows =
-    await databaseNews({
+  const [
+    live,
+    localRows,
+  ] = await Promise.all([
+    searchCurrentPoliticalNews({
+      query,
+      state,
+      locality,
+      limit,
+    }),
+
+    databaseNews({
       query,
       state,
       locality,
       limit,
       user,
-    });
+    }),
+  ]);
 
-  let currentRows = [];
-  const warnings = [];
-
-  if (openai) {
-    try {
-      const response =
-        await openai.responses.create({
-          model:
-            process.env
-              .OPENAI_WEB_SEARCH_MODEL ||
-            "gpt-5-mini",
-
-          tools: [
-            {
-              type:
-                "web_search",
-            },
-          ],
-
-          tool_choice:
-            "auto",
-
-          input:
-            "Find the newest reliable political reporting for " +
-            [
-              query,
-              state,
-              locality,
-            ]
-              .filter(Boolean)
-              .join(" ") +
-            ". Prefer official sources, established newsrooms, pollsters, election administrators, and campaign-finance authorities. Return a concise sourced briefing.",
-        });
-
-      currentRows =
-        webRows(
-          response,
-          limit
-        );
-    } catch (error) {
-      warnings.push(
-        "OpenAI web search unavailable: " +
-          error.message
-      );
-    }
-  } else {
-    warnings.push(
-      "OPENAI_API_KEY is not configured for live web search."
-    );
-  }
-
-  const articles = [
-    ...currentRows,
-    ...localRows,
-  ]
-    .filter(
-      (
-        row,
-        index,
-        array
-      ) =>
-        array.findIndex(
-          (candidate) =>
-            clean(
-              candidate.url ||
-                candidate.title
-            ).toLowerCase() ===
-            clean(
-              row.url ||
-                row.title
-            ).toLowerCase()
-        ) === index
+  const liveRows =
+    Array.isArray(
+      live?.data?.articles
     )
-    .slice(
+      ? live.data.articles
+      : [];
+
+  const articles =
+    dedupe(
+      sortNewest([
+        ...liveRows,
+        ...localRows,
+      ])
+    ).slice(
       0,
       limit
     );
 
-  return result({
+  return toolResult({
     tool:
       "search_live_news",
 
@@ -783,74 +913,160 @@ async function newsTool(
 
     summary:
       articles.length
-        ? "Found " +
-          articles.length +
-          " current political reports for " +
-          query +
-          "."
-        : "No current reports were found for " +
-          query +
-          ".",
+        ? `Found ${articles.length} current political reports for ${query}.`
+        : `No current reports were found for ${query}.`,
 
     data: {
       query,
+
       state:
-        state || null,
+        state ||
+        null,
+
       locality:
-        locality || null,
+        locality ||
+        null,
+
       articles,
     },
 
-    sources:
-      articles.map(
-        (article) =>
-          sourceMeta({
-            source:
-              article.publisher ||
-              article.source_type ||
-              "Current political news",
+    sources: [
+      ...(live?.sources ||
+        []),
 
-            url:
-              article.url,
+      ...localRows.map(
+        (row) => ({
+          source:
+            row.publisher ||
+            "VoterSpheres Political Signals",
 
-            publishedAt:
-              article.published_at,
+          source_url:
+            row.url,
 
-            confidence:
-              article.score ||
-              82,
-          })
+          published_at:
+            row.published_at,
+
+          fetched_at:
+            now(),
+
+          confidence:
+            row.score ||
+            78,
+        })
       ),
+    ],
 
-    warnings,
+    warnings:
+      live?.warnings ||
+      [],
 
     degraded:
-      warnings.length >
-      0,
+      !live?.ok &&
+      localRows.length ===
+        0,
   });
 }
 
-async function pollingTool(
-  args
-) {
+async function pollingTool(args) {
   const state =
-    clean(args.state);
+    clean(
+      args.state
+    );
 
   const office =
-    clean(args.office);
+    clean(
+      args.office
+    );
 
   const candidate =
-    clean(args.candidate);
+    clean(
+      args.candidate
+    );
 
   const locality =
-    clean(args.locality);
+    clean(
+      args.locality
+    );
 
   const limit =
-    limitValue(
+    clamp(
       args.limit,
       10,
+      1,
       20
     );
+
+  const live =
+    await getPollingProviderData({
+      state,
+      office,
+      candidate,
+      locality,
+      limit,
+    });
+
+  const livePolls =
+    Array.isArray(
+      live?.data?.polls
+    )
+      ? live.data.polls
+      : [];
+
+  if (
+    live?.ok &&
+    livePolls.length
+  ) {
+    return toolResult({
+      tool:
+        "get_latest_polling",
+
+      ok:
+        true,
+
+      summary:
+        live.summary,
+
+      data: {
+        state:
+          state ||
+          null,
+
+        office:
+          office ||
+          null,
+
+        candidate:
+          candidate ||
+          null,
+
+        locality:
+          locality ||
+          null,
+
+        polls:
+          sortNewest(
+            livePolls
+          ).slice(
+            0,
+            limit
+          ),
+
+        provider_priority:
+          "external",
+      },
+
+      sources:
+        live.sources ||
+        [],
+
+      warnings:
+        live.warnings ||
+        [],
+
+      degraded:
+        false,
+    });
+  }
 
   const params = [];
   const conditions = [];
@@ -864,7 +1080,7 @@ async function pollingTool(
     }
 
     params.push(
-      "%" + value + "%"
+      `%${value}%`
     );
 
     conditions.push(
@@ -899,7 +1115,9 @@ async function pollingTool(
         )}`
       : "";
 
-  params.push(limit);
+  params.push(
+    limit
+  );
 
   const response =
     await firstAvailable([
@@ -925,7 +1143,8 @@ async function pollingTool(
       },
 
       {
-        key: "polls",
+        key:
+          "polls",
 
         sql: `
           SELECT *
@@ -967,169 +1186,183 @@ async function pollingTool(
     ]);
 
   const polls =
-    response.rows.map(
-      (row) => ({
-        id: row.id,
+    sortNewest(
+      response.rows.map(
+        (row) => ({
+          id:
+            row.id,
 
-        pollster:
-          row.pollster ||
-          row.organization ||
-          row.source_name ||
-          null,
+          pollster:
+            row.pollster ||
+            row.organization ||
+            row.source_name ||
+            null,
 
-        state:
-          row.state ||
-          state ||
-          null,
+          state:
+            row.state ||
+            state ||
+            null,
 
-        office:
-          row.office ||
-          office ||
-          null,
+          office:
+            row.office ||
+            office ||
+            null,
 
-        locality:
-          row.locality ||
-          row.district ||
-          locality ||
-          null,
+          locality:
+            row.locality ||
+            row.district ||
+            locality ||
+            null,
 
-        candidate_name:
-          row.candidate_name ||
-          candidate ||
-          null,
+          candidate_name:
+            row.candidate_name ||
+            candidate ||
+            null,
 
-        candidate_results:
-          row.candidate_results ||
-          row.results ||
-          row.result_json ||
-          null,
+          candidate_results:
+            row.candidate_results ||
+            row.results ||
+            row.result_json ||
+            null,
 
-        percentage:
-          row.percentage ??
-          row.support ??
-          row.poll_percentage ??
-          null,
+          percentage:
+            row.percentage ??
+            row.support ??
+            row.poll_percentage ??
+            null,
 
-        field_start:
-          row.field_start ||
-          row.start_date ||
-          null,
+          field_start:
+            row.field_start ||
+            row.start_date ||
+            null,
 
-        field_end:
-          row.field_end ||
-          row.end_date ||
-          null,
+          field_end:
+            row.field_end ||
+            row.end_date ||
+            null,
 
-        published_at:
-          row.published_at ||
-          row.updated_at ||
-          row.created_at ||
-          null,
+          published_at:
+            row.published_at ||
+            row.updated_at ||
+            row.created_at ||
+            null,
 
-        sample_size:
-          row.sample_size ||
-          row.sample ||
-          null,
+          sample_size:
+            row.sample_size ||
+            row.sample ||
+            null,
 
-        population:
-          row.population ||
-          row.sample_type ||
-          null,
+          population:
+            row.population ||
+            row.sample_type ||
+            null,
 
-        margin_of_error:
-          row.margin_of_error ||
-          row.moe ||
-          null,
+          margin_of_error:
+            row.margin_of_error ||
+            row.moe ||
+            null,
 
-        source_url:
-          row.source_url ||
-          row.url ||
-          null,
+          source_url:
+            row.source_url ||
+            row.url ||
+            null,
 
-        is_aggregate:
-          Boolean(
-            row.is_aggregate ||
+          is_aggregate:
+            Boolean(
+              row.is_aggregate ||
               row.aggregate
-          ),
-      })
+            ),
+        })
+      )
     );
 
-  return result({
+  return toolResult({
     tool:
       "get_latest_polling",
 
     ok:
       response.ok &&
-      polls.length > 0,
+      polls.length >
+        0,
 
     summary:
       polls.length
-        ? "Found " +
-          polls.length +
-          " latest available polling records."
-        : "No compatible polling records are currently available.",
+        ? `Found ${polls.length} local fallback polling records.`
+        : "No current polling records are available.",
 
     data: {
       state:
-        state || null,
+        state ||
+        null,
+
       office:
-        office || null,
+        office ||
+        null,
+
       candidate:
-        candidate || null,
+        candidate ||
+        null,
+
       locality:
-        locality || null,
+        locality ||
+        null,
+
       polls,
+
+      provider_priority:
+        "local-fallback",
     },
 
     sources:
       polls.map(
-        (poll) =>
-          sourceMeta({
-            source:
-              poll.pollster ||
-              "Polling source",
+        (poll) => ({
+          source:
+            poll.pollster ||
+            "Polling source",
 
-            url:
-              poll.source_url,
+          source_url:
+            poll.source_url,
 
-            publishedAt:
-              poll.published_at ||
-              poll.field_end,
+          published_at:
+            poll.published_at ||
+            poll.field_end ||
+            null,
 
-            reportingPeriod:
-              poll.field_start &&
-              poll.field_end
-                ? poll.field_start +
-                  " to " +
-                  poll.field_end
-                : poll.field_end,
+          reporting_period:
+            poll.field_start &&
+            poll.field_end
+              ? `${poll.field_start} to ${poll.field_end}`
+              : poll.field_end,
 
-            confidence: 80,
+          fetched_at:
+            now(),
 
-            note:
-              poll.is_aggregate
-                ? "Polling aggregate."
-                : "Individual poll; do not treat as a definitive forecast.",
-          })
+          confidence:
+            78,
+        })
       ),
 
-    warnings:
-      response.ok
+    warnings: [
+      ...(live?.warnings ||
+        []),
+
+      ...(response.ok
         ? []
         : [
-            "No polling_results, polls, or election_polls table is available. Configure a polling provider and ingestion pipeline.",
-          ],
+            "No polling_results, polls, or election_polls table is available.",
+          ]),
+    ],
 
     degraded:
-      !response.ok,
+      true,
   });
 }
 
-async function fecTool(
-  args
-) {
+async function fecTool(args) {
   const candidate =
-    clean(args.candidate);
+    clean(
+      args.candidate
+    );
 
   const candidateId =
     clean(
@@ -1142,16 +1375,60 @@ async function fecTool(
     );
 
   const cycle =
-    clean(args.cycle);
+    clean(
+      args.cycle
+    );
+
+  const live =
+    await getOpenFecFinance({
+      candidateId,
+      committeeId,
+      cycle,
+    });
+
+  if (
+    live?.ok &&
+    Array.isArray(
+      live?.data?.records
+    ) &&
+    live.data.records.length
+  ) {
+    return toolResult({
+      tool:
+        "get_fec_finance",
+
+      ok:
+        true,
+
+      summary:
+        live.summary,
+
+      data: {
+        ...live.data,
+
+        provider_priority:
+          "openfec",
+      },
+
+      sources:
+        live.sources ||
+        [],
+
+      warnings:
+        live.warnings ||
+        [],
+
+      degraded:
+        false,
+    });
+  }
 
   const params = [];
   const conditions = [];
 
   if (candidate) {
     params.push(
-      "%" +
-        candidate +
-        "%"
+      `%${candidate}%`
     );
 
     conditions.push(
@@ -1180,7 +1457,9 @@ async function fecTool(
   }
 
   if (cycle) {
-    params.push(cycle);
+    params.push(
+      cycle
+    );
 
     conditions.push(
       `CAST(COALESCE(cycle, election_cycle) AS text) = $${params.length}`
@@ -1197,6 +1476,7 @@ async function fecTool(
   const response =
     await safeQuery(
       "fundraising_live",
+
       `
         SELECT *
         FROM fundraising_live
@@ -1210,6 +1490,7 @@ async function fecTool(
           ) DESC
         LIMIT 20
       `,
+
       params
     );
 
@@ -1273,55 +1554,60 @@ async function fecTool(
       })
     );
 
-  return result({
+  return toolResult({
     tool:
       "get_fec_finance",
 
     ok:
       response.ok &&
-      records.length > 0,
+      records.length >
+        0,
 
     summary:
       records.length
-        ? "Found " +
-          records.length +
-          " latest available campaign-finance records."
+        ? `Found ${records.length} local fallback finance records.`
         : "No campaign-finance record matched the request.",
 
     data: {
       records,
+
+      provider_priority:
+        "local-fallback",
     },
 
     sources:
       records.map(
-        (record) =>
-          sourceMeta({
-            source:
-              "Federal Election Commission / VoterSpheres FEC Sync",
+        (record) => ({
+          source:
+            "Federal Election Commission / VoterSpheres FEC Sync",
 
-            url:
-              record.source_url,
+          source_url:
+            record.source_url,
 
-            reportingPeriod:
-              record.coverage_through_date,
+          reporting_period:
+            record.coverage_through_date,
 
-            confidence:
-              95,
+          fetched_at:
+            now(),
 
-            note:
-              "Official filing data reflects the latest available reporting period and is not necessarily real-time.",
-          })
+          confidence:
+            92,
+        })
       ),
 
-    warnings:
-      response.ok
+    warnings: [
+      ...(live?.warnings ||
+        []),
+
+      ...(response.ok
         ? []
         : [
             response.error,
-          ],
+          ]),
+    ],
 
     degraded:
-      !response.ok,
+      true,
   });
 }
 
@@ -1329,8 +1615,8 @@ async function operationsTool(
   args,
   user
 ) {
-  const resolvedFirmId =
-    firmId(user);
+  const firmId =
+    getFirmId(user);
 
   const state =
     clean(
@@ -1362,9 +1648,7 @@ async function operationsTool(
 
   if (locality) {
     localityParams.push(
-      "%" +
-        locality +
-        "%"
+      `%${locality}%`
     );
 
     localityWhere += `
@@ -1377,7 +1661,7 @@ async function operationsTool(
   }
 
   const taskParams = [
-    resolvedFirmId,
+    firmId,
     state,
   ];
 
@@ -1416,6 +1700,7 @@ async function operationsTool(
   ] = await Promise.all([
     safeQuery(
       "state_localities",
+
       `
         SELECT *
         FROM state_localities
@@ -1428,11 +1713,13 @@ async function operationsTool(
           )
         LIMIT 500
       `,
+
       localityParams
     ),
 
     safeQuery(
       "state_tasks",
+
       `
         SELECT *
         FROM tasks
@@ -1442,11 +1729,13 @@ async function operationsTool(
           created_at DESC
         LIMIT 200
       `,
+
       taskParams
     ),
 
     safeQuery(
       "state_workspaces",
+
       `
         SELECT *
         FROM workspaces
@@ -1461,14 +1750,15 @@ async function operationsTool(
           updated_at DESC
         LIMIT 100
       `,
+
       [
-        resolvedFirmId,
+        firmId,
         state,
       ]
     ),
   ]);
 
-  return result({
+  return toolResult({
     tool:
       "get_state_operations",
 
@@ -1478,53 +1768,55 @@ async function operationsTool(
       workspaces.ok,
 
     summary:
-      state +
-      " operations include " +
-      localities.rows.length +
-      " localities, " +
-      workspaces.rows.length +
-      " workspaces, and " +
-      tasks.rows.length +
-      " tasks.",
+      `${state} operations include ${localities.rows.length} localities, ` +
+      `${workspaces.rows.length} workspaces, and ${tasks.rows.length} tasks.`,
 
     data: {
       state,
+
       locality:
-        locality || null,
+        locality ||
+        null,
+
       localities:
         localities.rows,
+
       workspaces:
         workspaces.rows,
+
       tasks:
         tasks.rows,
     },
 
     sources: [
-      sourceMeta({
+      {
         source:
           "VoterSpheres State Operations",
 
-        publishedAt:
+        fetched_at:
           now(),
 
         confidence:
           88,
-      }),
+      },
 
-      sourceMeta({
+      {
         source:
           "U.S. Census locality import",
 
-        reportingPeriod:
+        reporting_period:
           localities.rows?.[0]
             ?.source_year ||
           localities.rows?.[0]
             ?.vintage ||
           null,
 
+        fetched_at:
+          now(),
+
         confidence:
           95,
-      }),
+      },
     ],
 
     warnings: [
@@ -1538,9 +1830,7 @@ async function operationsTool(
       )
       .map(
         (item) =>
-          item.key +
-          ": " +
-          item.error
+          `${item.key}: ${item.error}`
       ),
 
     degraded: [
@@ -1554,9 +1844,7 @@ async function operationsTool(
   });
 }
 
-async function candidateTool(
-  args
-) {
+async function candidateTool(args) {
   const candidate =
     clean(
       args.candidate
@@ -1597,9 +1885,7 @@ async function candidateTool(
 
   if (candidate) {
     params.push(
-      "%" +
-        candidate +
-        "%"
+      `%${candidate}%`
     );
 
     conditions.push(
@@ -1619,9 +1905,7 @@ async function candidateTool(
 
   if (office) {
     params.push(
-      "%" +
-        office +
-        "%"
+      `%${office}%`
     );
 
     conditions.push(
@@ -1630,7 +1914,9 @@ async function candidateTool(
   }
 
   if (cycle) {
-    params.push(cycle);
+    params.push(
+      cycle
+    );
 
     conditions.push(
       `CAST(COALESCE(cycle, election_year) AS text) = $${params.length}`
@@ -1647,6 +1933,7 @@ async function candidateTool(
   const response =
     await safeQuery(
       "candidates",
+
       `
         SELECT *
         FROM candidates
@@ -1655,10 +1942,11 @@ async function candidateTool(
           updated_at DESC
         LIMIT 20
       `,
+
       params
     );
 
-  return result({
+  return toolResult({
     tool:
       "get_candidate_statistics",
 
@@ -1669,9 +1957,7 @@ async function candidateTool(
 
     summary:
       response.rows.length
-        ? "Found " +
-          response.rows.length +
-          " candidate records."
+        ? `Found ${response.rows.length} candidate records.`
         : "No candidate record matched the request.",
 
     data: {
@@ -1680,20 +1966,23 @@ async function candidateTool(
     },
 
     sources: [
-      sourceMeta({
+      {
         source:
           "VoterSpheres Candidate Database",
 
-        publishedAt:
+        published_at:
           response.rows?.[0]
             ?.updated_at ||
           response.rows?.[0]
             ?.created_at ||
           null,
 
+        fetched_at:
+          now(),
+
         confidence:
           90,
-      }),
+      },
     ],
 
     warnings:
@@ -1736,6 +2025,102 @@ export async function executeExecutiveVoiceTool({
         args
       );
 
+    case "get_legislative_updates": {
+      const live =
+        await getCongressUpdates(
+          args
+        );
+
+      return toolResult({
+        tool:
+          name,
+
+        ok:
+          live.ok,
+
+        summary:
+          live.summary,
+
+        data:
+          live.data,
+
+        sources:
+          live.sources ||
+          [],
+
+        warnings:
+          live.warnings ||
+          [],
+
+        degraded:
+          live.degraded,
+      });
+    }
+
+    case "get_weather_field_risk": {
+      const live =
+        await getWeatherFieldRisk(
+          args
+        );
+
+      return toolResult({
+        tool:
+          name,
+
+        ok:
+          live.ok,
+
+        summary:
+          live.summary,
+
+        data:
+          live.data,
+
+        sources:
+          live.sources ||
+          [],
+
+        warnings:
+          live.warnings ||
+          [],
+
+        degraded:
+          live.degraded,
+      });
+    }
+
+    case "get_election_administration_updates": {
+      const live =
+        await getElectionAdministrationUpdates(
+          args
+        );
+
+      return toolResult({
+        tool:
+          name,
+
+        ok:
+          live.ok,
+
+        summary:
+          live.summary,
+
+        data:
+          live.data,
+
+        sources:
+          live.sources ||
+          [],
+
+        warnings:
+          live.warnings ||
+          [],
+
+        degraded:
+          live.degraded,
+      });
+    }
+
     case "get_state_operations":
       return operationsTool(
         args,
@@ -1748,20 +2133,16 @@ export async function executeExecutiveVoiceTool({
       );
 
     default:
-      return result({
+      return toolResult({
         tool:
           name ||
           "unknown",
 
-        ok: false,
+        ok:
+          false,
 
         summary:
-          "Unknown Executive Voice tool: " +
-          (
-            name ||
-            "missing tool name"
-          ) +
-          ".",
+          `Unknown Executive Voice tool: ${name || "missing tool name"}.`,
 
         warnings: [
           "The requested tool is not registered.",
