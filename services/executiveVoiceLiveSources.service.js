@@ -1,63 +1,93 @@
 import OpenAI from "openai";
 
+/*
+ * =========================================================
+ * Executive Voice Live Sources
+ * Build 3.5.1
+ * =========================================================
+ *
+ * Features:
+ * - Hard OpenAI SDK timeout
+ * - No automatic OpenAI retries
+ * - Per-provider timeout protection
+ * - Parallel live-news providers
+ * - Partial-result success
+ * - Fresh and stale cache layers
+ * - Provider latency diagnostics
+ * - Newest-first sorting
+ * - Article deduplication
+ * - OpenFEC, Congress.gov, NWS, polling support
+ */
+
+const DEFAULT_TIMEOUT_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_PROVIDER_TIMEOUT_MS
+  ) || 6000;
+
+const OPENAI_SDK_TIMEOUT_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_OPENAI_SDK_TIMEOUT_MS
+  ) || 6500;
+
+const OPENAI_TIMEOUT_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_OPENAI_TIMEOUT_MS
+  ) || 7000;
+
+const NEWS_CACHE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_NEWS_CACHE_TTL_MS
+  ) || 60 * 1000;
+
+const NEWS_STALE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_NEWS_STALE_TTL_MS
+  ) || 30 * 60 * 1000;
+
+const OFFICIAL_CACHE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_OFFICIAL_CACHE_TTL_MS
+  ) || 5 * 60 * 1000;
+
+const OFFICIAL_STALE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_OFFICIAL_STALE_TTL_MS
+  ) || 60 * 60 * 1000;
+
+const POLLING_CACHE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_POLLING_CACHE_TTL_MS
+  ) || 5 * 60 * 1000;
+
+const WEATHER_CACHE_TTL_MS =
+  Number(
+    process.env.EXECUTIVE_VOICE_WEATHER_CACHE_TTL_MS
+  ) || 2 * 60 * 1000;
+
 const openai =
   process.env.OPENAI_API_KEY
     ? new OpenAI({
         apiKey:
           process.env.OPENAI_API_KEY,
+
+        /*
+         * Prevent the SDK from waiting for its normal,
+         * much longer default timeout.
+         */
+        timeout:
+          OPENAI_SDK_TIMEOUT_MS,
+
+        /*
+         * Retries can multiply latency. The unified
+         * engine already has provider fallback.
+         */
+        maxRetries:
+          0,
       })
     : null;
 
 const CACHE =
   new Map();
-
-const DEFAULT_TIMEOUT_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_PROVIDER_TIMEOUT_MS
-  ) || 7000;
-
-const OPENAI_TIMEOUT_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_OPENAI_TIMEOUT_MS
-  ) || 9000;
-
-const NEWS_CACHE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_NEWS_CACHE_TTL_MS
-  ) || 60 * 1000;
-
-const NEWS_STALE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_NEWS_STALE_TTL_MS
-  ) || 30 * 60 * 1000;
-
-const OFFICIAL_CACHE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_OFFICIAL_CACHE_TTL_MS
-  ) || 5 * 60 * 1000;
-
-const OFFICIAL_STALE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_OFFICIAL_STALE_TTL_MS
-  ) || 60 * 60 * 1000;
-
-const POLLING_CACHE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_POLLING_CACHE_TTL_MS
-  ) || 5 * 60 * 1000;
-
-const WEATHER_CACHE_TTL_MS =
-  Number(
-    process.env
-      .EXECUTIVE_VOICE_WEATHER_CACHE_TTL_MS
-  ) || 2 * 60 * 1000;
 
 const now = () =>
   new Date().toISOString();
@@ -66,7 +96,7 @@ const clean = (
   value = ""
 ) =>
   String(
-    value || ""
+    value ?? ""
   ).trim();
 
 function clamp(
@@ -81,17 +111,21 @@ function clamp(
       10
     );
 
-  return Number.isFinite(
-    parsed
-  )
-    ? Math.min(
-        max,
-        Math.max(
-          min,
-          parsed
-        )
-      )
-    : fallback;
+  if (
+    !Number.isFinite(
+      parsed
+    )
+  ) {
+    return fallback;
+  }
+
+  return Math.min(
+    max,
+    Math.max(
+      min,
+      parsed
+    )
+  );
 }
 
 function timestamp(
@@ -107,6 +141,23 @@ function timestamp(
   )
     ? parsed
     : 0;
+}
+
+function normalizeDate(
+  value
+) {
+  const stamp =
+    timestamp(
+      value
+    );
+
+  if (!stamp) {
+    return null;
+  }
+
+  return new Date(
+    stamp
+  ).toISOString();
 }
 
 function freshness(
@@ -523,7 +574,6 @@ function sourceMeta({
   return {
     name,
     url,
-
     provider,
 
     fetched_at:
@@ -732,23 +782,6 @@ function normalizeUrl(
   } catch {
     return url;
   }
-}
-
-function normalizeDate(
-  value
-) {
-  const stamp =
-    timestamp(
-      value
-    );
-
-  if (!stamp) {
-    return null;
-  }
-
-  return new Date(
-    stamp
-  ).toISOString();
 }
 
 function normalizeArticle(
@@ -969,9 +1002,11 @@ async function searchOpenAiNews({
       ok: false,
       articles: [],
       sources: [],
+
       warnings: [
         "OPENAI_API_KEY is missing on the backend.",
       ],
+
       diagnostic:
         providerDiagnostic({
           provider,
@@ -1000,43 +1035,52 @@ async function searchOpenAiNews({
   try {
     const response =
       await withTimeout(
-        openai.responses.create({
-          model:
-            process.env
-              .OPENAI_WEB_SEARCH_MODEL ||
-            "gpt-5-mini",
+        openai.responses.create(
+          {
+            model:
+              process.env
+                .OPENAI_WEB_SEARCH_MODEL ||
+              "gpt-5-mini",
 
-          tools: [
-            {
-              type:
-                "web_search",
-            },
-          ],
+            tools: [
+              {
+                type:
+                  "web_search",
+              },
+            ],
 
-          tool_choice:
-            "auto",
+            tool_choice:
+              "auto",
 
-          input:
-            "Search the public web for the newest reliable political reporting. " +
-            `Topic: ${searchQuery || "United States politics"}. ` +
-            `State: ${clean(state) || "any"}. ` +
-            `Locality: ${clean(locality) || "any"}. ` +
-            `Today is ${today}. ` +
-            `Return no more than ${clamp(
-              limit,
-              6,
-              1,
-              10
-            )} articles. ` +
-            "Prefer reports published within the last 24 hours, then the last 7 days. " +
-            "Prioritize official government sources, election administrators, established newsrooms, " +
-            "campaign-finance authorities, pollsters, campaigns, legislatures, and courts. " +
-            "Reject old background articles when newer reporting exists. " +
-            "Do not invent dates or URLs. " +
-            "Return ONLY valid JSON with this exact shape: " +
-            '{"articles":[{"title":"","publisher":"","published_at":"","url":"","summary":""}]}. ' +
-            "Use ISO-8601 publication timestamps when they are available. Do not include markdown.",
-        }),
+            input:
+              "Search the public web for the newest reliable political reporting. " +
+              `Topic: ${searchQuery || "United States politics"}. ` +
+              `State: ${clean(state) || "any"}. ` +
+              `Locality: ${clean(locality) || "any"}. ` +
+              `Today is ${today}. ` +
+              `Return no more than ${clamp(
+                limit,
+                6,
+                1,
+                10
+              )} articles. ` +
+              "Prefer reports published within the last 24 hours, then the last 7 days. " +
+              "Prioritize official government sources, election administrators, established newsrooms, " +
+              "campaign-finance authorities, pollsters, campaigns, legislatures, and courts. " +
+              "Reject old background articles when newer reporting exists. " +
+              "Do not invent dates or URLs. " +
+              "Return ONLY valid JSON with this exact shape: " +
+              '{"articles":[{"title":"","publisher":"","published_at":"","url":"","summary":""}]}. ' +
+              "Use ISO-8601 publication timestamps when available. Do not include markdown.",
+          },
+          {
+            timeout:
+              OPENAI_SDK_TIMEOUT_MS,
+
+            maxRetries:
+              0,
+          }
+        ),
         OPENAI_TIMEOUT_MS,
         "OpenAI live web search"
       );
@@ -1079,6 +1123,7 @@ async function searchOpenAiNews({
 
     return {
       provider,
+
       ok:
         articles.length >
         0,
@@ -1129,6 +1174,7 @@ async function searchOpenAiNews({
       diagnostic:
         providerDiagnostic({
           provider,
+
           ok:
             articles.length >
             0,
@@ -1140,15 +1186,12 @@ async function searchOpenAiNews({
         }),
     };
   } catch (error) {
-    const timedOut =
-      error?.code ===
-      "PROVIDER_TIMEOUT";
-
     return {
       provider,
       ok: false,
       articles: [],
       sources: [],
+
       warnings: [
         errorMessage(
           error
@@ -1162,7 +1205,12 @@ async function searchOpenAiNews({
           startedAt,
           error,
           itemCount: 0,
-          timedOut,
+
+          timedOut:
+            error?.code ===
+              "PROVIDER_TIMEOUT" ||
+            error?.name ===
+              "APIConnectionTimeoutError",
         }),
     };
   }
@@ -1182,8 +1230,7 @@ async function searchNewsApi({
 
   const apiKey =
     clean(
-      process.env
-        .NEWS_API_KEY
+      process.env.NEWS_API_KEY
     );
 
   if (!apiKey) {
@@ -1192,6 +1239,7 @@ async function searchNewsApi({
       ok: false,
       articles: [],
       sources: [],
+
       warnings: [
         "NEWS_API_KEY is not configured.",
       ],
@@ -1214,6 +1262,21 @@ async function searchNewsApi({
     }) ||
     "United States politics";
 
+  const fromDate =
+    new Date(
+      Date.now() -
+        7 *
+          24 *
+          60 *
+          60 *
+          1000
+    )
+      .toISOString()
+      .slice(
+        0,
+        10
+      );
+
   const params =
     new URLSearchParams({
       q:
@@ -1235,28 +1298,11 @@ async function searchNewsApi({
           )
         ),
 
+      from:
+        fromDate,
+
       apiKey,
     });
-
-  const fromDate =
-    new Date(
-      Date.now() -
-        7 *
-          24 *
-          60 *
-          60 *
-          1000
-    )
-      .toISOString()
-      .slice(
-        0,
-        10
-      );
-
-  params.set(
-    "from",
-    fromDate
-  );
 
   try {
     const payload =
@@ -1375,10 +1421,6 @@ async function searchNewsApi({
         }),
     };
   } catch (error) {
-    const timedOut =
-      error?.code ===
-      "PROVIDER_TIMEOUT";
-
     return {
       provider,
       ok: false,
@@ -1398,7 +1440,10 @@ async function searchNewsApi({
           startedAt,
           error,
           itemCount: 0,
-          timedOut,
+
+          timedOut:
+            error?.code ===
+            "PROVIDER_TIMEOUT",
         }),
     };
   }
@@ -1418,8 +1463,7 @@ async function searchGNews({
 
   const apiKey =
     clean(
-      process.env
-        .GNEWS_API_KEY
+      process.env.GNEWS_API_KEY
     );
 
   if (!apiKey) {
@@ -1596,10 +1640,6 @@ async function searchGNews({
         }),
     };
   } catch (error) {
-    const timedOut =
-      error?.code ===
-      "PROVIDER_TIMEOUT";
-
     return {
       provider,
       ok: false,
@@ -1619,7 +1659,10 @@ async function searchGNews({
           startedAt,
           error,
           itemCount: 0,
-          timedOut,
+
+          timedOut:
+            error?.code ===
+            "PROVIDER_TIMEOUT",
         }),
     };
   }
@@ -1671,40 +1714,129 @@ export async function searchCurrentPoliticalNews({
     return freshCached;
   }
 
-  const providerCalls = [
-    searchOpenAiNews({
-      query:
-        normalizedQuery,
+  const providerCalls =
+    [];
 
-      state,
-      locality,
+  const providerNames =
+    [];
 
-      limit:
-        normalizedLimit,
-    }),
+  if (
+    process.env.OPENAI_API_KEY
+  ) {
+    providerNames.push(
+      "openai_web_search"
+    );
 
-    searchNewsApi({
-      query:
-        normalizedQuery,
+    providerCalls.push(
+      searchOpenAiNews({
+        query:
+          normalizedQuery,
 
-      state,
-      locality,
+        state,
+        locality,
 
-      limit:
-        normalizedLimit,
-    }),
+        limit:
+          normalizedLimit,
+      })
+    );
+  }
 
-    searchGNews({
-      query:
-        normalizedQuery,
+  if (
+    process.env.NEWS_API_KEY
+  ) {
+    providerNames.push(
+      "newsapi"
+    );
 
-      state,
-      locality,
+    providerCalls.push(
+      searchNewsApi({
+        query:
+          normalizedQuery,
 
-      limit:
-        normalizedLimit,
-    }),
-  ];
+        state,
+        locality,
+
+        limit:
+          normalizedLimit,
+      })
+    );
+  }
+
+  if (
+    process.env.GNEWS_API_KEY
+  ) {
+    providerNames.push(
+      "gnews"
+    );
+
+    providerCalls.push(
+      searchGNews({
+        query:
+          normalizedQuery,
+
+        state,
+        locality,
+
+        limit:
+          normalizedLimit,
+      })
+    );
+  }
+
+  if (
+    providerCalls.length ===
+    0
+  ) {
+    const staleCached =
+      getStaleCached(
+        key
+      );
+
+    if (
+      staleCached
+    ) {
+      return staleCached;
+    }
+
+    return result({
+      provider:
+        "unified_live_news",
+
+      ok:
+        false,
+
+      summary:
+        "No live-news provider is configured.",
+
+      data: {
+        query:
+          normalizedQuery,
+
+        state:
+          clean(state) ||
+          null,
+
+        locality:
+          clean(locality) ||
+          null,
+
+        articles: [],
+
+        successful_providers:
+          [],
+
+        attempted_providers:
+          [],
+      },
+
+      warnings: [
+        "Configure OPENAI_API_KEY, NEWS_API_KEY, or GNEWS_API_KEY.",
+      ],
+
+      degraded:
+        true,
+    });
+  }
 
   const settled =
     await Promise.allSettled(
@@ -1718,11 +1850,10 @@ export async function searchCurrentPoliticalNews({
         index
       ) => {
         const fallbackProvider =
-          [
-            "openai_web_search",
-            "newsapi",
-            "gnews",
-          ][index];
+          providerNames[
+            index
+          ] ||
+          "unknown_news_provider";
 
         if (
           entry.status ===
@@ -1739,6 +1870,7 @@ export async function searchCurrentPoliticalNews({
             false,
 
           articles: [],
+
           sources: [],
 
           warnings: [
@@ -1861,9 +1993,7 @@ export async function searchCurrentPoliticalNews({
         },
 
         sources,
-
         warnings,
-
         diagnostics,
 
         degraded:
@@ -1894,7 +2024,8 @@ export async function searchCurrentPoliticalNews({
 
       warnings: [
         ...(
-          staleCached.warnings ||
+          staleCached
+            .warnings ||
           []
         ),
 
@@ -1938,9 +2069,7 @@ export async function searchCurrentPoliticalNews({
     },
 
     sources: [],
-
     warnings,
-
     diagnostics,
 
     degraded:
@@ -1961,16 +2090,13 @@ export async function getOpenFecFinance({
 
   const apiKey =
     clean(
-      process.env
-        .FEC_API_KEY
+      process.env.FEC_API_KEY
     );
 
   if (!apiKey) {
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "OpenFEC is not configured.",
@@ -1982,11 +2108,9 @@ export async function getOpenFecFinance({
       diagnostics: [
         providerDiagnostic({
           provider,
-          ok:
-            false,
+          ok: false,
           startedAt,
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
 
@@ -2016,9 +2140,7 @@ export async function getOpenFecFinance({
   ) {
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "A candidate ID or committee ID is required.",
@@ -2030,11 +2152,9 @@ export async function getOpenFecFinance({
       diagnostics: [
         providerDiagnostic({
           provider,
-          ok:
-            false,
+          ok: false,
           startedAt,
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
 
@@ -2202,16 +2322,10 @@ export async function getOpenFecFinance({
     const diagnostic =
       providerDiagnostic({
         provider,
-
-        ok:
-          false,
-
+        ok: false,
         startedAt,
-
         error,
-
-        itemCount:
-          0,
+        itemCount: 0,
 
         timedOut:
           error?.code ===
@@ -2250,9 +2364,7 @@ export async function getOpenFecFinance({
 
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "OpenFEC finance lookup failed.",
@@ -2285,16 +2397,13 @@ export async function getCongressUpdates({
 
   const apiKey =
     clean(
-      process.env
-        .CONGRESS_API_KEY
+      process.env.CONGRESS_API_KEY
     );
 
   if (!apiKey) {
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "Congress.gov is not configured.",
@@ -2306,11 +2415,9 @@ export async function getCongressUpdates({
       diagnostics: [
         providerDiagnostic({
           provider,
-          ok:
-            false,
+          ok: false,
           startedAt,
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
 
@@ -2517,16 +2624,10 @@ export async function getCongressUpdates({
     const diagnostic =
       providerDiagnostic({
         provider,
-
-        ok:
-          false,
-
+        ok: false,
         startedAt,
-
         error,
-
-        itemCount:
-          0,
+        itemCount: 0,
 
         timedOut:
           error?.code ===
@@ -2565,9 +2666,7 @@ export async function getCongressUpdates({
 
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "Congress.gov lookup failed.",
@@ -2619,9 +2718,7 @@ export async function getWeatherFieldRisk({
   ) {
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "Latitude and longitude are required.",
@@ -2633,11 +2730,9 @@ export async function getWeatherFieldRisk({
       diagnostics: [
         providerDiagnostic({
           provider,
-          ok:
-            false,
+          ok: false,
           startedAt,
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
 
@@ -2665,8 +2760,7 @@ export async function getWeatherFieldRisk({
       "application/geo+json",
 
     "User-Agent":
-      process.env
-        .NWS_USER_AGENT ||
+      process.env.NWS_USER_AGENT ||
       "VoterSpheres/1.0 contact@voterspheres.org",
   };
 
@@ -2768,7 +2862,8 @@ export async function getWeatherFieldRisk({
 
     const periods =
       Array.isArray(
-        forecast?.properties
+        forecast
+          ?.properties
           ?.periods
       )
         ? forecast.properties.periods
@@ -2953,16 +3048,10 @@ export async function getWeatherFieldRisk({
     const diagnostic =
       providerDiagnostic({
         provider,
-
-        ok:
-          false,
-
+        ok: false,
         startedAt,
-
         error,
-
-        itemCount:
-          0,
+        itemCount: 0,
 
         timedOut:
           error?.code ===
@@ -3001,9 +3090,7 @@ export async function getWeatherFieldRisk({
 
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "National Weather Service lookup failed.",
@@ -3035,22 +3122,18 @@ export async function getPollingProviderData(
 
   const baseUrl =
     clean(
-      process.env
-        .POLLING_PROVIDER_URL
+      process.env.POLLING_PROVIDER_URL
     );
 
   const apiKey =
     clean(
-      process.env
-        .POLLING_PROVIDER_API_KEY
+      process.env.POLLING_PROVIDER_API_KEY
     );
 
   if (!baseUrl) {
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "No external polling provider is configured.",
@@ -3062,11 +3145,9 @@ export async function getPollingProviderData(
       diagnostics: [
         providerDiagnostic({
           provider,
-          ok:
-            false,
+          ok: false,
           startedAt,
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
 
@@ -3084,7 +3165,8 @@ export async function getPollingProviderData(
       value,
     ]
     of Object.entries(
-      args || {}
+      args ||
+      {}
     )
   ) {
     if (
@@ -3148,8 +3230,7 @@ export async function getPollingProviderData(
             DEFAULT_TIMEOUT_MS,
 
           label:
-            process.env
-              .POLLING_PROVIDER_NAME ||
+            process.env.POLLING_PROVIDER_NAME ||
             "Polling provider",
         }
       );
@@ -3213,8 +3294,7 @@ export async function getPollingProviderData(
         sources: [
           sourceMeta({
             name:
-              process.env
-                .POLLING_PROVIDER_NAME ||
+              process.env.POLLING_PROVIDER_NAME ||
               "Configured polling provider",
 
             url:
@@ -3288,16 +3368,10 @@ export async function getPollingProviderData(
     const diagnostic =
       providerDiagnostic({
         provider,
-
-        ok:
-          false,
-
+        ok: false,
         startedAt,
-
         error,
-
-        itemCount:
-          0,
+        itemCount: 0,
 
         timedOut:
           error?.code ===
@@ -3336,9 +3410,7 @@ export async function getPollingProviderData(
 
     return result({
       provider,
-
-      ok:
-        false,
+      ok: false,
 
       summary:
         "External polling-provider lookup failed.",
@@ -3388,8 +3460,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .OPENAI_API_KEY
+          process.env.OPENAI_API_KEY
         ),
 
       required_env: [
@@ -3398,6 +3469,9 @@ export async function getExecutiveVoiceSourceHealth() {
 
       timeout_ms:
         OPENAI_TIMEOUT_MS,
+
+      sdk_timeout_ms:
+        OPENAI_SDK_TIMEOUT_MS,
     },
 
     {
@@ -3406,8 +3480,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .NEWS_API_KEY
+          process.env.NEWS_API_KEY
         ),
 
       required_env: [
@@ -3424,8 +3497,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .GNEWS_API_KEY
+          process.env.GNEWS_API_KEY
         ),
 
       required_env: [
@@ -3442,8 +3514,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .FEC_API_KEY
+          process.env.FEC_API_KEY
         ),
 
       required_env: [
@@ -3460,8 +3531,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .CONGRESS_API_KEY
+          process.env.CONGRESS_API_KEY
         ),
 
       required_env: [
@@ -3492,8 +3562,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .POLLING_PROVIDER_URL
+          process.env.POLLING_PROVIDER_URL
         ),
 
       required_env: [
@@ -3510,12 +3579,9 @@ export async function getExecutiveVoiceSourceHealth() {
 
       configured:
         Boolean(
-          process.env
-            .OPENAI_API_KEY ||
-          process.env
-            .NEWS_API_KEY ||
-          process.env
-            .GNEWS_API_KEY
+          process.env.OPENAI_API_KEY ||
+          process.env.NEWS_API_KEY ||
+          process.env.GNEWS_API_KEY
         ),
 
       required_env: [
@@ -3615,7 +3681,10 @@ export async function getExecutiveVoiceSourceHealth() {
       default_provider_ms:
         DEFAULT_TIMEOUT_MS,
 
-      openai_web_search_ms:
+      openai_sdk_ms:
+        OPENAI_SDK_TIMEOUT_MS,
+
+      openai_outer_ms:
         OPENAI_TIMEOUT_MS,
     },
 
