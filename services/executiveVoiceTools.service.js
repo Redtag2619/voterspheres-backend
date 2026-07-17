@@ -7,14 +7,19 @@ import {
   getOpenFecFinance,
   getPollingProviderData,
   getWeatherFieldRisk,
+  searchCandidatePoliticalNews,
   searchCurrentPoliticalNews,
 } from "./executiveVoiceLiveSources.service.js";
 
 const now = () =>
   new Date().toISOString();
 
-const clean = (value = "") =>
-  String(value || "").trim();
+const clean = (
+  value = ""
+) =>
+  String(
+    value ?? ""
+  ).trim();
 
 function clamp(
   value,
@@ -62,16 +67,21 @@ function sortNewest(
   return [
     ...rows,
   ].sort(
-    (a, b) =>
+    (
+      a,
+      b
+    ) =>
       timestamp(
         b.published_at ||
           b.field_end ||
-          b.updated_at
+          b.updated_at ||
+          b.created_at
       ) -
       timestamp(
         a.published_at ||
           a.field_end ||
-          a.updated_at
+          a.updated_at ||
+          a.created_at
       )
   );
 }
@@ -94,12 +104,17 @@ function dedupe(
 
       if (
         !key ||
-        seen.has(key)
+        seen.has(
+          key
+        )
       ) {
         return false;
       }
 
-      seen.add(key);
+      seen.add(
+        key
+      );
+
       return true;
     }
   );
@@ -123,6 +138,7 @@ function toolResult({
   data = null,
   sources = [],
   warnings = [],
+  diagnostics = [],
   degraded = false,
 } = {}) {
   return {
@@ -132,6 +148,7 @@ function toolResult({
     data,
     sources,
     warnings,
+    diagnostics,
     degraded,
 
     generated_at:
@@ -153,7 +170,8 @@ async function safeQuery(
 
     return {
       key,
-      ok: true,
+      ok:
+        true,
 
       rows:
         response.rows ||
@@ -162,7 +180,9 @@ async function safeQuery(
       error:
         null,
     };
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.warn(
       `[executive-voice-tools] ${key} unavailable:`,
       error.message
@@ -170,8 +190,11 @@ async function safeQuery(
 
     return {
       key,
-      ok: false,
-      rows: [],
+      ok:
+        false,
+
+      rows:
+        [],
 
       error:
         error.message,
@@ -194,22 +217,90 @@ async function firstAvailable(
           []
       );
 
-    if (response.ok) {
+    if (
+      response.ok
+    ) {
       return response;
     }
   }
 
   return {
     key:
-      candidates[0]?.key ||
+      candidates[0]
+        ?.key ||
       "unknown",
 
-    ok: false,
-    rows: [],
+    ok:
+      false,
+
+    rows:
+      [],
 
     error:
       "No compatible data source is available.",
   };
+}
+
+function candidateDisplayName(
+  candidate = {}
+) {
+  return (
+    clean(
+      candidate.name
+    ) ||
+    clean(
+      [
+        candidate.first_name,
+        candidate.middle_name,
+        candidate.last_name,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          " "
+        )
+    ) ||
+    null
+  );
+}
+
+function firstValue(
+  ...values
+) {
+  return values.find(
+    (
+      value
+    ) =>
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+  ) ?? null;
+}
+
+function uniqueWarnings(
+  warnings = []
+) {
+  return [
+    ...new Set(
+      warnings
+        .flat()
+        .filter(
+          Boolean
+        )
+        .map(
+          (
+            warning
+          ) =>
+            clean(
+              warning
+            )
+        )
+        .filter(
+          Boolean
+        )
+    ),
+  ];
 }
 
 export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
@@ -266,7 +357,7 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
         "search_live_news",
 
       description:
-        "Search the public web for the newest political reporting. Always use this for current, latest, today, breaking, recent articles, or public political developments.",
+        "Search the public web for the newest political reporting. Always use this for current, latest, today, breaking, recent articles, or public political developments not focused on one specific candidate.",
 
       parameters: {
         type:
@@ -302,6 +393,92 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
 
         required: [
           "query",
+        ],
+
+        additionalProperties:
+          false,
+      },
+    },
+
+    {
+      type:
+        "function",
+
+      name:
+        "get_candidate_live_intelligence",
+
+      description:
+        "Get the newest available intelligence about a named political candidate. Use this instead of get_candidate_statistics for any request involving current, latest, today, recent news, campaign activity, polling, fundraising, endorsements, controversies, debates, advertising, ballot activity, or election developments.",
+
+      parameters: {
+        type:
+          "object",
+
+        properties: {
+          candidate: {
+            type:
+              "string",
+          },
+
+          candidate_id: {
+            type: [
+              "number",
+              "string",
+              "null",
+            ],
+          },
+
+          fec_candidate_id: {
+            type: [
+              "string",
+              "null",
+            ],
+          },
+
+          committee_id: {
+            type: [
+              "string",
+              "null",
+            ],
+          },
+
+          state: {
+            type:
+              "string",
+          },
+
+          office: {
+            type:
+              "string",
+          },
+
+          locality: {
+            type:
+              "string",
+          },
+
+          cycle: {
+            type: [
+              "integer",
+              "string",
+              "null",
+            ],
+          },
+
+          limit: {
+            type:
+              "integer",
+
+            minimum:
+              1,
+
+            maximum:
+              20,
+          },
+        },
+
+        required: [
+          "candidate",
         ],
 
         additionalProperties:
@@ -580,7 +757,7 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS =
         "get_candidate_statistics",
 
       description:
-        "Get current VoterSpheres candidate profile and campaign statistics.",
+        "Get the stored VoterSpheres candidate profile and campaign statistics. Use only for profile or database-record questions that do not request current or live information.",
 
       parameters: {
         type:
@@ -720,9 +897,13 @@ async function databaseNews({
   `;
 
   const firmId =
-    getFirmId(user);
+    getFirmId(
+      user
+    );
 
-  if (firmId) {
+  if (
+    firmId
+  ) {
     params.push(
       firmId
     );
@@ -735,7 +916,9 @@ async function databaseNews({
     `;
   }
 
-  if (state) {
+  if (
+    state
+  ) {
     params.push(
       state.toUpperCase()
     );
@@ -747,7 +930,9 @@ async function databaseNews({
     `;
   }
 
-  if (locality) {
+  if (
+    locality
+  ) {
     params.push(
       `%${locality}%`
     );
@@ -786,7 +971,9 @@ async function databaseNews({
     );
 
   return response.rows.map(
-    (row) => ({
+    (
+      row
+    ) => ({
       id:
         row.id,
 
@@ -868,22 +1055,23 @@ async function newsTool(
   const [
     live,
     localRows,
-  ] = await Promise.all([
-    searchCurrentPoliticalNews({
-      query,
-      state,
-      locality,
-      limit,
-    }),
+  ] =
+    await Promise.all([
+      searchCurrentPoliticalNews({
+        query,
+        state,
+        locality,
+        limit,
+      }),
 
-    databaseNews({
-      query,
-      state,
-      locality,
-      limit,
-      user,
-    }),
-  ]);
+      databaseNews({
+        query,
+        state,
+        locality,
+        limit,
+        user,
+      }),
+    ]);
 
   const liveRows =
     Array.isArray(
@@ -931,11 +1119,15 @@ async function newsTool(
     },
 
     sources: [
-      ...(live?.sources ||
-        []),
+      ...(
+        live?.sources ||
+        []
+      ),
 
       ...localRows.map(
-        (row) => ({
+        (
+          row
+        ) => ({
           source:
             row.publisher ||
             "VoterSpheres Political Signals",
@@ -960,6 +1152,10 @@ async function newsTool(
       live?.warnings ||
       [],
 
+    diagnostics:
+      live?.diagnostics ||
+      [],
+
     degraded:
       !live?.ok &&
       localRows.length ===
@@ -967,7 +1163,620 @@ async function newsTool(
   });
 }
 
-async function pollingTool(args) {
+async function resolveCandidateProfile(
+  args = {}
+) {
+  const candidate =
+    clean(
+      args.candidate
+    );
+
+  const candidateId =
+    clean(
+      args.candidate_id
+    );
+
+  const state =
+    clean(
+      args.state
+    );
+
+  const office =
+    clean(
+      args.office
+    );
+
+  const cycle =
+    clean(
+      args.cycle
+    );
+
+  const params =
+    [];
+
+  const conditions =
+    [];
+
+  if (
+    candidateId
+  ) {
+    params.push(
+      candidateId
+    );
+
+    conditions.push(
+      `CAST(id AS text) = $${params.length}`
+    );
+  }
+
+  if (
+    candidate
+  ) {
+    params.push(
+      `%${candidate}%`
+    );
+
+    conditions.push(
+      `(
+        COALESCE(name, '') ILIKE $${params.length}
+        OR (
+          COALESCE(first_name, '')
+          || ' '
+          || COALESCE(last_name, '')
+        ) ILIKE $${params.length}
+      )`
+    );
+  }
+
+  if (
+    state
+  ) {
+    params.push(
+      state.toUpperCase()
+    );
+
+    conditions.push(
+      `UPPER(COALESCE(state, '')) = $${params.length}`
+    );
+  }
+
+  if (
+    office
+  ) {
+    params.push(
+      `%${office}%`
+    );
+
+    conditions.push(
+      `COALESCE(office, '') ILIKE $${params.length}`
+    );
+  }
+
+  if (
+    cycle
+  ) {
+    params.push(
+      cycle
+    );
+
+    conditions.push(
+      `CAST(COALESCE(cycle, election_year) AS text) = $${params.length}`
+    );
+  }
+
+  const where =
+    conditions.length
+      ? `WHERE ${conditions.join(
+          " AND "
+        )}`
+      : "";
+
+  return safeQuery(
+    "candidate_profile",
+
+    `
+      SELECT *
+      FROM candidates
+      ${where}
+      ORDER BY
+        updated_at DESC,
+        created_at DESC
+      LIMIT 5
+    `,
+
+    params
+  );
+}
+
+async function candidateLiveTool(
+  args,
+  user
+) {
+  const requestedCandidate =
+    clean(
+      args.candidate
+    );
+
+  const requestedState =
+    clean(
+      args.state
+    );
+
+  const requestedOffice =
+    clean(
+      args.office
+    );
+
+  const requestedLocality =
+    clean(
+      args.locality
+    );
+
+  const requestedCycle =
+    clean(
+      args.cycle
+    );
+
+  const requestedLimit =
+    clamp(
+      args.limit,
+      10,
+      1,
+      20
+    );
+
+  const profileResponse =
+    await resolveCandidateProfile(
+      args
+    );
+
+  const profile =
+    profileResponse.rows?.[0] ||
+    null;
+
+  const resolvedCandidate =
+    candidateDisplayName(
+      profile
+    ) ||
+    requestedCandidate;
+
+  const resolvedState =
+    firstValue(
+      profile?.state,
+      requestedState
+    ) ||
+    "";
+
+  const resolvedOffice =
+    firstValue(
+      profile?.office,
+      requestedOffice
+    ) ||
+    "";
+
+  const resolvedCycle =
+    firstValue(
+      profile?.cycle,
+      profile?.election_year,
+      requestedCycle
+    ) ||
+    "";
+
+  const resolvedFecCandidateId =
+    firstValue(
+      args.fec_candidate_id,
+      profile?.fec_candidate_id,
+      profile?.candidate_id,
+      profile?.fec_id
+    );
+
+  const resolvedCommitteeId =
+    firstValue(
+      args.committee_id,
+      profile?.committee_id,
+      profile?.principal_committee_id,
+      profile?.fec_committee_id
+    );
+
+  const [
+    liveNews,
+    polling,
+    finance,
+    localNews,
+  ] =
+    await Promise.all([
+      searchCandidatePoliticalNews({
+        candidate:
+          resolvedCandidate,
+
+        state:
+          resolvedState,
+
+        office:
+          resolvedOffice,
+
+        locality:
+          requestedLocality,
+
+        limit:
+          requestedLimit,
+      }),
+
+      pollingTool({
+        candidate:
+          resolvedCandidate,
+
+        state:
+          resolvedState,
+
+        office:
+          resolvedOffice,
+
+        locality:
+          requestedLocality,
+
+        limit:
+          requestedLimit,
+      }),
+
+      fecTool({
+        candidate:
+          resolvedCandidate,
+
+        candidate_id:
+          resolvedFecCandidateId,
+
+        committee_id:
+          resolvedCommitteeId,
+
+        cycle:
+          resolvedCycle,
+      }),
+
+      databaseNews({
+        query:
+          resolvedCandidate,
+
+        state:
+          resolvedState,
+
+        locality:
+          requestedLocality,
+
+        limit:
+          requestedLimit,
+
+        user,
+      }),
+    ]);
+
+  const liveArticles =
+    Array.isArray(
+      liveNews?.data?.articles
+    )
+      ? liveNews.data.articles
+      : [];
+
+  const mergedArticles =
+    dedupe(
+      sortNewest([
+        ...liveArticles,
+        ...localNews,
+      ])
+    ).slice(
+      0,
+      requestedLimit
+    );
+
+  const polls =
+    Array.isArray(
+      polling?.data?.polls
+    )
+      ? polling.data.polls
+      : [];
+
+  const financeRecords =
+    Array.isArray(
+      finance?.data?.records
+    )
+      ? finance.data.records
+      : [];
+
+  const newestArticle =
+    mergedArticles[0] ||
+    null;
+
+  const newestPoll =
+    polls[0] ||
+    null;
+
+  const newestFinanceRecord =
+    financeRecords[0] ||
+    null;
+
+  const summaryParts =
+    [];
+
+  if (
+    mergedArticles.length
+  ) {
+    summaryParts.push(
+      `${mergedArticles.length} current article${
+        mergedArticles.length ===
+        1
+          ? ""
+          : "s"
+      }`
+    );
+  }
+
+  if (
+    polls.length
+  ) {
+    summaryParts.push(
+      `${polls.length} polling record${
+        polls.length ===
+        1
+          ? ""
+          : "s"
+      }`
+    );
+  }
+
+  if (
+    financeRecords.length
+  ) {
+    summaryParts.push(
+      `${financeRecords.length} finance record${
+        financeRecords.length ===
+        1
+          ? ""
+          : "s"
+      }`
+    );
+  }
+
+  const ok =
+    Boolean(
+      profile ||
+      mergedArticles.length ||
+      polls.length ||
+      financeRecords.length
+    );
+
+  return toolResult({
+    tool:
+      "get_candidate_live_intelligence",
+
+    ok,
+
+    summary:
+      summaryParts.length
+        ? `Live intelligence for ${resolvedCandidate}: ${summaryParts.join(
+            ", "
+          )}.`
+        : `No current live intelligence was found for ${resolvedCandidate}.`,
+
+    data: {
+      candidate: {
+        requested_name:
+          requestedCandidate,
+
+        resolved_name:
+          resolvedCandidate,
+
+        candidate_id:
+          firstValue(
+            profile?.id,
+            args.candidate_id
+          ),
+
+        fec_candidate_id:
+          resolvedFecCandidateId,
+
+        committee_id:
+          resolvedCommitteeId,
+
+        state:
+          resolvedState ||
+          null,
+
+        office:
+          resolvedOffice ||
+          null,
+
+        locality:
+          requestedLocality ||
+          null,
+
+        cycle:
+          resolvedCycle ||
+          null,
+
+        profile:
+          profile ||
+          null,
+
+        profile_matches:
+          profileResponse.rows ||
+          [],
+      },
+
+      news: {
+        articles:
+          mergedArticles,
+
+        live_article_count:
+          liveArticles.length,
+
+        local_article_count:
+          localNews.length,
+
+        latest_published_at:
+          newestArticle
+            ?.published_at ||
+          null,
+
+        successful_providers:
+          liveNews?.data
+            ?.successful_providers ||
+          [],
+
+        attempted_providers:
+          liveNews?.data
+            ?.attempted_providers ||
+          [],
+      },
+
+      polling: {
+        polls,
+
+        latest_field_end:
+          newestPoll
+            ?.field_end ||
+          newestPoll
+            ?.published_at ||
+          null,
+
+        provider_priority:
+          polling?.data
+            ?.provider_priority ||
+          null,
+      },
+
+      finance: {
+        records:
+          financeRecords,
+
+        latest_reporting_period:
+          newestFinanceRecord
+            ?.coverage_through_date ||
+          newestFinanceRecord
+            ?.coverage_end_date ||
+          null,
+
+        provider_priority:
+          finance?.data
+            ?.provider_priority ||
+          null,
+      },
+    },
+
+    sources: [
+      ...(
+        liveNews?.sources ||
+        []
+      ),
+
+      ...localNews.map(
+        (
+          row
+        ) => ({
+          source:
+            row.publisher ||
+            "VoterSpheres Political Signals",
+
+          source_url:
+            row.url,
+
+          published_at:
+            row.published_at,
+
+          fetched_at:
+            now(),
+
+          confidence:
+            row.score ||
+            78,
+        })
+      ),
+
+      ...(
+        polling?.sources ||
+        []
+      ),
+
+      ...(
+        finance?.sources ||
+        []
+      ),
+
+      ...(
+        profile
+          ? [
+              {
+                source:
+                  "VoterSpheres Candidate Database",
+
+                published_at:
+                  profile.updated_at ||
+                  profile.created_at ||
+                  null,
+
+                fetched_at:
+                  now(),
+
+                confidence:
+                  90,
+              },
+            ]
+          : []
+      ),
+    ],
+
+    warnings:
+      uniqueWarnings([
+        liveNews?.warnings ||
+          [],
+
+        polling?.warnings ||
+          [],
+
+        finance?.warnings ||
+          [],
+
+        profileResponse.ok
+          ? []
+          : [
+              profileResponse.error,
+            ],
+
+        !profile &&
+        requestedCandidate
+          ? [
+              "No matching local candidate profile was found; live providers used the requested candidate name.",
+            ]
+          : [],
+      ]),
+
+    diagnostics: [
+      ...(
+        liveNews?.diagnostics ||
+        []
+      ),
+
+      ...(
+        polling?.diagnostics ||
+        []
+      ),
+
+      ...(
+        finance?.diagnostics ||
+        []
+      ),
+    ],
+
+    degraded:
+      !liveNews?.ok ||
+      !polling?.ok ||
+      !finance?.ok ||
+      !profileResponse.ok,
+  });
+}
+
+async function pollingTool(
+  args
+) {
   const state =
     clean(
       args.state
@@ -1063,19 +1872,30 @@ async function pollingTool(args) {
         live.warnings ||
         [],
 
+      diagnostics:
+        live.diagnostics ||
+        [],
+
       degraded:
-        false,
+        Boolean(
+          live.degraded
+        ),
     });
   }
 
-  const params = [];
-  const conditions = [];
+  const params =
+    [];
+
+  const conditions =
+    [];
 
   const like = (
     column,
     value
   ) => {
-    if (!value) {
+    if (
+      !value
+    ) {
       return;
     }
 
@@ -1188,7 +2008,9 @@ async function pollingTool(args) {
   const polls =
     sortNewest(
       response.rows.map(
-        (row) => ({
+        (
+          row
+        ) => ({
           id:
             row.id,
 
@@ -1315,7 +2137,9 @@ async function pollingTool(args) {
 
     sources:
       polls.map(
-        (poll) => ({
+        (
+          poll
+        ) => ({
           source:
             poll.pollster ||
             "Polling source",
@@ -1342,23 +2166,30 @@ async function pollingTool(args) {
         })
       ),
 
-    warnings: [
-      ...(live?.warnings ||
-        []),
+    warnings:
+      uniqueWarnings([
+        live?.warnings ||
+          [],
 
-      ...(response.ok
-        ? []
-        : [
-            "No polling_results, polls, or election_polls table is available.",
-          ]),
-    ],
+        response.ok
+          ? []
+          : [
+              "No polling_results, polls, or election_polls table is available.",
+            ],
+      ]),
+
+    diagnostics:
+      live?.diagnostics ||
+      [],
 
     degraded:
       true,
   });
 }
 
-async function fecTool(args) {
+async function fecTool(
+  args
+) {
   const candidate =
     clean(
       args.candidate
@@ -1418,25 +2249,41 @@ async function fecTool(args) {
         live.warnings ||
         [],
 
+      diagnostics:
+        live.diagnostics ||
+        [],
+
       degraded:
-        false,
+        Boolean(
+          live.degraded
+        ),
     });
   }
 
-  const params = [];
-  const conditions = [];
+  const params =
+    [];
 
-  if (candidate) {
+  const conditions =
+    [];
+
+  if (
+    candidate
+  ) {
     params.push(
       `%${candidate}%`
     );
 
     conditions.push(
-      `(COALESCE(candidate_name, '') ILIKE $${params.length} OR COALESCE(name, '') ILIKE $${params.length})`
+      `(
+        COALESCE(candidate_name, '') ILIKE $${params.length}
+        OR COALESCE(name, '') ILIKE $${params.length}
+      )`
     );
   }
 
-  if (candidateId) {
+  if (
+    candidateId
+  ) {
     params.push(
       candidateId
     );
@@ -1446,7 +2293,9 @@ async function fecTool(args) {
     );
   }
 
-  if (committeeId) {
+  if (
+    committeeId
+  ) {
     params.push(
       committeeId
     );
@@ -1456,7 +2305,9 @@ async function fecTool(args) {
     );
   }
 
-  if (cycle) {
+  if (
+    cycle
+  ) {
     params.push(
       cycle
     );
@@ -1496,7 +2347,9 @@ async function fecTool(args) {
 
   const records =
     response.rows.map(
-      (row) => ({
+      (
+        row
+      ) => ({
         candidate_name:
           row.candidate_name ||
           row.name ||
@@ -1577,7 +2430,9 @@ async function fecTool(args) {
 
     sources:
       records.map(
-        (record) => ({
+        (
+          record
+        ) => ({
           source:
             "Federal Election Commission / VoterSpheres FEC Sync",
 
@@ -1595,16 +2450,21 @@ async function fecTool(args) {
         })
       ),
 
-    warnings: [
-      ...(live?.warnings ||
-        []),
+    warnings:
+      uniqueWarnings([
+        live?.warnings ||
+          [],
 
-      ...(response.ok
-        ? []
-        : [
-            response.error,
-          ]),
-    ],
+        response.ok
+          ? []
+          : [
+              response.error,
+            ],
+      ]),
+
+    diagnostics:
+      live?.diagnostics ||
+      [],
 
     degraded:
       true,
@@ -1616,7 +2476,9 @@ async function operationsTool(
   user
 ) {
   const firmId =
-    getFirmId(user);
+    getFirmId(
+      user
+    );
 
   const state =
     clean(
@@ -1646,7 +2508,9 @@ async function operationsTool(
     ) = $1
   `;
 
-  if (locality) {
+  if (
+    locality
+  ) {
     localityParams.push(
       `%${locality}%`
     );
@@ -1683,7 +2547,9 @@ async function operationsTool(
       )
   `;
 
-  if (workspaceId) {
+  if (
+    workspaceId
+  ) {
     taskParams.push(
       workspaceId
     );
@@ -1697,66 +2563,67 @@ async function operationsTool(
     localities,
     tasks,
     workspaces,
-  ] = await Promise.all([
-    safeQuery(
-      "state_localities",
+  ] =
+    await Promise.all([
+      safeQuery(
+        "state_localities",
 
-      `
-        SELECT *
-        FROM state_localities
-        ${localityWhere}
-        ORDER BY
-          COALESCE(
-            name,
-            locality_name,
-            county_name
-          )
-        LIMIT 500
-      `,
-
-      localityParams
-    ),
-
-    safeQuery(
-      "state_tasks",
-
-      `
-        SELECT *
-        FROM tasks
-        ${taskWhere}
-        ORDER BY
-          updated_at DESC,
-          created_at DESC
-        LIMIT 200
-      `,
-
-      taskParams
-    ),
-
-    safeQuery(
-      "state_workspaces",
-
-      `
-        SELECT *
-        FROM workspaces
-        WHERE firm_id = $1
-          AND UPPER(
+        `
+          SELECT *
+          FROM state_localities
+          ${localityWhere}
+          ORDER BY
             COALESCE(
-              state,
-              ''
+              name,
+              locality_name,
+              county_name
             )
-          ) = $2
-        ORDER BY
-          updated_at DESC
-        LIMIT 100
-      `,
+          LIMIT 500
+        `,
 
-      [
-        firmId,
-        state,
-      ]
-    ),
-  ]);
+        localityParams
+      ),
+
+      safeQuery(
+        "state_tasks",
+
+        `
+          SELECT *
+          FROM tasks
+          ${taskWhere}
+          ORDER BY
+            updated_at DESC,
+            created_at DESC
+          LIMIT 200
+        `,
+
+        taskParams
+      ),
+
+      safeQuery(
+        "state_workspaces",
+
+        `
+          SELECT *
+          FROM workspaces
+          WHERE firm_id = $1
+            AND UPPER(
+              COALESCE(
+                state,
+                ''
+              )
+            ) = $2
+          ORDER BY
+            updated_at DESC
+          LIMIT 100
+        `,
+
+        [
+          firmId,
+          state,
+        ]
+      ),
+    ]);
 
   return toolResult({
     tool:
@@ -1825,11 +2692,15 @@ async function operationsTool(
       workspaces,
     ]
       .filter(
-        (item) =>
+        (
+          item
+        ) =>
           !item.ok
       )
       .map(
-        (item) =>
+        (
+          item
+        ) =>
           `${item.key}: ${item.error}`
       ),
 
@@ -1838,112 +2709,20 @@ async function operationsTool(
       tasks,
       workspaces,
     ].some(
-      (item) =>
+      (
+        item
+      ) =>
         !item.ok
     ),
   });
 }
 
-async function candidateTool(args) {
-  const candidate =
-    clean(
-      args.candidate
-    );
-
-  const candidateId =
-    clean(
-      args.candidate_id
-    );
-
-  const state =
-    clean(
-      args.state
-    );
-
-  const office =
-    clean(
-      args.office
-    );
-
-  const cycle =
-    clean(
-      args.cycle
-    );
-
-  const params = [];
-  const conditions = [];
-
-  if (candidateId) {
-    params.push(
-      candidateId
-    );
-
-    conditions.push(
-      `CAST(id AS text) = $${params.length}`
-    );
-  }
-
-  if (candidate) {
-    params.push(
-      `%${candidate}%`
-    );
-
-    conditions.push(
-      `(COALESCE(name, '') ILIKE $${params.length} OR COALESCE(first_name, '') || ' ' || COALESCE(last_name, '') ILIKE $${params.length})`
-    );
-  }
-
-  if (state) {
-    params.push(
-      state.toUpperCase()
-    );
-
-    conditions.push(
-      `UPPER(COALESCE(state, '')) = $${params.length}`
-    );
-  }
-
-  if (office) {
-    params.push(
-      `%${office}%`
-    );
-
-    conditions.push(
-      `COALESCE(office, '') ILIKE $${params.length}`
-    );
-  }
-
-  if (cycle) {
-    params.push(
-      cycle
-    );
-
-    conditions.push(
-      `CAST(COALESCE(cycle, election_year) AS text) = $${params.length}`
-    );
-  }
-
-  const where =
-    conditions.length
-      ? `WHERE ${conditions.join(
-          " AND "
-        )}`
-      : "";
-
+async function candidateTool(
+  args
+) {
   const response =
-    await safeQuery(
-      "candidates",
-
-      `
-        SELECT *
-        FROM candidates
-        ${where}
-        ORDER BY
-          updated_at DESC
-        LIMIT 20
-      `,
-
-      params
+    await resolveCandidateProfile(
+      args
     );
 
   return toolResult({
@@ -2002,7 +2781,9 @@ export async function executeExecutiveVoiceTool({
   arguments: args = {},
   user = {},
 } = {}) {
-  switch (name) {
+  switch (
+    name
+  ) {
     case "get_unified_executive_intelligence":
       return unifiedTool(
         args,
@@ -2011,6 +2792,12 @@ export async function executeExecutiveVoiceTool({
 
     case "search_live_news":
       return newsTool(
+        args,
+        user
+      );
+
+    case "get_candidate_live_intelligence":
+      return candidateLiveTool(
         args,
         user
       );
@@ -2052,8 +2839,14 @@ export async function executeExecutiveVoiceTool({
           live.warnings ||
           [],
 
+        diagnostics:
+          live.diagnostics ||
+          [],
+
         degraded:
-          live.degraded,
+          Boolean(
+            live.degraded
+          ),
       });
     }
 
@@ -2084,8 +2877,14 @@ export async function executeExecutiveVoiceTool({
           live.warnings ||
           [],
 
+        diagnostics:
+          live.diagnostics ||
+          [],
+
         degraded:
-          live.degraded,
+          Boolean(
+            live.degraded
+          ),
       });
     }
 
@@ -2116,8 +2915,14 @@ export async function executeExecutiveVoiceTool({
           live.warnings ||
           [],
 
+        diagnostics:
+          live.diagnostics ||
+          [],
+
         degraded:
-          live.degraded,
+          Boolean(
+            live.degraded
+          ),
       });
     }
 
@@ -2142,7 +2947,10 @@ export async function executeExecutiveVoiceTool({
           false,
 
         summary:
-          `Unknown Executive Voice tool: ${name || "missing tool name"}.`,
+          `Unknown Executive Voice tool: ${
+            name ||
+            "missing tool name"
+          }.`,
 
         warnings: [
           "The requested tool is not registered.",
