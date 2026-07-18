@@ -2507,13 +2507,7 @@ async function operationsTool(
   ];
 
   let localityWhere = `
-    WHERE UPPER(
-      COALESCE(
-        state_code,
-        state,
-        ''
-      )
-    ) = $1
+   WHERE UPPER(state_code) = $1
   `;
 
   if (
@@ -2580,12 +2574,7 @@ async function operationsTool(
           SELECT *
           FROM state_localities
           ${localityWhere}
-          ORDER BY
-            COALESCE(
-              name,
-              locality_name,
-              county_name
-            )
+          ORDER BY name
           LIMIT 500
         `,
 
