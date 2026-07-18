@@ -3216,7 +3216,12 @@ export async function searchCandidatePoliticalNews({
   } catch (error) {
     console.error(
       "[executive-voice-live-sources] searchCandidatePoliticalNews FAILED",
-      error
+      {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack,
+        cause: error?.cause,
+      }
     );
 
     throw error;
