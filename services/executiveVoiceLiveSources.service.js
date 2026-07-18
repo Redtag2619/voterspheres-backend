@@ -119,7 +119,6 @@ const openai =
         timeout:
           OPENAI_SDK_TIMEOUT_MS,
 
-
         maxRetries:
           0,
       })
@@ -239,7 +238,6 @@ function freshness(
     age <=
     7 * day
   ) {
-
     return "recent";
   }
 
@@ -300,6 +298,7 @@ async function withTimeout(
   promise,
   timeoutMs =
     DEFAULT_TIMEOUT_MS,
+
   label =
     "External provider"
 ) {
@@ -360,7 +359,6 @@ function getFreshCached(
   if (
     !entry ||
     entry.expires_at <=
-
       Date.now()
   ) {
     return null;
@@ -401,6 +399,7 @@ function getStaleCached(
     }
 
     return null;
+
   }
 
   return {
@@ -481,7 +480,6 @@ function providerDiagnostic({
       Boolean(ok),
 
     latency_ms:
-
       elapsedMs(
         startedAt
       ),
@@ -703,6 +701,7 @@ function extractJsonObject(
 
   const direct =
     safeJson(
+
       text
     );
 
@@ -723,7 +722,6 @@ function extractJsonObject(
       .trim();
 
   const fencedParsed =
-
     safeJson(
       fenced
     );
@@ -804,6 +802,7 @@ function normalizeUrl(
       );
 
     parsed.hash =
+
       "";
 
     [
@@ -844,7 +843,6 @@ function normalizeArticle(
     );
 
   return {
-
     title:
       clean(
         article.title
@@ -906,6 +904,7 @@ function articleKey(
       article?.url
     ).toLowerCase();
 
+
   if (url) {
     return `url:${url}`;
   }
@@ -965,7 +964,6 @@ function deduplicateArticles(
     if (!existing) {
       seen.set(
         key,
-
         article
       );
 
@@ -1006,6 +1004,7 @@ function deduplicateArticles(
     ) {
       seen.set(
         key,
+
         {
           ...existing,
           ...article,
@@ -1086,7 +1085,6 @@ function buildNewsQuery({
 function escapeSearchPhrase(
   value
 ) {
-
   return clean(
     value
   ).replace(
@@ -1107,6 +1105,7 @@ function normalizeCandidateName(
     )
     .trim();
 }
+
 
 function candidateNameParts(
   candidate
@@ -1308,6 +1307,7 @@ function buildCandidateNewsQuery({
     ].filter(Boolean);
 
   const locationClause =
+
     optionalLocationTerms.length
       ? ` AND (${optionalLocationTerms
           .map(
@@ -1408,6 +1408,7 @@ function candidateArticleFilter(
     state = "",
     office = "",
     minimumRelevance = CANDIDATE_MIN_RELEVANCE,
+
   } = {}
 ) {
   return rows
@@ -1448,7 +1449,6 @@ function newsLookbackStart(
 ) {
   return new Date(
     Date.now() -
-
       clamp(
         days,
         7,
@@ -1509,6 +1509,7 @@ async function searchOpenAiNews({
     new Date()
       .toISOString()
       .slice(
+
         0,
         10
       );
@@ -1569,7 +1570,6 @@ async function searchOpenAiNews({
 
             input:
               "Search the public web for the newest reliable political reporting. " +
-
               subjectInstruction +
               `Topic: ${searchQuery || "United States politics"}. ` +
               `State: ${clean(state) || "any"}. ` +
@@ -1691,7 +1691,6 @@ async function searchOpenAiNews({
                     ? "Publication timestamp was returned by the public source."
                     : "Publication timestamp was unavailable; freshness is uncertain.",
 
-
               provider,
 
               latency_ms:
@@ -1711,6 +1710,7 @@ async function searchOpenAiNews({
 
       diagnostic:
         providerDiagnostic({
+
           provider,
 
           ok:
@@ -1912,6 +1912,7 @@ async function searchNewsApi({
           normalizeArticle(
             {
               title:
+
                 article.title,
 
               publisher:
@@ -2012,6 +2013,7 @@ async function searchNewsApi({
         articles.length ===
           0
           ? [
+
               "NewsAPI returned articles, but none passed the candidate relevance threshold.",
             ]
           : [],
@@ -2052,7 +2054,6 @@ async function searchNewsApi({
       diagnostic:
         providerDiagnostic({
           provider,
-
 
           ok:
             false,
@@ -2113,6 +2114,7 @@ async function searchGNews({
       diagnostic:
         providerDiagnostic({
           provider,
+
           ok:
             false,
           startedAt,
@@ -2174,7 +2176,6 @@ async function searchGNews({
           normalizedLimit
         ),
 
-
       from:
         fromTimestamp,
 
@@ -2214,6 +2215,7 @@ async function searchGNews({
           : []
       ).map(
         (article) =>
+
           normalizeArticle(
             {
               title:
@@ -2294,7 +2296,6 @@ async function searchGNews({
                         article.candidate_relevance
                       )
                     )
-
                   : article.published_at
                     ? 88
                     : 73,
@@ -2315,6 +2316,7 @@ async function searchGNews({
         candidateMode &&
         rawArticles.length >
           0 &&
+
         articles.length ===
           0
           ? [
@@ -2558,6 +2560,10 @@ async function runNewsProviders({
     candidateMode
   ) {
     console.log(
+      "[executive-voice-live-sources] About to summarize provider results"
+    );
+
+    console.log(
       "[executive-voice-live-sources] Candidate provider results:",
       {
         candidate,
@@ -2656,7 +2662,6 @@ export async function searchCurrentPoliticalNews({
       limit,
       6,
       1,
-
       10
     );
 
@@ -2713,6 +2718,7 @@ export async function searchCurrentPoliticalNews({
 
   if (
     providerOutput
+
       .articles
       .length >
     0
@@ -2777,7 +2783,6 @@ export async function searchCurrentPoliticalNews({
         degraded:
           providerOutput.successfulProviders.length <
           providerOutput.providerNames.length,
-
       });
 
     return setCached(
@@ -2871,6 +2876,18 @@ export async function searchCandidatePoliticalNews({
   locality = "",
   limit = 10,
 } = {}) {
+  console.log(
+    "[executive-voice-live-sources] searchCandidatePoliticalNews called",
+    {
+      candidate,
+      state,
+      office,
+      locality,
+      limit,
+    }
+  );
+
+  try {
   const candidateName =
     normalizeCandidateName(
       candidate
@@ -2898,11 +2915,11 @@ export async function searchCandidatePoliticalNews({
         "A candidate name is required for live candidate intelligence.",
 
       data: {
-
         candidate:
           null,
 
         articles:
+
           [],
       },
 
@@ -3003,6 +3020,7 @@ export async function searchCandidatePoliticalNews({
             0
           ) >=
           CANDIDATE_MIN_RELEVANCE
+
       );
 
   const articles =
@@ -3019,7 +3037,6 @@ export async function searchCandidatePoliticalNews({
     articles.length >
     0
   ) {
-
     const newestArticle =
       articles[0];
 
@@ -3104,6 +3121,7 @@ export async function searchCandidatePoliticalNews({
 
     return setCached(
       key,
+
       output,
       CANDIDATE_NEWS_CACHE_TTL_MS,
       CANDIDATE_NEWS_STALE_TTL_MS
@@ -3195,7 +3213,16 @@ export async function searchCandidatePoliticalNews({
     degraded:
       true,
   });
+  } catch (error) {
+    console.error(
+      "[executive-voice-live-sources] searchCandidatePoliticalNews FAILED",
+      error
+    );
+
+    throw error;
+  }
 }
+
 
 export async function getOpenFecFinance({
   candidateId = "",
@@ -3260,7 +3287,6 @@ export async function getOpenFecFinance({
   const normalizedCycle =
     clean(
       cycle
-
     );
 
   if (
@@ -3297,6 +3323,7 @@ export async function getOpenFecFinance({
       degraded:
         true,
     });
+
   }
 
   const key =
@@ -3381,7 +3408,6 @@ export async function getOpenFecFinance({
         data: {
           candidate_id:
             candidate ||
-
             null,
 
           committee_id:
@@ -3398,6 +3424,7 @@ export async function getOpenFecFinance({
         sources: [
           sourceMeta({
             name:
+
               "Federal Election Commission OpenFEC API",
 
             url:
@@ -3498,11 +3525,11 @@ export async function getOpenFecFinance({
             staleCached
               .warnings ||
             []
+
           ),
 
           errorMessage(
             error
-
           ),
         ],
       };
@@ -3599,6 +3626,7 @@ export async function getCongressUpdates({
     `congress:${normalizedQuery}:${normalizedLimit}`;
 
   const freshCached =
+
     getFreshCached(
       key
     );
@@ -3623,7 +3651,6 @@ export async function getCongressUpdates({
         ),
 
       sort:
-
         "updateDate+desc",
     });
 
@@ -3700,6 +3727,7 @@ export async function getCongressUpdates({
               ),
           })
         )
+
       );
 
     const latency =
@@ -3800,6 +3828,7 @@ export async function getCongressUpdates({
         error,
 
         itemCount:
+
           0,
 
         timedOut:
@@ -3864,7 +3893,6 @@ export async function getCongressUpdates({
 
 export async function getWeatherFieldRisk({
   latitude,
-
   longitude,
   location = "",
 } = {}) {
@@ -3985,7 +4013,6 @@ export async function getWeatherFieldRisk({
                   "National Weather Service forecast",
               }
             )
-
           : Promise.resolve(
               null
             ),
@@ -4002,6 +4029,7 @@ export async function getWeatherFieldRisk({
               "National Weather Service alerts",
           }
         ),
+
       ]);
 
     const forecast =
@@ -4107,7 +4135,6 @@ export async function getWeatherFieldRisk({
         startedAt
       );
 
-
     const output =
       result({
         provider,
@@ -4203,6 +4230,7 @@ export async function getWeatherFieldRisk({
             error:
               successfulResponses >
               0
+
                 ? null
                 : settled[0]
                     ?.reason ||
@@ -4227,7 +4255,6 @@ export async function getWeatherFieldRisk({
         degraded:
           successfulResponses <
           2,
-
       });
 
     return setCached(
@@ -4304,6 +4331,7 @@ export async function getWeatherFieldRisk({
 
       warnings: [
         errorMessage(
+
           error
         ),
       ],
@@ -4468,7 +4496,6 @@ export async function getPollingProviderData(
 
     const polls =
       sortByNewest(
-
         Array.isArray(
           rawPolls
         )
@@ -4505,6 +4532,7 @@ export async function getPollingProviderData(
           0,
 
         summary:
+
           polls.length
             ? `Found ${polls.length} external polling records.`
             : "No external polling records matched the request.",
@@ -4589,7 +4617,6 @@ export async function getPollingProviderData(
   ) {
     const staleCached =
       getStaleCached(
-
         cacheKey
       );
 
@@ -4606,6 +4633,7 @@ export async function getPollingProviderData(
 
         itemCount:
           0,
+
 
         timedOut:
           error?.code ===
@@ -4707,10 +4735,10 @@ export async function getExecutiveVoiceSourceHealth() {
       timeout_ms:
         OPENAI_TIMEOUT_MS,
 
+
       sdk_timeout_ms:
         OPENAI_SDK_TIMEOUT_MS,
     },
-
 
     {
       id:
@@ -4807,6 +4835,7 @@ export async function getExecutiveVoiceSourceHealth() {
 
       timeout_ms:
         DEFAULT_TIMEOUT_MS,
+
     },
 
     {
@@ -4831,7 +4860,6 @@ export async function getExecutiveVoiceSourceHealth() {
         Boolean(
           process.env
             .POLLING_PROVIDER_URL
-
         ),
 
       required_env: [
@@ -4908,6 +4936,7 @@ export async function getExecutiveVoiceSourceHealth() {
         staleEntries,
 
       expired_entries:
+
         expiredEntries,
 
       news_ttl_ms:
@@ -4952,7 +4981,6 @@ export async function getExecutiveVoiceSourceHealth() {
 
       general_news_days:
         GENERAL_NEWS_LOOKBACK_DAYS,
-
     },
 
     candidate_relevance: {
