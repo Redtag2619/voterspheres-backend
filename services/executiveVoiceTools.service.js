@@ -242,8 +242,16 @@ async function firstAvailable(
 }
 
 function candidateDisplayName(
-  candidate = {}
+  candidate
 ) {
+  if (
+    !candidate ||
+    typeof candidate !==
+      "object"
+  ) {
+    return null;
+  }
+
   return (
     clean(
       candidate.name
