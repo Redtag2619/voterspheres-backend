@@ -30,13 +30,13 @@ const OPENAI_SDK_TIMEOUT_MS =
   Number(
     process.env
       .EXECUTIVE_VOICE_OPENAI_SDK_TIMEOUT_MS
-  ) || 6500;
+  ) || 12000;
 
 const OPENAI_TIMEOUT_MS =
   Number(
     process.env
       .EXECUTIVE_VOICE_OPENAI_TIMEOUT_MS
-  ) || 7000;
+  ) || 15000;
 
 const NEWS_CACHE_TTL_MS =
   Number(
@@ -1953,6 +1953,23 @@ async function searchNewsApi({
         normalizedLimit
       );
 
+    console.log(
+      "[executive-voice-live-sources] NewsAPI search result",
+      {
+        query:
+          searchQuery,
+
+        raw_article_count:
+          rawArticles.length,
+
+        filtered_article_count:
+          relevantArticles.length,
+
+        returned_article_count:
+          articles.length,
+      }
+    );
+
     const latency =
       elapsedMs(
         startedAt
@@ -2258,6 +2275,23 @@ async function searchGNews({
         0,
         normalizedLimit
       );
+
+    console.log(
+      "[executive-voice-live-sources] GNews search result",
+      {
+        query:
+          searchQuery,
+
+        raw_article_count:
+          rawArticles.length,
+
+        filtered_article_count:
+          relevantArticles.length,
+
+        returned_article_count:
+          articles.length,
+      }
+    );
 
     const latency =
       elapsedMs(
@@ -4703,18 +4737,41 @@ export async function getPollingProviderData(
 export async function getElectionAdministrationUpdates(
   args = {}
 ) {
+  const state =
+    clean(
+      args.state
+    );
+
+  const locality =
+    clean(
+      args.locality
+    );
+
+  const query =
+    clean(
+      args.query
+    ) ||
+    [
+      state,
+      locality,
+      "Secretary of State",
+      "election administration",
+      "voting",
+      "ballot",
+      "election officials",
+      "election law",
+    ]
+      .filter(
+        Boolean
+      )
+      .join(
+        " "
+      );
+
   return searchCurrentPoliticalNews({
-    query:
-      clean(
-        args.query
-      ) ||
-      "latest election administration election officials voting systems deadlines court rulings ballot access",
-
-    state:
-      args.state,
-
-    locality:
-      args.locality,
+    query,
+    state,
+    locality,
 
     limit:
       args.limit,
