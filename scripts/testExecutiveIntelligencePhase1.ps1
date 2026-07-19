@@ -1,33 +1,19 @@
 param(
-  [string]$BaseUrl = "http://127.0.0.1:10000/api",
-  [string]$Token = "",
-  [string]$Question = "What is the latest verified political intelligence about Donald Trump?",
-  [int]$WorkspaceId = 1
+  [string]$BaseUrl = "http://localhost:10000/api",
+  [Parameter(Mandatory = $true)][string]$Token
 )
 
-$headers = @{ "Content-Type" = "application/json" }
-if ($Token) { $headers.Authorization = "Bearer $Token" }
+$headers = @{ Authorization = "Bearer $Token"; "Content-Type" = "application/json" }
 
-Write-Host "`n1. Checking orchestrator configuration..." -ForegroundColor Cyan
-Invoke-RestMethod -Method Get `
-  -Uri "$BaseUrl/executive-intelligence-orchestrator/config" `
-  -Headers $headers | ConvertTo-Json -Depth 20
+Write-Host "Checking Build 4 config..." -ForegroundColor Cyan
+Invoke-RestMethod -Method Get -Uri "$BaseUrl/executive-intelligence-orchestrator/config" -Headers $headers | ConvertTo-Json -Depth 8
 
 $body = @{
-  question = $Question
-  workspace_id = $WorkspaceId
-  limit = 10
+  question = "What are the most important political developments in Georgia?"
+  state = "GA"
+  workspace_id = 1
+  limit = 12
 } | ConvertTo-Json
 
-Write-Host "`n2. Inspecting tool plan..." -ForegroundColor Cyan
-Invoke-RestMethod -Method Post `
-  -Uri "$BaseUrl/executive-intelligence-orchestrator/plan" `
-  -Headers $headers `
-  -Body $body | ConvertTo-Json -Depth 30
-
-Write-Host "`n3. Running complete executive intelligence brief..." -ForegroundColor Cyan
-Invoke-RestMethod -Method Post `
-  -Uri "$BaseUrl/executive-intelligence-orchestrator/brief" `
-  -Headers $headers `
-  -Body $body | ConvertTo-Json -Depth 50
-
+Write-Host "Running Build 4 briefing..." -ForegroundColor Cyan
+Invoke-RestMethod -Method Post -Uri "$BaseUrl/executive-intelligence-orchestrator/brief" -Headers $headers -Body $body | ConvertTo-Json -Depth 15
