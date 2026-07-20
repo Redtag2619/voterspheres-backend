@@ -102,6 +102,7 @@ import executiveVoiceRoutes from "./routes/executiveVoice.routes.js";
 import unifiedExecutiveIntelligenceRoutes from "./routes/unifiedExecutiveIntelligence.routes.js";
 import executiveVoiceLiveSourcesRoutes from "./routes/executiveVoiceLiveSources.routes.js";
 import executiveIntelligenceOrchestratorRoutes from "./routes/executiveIntelligenceOrchestrator.routes.js";
+import executiveIntelligenceRoutes from "./routes/executiveIntelligence.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
