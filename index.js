@@ -327,6 +327,7 @@ app.use("/api/unified-executive-intelligence", unifiedExecutiveIntelligenceRoute
 app.use("/api/executive-voice-tools", executiveVoiceToolsRoutes);
 app.use("/api/executive-voice-live-sources", executiveVoiceLiveSourcesRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceOrchestratorRoutes);
+app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceRoutes);
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
