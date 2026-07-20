@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
 /*
@@ -289,7 +289,7 @@ function detectCandidate(question, suppliedCandidate = "") {
     return explicit;
   }
 
-  const quoted = clean(question).match(/["“]([^"”]{3,80})["”]/);
+  const quoted = clean(question).match(/["â€œ]([^"â€]{3,80})["â€]/);
 
   if (quoted) {
     return clean(quoted[1]);
@@ -928,7 +928,7 @@ function buildDeterministicBriefing({
     context.cycle,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" Â· ");
 
   const headline =
     usefulSummaries[0] ||
@@ -1027,7 +1027,7 @@ function buildDeterministicBriefing({
               .slice(0, 4)
               .map(
                 (item) =>
-                  `${item.tool} — ${item.issue}`
+                  `${item.tool} â€” ${item.issue}`
               )
               .join("; ")}`
           : "No major tool failures were reported.",
@@ -1398,4 +1398,3 @@ export async function runExecutiveIntelligenceOrchestrator({
       now(),
   };
 }
-
