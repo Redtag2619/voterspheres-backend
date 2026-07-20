@@ -8,7 +8,7 @@ import {
 
 // Replace this import only if your actual auth middleware
 // has a different filename or export name.
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
