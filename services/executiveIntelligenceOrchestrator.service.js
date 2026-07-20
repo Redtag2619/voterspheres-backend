@@ -471,16 +471,16 @@ function buildToolPlan({
     );
   }
 
-  if (
-    state &&
-    [
-      "race_overview",
-      "candidate",
-      "polling",
-      "finance",
-      "executive_overview",
-    ].includes(intent)
-  ) {
+ if (
+  (state || candidate) &&
+  [
+    "race_overview",
+    "candidate",
+    "polling",
+    "finance",
+    "executive_overview",
+  ].includes(intent)
+) {
     calls.push(
       makeCall(
         "get_candidate_statistics",
@@ -544,10 +544,11 @@ function buildToolPlan({
   }
 
   if (
-    candidateId ||
-    committeeId ||
-    intent === "finance"
-  ) {
+  candidate ||
+  candidateId ||
+  committeeId ||
+  intent === "finance"
+) {
     calls.push(
       makeCall(
         "get_fec_finance",
