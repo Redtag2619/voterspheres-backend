@@ -14,4 +14,8 @@ router.post("/brief",requireAuth,createFabricBrief);
 
 router.post("/simulate",requireAuth,simulateFabricScenario);
 
+<<<<<<< HEAD
 export default router;
+=======
+export default router;
+>>>>>>> e8e5cd6 (Fix Executive Intelligence Fabric auth middleware import)
