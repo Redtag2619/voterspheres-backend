@@ -1,4 +1,4 @@
-import pool from "../db/pool.js";
+﻿import { pool } from "../db/pool.js";
 
 const clean = (v = "") => String(v ?? "").trim();
 
@@ -29,4 +29,5 @@ export function createExecutiveFabricAdapters() {
 }
 
 export default createExecutiveFabricAdapters;
+
 

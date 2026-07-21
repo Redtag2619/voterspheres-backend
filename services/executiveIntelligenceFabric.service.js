@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 
 import crypto from "node:crypto";
 
@@ -282,8 +282,7 @@ function fallbackBrief({ intent, results, coverage, confidence, entities }) {
 
     recommended_actions: ["Validate the highest-ranked evidence before operational execution.", "Refresh degraded providers before making an irreversible decision.", entities.state ? `Compare ${entities.state} movement with national movement.` : "Resolve the relevant state or district for localized guidance."],
 
-    answer: findings.map((x) => `${x.rank}. ${x.finding}`).join("\n"), 
-
+    answer: findings.map((x) => `${x.rank}. ${x.finding}`).join("\n"),
   };
 
 }
@@ -372,3 +371,4 @@ export function createExecutiveIntelligenceFabric({ adapters = {}, memory = null
 
 
 export default createExecutiveIntelligenceFabric;
+
