@@ -282,7 +282,7 @@ function fallbackBrief({ intent, results, coverage, confidence, entities }) {
 
     recommended_actions: ["Validate the highest-ranked evidence before operational execution.", "Refresh degraded providers before making an irreversible decision.", entities.state ? `Compare ${entities.state} movement with national movement.` : "Resolve the relevant state or district for localized guidance."],
 
-    answer: findings.map((x) => `${x.rank}. ${x.finding}`).join("
+    answer: findings.map((x) => `${x.rank}. ${x.finding}`).join("\n"),
 
 ") || "No grounded answer is available because live evidence was unavailable.",
 
