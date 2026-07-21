@@ -2,7 +2,24 @@
 
 const clean = (v = "") => String(v ?? "").trim();
 
-async function safeQuery(sql, params = []) { try { return (await pool.query(sql, params)).rows; } catch { return []; } }
+async function safeQuery(sql, params = [], queryName = "executive-fabric-query") {
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows;
+  } catch (error) {
+    console.error(`[Executive Fabric] ${queryName} failed`, {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      hint: error.hint,
+      position: error.position,
+      sql: String(sql).replace(/\s+/g, " ").trim().slice(0, 500),
+      params
+    });
+
+    return [];
+  }
+}
 
 const sources = (rows, provider, title = "name") => rows.map((row) => ({ provider, name: clean(row[title] || row.name || provider), title: clean(row[title] || row.name || provider), published_at: row.updated_at || row.created_at || null, excerpt: clean(row.summary || row.description || row.status), relevance_score: 82 }));
 
