@@ -284,7 +284,7 @@ function fallbackBrief({ intent, results, coverage, confidence, entities }) {
 
     answer: findings.map((x) => `${x.rank}. ${x.finding}`).join("\n"),
 
-") || "No grounded answer is available because live evidence was unavailable.",
+") 
 
   };
 
