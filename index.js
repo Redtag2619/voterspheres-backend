@@ -103,6 +103,7 @@ import unifiedExecutiveIntelligenceRoutes from "./routes/unifiedExecutiveIntelli
 import executiveVoiceLiveSourcesRoutes from "./routes/executiveVoiceLiveSources.routes.js";
 import executiveIntelligenceOrchestratorRoutes from "./routes/executiveIntelligenceOrchestrator.routes.js";
 import executiveIntelligenceRoutes from "./routes/executiveIntelligence.routes.js";
+import executiveIntelligenceFabricRoutes from "./routes/executiveIntelligenceFabric.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -328,6 +329,9 @@ app.use("/api/executive-voice-tools", executiveVoiceToolsRoutes);
 app.use("/api/executive-voice-live-sources", executiveVoiceLiveSourcesRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceOrchestratorRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceRoutes);
+app.use("/api/executive-intelligence-fabric", executiveIntelligenceFabricRoutes);
+
+
 app.use("/api/ai-campaign-copilot", aiCampaignCopilotRoutes);
 
 app.use("/api/beta-admin", requireAuth, betaAdminRoutes);
