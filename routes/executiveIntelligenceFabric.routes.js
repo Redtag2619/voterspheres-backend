@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 import { getFabricHealth, planFabricRequest, createFabricBrief, simulateFabricScenario } from "../controllers/executiveIntelligenceFabric.controller.js";
 
