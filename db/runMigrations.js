@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { pool } from "./pool.js";
 
-const migrationsDir = path.join(process.cwd(), "migrations");
+const migrationsDir = path.join(process.cwd(), "db", "migrations");
 
 async function runMigrations() {
   try {
