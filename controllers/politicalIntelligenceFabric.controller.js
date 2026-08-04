@@ -16,7 +16,7 @@ import {
 
   upsertWatchlist,
 
-  deleteWatchlist
+  deleteWatchlist,
 
 } from "../services/politicalIntelligenceFabric.service.js";
 
@@ -28,11 +28,11 @@ function workspaceIdFrom(req) {
 
     req.user?.workspace_id ||
 
-    req.user?.workspaceId ||
+      req.user?.workspaceId ||
 
-    req.query?.workspace_id ||
+      req.query?.workspace_id ||
 
-    req.body?.workspace_id
+      req.body?.workspace_id
 
   );
 
@@ -42,7 +42,19 @@ function workspaceIdFrom(req) {
 
 function userIdFrom(req) {
 
-  return Number(req.user?.id || req.user?.user_id || req.user?.userId) || null;
+  return (
+
+    Number(
+
+      req.user?.id ||
+
+        req.user?.user_id ||
+
+        req.user?.userId
+
+    ) || null
+
+  );
 
 }
 
@@ -52,15 +64,73 @@ function requireWorkspace(req, res) {
 
   const workspaceId = workspaceIdFrom(req);
 
+ 
+
   if (!workspaceId) {
 
-    res.status(400).json({ error: "workspace_id is required" });
+    res.status(400).json({
+
+      ok: false,
+
+      error: "workspace_id is required",
+
+    });
+
+ 
 
     return null;
 
   }
 
+ 
+
   return workspaceId;
+
+}
+
+ 
+
+function booleanOption(value, fallback = true) {
+
+  if (value === undefined || value === null || value === "") {
+
+    return fallback;
+
+  }
+
+ 
+
+  if (typeof value === "boolean") return value;
+
+ 
+
+  return !["false", "0", "no", "off"].includes(
+
+    String(value).trim().toLowerCase()
+
+  );
+
+}
+
+ 
+
+function sendFailure(res, status, error, publicMessage) {
+
+  return res.status(status).json({
+
+    ok: false,
+
+    error: publicMessage,
+
+    detail:
+
+      process.env.NODE_ENV === "production"
+
+        ? undefined
+
+        : error?.message,
+
+  });
 
 }
 
@@ -74,17 +144,19 @@ export async function getPoliticalFabricHealth(req, res) {
 
  
 
-  res.json({
+  return res.json({
 
     ok: true,
 
     service: "political-intelligence-fabric",
 
-    build: "5.0",
+    build: "5.1-live-signals",
 
     workspace_id: workspaceId,
 
-    timestamp: new Date().toISOString()
+    live_sources_enabled: true,
+
+    timestamp: new Date().toISOString(),
 
   });
 
@@ -100,13 +172,57 @@ export async function getPoliticalFabricOverviewController(req, res) {
 
     if (!workspaceId) return;
 
-    res.json(await getPoliticalFabricOverview({ workspaceId }));
+ 
+
+    const result = await getPoliticalFabricOverview({
+
+      workspaceId,
+
+      includeLiveSources: booleanOption(
+
+        req.query?.include_live_sources,
+
+        true
+
+      ),
+
+      refreshLiveSources: booleanOption(
+
+        req.query?.refresh_live_sources,
+
+        false
+
+      ),
+
+    });
+
+ 
+
+    return res.json(result);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] overview failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to load Political Intelligence Fabric overview" });
+      "[PoliticalFabric] overview failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to load Political Intelligence Fabric overview"
+
+    );
 
   }
 
@@ -136,19 +252,105 @@ export async function runPoliticalScanController(req, res) {
 
       timeHorizon: req.body?.time_horizon,
 
-      limit: req.body?.limit
+      limit: req.body?.limit,
+
+      includeLiveSources: booleanOption(
+
+        req.body?.include_live_sources,
+
+        true
+
+      ),
+
+      refreshLiveSources: booleanOption(
+
+        req.body?.refresh_live_sources,
+
+        true
+
+      ),
+
+      liveSourceOptions: {
+
+        includeNews: booleanOption(
+
+          req.body?.include_news,
+
+          true
+
+        ),
+
+        includeFec: booleanOption(
+
+          req.body?.include_fec,
+
+          true
+
+        ),
+
+        includePolling: booleanOption(
+
+          req.body?.include_polling,
+
+          true
+
+        ),
+
+        includeLegislation: booleanOption(
+
+          req.body?.include_legislation,
+
+          true
+
+        ),
+
+        includeElectionAdministration: booleanOption(
+
+          req.body?.include_election_administration,
+
+          true
+
+        ),
+
+        includeWeatherRisk: booleanOption(
+
+          req.body?.include_weather_risk,
+
+          true
+
+        ),
+
+      },
 
     });
 
  
 
-    res.json(result);
+    return res.json(result);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] scan failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to run political intelligence scan" });
+      "[PoliticalFabric] scan failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to run political intelligence scan"
+
+    );
 
   }
 
@@ -180,19 +382,45 @@ export async function createPoliticalBriefController(req, res) {
 
       stateCode: req.body?.state_code,
 
-      timeHorizon: req.body?.time_horizon
+      timeHorizon: req.body?.time_horizon,
+
+      includeLiveSources: booleanOption(
+
+        req.body?.include_live_sources,
+
+        true
+
+      ),
 
     });
 
  
 
-    res.status(201).json(brief);
+    return res.status(201).json(brief);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] create brief failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to create political intelligence brief" });
+      "[PoliticalFabric] create brief failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to create political intelligence brief"
+
+    );
 
   }
 
@@ -208,13 +436,43 @@ export async function listPoliticalBriefsController(req, res) {
 
     if (!workspaceId) return;
 
-    res.json(await listPoliticalBriefs({ workspaceId, limit: req.query?.limit }));
+ 
+
+    return res.json(
+
+      await listPoliticalBriefs({
+
+        workspaceId,
+
+        limit: req.query?.limit,
+
+      })
+
+    );
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] list briefs failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to list political intelligence briefs" });
+      "[PoliticalFabric] list briefs failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to list political intelligence briefs"
+
+    );
 
   }
 
@@ -230,17 +488,57 @@ export async function getPoliticalBriefController(req, res) {
 
     if (!workspaceId) return;
 
-    const brief = await getPoliticalBrief({ workspaceId, briefId: req.params.id });
+ 
 
-    if (!brief) return res.status(404).json({ error: "Brief not found" });
+    const brief = await getPoliticalBrief({
 
-    res.json(brief);
+      workspaceId,
+
+      briefId: req.params.id,
+
+    });
+
+ 
+
+    if (!brief) {
+
+      return res.status(404).json({
+
+        ok: false,
+
+        error: "Brief not found",
+
+      });
+
+    }
+
+ 
+
+    return res.json(brief);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] read brief failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to read political intelligence brief" });
+      "[PoliticalFabric] read brief failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to read political intelligence brief"
+
+    );
 
   }
 
@@ -256,13 +554,43 @@ export async function listWatchlistController(req, res) {
 
     if (!workspaceId) return;
 
-    res.json(await listWatchlist({ workspaceId, status: req.query?.status }));
+ 
+
+    return res.json(
+
+      await listWatchlist({
+
+        workspaceId,
+
+        status: req.query?.status,
+
+      })
+
+    );
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] list watchlist failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to list political intelligence watchlist" });
+      "[PoliticalFabric] list watchlist failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to list political intelligence watchlist"
+
+    );
 
   }
 
@@ -280,9 +608,23 @@ export async function upsertWatchlistController(req, res) {
 
  
 
-    if (!req.body?.entity_type || !req.body?.entity_name) {
+    if (
 
-      return res.status(400).json({ error: "entity_type and entity_name are required" });
+      !req.body?.entity_type ||
+
+      !req.body?.entity_name
+
+    ) {
+
+      return res.status(400).json({
+
+        ok: false,
+
+        error:
+
+          "entity_type and entity_name are required",
+
+      });
 
     }
 
@@ -310,19 +652,37 @@ export async function upsertWatchlistController(req, res) {
 
       thresholds: req.body.thresholds,
 
-      tags: req.body.tags
+      tags: req.body.tags,
 
     });
 
  
 
-    res.status(201).json(item);
+    return res.status(201).json(item);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] save watchlist failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to save political intelligence watchlist item" });
+      "[PoliticalFabric] save watchlist failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to save political intelligence watchlist item"
+
+    );
 
   }
 
@@ -338,17 +698,57 @@ export async function deleteWatchlistController(req, res) {
 
     if (!workspaceId) return;
 
-    const deleted = await deleteWatchlist({ workspaceId, watchlistId: req.params.id });
+ 
 
-    if (!deleted) return res.status(404).json({ error: "Watchlist item not found" });
+    const deleted = await deleteWatchlist({
 
-    res.status(204).send();
+      workspaceId,
+
+      watchlistId: req.params.id,
+
+    });
+
+ 
+
+    if (!deleted) {
+
+      return res.status(404).json({
+
+        ok: false,
+
+        error: "Watchlist item not found",
+
+      });
+
+    }
+
+ 
+
+    return res.status(204).send();
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] delete watchlist failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to delete political intelligence watchlist item" });
+      "[PoliticalFabric] delete watchlist failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to delete political intelligence watchlist item"
+
+    );
 
   }
 
@@ -376,19 +776,37 @@ export async function runPoliticalScenarioController(req, res) {
 
       scenarioType: req.body?.scenario_type,
 
-      assumptions: req.body?.assumptions || {}
+      assumptions: req.body?.assumptions || {},
 
     });
 
  
 
-    res.status(201).json(scenario);
+    return res.status(201).json(scenario);
 
   } catch (error) {
 
-    console.error("[PoliticalFabric] scenario failed:", error);
+    console.error(
 
-    res.status(500).json({ error: "Unable to run political intelligence scenario" });
+      "[PoliticalFabric] scenario failed:",
+
+      error
+
+    );
+
+ 
+
+    return sendFailure(
+
+      res,
+
+      500,
+
+      error,
+
+      "Unable to run political intelligence scenario"
+
+    );
 
   }
 
