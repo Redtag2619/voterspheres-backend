@@ -2523,270 +2523,94 @@ async function runNewsProviders({
   office = "",
   candidateMode = false,
 } = {}) {
-  const providerCalls =
-    [];
+  /*
+   * Build 5.4 fast-path: use the public RSS source first. A successful
+   * RSS response is returned immediately so slow paid providers cannot
+   * force the whole Political Fabric scan to time out.
+   */
+  const rssResult = await searchGoogleNewsRss({
+    query, state, locality, limit, candidate, office, candidateMode,
+  });
 
-  const providerNames =
-    [];
-
-  providerNames.push("google_news_rss");
-  providerCalls.push(
-    searchGoogleNewsRss({ query, state, locality, limit, candidate, office, candidateMode })
-  );
-
-  if (
-    process.env
-      .OPENAI_API_KEY
-  ) {
-    providerNames.push(
-      "openai_web_search"
-    );
-
-    providerCalls.push(
-      searchOpenAiNews({
-        query,
-        state,
-        locality,
-        limit,
-        candidate,
-        office,
-        candidateMode,
-      })
-    );
-  }
-
-  if (
-    process.env
-
-      .NEWS_API_KEY
-  ) {
-    providerNames.push(
-      "newsapi"
-    );
-
-    providerCalls.push(
-      searchNewsApi({
-        query,
-        state,
-        locality,
-        limit,
-        candidate,
-        office,
-        candidateMode,
-      })
-    );
-  }
-
-  if (
-    process.env
-      .GNEWS_API_KEY
-  ) {
-    providerNames.push(
-      "gnews"
-    );
-
-    providerCalls.push(
-      searchGNews({
-        query,
-        state,
-        locality,
-        limit,
-        candidate,
-        office,
-        candidateMode,
-      })
-    );
-  }
-
-  if (
-    providerCalls.length ===
-    0
-  ) {
+  if (rssResult.ok && (rssResult.articles?.length || 0) > 0) {
     return {
-      providerResults:
-        [],
-
-      providerNames:
-        [],
-
-      articles:
-        [],
-
-      sources:
-        [],
-
-      warnings: [
-        "Configure OPENAI_API_KEY, NEWS_API_KEY, or GNEWS_API_KEY.",
-      ],
-
-      diagnostics:
-        [],
-
-      successfulProviders:
-        [],
+      providerResults: [rssResult],
+      providerNames: ["google_news_rss"],
+      articles: rssResult.articles || [],
+      sources: rssResult.sources || [],
+      warnings: rssResult.warnings || [],
+      diagnostics: rssResult.diagnostic ? [rssResult.diagnostic] : [],
+      successfulProviders: [rssResult],
     };
   }
 
-  const settled =
-    await Promise.allSettled(
-      providerCalls
-    );
+  const providerCalls = [];
+  const providerNames = [];
 
-  const providerResults =
-    settled.map(
-      (
-        entry,
-        index
-      ) => {
-        const fallbackProvider =
-          providerNames[
-            index
-          ] ||
-          "unknown_news_provider";
-
-        if (
-          entry.status ===
-          "fulfilled"
-        ) {
-          return entry.value;
-        }
-
-        return {
-          provider:
-            fallbackProvider,
-
-          ok:
-            false,
-
-          articles:
-            [],
-
-          sources:
-            [],
-
-          warnings: [
-            errorMessage(
-              entry.reason
-            ),
-          ],
-
-          diagnostic:
-            providerDiagnostic({
-              provider:
-                fallbackProvider,
-
-              ok:
-                false,
-
-              startedAt:
-                Date.now(),
-
-              error:
-                entry.reason,
-
-              itemCount:
-                0,
-
-              timedOut:
-                entry.reason
-                  ?.code ===
-                "PROVIDER_TIMEOUT",
-            }),
-        };
-      }
-    );
-
-  if (
-    candidateMode
-  ) {
-    console.log(
-      "[executive-voice-live-sources] About to summarize provider results"
-    );
-
-    console.log(
-      "[executive-voice-live-sources] Candidate provider results:",
-      {
-        candidate,
-        state,
-        office,
-        locality,
-
-        providers:
-          providerResults.map(
-            (providerResult) => ({
-              provider:
-                providerResult.provider,
-
-              ok:
-                providerResult.ok,
-
-              article_count:
-                providerResult.articles
-                  ?.length ||
-                0,
-
-              warning_count:
-                providerResult.warnings
-                  ?.length ||
-                0,
-            })
-          ),
-      }
-    );
+  if (process.env.OPENAI_API_KEY) {
+    providerNames.push("openai_web_search");
+    providerCalls.push(searchOpenAiNews({
+      query, state, locality, limit, candidate, office, candidateMode,
+    }));
   }
 
-  const successfulProviders =
-    providerResults.filter(
-      (providerResult) =>
-        providerResult.ok
-    );
+  if (process.env.NEWS_API_KEY) {
+    providerNames.push("newsapi");
+    providerCalls.push(searchNewsApi({
+      query, state, locality, limit, candidate, office, candidateMode,
+    }));
+  }
 
-  const articles =
-    deduplicateArticles(
-      providerResults.flatMap(
-        (providerResult) =>
-          providerResult.articles ||
-          []
-      )
-    ).slice(
-      0,
-      clamp(
-        limit,
-        6,
-        1,
-        20
-      )
-    );
+  if (process.env.GNEWS_API_KEY) {
+    providerNames.push("gnews");
+    providerCalls.push(searchGNews({
+      query, state, locality, limit, candidate, office, candidateMode,
+    }));
+  }
 
-  const sources =
-    providerResults.flatMap(
-      (providerResult) =>
-        providerResult.sources ||
-        []
-    );
+  if (!providerCalls.length) {
+    return {
+      providerResults: [rssResult],
+      providerNames: ["google_news_rss"],
+      articles: [],
+      sources: [],
+      warnings: [
+        ...(rssResult.warnings || []),
+        "No configured secondary news provider returned records.",
+      ],
+      diagnostics: rssResult.diagnostic ? [rssResult.diagnostic] : [],
+      successfulProviders: [],
+    };
+  }
 
-  const warnings =
-    providerResults.flatMap(
-      (providerResult) =>
-        providerResult.warnings ||
-        []
-    );
+  const settled = await Promise.allSettled(providerCalls);
+  const secondaryResults = settled.map((entry, index) => {
+    const fallbackProvider = providerNames[index] || "unknown_news_provider";
+    if (entry.status === "fulfilled") return entry.value;
+    return {
+      provider: fallbackProvider, ok: false, articles: [], sources: [],
+      warnings: [errorMessage(entry.reason)],
+      diagnostic: providerDiagnostic({
+        provider: fallbackProvider, ok: false, startedAt: Date.now(),
+        error: entry.reason, itemCount: 0,
+        timedOut: entry.reason?.code === "PROVIDER_TIMEOUT",
+      }),
+    };
+  });
 
-  const diagnostics =
-    providerResults
-      .map(
-        (providerResult) =>
-          providerResult.diagnostic
-      )
-      .filter(Boolean);
+  const providerResults = [rssResult, ...secondaryResults];
+  const successfulProviders = providerResults.filter((item) => item.ok);
+  const articles = deduplicateArticles(
+    providerResults.flatMap((item) => item.articles || [])
+  ).slice(0, clamp(limit, 6, 1, 20));
 
   return {
     providerResults,
-    providerNames,
+    providerNames: ["google_news_rss", ...providerNames],
     articles,
-    sources,
-    warnings,
-    diagnostics,
+    sources: providerResults.flatMap((item) => item.sources || []),
+    warnings: providerResults.flatMap((item) => item.warnings || []),
+    diagnostics: providerResults.map((item) => item.diagnostic).filter(Boolean),
     successfulProviders,
   };
 }
@@ -3370,6 +3194,14 @@ export async function searchCandidatePoliticalNews({
 }
 
 
+function isValidFecCandidateId(value = "") {
+  return /^[PHS][A-Z0-9]{8}$/i.test(clean(value));
+}
+
+function isValidFecCommitteeId(value = "") {
+  return /^C[0-9]{8}$/i.test(clean(value));
+}
+
 export async function getOpenFecFinance({
   candidateId = "",
   committeeId = "",
@@ -3418,15 +3250,32 @@ export async function getOpenFecFinance({
     });
   }
 
-  const candidate =
-    clean(
-      candidateId
-    );
+  const requestedCandidate = clean(candidateId).toUpperCase();
+  const requestedCommittee = clean(committeeId).toUpperCase();
 
-  const committee =
-    clean(
-      committeeId
+  const candidate = isValidFecCandidateId(requestedCandidate)
+    ? requestedCandidate
+    : "";
+
+  const committee = isValidFecCommitteeId(requestedCommittee)
+    ? requestedCommittee
+    : "";
+
+  const identifierWarnings = [];
+
+  if (requestedCandidate && !candidate) {
+    identifierWarnings.push(
+      `Ignored invalid OpenFEC candidate_id "${requestedCandidate}". ` +
+      "Candidate IDs must begin with P, H, or S and contain eight additional letters or numbers."
     );
+  }
+
+  if (requestedCommittee && !committee) {
+    identifierWarnings.push(
+      `Ignored invalid OpenFEC committee_id "${requestedCommittee}". ` +
+      "Committee IDs must begin with C and contain eight digits."
+    );
+  }
 
   const normalizedCycle =
     clean(
@@ -3564,6 +3413,8 @@ export async function getOpenFecFinance({
               latency,
           }),
         ],
+
+        warnings: identifierWarnings,
 
         diagnostics: [
           providerDiagnostic({
