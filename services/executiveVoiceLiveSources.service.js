@@ -1,9 +1,11 @@
+
 import OpenAI from "openai";
+import { pool } from "../db/pool.js";
 
 /*
  * =========================================================
  * Executive Voice Live Sources
- * Build 3.5.3
+ * Build 5.3.0
  * =========================================================
  *
  * Adds:
@@ -2422,6 +2424,96 @@ async function searchGNews({
   }
 }
 
+function decodeXmlEntities(value = "") {
+  return clean(value)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '\"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function xmlTag(block, tag) {
+  const match = String(block || "").match(
+    new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i")
+  );
+
+  return match ? decodeXmlEntities(match[1]) : "";
+}
+
+async function searchGoogleNewsRss({
+  query,
+  state = "",
+  locality = "",
+  limit = 10,
+  candidate = "",
+  office = "",
+  candidateMode = false,
+} = {}) {
+  const provider = "google_news_rss";
+  const startedAt = Date.now();
+  const normalizedLimit = clamp(limit, 10, 1, 20);
+  const searchQuery = candidateMode
+    ? buildProviderCandidateQuery({ provider, candidate, office, state, locality })
+    : buildNewsQuery({ query, state, locality }) || "United States politics elections";
+
+  const params = new URLSearchParams({ q: searchQuery, hl: "en-US", gl: "US", ceid: "US:en" });
+
+  try {
+    const xml = await fetchJson(`https://news.google.com/rss/search?${params.toString()}`, {
+      headers: {
+        Accept: "application/rss+xml, application/xml, text/xml",
+        "User-Agent": process.env.NEWS_RSS_USER_AGENT || "VoterSpheres/1.0 contact@voterspheres.org",
+      },
+      timeoutMs: Math.max(DEFAULT_TIMEOUT_MS, 10000),
+      label: "Google News RSS",
+    });
+
+    const rawXml = typeof xml === "string" ? xml : "";
+    const items = rawXml.match(/<item>[\s\S]*?<\/item>/gi) || [];
+    const rawArticles = items.map((item) => {
+      const sourceMatch = item.match(/<source(?:\s+url="([^"]*)")?>([\s\S]*?)<\/source>/i);
+      return normalizeArticle({
+        title: xmlTag(item, "title"),
+        url: xmlTag(item, "link"),
+        published_at: xmlTag(item, "pubDate"),
+        summary: xmlTag(item, "description"),
+        publisher: sourceMatch ? decodeXmlEntities(sourceMatch[2]) : "Google News",
+      }, provider);
+    });
+
+    const relevantArticles = candidateMode
+      ? candidateArticleFilter(rawArticles, {
+          candidate, state, office, minimumRelevance: Math.max(20, CANDIDATE_MIN_RELEVANCE - 10),
+        })
+      : rawArticles;
+    const articles = deduplicateArticles(relevantArticles).slice(0, normalizedLimit);
+
+    return {
+      provider,
+      ok: articles.length > 0,
+      articles,
+      sources: articles.map((article) => sourceMeta({
+        name: article.publisher || "Google News RSS",
+        url: article.url,
+        published_at: article.published_at,
+        confidence: article.published_at ? 82 : 68,
+        note: "Public Google News RSS fallback used when configured providers are slow or unavailable.",
+        provider,
+        latency_ms: elapsedMs(startedAt),
+      })),
+      warnings: [],
+      diagnostic: providerDiagnostic({ provider, ok: articles.length > 0, startedAt, itemCount: articles.length }),
+    };
+  } catch (error) {
+    return {
+      provider, ok: false, articles: [], sources: [], warnings: [errorMessage(error)],
+      diagnostic: providerDiagnostic({ provider, ok: false, startedAt, error, itemCount: 0, timedOut: error?.code === "PROVIDER_TIMEOUT" }),
+    };
+  }
+}
+
 async function runNewsProviders({
   query,
   state = "",
@@ -2436,6 +2528,11 @@ async function runNewsProviders({
 
   const providerNames =
     [];
+
+  providerNames.push("google_news_rss");
+  providerCalls.push(
+    searchGoogleNewsRss({ query, state, locality, limit, candidate, office, candidateMode })
+  );
 
   if (
     process.env
@@ -3379,7 +3476,7 @@ export async function getOpenFecFinance({
         ? `https://api.open.fec.gov/v1/candidate/${encodeURIComponent(
             candidate
           )}/totals/?${params.toString()}`
-        : `https://api.open.fec.gov/v1/candidate/totals/?${params.toString()}&sort=-receipts`;
+        : `https://api.open.fec.gov/v1/candidate/totals/?${params.toString()}&sort=name`;
 
   try {
     const payload =
@@ -3394,12 +3491,13 @@ export async function getOpenFecFinance({
         }
       );
 
-    const records =
-      Array.isArray(
-        payload?.results
-      )
-        ? payload.results
-        : [];
+    const records = (Array.isArray(payload?.results) ? payload.results : [])
+      .sort((a, b) => {
+        if (!nationalMode) return 0;
+        const aReceipts = Number(a?.receipts || a?.total_receipts || a?.receipts_ytd || 0);
+        const bReceipts = Number(b?.receipts || b?.total_receipts || b?.receipts_ytd || 0);
+        return bReceipts - aReceipts;
+      });
 
     const latency =
       elapsedMs(
@@ -4466,6 +4564,40 @@ export async function getWeatherFieldRisk({
   }
 }
 
+async function readStoredPollingRecords(args = {}) {
+  const state = clean(args.state_code || args.state).toUpperCase().slice(0, 2);
+  const office = clean(args.office);
+  const limit = clamp(args.limit, 20, 1, 100);
+
+  try {
+    const metadata = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'polling_results'`
+    );
+    const columns = new Set(metadata.rows.map((row) => row.column_name));
+    if (!columns.size) return { configured: false, records: [], error: "polling_results table is not configured." };
+
+    const stateColumn = columns.has("state") ? "state" : columns.has("state_code") ? "state_code" : null;
+    const officeColumn = columns.has("office") ? "office" : null;
+    const dateColumn = ["field_end", "published_at", "updated_at", "created_at"].find((column) => columns.has(column));
+    const conditions = [];
+    const params = [];
+    if (state && stateColumn) {
+      params.push(state);
+      conditions.push(`UPPER(COALESCE("${stateColumn}"::text, '')) = $${params.length}`);
+    }
+    if (office && officeColumn) {
+      params.push(`%${office}%`);
+      conditions.push(`"${officeColumn}" ILIKE $${params.length}`);
+    }
+    const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const query = `SELECT * FROM polling_results ${whereSql} ORDER BY ${dateColumn ? `"${dateColumn}"` : "1"} DESC NULLS LAST LIMIT ${limit}`;
+    const result = await pool.query(query, params);
+    return { configured: true, records: result.rows, error: null };
+  } catch (error) {
+    return { configured: true, records: [], error: errorMessage(error) };
+  }
+}
+
 export async function getPollingProviderData(
   args = {}
 ) {
@@ -4490,33 +4622,25 @@ export async function getPollingProviderData(
   if (
     !baseUrl
   ) {
+    const stored = await readStoredPollingRecords(args);
     return result({
-      provider,
-      ok: false,
-      configured: false,
-      summary:
-        "No external polling provider is configured.",
-
+      provider: "stored_polling",
+      ok: stored.records.length > 0,
+      configured: stored.configured,
+      summary: stored.records.length
+        ? `Found ${stored.records.length} stored polling records.`
+        : "No external polling provider is configured and no stored polling records were available.",
+      data: { polls: stored.records, records: stored.records, fallback: "polling_results" },
+      records: stored.records,
       warnings: [
-        "POLLING_PROVIDER_URL is missing.",
+        "POLLING_PROVIDER_URL is missing; using the polling_results database fallback.",
+        ...(stored.error ? [stored.error] : []),
       ],
-
-      diagnostics: [
-        providerDiagnostic({
-          provider,
-
-          ok:
-            false,
-
-          startedAt,
-
-          itemCount:
-            0,
-        }),
-      ],
-
-      degraded:
-        true,
+      diagnostics: [providerDiagnostic({
+        provider: "stored_polling", ok: stored.records.length > 0, startedAt,
+        itemCount: stored.records.length, error: stored.error ? new Error(stored.error) : null,
+      })],
+      degraded: stored.records.length === 0,
     });
   }
 
@@ -4735,6 +4859,20 @@ export async function getPollingProviderData(
   } catch (
     error
   ) {
+    const stored = await readStoredPollingRecords(args);
+    if (stored.records.length > 0) {
+      return result({
+        provider: "stored_polling",
+        ok: true,
+        summary: `The external polling provider failed; returning ${stored.records.length} stored polling records.`,
+        data: { polls: stored.records, records: stored.records, fallback: "polling_results" },
+        records: stored.records,
+        warnings: [errorMessage(error), "Using the polling_results database fallback."],
+        diagnostics: [providerDiagnostic({ provider, ok: false, startedAt, error, itemCount: 0, timedOut: error?.code === "PROVIDER_TIMEOUT" })],
+        degraded: true,
+      });
+    }
+
     const staleCached =
       getStaleCached(
         cacheKey
@@ -4862,6 +5000,8 @@ export async function getElectionAdministrationUpdates(
 
 export async function getExecutiveVoiceSourceHealth() {
   const providers = [
+    { id: "google_news_rss", configured: true, required_env: [], timeout_ms: Math.max(DEFAULT_TIMEOUT_MS, 10000) },
+
     {
       id:
         "openai_web_search",
@@ -5163,3 +5303,4 @@ export function clearExecutiveVoiceSourceCache() {
       now(),
   };
 }
+
