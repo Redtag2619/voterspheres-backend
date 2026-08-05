@@ -641,8 +641,10 @@ function sourceMeta({
 function result({
   provider,
   ok = true,
+  configured = true,
   summary = "",
   data = null,
+  records = null,
   sources = [],
   warnings = [],
   diagnostics = [],
@@ -650,17 +652,24 @@ function result({
   cached = false,
   stale = false,
 } = {}) {
+  const normalizedRecords = Array.isArray(records)
+    ? records
+    : [];
+
   return {
-    ok,
+    ok: Boolean(ok),
+    configured: Boolean(configured),
     provider,
     summary,
     data,
+    records: normalizedRecords,
+    count: normalizedRecords.length,
     sources,
     warnings,
     diagnostics,
-    degraded,
-    cached,
-    stale,
+    degraded: Boolean(degraded),
+    cached: Boolean(cached),
+    stale: Boolean(stale),
 
     generated_at:
       now(),
@@ -2805,6 +2814,8 @@ export async function searchCurrentPoliticalNews({
             providerOutput.providerNames,
         },
 
+        records: providerOutput.articles,
+
         sources:
           providerOutput.sources,
 
@@ -2856,9 +2867,8 @@ export async function searchCurrentPoliticalNews({
   return result({
     provider:
       "unified_live_news",
-
-    ok:
-      false,
+    ok: false,
+    configured: providerOutput.providerNames.length > 0,
 
     summary:
       "No live political news provider returned current results.",
@@ -3283,10 +3293,8 @@ export async function getOpenFecFinance({
   if (!apiKey) {
     return result({
       provider,
-
-      ok:
-        false,
-
+      ok: false,
+      configured: false,
       summary:
         "OpenFEC is not configured.",
 
@@ -3328,42 +3336,7 @@ export async function getOpenFecFinance({
       cycle
     );
 
-  if (
-    !candidate &&
-    !committee
-  ) {
-    return result({
-      provider,
-
-      ok:
-        false,
-
-      summary:
-        "A candidate ID or committee ID is required.",
-
-      warnings: [
-        "Provide candidate_id or committee_id.",
-      ],
-
-      diagnostics: [
-        providerDiagnostic({
-          provider,
-
-          ok:
-            false,
-
-          startedAt,
-
-          itemCount:
-            0,
-        }),
-      ],
-
-      degraded:
-        true,
-    });
-
-  }
+  const nationalMode = !candidate && !committee;
 
   const key =
     `fec:${candidate}:${committee}:${normalizedCycle}`;
@@ -3402,9 +3375,11 @@ export async function getOpenFecFinance({
       ? `https://api.open.fec.gov/v1/committee/${encodeURIComponent(
           committee
         )}/totals/?${params.toString()}`
-      : `https://api.open.fec.gov/v1/candidate/${encodeURIComponent(
-          candidate
-        )}/totals/?${params.toString()}`;
+      : candidate
+        ? `https://api.open.fec.gov/v1/candidate/${encodeURIComponent(
+            candidate
+          )}/totals/?${params.toString()}`
+        : `https://api.open.fec.gov/v1/candidate/totals/?${params.toString()}&sort=-receipts`;
 
   try {
     const payload =
@@ -3456,9 +3431,11 @@ export async function getOpenFecFinance({
           cycle:
             normalizedCycle ||
             null,
-
+          mode: nationalMode ? "national_candidate_totals" : "entity_totals",
           records,
         },
+
+        records,
 
         sources: [
           sourceMeta({
@@ -3618,10 +3595,8 @@ export async function getCongressUpdates({
   if (!apiKey) {
     return result({
       provider,
-
-      ok:
-        false,
-
+      ok: false,
+      configured: false,
       summary:
         "Congress.gov is not configured.",
 
@@ -3713,41 +3688,38 @@ export async function getCongressUpdates({
         ? payload.bills
         : [];
 
-    const needle =
-      normalizedQuery
-        .toLowerCase();
+    const queryTokens = normalizedQuery
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 4)
+      .filter(
+        (token) =>
+          ![
+            "united",
+            "states",
+            "politics",
+            "campaigns",
+            "horizon",
+          ].includes(token)
+      )
+      .slice(0, 8);
 
-    if (
-      needle
-    ) {
-      bills =
-        bills.filter(
-          (
-            bill
-          ) =>
-            [
-              bill.title,
-              bill.type,
-              bill.number,
-              bill.latestAction
-                ?.text,
-            ]
-              .filter(
-                Boolean
-              )
-              .some(
-                (
-                  value
-                ) =>
-                  String(
-                    value
-                  )
-                    .toLowerCase()
-                    .includes(
-                      needle
-                    )
-              )
+    if (queryTokens.length) {
+      bills = bills.filter((bill) => {
+        const haystack = [
+          bill.title,
+          bill.type,
+          bill.number,
+          bill.latestAction?.text,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return queryTokens.some((token) =>
+          haystack.includes(token)
         );
+      });
     }
 
     bills =
@@ -3794,6 +3766,8 @@ export async function getCongressUpdates({
 
           bills,
         },
+
+        records: bills,
 
         sources: [
           sourceMeta({
@@ -3930,10 +3904,110 @@ export async function getCongressUpdates({
   }
 }
 
+const STATE_FIELD_COORDINATES = Object.freeze({
+  AL: { latitude: 32.377716, longitude: -86.300568, location: "Montgomery, AL" },
+  AK: { latitude: 58.301598, longitude: -134.420212, location: "Juneau, AK" },
+  AZ: { latitude: 33.448143, longitude: -112.096962, location: "Phoenix, AZ" },
+  AR: { latitude: 34.746613, longitude: -92.288986, location: "Little Rock, AR" },
+  CA: { latitude: 38.576668, longitude: -121.493629, location: "Sacramento, CA" },
+  CO: { latitude: 39.739227, longitude: -104.984856, location: "Denver, CO" },
+  CT: { latitude: 41.764046, longitude: -72.682198, location: "Hartford, CT" },
+  DE: { latitude: 39.157307, longitude: -75.519722, location: "Dover, DE" },
+  DC: { latitude: 38.895110, longitude: -77.036370, location: "Washington, DC" },
+  FL: { latitude: 30.438118, longitude: -84.281296, location: "Tallahassee, FL" },
+  GA: { latitude: 33.749027, longitude: -84.388229, location: "Atlanta, GA" },
+  HI: { latitude: 21.307442, longitude: -157.857376, location: "Honolulu, HI" },
+  ID: { latitude: 43.617775, longitude: -116.199722, location: "Boise, ID" },
+  IL: { latitude: 39.798363, longitude: -89.654961, location: "Springfield, IL" },
+  IN: { latitude: 39.768623, longitude: -86.162643, location: "Indianapolis, IN" },
+  IA: { latitude: 41.591087, longitude: -93.603729, location: "Des Moines, IA" },
+  KS: { latitude: 39.048191, longitude: -95.677956, location: "Topeka, KS" },
+  KY: { latitude: 38.186722, longitude: -84.875374, location: "Frankfort, KY" },
+  LA: { latitude: 30.457069, longitude: -91.187393, location: "Baton Rouge, LA" },
+  ME: { latitude: 44.307167, longitude: -69.781693, location: "Augusta, ME" },
+  MD: { latitude: 38.978764, longitude: -76.490936, location: "Annapolis, MD" },
+  MA: { latitude: 42.358162, longitude: -71.063698, location: "Boston, MA" },
+  MI: { latitude: 42.733635, longitude: -84.555328, location: "Lansing, MI" },
+  MN: { latitude: 44.955097, longitude: -93.102211, location: "Saint Paul, MN" },
+  MS: { latitude: 32.303848, longitude: -90.182106, location: "Jackson, MS" },
+  MO: { latitude: 38.579201, longitude: -92.172935, location: "Jefferson City, MO" },
+  MT: { latitude: 46.585709, longitude: -112.018417, location: "Helena, MT" },
+  NE: { latitude: 40.808075, longitude: -96.699654, location: "Lincoln, NE" },
+  NV: { latitude: 39.163914, longitude: -119.766121, location: "Carson City, NV" },
+  NH: { latitude: 43.206898, longitude: -71.537994, location: "Concord, NH" },
+  NJ: { latitude: 40.220596, longitude: -74.769913, location: "Trenton, NJ" },
+  NM: { latitude: 35.682240, longitude: -105.939728, location: "Santa Fe, NM" },
+  NY: { latitude: 42.652843, longitude: -73.757874, location: "Albany, NY" },
+  NC: { latitude: 35.780430, longitude: -78.639099, location: "Raleigh, NC" },
+  ND: { latitude: 46.820850, longitude: -100.783318, location: "Bismarck, ND" },
+  OH: { latitude: 39.961346, longitude: -82.999069, location: "Columbus, OH" },
+  OK: { latitude: 35.492207, longitude: -97.503342, location: "Oklahoma City, OK" },
+  OR: { latitude: 44.938461, longitude: -123.030403, location: "Salem, OR" },
+  PA: { latitude: 40.264378, longitude: -76.883598, location: "Harrisburg, PA" },
+  RI: { latitude: 41.830914, longitude: -71.414963, location: "Providence, RI" },
+  SC: { latitude: 34.000343, longitude: -81.033211, location: "Columbia, SC" },
+  SD: { latitude: 44.367031, longitude: -100.346405, location: "Pierre, SD" },
+  TN: { latitude: 36.165810, longitude: -86.784241, location: "Nashville, TN" },
+  TX: { latitude: 30.274670, longitude: -97.740349, location: "Austin, TX" },
+  UT: { latitude: 40.777477, longitude: -111.888237, location: "Salt Lake City, UT" },
+  VT: { latitude: 44.262436, longitude: -72.580536, location: "Montpelier, VT" },
+  VA: { latitude: 37.538857, longitude: -77.433640, location: "Richmond, VA" },
+  WA: { latitude: 47.035805, longitude: -122.905014, location: "Olympia, WA" },
+  WV: { latitude: 38.336246, longitude: -81.612328, location: "Charleston, WV" },
+  WI: { latitude: 43.074684, longitude: -89.384445, location: "Madison, WI" },
+  WY: { latitude: 41.140259, longitude: -104.820236, location: "Cheyenne, WY" },
+});
+
+function resolveWeatherCoordinates({
+  latitude,
+  longitude,
+  location = "",
+  state = "",
+  state_code = "",
+  geographic_scope = "",
+} = {}) {
+  const directLatitude = Number(latitude);
+  const directLongitude = Number(longitude);
+
+  if (
+    Number.isFinite(directLatitude) &&
+    Number.isFinite(directLongitude)
+  ) {
+    return {
+      latitude: directLatitude,
+      longitude: directLongitude,
+      location: clean(location) || `${directLatitude}, ${directLongitude}`,
+      resolution: "coordinates",
+    };
+  }
+
+  const stateCode = clean(
+    state_code || state || geographic_scope
+  )
+    .toUpperCase()
+    .slice(0, 2);
+
+  const resolved = STATE_FIELD_COORDINATES[stateCode];
+
+  if (!resolved) {
+    return null;
+  }
+
+  return {
+    ...resolved,
+    location: clean(location) || resolved.location,
+    state_code: stateCode,
+    resolution: "state_capital",
+  };
+}
+
 export async function getWeatherFieldRisk({
   latitude,
   longitude,
   location = "",
+  state = "",
+  state_code = "",
+  geographic_scope = "",
 } = {}) {
   const provider =
     "nws";
@@ -3941,55 +4015,40 @@ export async function getWeatherFieldRisk({
   const startedAt =
     Date.now();
 
-  const lat =
-    Number(
-      latitude
-    );
+  const resolvedLocation = resolveWeatherCoordinates({
+    latitude,
+    longitude,
+    location,
+    state,
+    state_code,
+    geographic_scope,
+  });
 
-  const lon =
-    Number(
-      longitude
-    );
-
-  if (
-    !Number.isFinite(
-      lat
-    ) ||
-    !Number.isFinite(
-      lon
-    )
-  ) {
+  if (!resolvedLocation) {
     return result({
       provider,
-
-      ok:
-        false,
-
+      ok: false,
+      configured: true,
       summary:
-        "Latitude and longitude are required.",
-
+        "Weather risk requires coordinates or a supported U.S. state code.",
       warnings: [
-        "Provide numeric latitude and longitude.",
+        "Provide latitude/longitude or state/state_code.",
       ],
-
       diagnostics: [
         providerDiagnostic({
           provider,
-
-          ok:
-            false,
-
+          ok: false,
           startedAt,
-
-          itemCount:
-            0,
+          itemCount: 0,
         }),
       ],
-
-      degraded:
-        true,
+      degraded: true,
     });
   }
+
+  const lat = resolvedLocation.latitude;
+  const lon = resolvedLocation.longitude;
+  const resolvedLocationName = resolvedLocation.location;
 
   const key =
     `weather:${lat}:${lon}`;
@@ -4183,7 +4242,7 @@ export async function getWeatherFieldRisk({
           0,
 
         summary:
-          `${clean(location) || `${lat}, ${lon}`} field risk is ${riskLevel}. ` +
+          `${resolvedLocationName} field risk is ${riskLevel}. ` +
           `${alertRows.length} active alert${
             alertRows.length ===
             1
@@ -4192,30 +4251,52 @@ export async function getWeatherFieldRisk({
           } are present.`,
 
         data: {
-          location:
-            clean(
-              location
-            ) ||
-            null,
-
-          latitude:
-            lat,
-
-          longitude:
-            lon,
-
-          risk_level:
-            riskLevel,
-
-          active_alerts:
-            alertRows,
-
-          forecast_periods:
-            periods.slice(
-              0,
-              6
-            ),
+          location: resolvedLocationName,
+          state_code: resolvedLocation.state_code || null,
+          coordinate_resolution: resolvedLocation.resolution,
+          latitude: lat,
+          longitude: lon,
+          risk_level: riskLevel,
+          records: [
+            {
+              id: `weather:${resolvedLocation.state_code || `${lat},${lon}`}`,
+              title: `${resolvedLocationName} field risk is ${riskLevel}`,
+              name: `${resolvedLocationName} weather field risk`,
+              state_code: resolvedLocation.state_code || null,
+              risk_level: riskLevel,
+              score:
+                riskLevel === "High"
+                  ? 88
+                  : riskLevel === "Elevated"
+                    ? 68
+                    : 25,
+              summary:
+                `${alertRows.length} active alert${alertRows.length === 1 ? "" : "s"}; ` +
+                `${periods.length} forecast period${periods.length === 1 ? "" : "s"}.`,
+              published_at:
+                normalizeDate(
+                  forecast?.properties?.updated ||
+                    alertRows[0]?.properties?.sent
+                ),
+              active_alert_count: alertRows.length,
+            },
+          ],
+          active_alerts: alertRows,
+          forecast_periods: periods.slice(0, 6),
         },
+
+        records: [
+          {
+            id: `weather:${resolvedLocation.state_code || `${lat},${lon}`}`,
+            title: `${resolvedLocationName} field risk is ${riskLevel}`,
+            name: `${resolvedLocationName} weather field risk`,
+            state_code: resolvedLocation.state_code || null,
+            risk_level: riskLevel,
+            score: riskLevel === "High" ? 88 : riskLevel === "Elevated" ? 68 : 25,
+            summary: `${alertRows.length} active weather alerts and ${periods.length} forecast periods.`,
+            published_at: normalizeDate(forecast?.properties?.updated || alertRows[0]?.properties?.sent),
+          },
+        ],
 
         sources: [
           sourceMeta({
@@ -4411,10 +4492,8 @@ export async function getPollingProviderData(
   ) {
     return result({
       provider,
-
-      ok:
-        false,
-
+      ok: false,
+      configured: false,
       summary:
         "No external polling provider is configured.",
 
@@ -4580,6 +4659,8 @@ export async function getPollingProviderData(
           polls,
         },
 
+        records: polls,
+
         sources: [
           sourceMeta({
             name:
@@ -4739,7 +4820,8 @@ export async function getElectionAdministrationUpdates(
 ) {
   const state =
     clean(
-      args.state
+      args.state ||
+      args.state_code
     );
 
   const locality =
@@ -4972,7 +5054,7 @@ export async function getExecutiveVoiceSourceHealth() {
       true,
 
     build:
-      "3.5.3",
+      "5.2",
 
     providers,
 
@@ -5069,7 +5151,7 @@ export function clearExecutiveVoiceSourceCache() {
       true,
 
     build:
-      "3.5.3",
+      "5.2",
 
     message:
       "Executive Voice live-source cache cleared.",
