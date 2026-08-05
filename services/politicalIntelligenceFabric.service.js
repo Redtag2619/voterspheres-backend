@@ -1,4 +1,3 @@
-
 import { collectPoliticalSignals } from "../adapters/politicalIntelligenceFabric.adapters.js";
  
 import {
@@ -230,6 +229,12 @@ function extractRows(payload, depth = 0) {
     "candidates",
     "reports",
     "totals",
+    "active_alerts",
+    "forecast_periods",
+    "records",
+    "payload",
+    "response",
+    "result",
   ];
  
   for (const key of preferredKeys) {
@@ -269,18 +274,63 @@ function safeErrorMessage(result) {
 }
  
 function sourceHealthFromSettled(
-  result,
+  settledResult,
   rows,
   extra = {}
 ) {
+  const payload =
+    settledResult?.status === "fulfilled"
+      ? settledResult.value
+      : null;
+
+  const configured =
+    settledResult?.status === "fulfilled"
+      ? payload?.configured !== false
+      : true;
+
+  const providerOk =
+    settledResult?.status === "fulfilled" &&
+    payload?.ok === true;
+
+  const warnings = Array.isArray(payload?.warnings)
+    ? payload.warnings
+    : [];
+
+  const diagnosticError = Array.isArray(payload?.diagnostics)
+    ? payload.diagnostics.find((item) => item?.error)?.error
+    : null;
+
+  const error =
+    safeErrorMessage(settledResult) ||
+    diagnosticError ||
+    (!configured
+      ? warnings[0] || "Provider is not configured."
+      : !providerOk
+        ? warnings[0] || payload?.summary || null
+        : null);
+
   return {
-    ok: result.status === "fulfilled",
+    ok: providerOk,
+    configured,
     count: rows.length,
     degraded:
-      result.status === "rejected" ||
+      settledResult?.status === "rejected" ||
+      payload?.degraded === true ||
+      !providerOk ||
+      !configured ||
       Boolean(extra.degraded),
-    error: safeErrorMessage(result),
-    checked_at: new Date().toISOString(),
+    error,
+    provider: payload?.provider || null,
+    cached: Boolean(payload?.cached),
+    stale: Boolean(payload?.stale),
+    summary: payload?.summary || null,
+    warnings,
+    diagnostics: Array.isArray(payload?.diagnostics)
+      ? payload.diagnostics
+      : [],
+    checked_at:
+      payload?.generated_at ||
+      new Date().toISOString(),
     ...extra,
   };
 }
@@ -1175,9 +1225,8 @@ async function collectLivePoliticalSignals({
       key: "live_news",
       promise: searchCurrentPoliticalNews({
         query,
-        state_code: stateCode,
+        state: stateCode || "",
         limit: 30,
-        refresh,
       }),
     });
   }
@@ -1198,10 +1247,8 @@ async function collectLivePoliticalSignals({
     tasks.push({
       key: "live_congress",
       promise: getCongressUpdates({
-        query,
-        state_code: stateCode,
+        query: stateCode ? "election" : "",
         limit: 20,
-        refresh,
       }),
     });
   }
@@ -1215,10 +1262,12 @@ async function collectLivePoliticalSignals({
         "live_election_administration",
       promise:
         getElectionAdministrationUpdates({
-          query,
-          state_code: stateCode,
+          query:
+            stateCode
+              ? `${stateCode} election administration voting ballot`
+              : "election administration voting ballot",
+          state: stateCode || "",
           limit: 20,
-          refresh,
         }),
     });
   }
@@ -1226,12 +1275,24 @@ async function collectLivePoliticalSignals({
   if (options.includeWeatherRisk !== false) {
     tasks.push({
       key: "live_weather_risk",
-      promise: getWeatherFieldRisk({
-        state_code: stateCode,
-        geographic_scope:
-          stateCode || "National",
-        refresh,
-      }),
+      promise: stateCode
+        ? getWeatherFieldRisk({
+            state_code: stateCode,
+            location: `${stateCode} field operations`,
+          })
+        : Promise.resolve({
+            ok: true,
+            configured: true,
+            provider: "nws",
+            summary:
+              "National weather risk requires a state-scoped scan.",
+            data: { records: [] },
+            records: [],
+            warnings: [],
+            diagnostics: [],
+            degraded: false,
+            generated_at: new Date().toISOString(),
+          }),
     });
   }
  
@@ -1292,9 +1353,14 @@ async function collectLivePoliticalSignals({
       );
  
     sourceHealth[sourceKey] = {
+      ...currentHealth,
       ok:
         Boolean(previousHealth?.ok) ||
         currentHealth.ok,
+      configured:
+        previousHealth?.configured === false
+          ? false
+          : currentHealth.configured,
       count:
         Number(previousHealth?.count || 0) +
         rows.length,
@@ -1305,6 +1371,14 @@ async function collectLivePoliticalSignals({
         previousHealth?.error ||
         currentHealth.error ||
         null,
+      warnings: [
+        ...asArray(previousHealth?.warnings),
+        ...asArray(currentHealth.warnings),
+      ],
+      diagnostics: [
+        ...asArray(previousHealth?.diagnostics),
+        ...asArray(currentHealth.diagnostics),
+      ],
       checked_at:
         currentHealth.checked_at,
     };
@@ -1388,6 +1462,18 @@ export async function runPoliticalIntelligenceScan({
         health?.error || null,
       table:
         health?.table || null,
+      provider:
+        health?.provider || null,
+      summary:
+        health?.summary || null,
+      warnings:
+        asArray(health?.warnings),
+      diagnostics:
+        asArray(health?.diagnostics),
+      cached:
+        Boolean(health?.cached),
+      stale:
+        Boolean(health?.stale),
       details:
         health?.details || {},
       checked_at:
