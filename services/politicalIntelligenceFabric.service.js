@@ -1,4 +1,3 @@
-
 import { collectPoliticalSignals } from "../adapters/politicalIntelligenceFabric.adapters.js";
  
 import {
@@ -32,6 +31,96 @@ const clamp = (value, min = 0, max = 100) =>
  
 const asArray = (value) =>
   Array.isArray(value) ? value : [];
+
+function extractNumericValues(value, depth = 0) {
+  if (
+    depth > 5 ||
+    value === null ||
+    value === undefined
+  ) {
+    return [];
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? [value]
+      : [];
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed)
+      ? [parsed]
+      : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) =>
+      extractNumericValues(item, depth + 1)
+    );
+  }
+
+  if (typeof value === "object") {
+    const preferredKeys = [
+      "score",
+      "value",
+      "average",
+      "avg",
+      "mean",
+      "risk",
+      "support",
+      "mobilization",
+      "confidence",
+      "count",
+    ];
+
+    const preferredValues = preferredKeys.flatMap((key) =>
+      Object.prototype.hasOwnProperty.call(value, key)
+        ? extractNumericValues(value[key], depth + 1)
+        : []
+    );
+
+    if (preferredValues.length) {
+      return preferredValues;
+    }
+
+    return Object.values(value).flatMap((item) =>
+      extractNumericValues(item, depth + 1)
+    );
+  }
+
+  return [];
+}
+
+function safeNumericValue(
+  value,
+  fallback = 0,
+  strategy = "average"
+) {
+  const values = extractNumericValues(value);
+
+  if (!values.length) {
+    return Number(fallback) || 0;
+  }
+
+  if (strategy === "max") {
+    return Math.max(...values);
+  }
+
+  if (strategy === "min") {
+    return Math.min(...values);
+  }
+
+  if (strategy === "sum") {
+    return values.reduce((sum, item) => sum + item, 0);
+  }
+
+  return (
+    values.reduce((sum, item) => sum + item, 0) /
+    values.length
+  );
+}
  
 function severityFromScore(score) {
   if (score >= 85) return "critical";
@@ -588,46 +677,82 @@ function influenceFindings(rows = []) {
  
 function coalitionFindings(rows = []) {
   return rows.flatMap((item) => {
-    const support =
-      Number(item.support_score) || 0;
-    const mobilization =
-      Number(item.mobilization_score) || 0;
-    const fragmentation =
-      Number(item.fragmentation_risk) || 0;
- 
+    const support = clamp(
+      safeNumericValue(
+        item.support_score,
+        50,
+        "average"
+      )
+    );
+
+    const mobilization = clamp(
+      safeNumericValue(
+        item.mobilization_score,
+        50,
+        "average"
+      )
+    );
+
+    const fragmentation = clamp(
+      safeNumericValue(
+        item.fragmentation_risk,
+        0,
+        "max"
+      )
+    );
+
+    const memberCount = Math.max(
+      0,
+      Math.round(
+        safeNumericValue(
+          item.member_count,
+          0,
+          "max"
+        )
+      )
+    );
+
     if (
       fragmentation < 45 &&
       support >= 55
     ) {
       return [];
     }
- 
+
     const score = clamp(
       fragmentation * 0.65 +
         (100 - support) * 0.25 +
         (100 - mobilization) * 0.1
     );
- 
+
+    const coalitionName =
+      clean(item.coalition_name) ||
+      "Coalition";
+
     return [
       {
         category: "coalition",
         entity_type: "coalition",
         entity_id:
-          `${item.coalition_name}:${getStateCode(item) || "US"}`,
-        entity_name: item.coalition_name,
+          `${coalitionName}:${getStateCode(item) || "US"}`,
+        entity_name: coalitionName,
         state_code: getStateCode(item),
         title:
-          `Coalition stability watch: ${item.coalition_name}`,
+          `Coalition stability watch: ${coalitionName}`,
         summary:
-          `Support ${support}; mobilization ${mobilization}; fragmentation risk ${fragmentation}.`,
+          `Support ${Math.round(support)}; ` +
+          `mobilization ${Math.round(mobilization)}; ` +
+          `fragmentation risk ${Math.round(fragmentation)}; ` +
+          `members ${memberCount}.`,
         score,
         severity: severityFromScore(score),
-        confidence: 76,
+        confidence: 82,
         metrics: {
           support_score: support,
           mobilization_score: mobilization,
           fragmentation_risk:
             fragmentation,
+          member_count: memberCount,
         },
         evidence: [
           evidence(
