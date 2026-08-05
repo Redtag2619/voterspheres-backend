@@ -997,287 +997,186 @@ export async function readCoalitionSignals({
   scope = {},
   limit = 100,
 }) {
-  const tableCandidates = [
-    "coalition_intelligence",
-    "coalition_scores",
-    "national_coalition_intelligence",
-  ];
+  /*
+   * Build 5.1 final production mapping.
+   *
+   * Production coalition_intelligence scoring fields are native
+   * PostgreSQL numeric/integer columns. They must not be cast through
+   * JSONB. The members, relationships, and metadata fields remain JSONB
+   * evidence fields and are returned without numeric conversion.
+   */
+  return runDynamicSource({
+    source: "coalition_intelligence",
 
-  let table = null;
+    tableCandidates: [
+      "coalition_intelligence",
+      "coalition_scores",
+      "national_coalition_intelligence",
+      "coalitions",
+    ],
 
-  for (const candidate of tableCandidates) {
-    if (await tableExists(candidate)) {
-      table = candidate;
-      break;
-    }
-  }
+    workspaceId,
+    scope,
+    limit,
+    maxLimit: 500,
 
-  if (!table) {
-    return {
-      source: "coalition_intelligence",
-      rows: [],
-      ok: false,
-      configured: false,
-      degraded: true,
-      error:
-        "Coalition intelligence table is not configured.",
-      table: null,
-      details: {
-        searched_tables: tableCandidates,
-      },
-    };
-  }
+    selectBuilder: (columns) => [
+      textExpression(
+        columns,
+        [
+          "coalition_name",
+          "name",
+          "title",
+          "entity_name",
+        ],
+        "coalition_name",
+        "'Coalition'"
+      ),
 
-  const columns = await readColumns(table);
+      textExpression(
+        columns,
+        [
+          "state_code",
+          "state",
+          "jurisdiction",
+          "jurisdiction_code",
+          "geography",
+          "scope_value",
+        ],
+        "state_code"
+      ),
 
-  const workspaceColumn =
-    firstExisting(columns, [
-      "workspace_id",
-      "firm_id",
-    ]);
+      numericExpression(
+        columns,
+        [
+          "support_score",
+          "coalition_score",
+          "score",
+        ],
+        "support_score",
+        "50"
+      ),
 
-  const stateColumn =
-    firstExisting(columns, [
-      "state_code",
-      "state",
-      "jurisdiction_code",
-      "geography",
-      "scope_value",
-    ]);
+      numericExpression(
+        columns,
+        [
+          "mobilization_score",
+          "cohesion_score",
+          "engagement_score",
+          "activation_score",
+        ],
+        "mobilization_score",
+        "50"
+      ),
 
-  const nameColumn =
-    firstExisting(columns, [
-      "coalition_name",
-      "name",
-      "title",
-      "entity_name",
-    ]);
+      numericExpression(
+        columns,
+        [
+          "fragmentation_risk",
+          "risk_score",
+          "fragmentation_score",
+        ],
+        "fragmentation_risk",
+        "0"
+      ),
 
-  const supportColumn =
-    firstExisting(columns, [
-      "support_score",
-      "coalition_score",
-      "score",
-    ]);
+      numericExpression(
+        columns,
+        [
+          "member_count",
+          "entity_count",
+          "relationship_count",
+        ],
+        "member_count",
+        "0"
+      ),
 
-  const mobilizationColumn =
-    firstExisting(columns, [
-      "mobilization_score",
-      "cohesion_score",
-      "engagement_score",
-      "activation_score",
-    ]);
+      numericExpression(
+        columns,
+        [
+          "confidence",
+          "confidence_score",
+        ],
+        "confidence_score",
+        "70"
+      ),
 
-  const fragmentationColumn =
-    firstExisting(columns, [
-      "fragmentation_risk",
+      numericExpression(
+        columns,
+        [
+          "opportunity_score",
+          "opportunity",
+        ],
+        "opportunity_score",
+        "0"
+      ),
+
+      numericExpression(
+        columns,
+        [
+          "forecast_probability",
+          "forecast_score",
+          "win_probability",
+        ],
+        "forecast_probability",
+        "0"
+      ),
+
+      textExpression(
+        columns,
+        [
+          "recommended_action",
+          "recommendation",
+          "summary",
+        ],
+        "recommended_action"
+      ),
+
+      selectExpression(
+        columns,
+        ["members"],
+        "members",
+        "'[]'::jsonb"
+      ),
+
+      selectExpression(
+        columns,
+        ["relationships"],
+        "relationships",
+        "'[]'::jsonb"
+      ),
+
+      selectExpression(
+        columns,
+        ["metadata"],
+        "metadata",
+        "'{}'::jsonb"
+      ),
+
+      dateExpression(
+        columns,
+        [
+          "updated_at",
+          "calculated_at",
+          "created_at",
+        ],
+        "updated_at"
+      ),
+    ],
+
+    orderByCandidates: [
       "risk_score",
-      "fragmentation_score",
-    ]);
-
-  const memberCountColumn =
-    firstExisting(columns, [
-      "member_count",
-      "entity_count",
-      "relationship_count",
-    ]);
-
-  const confidenceColumn =
-    firstExisting(columns, [
-      "confidence",
-      "confidence_score",
-    ]);
-
-  const opportunityColumn =
-    firstExisting(columns, [
-      "opportunity_score",
-      "opportunity",
-    ]);
-
-  const forecastColumn =
-    firstExisting(columns, [
-      "forecast_probability",
-      "forecast_score",
-      "win_probability",
-    ]);
-
-  const recommendationColumn =
-    firstExisting(columns, [
-      "recommended_action",
-      "recommendation",
-      "summary",
-    ]);
-
-  const updatedColumn =
-    firstExisting(columns, [
+      "fragmentation_risk",
+      "coalition_score",
       "updated_at",
       "calculated_at",
       "created_at",
-    ]);
+    ],
 
-  const state = upperState(
-    scope?.state_code ||
-      scope?.scope_value
-  );
-
-  const conditions = [];
-  const params = [];
-
-  if (workspaceColumn) {
-    params.push(workspaceId);
-
-    conditions.push(
-      `${quoteIdentifier(workspaceColumn)} = $${params.length}`
-    );
-  }
-
-  if (state && stateColumn) {
-    params.push(state);
-
-    conditions.push(
-      `UPPER(COALESCE(${quoteIdentifier(stateColumn)}::text, '')) = $${params.length}`
-    );
-  }
-
-  const nameExpression = nameColumn
-    ? `${quoteIdentifier(nameColumn)}::text AS coalition_name`
-    : "'Coalition'::text AS coalition_name";
-
-  const stateExpression = stateColumn
-    ? `${quoteIdentifier(stateColumn)}::text AS state_code`
-    : "NULL::text AS state_code";
-
-  /*
-   * These columns are genuine PostgreSQL numeric/integer fields.
-   * Do not cast them through JSONB.
-   */
-  const supportExpression = supportColumn
-    ? `COALESCE(${quoteIdentifier(supportColumn)}::numeric, 50)::numeric AS support_score`
-    : "50::numeric AS support_score";
-
-  const mobilizationExpression =
-    mobilizationColumn
-      ? `COALESCE(${quoteIdentifier(mobilizationColumn)}::numeric, 50)::numeric AS mobilization_score`
-      : "50::numeric AS mobilization_score";
-
-  const fragmentationExpression =
-    fragmentationColumn
-      ? `COALESCE(${quoteIdentifier(fragmentationColumn)}::numeric, 0)::numeric AS fragmentation_risk`
-      : "0::numeric AS fragmentation_risk";
-
-  const memberCountExpression =
-    memberCountColumn
-      ? `COALESCE(${quoteIdentifier(memberCountColumn)}::numeric, 0)::numeric AS member_count`
-      : "0::numeric AS member_count";
-
-  const confidenceExpression =
-    confidenceColumn
-      ? `COALESCE(${quoteIdentifier(confidenceColumn)}::numeric, 70)::numeric AS confidence_score`
-      : "70::numeric AS confidence_score";
-
-  const opportunityExpression =
-    opportunityColumn
-      ? `COALESCE(${quoteIdentifier(opportunityColumn)}::numeric, 0)::numeric AS opportunity_score`
-      : "0::numeric AS opportunity_score";
-
-  const forecastExpression =
-    forecastColumn
-      ? `COALESCE(${quoteIdentifier(forecastColumn)}::numeric, 0)::numeric AS forecast_probability`
-      : "0::numeric AS forecast_probability";
-
-  const recommendationExpression =
-    recommendationColumn
-      ? `${quoteIdentifier(recommendationColumn)}::text AS recommended_action`
-      : "NULL::text AS recommended_action";
-
-  /*
-   * JSONB arrays remain JSONB evidence fields.
-   * They are not converted into scalar scores.
-   */
-  const membersExpression =
-    columns.has("members")
-      ? `${quoteIdentifier("members")} AS members`
-      : "'[]'::jsonb AS members";
-
-  const relationshipsExpression =
-    columns.has("relationships")
-      ? `${quoteIdentifier("relationships")} AS relationships`
-      : "'[]'::jsonb AS relationships";
-
-  const metadataExpression =
-    columns.has("metadata")
-      ? `${quoteIdentifier("metadata")} AS metadata`
-      : "'{}'::jsonb AS metadata";
-
-  const updatedExpression =
-    updatedColumn
-      ? `${quoteIdentifier(updatedColumn)} AS updated_at`
-      : "NULL::timestamp AS updated_at";
-
-  const whereSql = conditions.length
-    ? `WHERE ${conditions.join(" AND ")}`
-    : "";
-
-  const safeLimit = Math.max(
-    1,
-    Math.min(
-      Number(limit) || 100,
-      500
-    )
-  );
-
-  const sql = `
-    SELECT
-      ${nameExpression},
-      ${stateExpression},
-      ${supportExpression},
-      ${mobilizationExpression},
-      ${fragmentationExpression},
-      ${memberCountExpression},
-      ${confidenceExpression},
-      ${opportunityExpression},
-      ${forecastExpression},
-      ${recommendationExpression},
-      ${membersExpression},
-      ${relationshipsExpression},
-      ${metadataExpression},
-      ${updatedExpression}
-
-    FROM ${quoteIdentifier(table)}
-
-    ${whereSql}
-
-    ORDER BY
-      fragmentation_risk DESC NULLS LAST,
-      support_score DESC NULLS LAST
-
-    LIMIT ${safeLimit}
-  `;
-
-  return safeQuery(
-    sql,
-    params,
-    "coalition_intelligence",
-    {
-      table,
-      configured: true,
-      degraded: false,
-      details: {
-        selected_table: table,
-        support_column: supportColumn,
-        mobilization_column:
-          mobilizationColumn,
-        fragmentation_column:
-          fragmentationColumn,
-        member_count_column:
-          memberCountColumn,
-        state_column: stateColumn,
-        numeric_columns_are_native: true,
-      },
-    }
-  );
+    orderDirection: "DESC",
+  });
 }
- 
+
 export async function collectPoliticalSignals({
   workspaceId,
   scope = {},
