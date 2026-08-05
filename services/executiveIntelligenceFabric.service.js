@@ -90,7 +90,7 @@ function entitiesOf(question, context = {}) {
 
     candidate: clean(context.candidate || context.candidate_name) || null,
 
-    candidate_id: context.candidate_id || context.fec_candidate_id || null,
+    candidate_id: context.fec_candidate_id || context.candidate_id || null,
 
     state: state ? state.toUpperCase() : null,
 
