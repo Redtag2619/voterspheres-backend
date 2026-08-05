@@ -105,6 +105,7 @@ import executiveIntelligenceOrchestratorRoutes from "./routes/executiveIntellige
 import executiveIntelligenceRoutes from "./routes/executiveIntelligence.routes.js";
 import executiveIntelligenceFabricRoutes from "./routes/executiveIntelligenceFabric.routes.js";
 import politicalIntelligenceFabricRoutes from "./routes/politicalIntelligenceFabric.routes.js";
+import pollingIntelligenceRoutes from "./routes/pollingIntelligence.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
@@ -331,6 +332,7 @@ app.use("/api/executive-voice-live-sources", executiveVoiceLiveSourcesRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceOrchestratorRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceRoutes);
 app.use("/api/political-intelligence-fabric", politicalIntelligenceFabricRoutes);
+app.use("/api/polling-intelligence", pollingIntelligenceRoutes);
 app.use("/api/executive-intelligence-fabric", executiveIntelligenceFabricRoutes);
 
 
