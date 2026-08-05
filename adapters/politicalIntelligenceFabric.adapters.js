@@ -1,4 +1,3 @@
-
 import { pool } from "../db/pool.js";
  
 const clean = (value = "") => String(value ?? "").trim();
@@ -153,6 +152,137 @@ function numericExpression(columns, candidates, alias, fallback = "0") {
   }
  
   return `COALESCE(${quoteIdentifier(column)}::numeric, ${fallback}) AS ${quoteIdentifier(alias)}`;
+}
+
+function jsonSafeNumericExpression(
+  columns,
+  candidates,
+  alias,
+  fallback = "0",
+  arrayStrategy = "average"
+) {
+  const column = firstColumn(columns, candidates);
+
+  if (!column) {
+    return `${fallback}::numeric AS ${quoteIdentifier(alias)}`;
+  }
+
+  const field = quoteIdentifier(column);
+  const aggregate =
+    arrayStrategy === "max"
+      ? "MAX"
+      : arrayStrategy === "min"
+        ? "MIN"
+        : arrayStrategy === "sum"
+          ? "SUM"
+          : "AVG";
+
+  return `
+    COALESCE(
+      CASE
+        WHEN pg_typeof(${field})::text IN (
+          'smallint',
+          'integer',
+          'bigint',
+          'numeric',
+          'decimal',
+          'real',
+          'double precision'
+        )
+        THEN ${field}::text::numeric
+
+        WHEN pg_typeof(${field})::text IN ('json', 'jsonb')
+        THEN CASE jsonb_typeof(${field}::jsonb)
+          WHEN 'number'
+          THEN (${field}::jsonb #>> '{}')::numeric
+
+          WHEN 'string'
+          THEN CASE
+            WHEN (${field}::jsonb #>> '{}')
+              ~ '^-?[0-9]+([.][0-9]+)?$'
+            THEN (${field}::jsonb #>> '{}')::numeric
+            ELSE NULL
+          END
+
+          WHEN 'object'
+          THEN COALESCE(
+            CASE
+              WHEN (${field}::jsonb ->> 'score')
+                ~ '^-?[0-9]+([.][0-9]+)?$'
+              THEN (${field}::jsonb ->> 'score')::numeric
+            END,
+            CASE
+              WHEN (${field}::jsonb ->> 'value')
+                ~ '^-?[0-9]+([.][0-9]+)?$'
+              THEN (${field}::jsonb ->> 'value')::numeric
+            END,
+            CASE
+              WHEN (${field}::jsonb ->> 'average')
+                ~ '^-?[0-9]+([.][0-9]+)?$'
+              THEN (${field}::jsonb ->> 'average')::numeric
+            END,
+            CASE
+              WHEN (${field}::jsonb ->> 'avg')
+                ~ '^-?[0-9]+([.][0-9]+)?$'
+              THEN (${field}::jsonb ->> 'avg')::numeric
+            END
+          )
+
+          WHEN 'array'
+          THEN (
+            SELECT ${aggregate}(
+              CASE
+                WHEN jsonb_typeof(element) = 'number'
+                THEN (element #>> '{}')::numeric
+
+                WHEN jsonb_typeof(element) = 'string'
+                  AND (element #>> '{}')
+                    ~ '^-?[0-9]+([.][0-9]+)?$'
+                THEN (element #>> '{}')::numeric
+
+                WHEN jsonb_typeof(element) = 'object'
+                THEN COALESCE(
+                  CASE
+                    WHEN (element ->> 'score')
+                      ~ '^-?[0-9]+([.][0-9]+)?$'
+                    THEN (element ->> 'score')::numeric
+                  END,
+                  CASE
+                    WHEN (element ->> 'value')
+                      ~ '^-?[0-9]+([.][0-9]+)?$'
+                    THEN (element ->> 'value')::numeric
+                  END,
+                  CASE
+                    WHEN (element ->> 'average')
+                      ~ '^-?[0-9]+([.][0-9]+)?$'
+                    THEN (element ->> 'average')::numeric
+                  END,
+                  CASE
+                    WHEN (element ->> 'avg')
+                      ~ '^-?[0-9]+([.][0-9]+)?$'
+                    THEN (element ->> 'avg')::numeric
+                  END
+                )
+
+                ELSE NULL
+              END
+            )
+            FROM jsonb_array_elements(${field}::jsonb) AS element
+          )
+
+          ELSE NULL
+        END
+
+        ELSE CASE
+          WHEN ${field}::text
+            ~ '^-?[0-9]+([.][0-9]+)?$'
+          THEN ${field}::text::numeric
+          ELSE NULL
+        END
+      END,
+      ${fallback}
+    )::numeric AS ${quoteIdentifier(alias)}
+  `;
 }
  
 function textExpression(columns, candidates, alias, fallback = "NULL") {
@@ -879,12 +1009,62 @@ export async function readCoalitionSignals({
     limit,
     maxLimit: 500,
     selectBuilder: (columns) => [
-      textExpression(columns, ["coalition_name", "name", "title"], "coalition_name", "'Coalition'"),
-      textExpression(columns, ["state_code", "state", "jurisdiction", "scope_value"], "state_code"),
-      numericExpression(columns, ["support_score", "support"], "support_score"),
-      numericExpression(columns, ["mobilization_score", "mobilization"], "mobilization_score"),
-      numericExpression(columns, ["fragmentation_risk", "fragmentation_score", "risk_score"], "fragmentation_risk"),
-      numericExpression(columns, ["member_count", "members"], "member_count"),
+      textExpression(
+        columns,
+        ["coalition_name", "name", "title", "entity_name"],
+        "coalition_name",
+        "'Coalition'"
+      ),
+      textExpression(
+        columns,
+        [
+          "state_code",
+          "state",
+          "jurisdiction",
+          "jurisdiction_code",
+          "geography",
+          "scope_value",
+        ],
+        "state_code"
+      ),
+      jsonSafeNumericExpression(
+        columns,
+        ["support_score", "coalition_score", "score", "support"],
+        "support_score",
+        "50",
+        "average"
+      ),
+      jsonSafeNumericExpression(
+        columns,
+        [
+          "mobilization_score",
+          "mobilization",
+          "engagement_score",
+          "activation_score",
+        ],
+        "mobilization_score",
+        "50",
+        "average"
+      ),
+      jsonSafeNumericExpression(
+        columns,
+        [
+          "fragmentation_risk",
+          "fragmentation_score",
+          "risk_score",
+          "risk",
+        ],
+        "fragmentation_risk",
+        "0",
+        "max"
+      ),
+      jsonSafeNumericExpression(
+        columns,
+        ["member_count", "members", "entity_count"],
+        "member_count",
+        "0",
+        "max"
+      ),
       dateExpression(columns, ["updated_at", "created_at"], "updated_at"),
     ],
     orderByCandidates: ["fragmentation_risk", "risk_score", "updated_at"],
@@ -943,4 +1123,3 @@ export function clearPoliticalFabricSchemaCache() {
     cleared_at: new Date().toISOString(),
   };
 }
-
