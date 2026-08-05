@@ -15,6 +15,26 @@ function clean(value) {
   return next || null;
 }
 
+function normalizeFecCandidateId(value) {
+  const next = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  return /^[PHS][A-Z0-9]{8}$/.test(next)
+    ? next
+    : null;
+}
+
+function normalizeFecCommitteeId(value) {
+  const next = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  return /^C[A-Z0-9]{8}$/.test(next)
+    ? next
+    : null;
+}
+
 function normalizeOffice(value) {
   const v = String(value || "").toLowerCase().trim();
   if (v === "h" || v === "house") return "House";
@@ -140,7 +160,9 @@ function buildCandidateRecord(row, cycle) {
   const stateCode = row.state || row.candidate_state || null;
   const state = normalizeState(row);
   const district = normalizeDistrict(row);
-  const fecCandidateId = String(row.candidate_id || row.fec_candidate_id || "").trim();
+  const fecCandidateId = normalizeFecCandidateId(
+    row.fec_candidate_id || row.candidate_id
+  );
 
   return {
     fec_candidate_id: fecCandidateId || null,
@@ -410,7 +432,13 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
     cycle,
     page,
     per_page: perPage,
-    sort: "-receipts",
+
+    /*
+     * OpenFEC does not support sorting /candidates/totals/
+     * by receipts. The complete result set is sorted locally
+     * in normalizeFundraisingRows().
+     */
+    sort: "name",
     sort_hide_null: "false",
   });
 }
@@ -442,8 +470,17 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
   const normalized = [];
 
   for (const row of rows) {
-    const candidateId = row.candidate_id || row.fec_candidate_id || null;
-    if (!candidateId) continue;
+    const candidateId = normalizeFecCandidateId(
+      row.fec_candidate_id || row.candidate_id
+    );
+
+    if (!candidateId) {
+      console.warn(
+        "[FEC] Skipping fundraising record with invalid candidate ID:",
+        row.fec_candidate_id || row.candidate_id || null
+      );
+      continue;
+    }
 
     const pacContributions =
       normalized.length < effectivePacSyncLimit
@@ -767,11 +804,11 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
   await ensureCandidateProfilesSchema();
 
   const candidateId = candidate.id || candidate.candidate_id || null;
-  const fecCandidateId =
+  const fecCandidateId = normalizeFecCandidateId(
     candidate.fec_candidate_id ||
-    candidate.fecCandidateId ||
-    candidate.external_id ||
-    null;
+      candidate.fecCandidateId ||
+      candidate.external_id
+  );
 
   if (!candidateId) {
     return {
@@ -831,56 +868,97 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 }
 
 async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
-  if (!candidateId) return [];
+  const validCandidateId = normalizeFecCandidateId(candidateId);
+
+  if (!validCandidateId) {
+    console.warn(
+      "[FEC] Committee lookup skipped because candidate ID is invalid:",
+      candidateId
+    );
+    return [];
+  }
 
   try {
-    const payload = await fecGet(`/candidate/${candidateId}/committees/`, {
-      cycle,
-      per_page: 100,
-      designation: "P",
-    });
+    const payload = await fecGet(
+      `/candidate/${validCandidateId}/committees/`,
+      {
+        cycle,
+        per_page: 100,
+        designation: "P",
+      }
+    );
 
-    const rows = Array.isArray(payload?.results) ? payload.results : [];
+    const rows = Array.isArray(payload?.results)
+      ? payload.results
+      : [];
 
     return rows
       .map((row) => ({
-        committee_id: clean(row.committee_id),
+        committee_id: normalizeFecCommitteeId(row.committee_id),
         committee_name: clean(row.name) || clean(row.committee_name),
         designation: clean(row.designation),
         organization_type: clean(row.organization_type),
       }))
       .filter((row) => row.committee_id);
   } catch (error) {
-    console.warn(`[FEC] committee lookup skipped for ${candidateId}:`, error.message);
+    console.warn(
+      `[FEC] committee lookup skipped for ${validCandidateId}:`,
+      error.message
+    );
     return [];
   }
 }
 
 async function fetchScheduleAForCommittee({ committeeId, cycle }) {
-  if (!committeeId) return [];
+  const validCommitteeId = normalizeFecCommitteeId(committeeId);
+
+  if (!validCommitteeId) {
+    console.warn(
+      "[FEC] Schedule A lookup skipped because committee ID is invalid:",
+      committeeId
+    );
+    return [];
+  }
 
   try {
     const payload = await fecGet("/schedules/schedule_a/", {
-      committee_id: committeeId,
+      committee_id: validCommitteeId,
       two_year_transaction_period: cycle,
       per_page: 100,
       sort: "-contribution_receipt_amount",
       sort_hide_null: "false",
     });
 
-    return Array.isArray(payload?.results) ? payload.results : [];
+    return Array.isArray(payload?.results)
+      ? payload.results
+      : [];
   } catch (error) {
-    console.warn(`[FEC] Schedule A lookup skipped for committee ${committeeId}:`, error.message);
+    console.warn(
+      `[FEC] Schedule A lookup skipped for committee ${validCommitteeId}:`,
+      error.message
+    );
     return [];
   }
 }
 
-async function fetchPacContributionsForCandidate({ candidateId, cycle, limit = 25 }) {
-  if (!candidateId) return [];
+async function fetchPacContributionsForCandidate({
+  candidateId,
+  cycle,
+  limit = 25,
+}) {
+  const validCandidateId = normalizeFecCandidateId(candidateId);
+
+  if (!validCandidateId) {
+    console.warn(
+      "[FEC] PAC contribution lookup skipped because candidate ID is invalid:",
+      candidateId
+    );
+    return [];
+  }
 
   try {
     const committees = await fetchCandidateCommitteesForCandidate({
-      candidateId,
+      candidateId: validCandidateId,
       cycle,
     });
 
@@ -903,20 +981,27 @@ async function fetchPacContributionsForCandidate({ candidateId, cycle, limit = 2
 
     if (!allScheduleARows.length) {
       const payload = await fecGet("/schedules/schedule_a/", {
-        candidate_id: candidateId,
+        candidate_id: validCandidateId,
         two_year_transaction_period: cycle,
         per_page: 100,
         sort: "-contribution_receipt_amount",
         sort_hide_null: "false",
       });
 
-      const rows = Array.isArray(payload?.results) ? payload.results : [];
+      const rows = Array.isArray(payload?.results)
+        ? payload.results
+        : [];
+
       allScheduleARows.push(...rows);
     }
 
     return aggregatePacContributions(allScheduleARows, limit);
   } catch (error) {
-    console.warn(`[FEC] PAC contribution sync skipped for ${candidateId}:`, error.message);
+    console.warn(
+      `[FEC] PAC contribution sync skipped for ${validCandidateId}:`,
+      error.message
+    );
     return [];
   }
 }
+
