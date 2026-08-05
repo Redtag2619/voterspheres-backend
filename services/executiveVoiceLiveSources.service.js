@@ -3325,7 +3325,7 @@ export async function getOpenFecFinance({
         ? `https://api.open.fec.gov/v1/candidate/${encodeURIComponent(
             candidate
           )}/totals/?${params.toString()}`
-        : `https://api.open.fec.gov/v1/candidate/totals/?${params.toString()}&sort=name`;
+        : `https://api.open.fec.gov/v1/candidates/totals/?${params.toString()}&sort=name`;
 
   try {
     const payload =
