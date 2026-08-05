@@ -243,7 +243,24 @@ async function fetchText(url, {
         );
       }
 
-      return await response.text();
+      const contentType =
+  response.headers.get("content-type") || "";
+
+const responseText =
+  await response.text();
+
+if (
+  contentType.toLowerCase().includes("text/html") ||
+  /^\s*<!doctype html/i.test(responseText) ||
+  /^\s*<html/i.test(responseText)
+) {
+  throw new Error(
+    `Polling source returned HTML instead of polling data: ${response.url}`
+  );
+}
+
+return responseText;
+      
     } catch (error) {
       lastError = error;
       if (attempt < retries) await sleep(500 * 2 ** attempt);
@@ -1053,11 +1070,11 @@ export async function runPollingIntelligenceIngestion({
   const prunedCount = await pruneOldRows(retentionDays);
 
   const status =
-    errors.length === 0
-      ? "complete"
-      : storedCount > 0
-        ? "degraded"
-        : "failed";
+  storedCount > 0 && errors.length === 0
+    ? "complete"
+    : storedCount > 0
+      ? "degraded"
+      : "failed";
 
   await pool.query(
     `
