@@ -1201,17 +1201,23 @@ async function collectLivePoliticalSignals({
     ? `${stateCode} politics elections campaigns`
     : "United States politics elections campaigns";
  
-  const candidateIds = asArray(
-    sources.candidates
-  )
-    .map(
-      (candidate) =>
-        candidate?.fec_candidate_id ||
-        candidate?.candidate_id ||
-        candidate?.fec_id
-    )
-    .filter(Boolean)
-    .slice(0, 5);
+  const isValidFecCandidateId = (value) =>
+    /^[PHS][A-Z0-9]{8}$/i.test(
+      clean(value)
+    );
+
+  const candidateIds = [
+    ...new Set(
+      asArray(sources.candidates)
+        .flatMap((candidate) => [
+          candidate?.fec_candidate_id,
+          candidate?.fec_id,
+          candidate?.candidate_id,
+        ])
+        .map((value) => clean(value).toUpperCase())
+        .filter(isValidFecCandidateId)
+    ),
+  ].slice(0, 5);
  
   const tasks = [];
  
