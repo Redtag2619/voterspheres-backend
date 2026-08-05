@@ -17,4 +17,3 @@ router.get("/job", requireAuth, getPollingJobStatusController);
 router.post("/sync", requireAuth, syncPollingController);
 
 export default router;
-

@@ -1223,4 +1223,3 @@ export default {
   listPollingIntelligence,
   getPollingIntelligenceHealth,
 };
-

@@ -58,4 +58,3 @@ export async function getPollingJobStatusController(_req, res, next) {
     next(error);
   }
 }
-

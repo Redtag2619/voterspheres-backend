@@ -66,4 +66,3 @@ export function getPollingIntelligenceJobStatus() {
 }
 
 export default runPollingIntelligenceJob;
-
