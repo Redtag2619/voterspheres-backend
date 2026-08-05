@@ -1,3 +1,5 @@
+
+
 import { collectPoliticalSignals } from "../adapters/politicalIntelligenceFabric.adapters.js";
  
 import {
@@ -1195,16 +1197,9 @@ async function collectLivePoliticalSignals({
   const stateCode =
     scope?.state_code || null;
  
-  const query = [
-    stateCode
-      ? `${stateCode} politics elections campaigns`
-      : "United States politics elections campaigns",
-    timeHorizon
-      ? `time horizon ${timeHorizon}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const query = stateCode
+    ? `${stateCode} politics elections campaigns`
+    : "United States politics elections campaigns";
  
   const candidateIds = asArray(
     sources.candidates
@@ -1280,18 +1275,10 @@ async function collectLivePoliticalSignals({
             state_code: stateCode,
             location: `${stateCode} field operations`,
           })
-        : Promise.resolve({
-            ok: true,
-            configured: true,
-            provider: "nws",
-            summary:
-              "National weather risk requires a state-scoped scan.",
-            data: { records: [] },
-            records: [],
-            warnings: [],
-            diagnostics: [],
-            degraded: false,
-            generated_at: new Date().toISOString(),
+        : getWeatherFieldRisk({
+            latitude: 38.9072,
+            longitude: -77.0369,
+            location: "National operations baseline - Washington, DC",
           }),
     });
   }
@@ -1974,3 +1961,4 @@ export {
   upsertWatchlist,
   deleteWatchlist,
 };
+
