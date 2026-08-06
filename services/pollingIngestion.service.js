@@ -1,319 +1,573 @@
-import axios from "axios"; 
+import crypto from "node:crypto";
+import axios from "axios";
 import { pool } from "../db/pool.js";
 
-function text(value = "") {
-  return String(value || "").trim(); 
+const clean = (value = "") => String(value ?? "").trim();
+const upper = (value = "") => clean(value).toUpperCase();
+const lower = (value = "") => clean(value).toLowerCase();
+
+const toNumber = (value, fallback = null) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = Number(String(value).replace(/[$,%]/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toInteger = (value, fallback = null) => {
+  const parsed = toNumber(value, fallback);
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback;
+};
+
+const normalizeState = (value = "") => {
+  const next = upper(value);
+  if (!next || next === "NATIONAL" || next === "USA") return "US";
+  return next === "US" ? "US" : next.slice(0, 2);
+};
+
+const normalizePollType = (value = "") => {
+  const next = lower(value).replace(/_/g, "-").replace(/\s+/g, "-");
+  if (!next) return "unknown";
+  if (next.includes("generic") && next.includes("ballot")) return "generic-ballot";
+  if (next.includes("approval")) return "approval";
+  if (next.includes("favor")) return "favorability";
+  if (next.includes("president")) return "president";
+  if (next.includes("senate")) return "senate";
+  if (next.includes("governor")) return "governor";
+  if (next.includes("house")) return "house";
+  return next;
+};
+
+const normalizeDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime())
+    ? parsed.toISOString().slice(0, 10)
+    : null;
+};
+
+const normalizeTimestamp = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+};
+
+const sha256 = (value) =>
+  crypto.createHash("sha256").update(String(value)).digest("hex");
+
+function firstValue(object = {}, keys = []) {
+  for (const key of keys) {
+    const value = object?.[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
 }
 
-function stateName(value = "") {
-  const raw = text(value).toUpperCase();
-
-  const map = {
-    AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-    CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-    HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-    KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-    MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
-    MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
-    NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
-    ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
-    RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
-    TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
-    WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia"
-  };
-
-  return map[raw] || value || "";
+function sourcePollId(item = {}) {
+  return clean(firstValue(item, [
+    "id",
+    "poll_id",
+    "pollId",
+    "external_id",
+    "uuid",
+  ]));
 }
 
-function buildSubject(row) {
-  const candidate = text(row.candidate || row.full_name);
-  if (candidate) return candidate.replaceAll(",", "");
-  return [row.office, row.state].filter(Boolean).join(" ");
+function pollAnswers(item = {}) {
+  const candidates = [
+    item.answers,
+    item.results,
+    item.responses,
+    item.choices,
+    item.options,
+  ];
+
+  const raw = candidates.find(Array.isArray) || [];
+
+  return raw
+    .map((answer) => {
+      if (typeof answer === "string") return null;
+
+      const choice = clean(firstValue(answer, [
+        "choice",
+        "answer",
+        "candidate",
+        "candidate_name",
+        "response",
+        "name",
+        "label",
+        "party",
+      ]));
+
+      const pct = toNumber(firstValue(answer, [
+        "pct",
+        "percentage",
+        "percent",
+        "value",
+        "support",
+        "share",
+      ]));
+
+      if (!choice || pct === null) return null;
+
+      return {
+        choice,
+        pct,
+        party: clean(firstValue(answer, ["party", "candidate_party"])),
+        candidate_id: clean(firstValue(answer, ["candidate_id", "candidateId", "id"])),
+      };
+    })
+    .filter(Boolean);
 }
 
-function parseAnswers(item) {
-  if (Array.isArray(item?.answers)) return item.answers;
-  if (Array.isArray(item?.results)) return item.results;
-  return [];
+function freshnessScore(dateValue) {
+  if (!dateValue) return 35;
+  const timestamp = new Date(dateValue).getTime();
+  if (!Number.isFinite(timestamp)) return 35;
+  const days = Math.max(0, (Date.now() - timestamp) / 86400000);
+  if (days <= 3) return 100;
+  if (days <= 7) return 92;
+  if (days <= 14) return 84;
+  if (days <= 30) return 72;
+  if (days <= 90) return 58;
+  if (days <= 365) return 44;
+  return 28;
 }
 
-function externalId(item, fallback) {
-  return text(item?.id || item?.poll_id || item?.url || fallback);
+function confidenceScore({ sampleSize, marginOfError, population }) {
+  let score = 65;
+  if (sampleSize >= 1500) score += 15;
+  else if (sampleSize >= 1000) score += 12;
+  else if (sampleSize >= 600) score += 8;
+  else if (sampleSize >= 300) score += 4;
+
+  if (marginOfError !== null) {
+    if (marginOfError <= 2.5) score += 10;
+    else if (marginOfError <= 3.5) score += 7;
+    else if (marginOfError <= 5) score += 3;
+  }
+
+  const pop = lower(population);
+  if (pop === "lv") score += 6;
+  else if (pop === "rv") score += 4;
+  else if (pop === "a") score += 1;
+
+  return Math.max(25, Math.min(98, score));
 }
 
-function intOrNull(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.trunc(n) : null;
-}
+export async function ensureUnifiedPollingSchema() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS polling_results (id BIGSERIAL PRIMARY KEY)`);
 
-export async function ensurePollingSignalsTable() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS polling_signals (
-      id SERIAL PRIMARY KEY,
-      source TEXT NOT NULL DEFAULT 'votehub_polling',
-      external_id TEXT,
-      poll_type TEXT,
-      pollster TEXT,
-      subject TEXT,
-      state TEXT,
-      office TEXT,
-      candidate_name TEXT,
-      candidate_id TEXT,
-      start_date DATE,
-      end_date DATE,
-      sample_size INTEGER,
-      population TEXT,
-      url TEXT,
-      answers JSONB DEFAULT '[]'::jsonb,
-      raw_payload JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
+    ALTER TABLE polling_results
+      ADD COLUMN IF NOT EXISTS dedupe_key TEXT,
+      ADD COLUMN IF NOT EXISTS poll_id TEXT,
+      ADD COLUMN IF NOT EXISTS source TEXT,
+      ADD COLUMN IF NOT EXISTS source_url TEXT,
+      ADD COLUMN IF NOT EXISTS source_dataset TEXT,
+      ADD COLUMN IF NOT EXISTS poll_type TEXT,
+      ADD COLUMN IF NOT EXISTS pollster TEXT,
+      ADD COLUMN IF NOT EXISTS sponsor TEXT,
+      ADD COLUMN IF NOT EXISTS subject TEXT,
+      ADD COLUMN IF NOT EXISTS state TEXT,
+      ADD COLUMN IF NOT EXISTS district TEXT,
+      ADD COLUMN IF NOT EXISTS office TEXT,
+      ADD COLUMN IF NOT EXISTS race_name TEXT,
+      ADD COLUMN IF NOT EXISTS candidate_name TEXT,
+      ADD COLUMN IF NOT EXISTS candidate_id TEXT,
+      ADD COLUMN IF NOT EXISTS party TEXT,
+      ADD COLUMN IF NOT EXISTS answer TEXT,
+      ADD COLUMN IF NOT EXISTS pct NUMERIC,
+      ADD COLUMN IF NOT EXISTS field_start DATE,
+      ADD COLUMN IF NOT EXISTS field_end DATE,
+      ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS sample_size INTEGER,
+      ADD COLUMN IF NOT EXISTS population TEXT,
+      ADD COLUMN IF NOT EXISTS methodology TEXT,
+      ADD COLUMN IF NOT EXISTS mode TEXT,
+      ADD COLUMN IF NOT EXISTS margin_of_error NUMERIC,
+      ADD COLUMN IF NOT EXISTS partisan TEXT,
+      ADD COLUMN IF NOT EXISTS cycle INTEGER,
+      ADD COLUMN IF NOT EXISTS election_date DATE,
+      ADD COLUMN IF NOT EXISTS record_type TEXT NOT NULL DEFAULT 'measured_poll',
+      ADD COLUMN IF NOT EXISTS is_estimate BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS confidence_score NUMERIC NOT NULL DEFAULT 75,
+      ADD COLUMN IF NOT EXISTS freshness_score NUMERIC NOT NULL DEFAULT 50,
+      ADD COLUMN IF NOT EXISTS source_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_polling_results_dedupe_key
+      ON polling_results (dedupe_key)
+      WHERE dedupe_key IS NOT NULL
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS polling_ingestion_runs (
+      id BIGSERIAL PRIMARY KEY,
+      run_key TEXT UNIQUE NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'votehub',
+      status TEXT NOT NULL DEFAULT 'running',
+      request_count INTEGER NOT NULL DEFAULT 0,
+      fetched_poll_count INTEGER NOT NULL DEFAULT 0,
+      normalized_answer_count INTEGER NOT NULL DEFAULT 0,
+      inserted_count INTEGER NOT NULL DEFAULT 0,
+      updated_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+      diagnostics JSONB NOT NULL DEFAULT '{}'::jsonb,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
     )
   `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_polling_signals_source_external
-    ON polling_signals (COALESCE(source, ''), COALESCE(external_id, ''))
-    WHERE external_id IS NOT NULL
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_polling_signals_end_date
-    ON polling_signals (end_date DESC)
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_polling_signals_state
-    ON polling_signals (state)
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_polling_signals_candidate_id
-    ON polling_signals (candidate_id)
-  `);
 }
 
-export async function getPollingIngestionTargets(limit = 8) {
-  const { rows } = await pool.query(
-    `
-      SELECT
-        external_id AS candidate_id,
-        full_name AS candidate,
-        state,
-        office,
-        party
-      FROM candidates
-      WHERE state IS NOT NULL
-        AND state <> ''
-        AND office IS NOT NULL
-        AND office <> ''
-        AND office IN ('Senate', 'House', 'Governor', 'President')
-      ORDER BY last_imported_at DESC NULLS LAST, full_name ASC
-      LIMIT $1
-    `,
-    [limit]
-  );
-
-  return (rows || []).map((row) => ({
-    candidate_id: row.candidate_id,
-    candidate: row.candidate,
-    state: stateName(row.state),
-    office: row.office,
-    party: row.party || ""
-  }));
-}
-
-export async function fetchVoteHubPolls({ subject, fromDate }) {
+export async function fetchVoteHubPolls({
+  pollType = "generic-ballot",
+  subject = "",
+  pollster = "",
+  fromDate = "",
+  limit = 500,
+} = {}) {
   const endpoint =
     process.env.VOTEHUB_POLLING_API_URL ||
     "https://api.votehub.com/polls";
 
-  try {
-    const response = await axios.get(endpoint, {
-      params: {
-        subject,
-        from_date: fromDate
-      },
-      timeout: 30000
-    });
+  const response = await axios.get(endpoint, {
+    params: {
+      ...(pollType ? { poll_type: pollType } : {}),
+      ...(subject ? { subject } : {}),
+      ...(pollster ? { pollster } : {}),
+      ...(fromDate ? { from_date: fromDate } : {}),
+      ...(limit ? { limit } : {}),
+    },
+    timeout: Number(process.env.VOTEHUB_TIMEOUT_MS || 30000),
+    headers: {
+      Accept: "application/json",
+      "User-Agent": process.env.VOTEHUB_USER_AGENT || "VoterSpheres/5.7",
+    },
+  });
 
-    if (Array.isArray(response?.data?.polls)) return response.data.polls;
-    if (Array.isArray(response?.data?.results)) return response.data.results;
-    if (Array.isArray(response?.data)) return response.data;
+  const payload = response?.data;
 
-    return [];
-  } catch (error) {
-    console.warn("Polling fetch failed:", {
-      subject,
-      message: error.message
-    });
-
-    return [];
-  }
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.polls)) return payload.polls;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
 }
 
-export async function upsertPollingSignal(input = {}) {
-  await ensurePollingSignalsTable();
+export function normalizeVoteHubPoll(item = {}, context = {}) {
+  const answers = pollAnswers(item);
+  if (!answers.length) return [];
 
-  const source = text(input.source || "votehub_polling");
-  const id = text(input.external_id || "");
-  const fallbackId = `${source}:${input.subject || ""}:${input.candidate_id || ""}:${input.end_date || ""}`;
-  const finalExternalId = id || fallbackId;
-
-  const params = [
-    source,
-    finalExternalId,
-    text(input.poll_type),
-    text(input.pollster),
-    text(input.subject),
-    text(input.state),
-    text(input.office),
-    text(input.candidate_name),
-    text(input.candidate_id),
-    input.start_date || null,
-    input.end_date || null,
-    intOrNull(input.sample_size),
-    text(input.population),
-    text(input.url),
-    JSON.stringify(input.answers || []),
-    JSON.stringify(input.raw_payload || {})
-  ];
-
-  const existing = await pool.query(
-    `
-      SELECT id
-      FROM polling_signals
-      WHERE COALESCE(source, '') = COALESCE($1, '')
-        AND COALESCE(external_id, '') = COALESCE($2, '')
-      LIMIT 1
-    `,
-    [source, finalExternalId]
+  const pollId = sourcePollId(item) || sha256(JSON.stringify(item)).slice(0, 24);
+  const pollType = normalizePollType(
+    firstValue(item, ["poll_type", "pollType", "type"]) || context.pollType
   );
+  const pollster = clean(firstValue(item, ["pollster", "pollster_name", "organization", "firm"]));
+  const sponsorValue = firstValue(item, ["sponsors", "sponsor", "sponsor_name"]);
+  const sponsor = Array.isArray(sponsorValue)
+    ? sponsorValue.map((value) => clean(value?.name || value)).filter(Boolean).join(", ")
+    : clean(sponsorValue);
+  const subjectValue = firstValue(item, ["subject", "subject_name", "cycle"]);
+  const subject = typeof subjectValue === "object"
+    ? clean(subjectValue?.name || subjectValue?.title || subjectValue?.id)
+    : clean(subjectValue || context.subject);
+  const state = normalizeState(firstValue(item, ["state", "state_code", "location"]) || context.state || "US");
+  const office = clean(firstValue(item, ["office", "office_type", "race_type"]) || context.office || pollType);
+  const raceName = clean(firstValue(item, ["seat_name", "race_name", "question", "question_text"]) || `${state} ${office}`);
+  const district = clean(firstValue(item, ["district", "district_number"]));
+  const fieldStart = normalizeDate(firstValue(item, ["start_date", "field_start", "startDate"]));
+  const fieldEnd = normalizeDate(firstValue(item, ["end_date", "field_end", "endDate", "date"]));
+  const publishedAt = normalizeTimestamp(firstValue(item, ["published_at", "created_at", "updated_at"])) ||
+    (fieldEnd ? `${fieldEnd}T12:00:00.000Z` : null);
+  const sampleSize = toInteger(firstValue(item, ["sample_size", "sample", "n"]));
+  const population = clean(firstValue(item, ["population", "population_type"]));
+  const marginOfError = toNumber(firstValue(item, ["margin_of_error", "moe"]));
+  const methodology = clean(firstValue(item, ["methodology", "method", "notes"]));
+  const mode = clean(firstValue(item, ["mode", "survey_mode"]));
+  const partisan = clean(firstValue(item, ["partisan", "partisanship"]));
+  const sourceUrl = clean(firstValue(item, ["url", "source_url", "link"]));
+  const cycle = toInteger(firstValue(item, ["cycle", "election_year", "year"]));
+  const electionDate = normalizeDate(firstValue(item, ["election_date", "electionDate"]));
 
-  if (existing.rows.length) {
-    await pool.query(
-      `
-        UPDATE polling_signals
-        SET
-          poll_type = $3,
-          pollster = $4,
-          subject = $5,
-          state = $6,
-          office = $7,
-          candidate_name = $8,
-          candidate_id = $9,
-          start_date = $10,
-          end_date = $11,
-          sample_size = $12,
-          population = $13,
-          url = $14,
-          answers = $15::jsonb,
-          raw_payload = $16::jsonb,
-          updated_at = NOW()
-        WHERE COALESCE(source, '') = COALESCE($1, '')
-          AND COALESCE(external_id, '') = COALESCE($2, '')
-      `,
-      params
-    );
+  return answers.map((answer) => {
+    const dedupeKey = sha256([
+      "votehub",
+      pollId,
+      answer.choice,
+      state,
+      fieldEnd,
+      pollType,
+    ].join("|"));
 
-    return "updated";
-  }
+    return {
+      dedupe_key: dedupeKey,
+      poll_id: pollId,
+      source: "VoteHub",
+      source_url: sourceUrl || null,
+      source_dataset: "votehub-polling-api",
+      poll_type: pollType,
+      pollster: pollster || "Unknown",
+      sponsor: sponsor || null,
+      subject: subject || null,
+      state,
+      district: district || null,
+      office,
+      race_name: raceName,
+      candidate_name: answer.choice,
+      candidate_id: answer.candidate_id || null,
+      party: answer.party || null,
+      answer: answer.choice,
+      pct: answer.pct,
+      field_start: fieldStart,
+      field_end: fieldEnd,
+      published_at: publishedAt,
+      sample_size: sampleSize,
+      population: population || null,
+      methodology: methodology || null,
+      mode: mode || null,
+      margin_of_error: marginOfError,
+      partisan: partisan || null,
+      cycle,
+      election_date: electionDate,
+      record_type: "measured_poll",
+      is_estimate: false,
+      confidence_score: confidenceScore({ sampleSize, marginOfError, population }),
+      freshness_score: freshnessScore(fieldEnd || publishedAt),
+      source_payload: item,
+    };
+  });
+}
 
-  await pool.query(
+export async function upsertPollingResult(row = {}) {
+  await ensureUnifiedPollingSchema();
+
+  const result = await pool.query(
     `
-      INSERT INTO polling_signals (
-        source,
-        external_id,
-        poll_type,
-        pollster,
-        subject,
-        state,
-        office,
-        candidate_name,
-        candidate_id,
-        start_date,
-        end_date,
-        sample_size,
-        population,
-        url,
-        answers,
-        raw_payload,
-        created_at,
-        updated_at
+      INSERT INTO polling_results (
+        dedupe_key, poll_id, source, source_url, source_dataset,
+        poll_type, pollster, sponsor, subject, state,
+        district, office, race_name, candidate_name, candidate_id,
+        party, answer, pct, field_start, field_end,
+        published_at, sample_size, population, methodology, mode,
+        margin_of_error, partisan, cycle, election_date, record_type,
+        is_estimate, confidence_score, freshness_score, source_payload,
+        ingested_at, created_at, updated_at
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,NOW(),NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
+        $31,$32,$33,$34::jsonb,NOW(),NOW(),NOW()
       )
+      ON CONFLICT (dedupe_key)
+      WHERE dedupe_key IS NOT NULL
+      DO UPDATE SET
+        poll_id = EXCLUDED.poll_id,
+        source = EXCLUDED.source,
+        source_url = EXCLUDED.source_url,
+        source_dataset = EXCLUDED.source_dataset,
+        poll_type = EXCLUDED.poll_type,
+        pollster = EXCLUDED.pollster,
+        sponsor = EXCLUDED.sponsor,
+        subject = EXCLUDED.subject,
+        state = EXCLUDED.state,
+        district = EXCLUDED.district,
+        office = EXCLUDED.office,
+        race_name = EXCLUDED.race_name,
+        candidate_name = EXCLUDED.candidate_name,
+        candidate_id = EXCLUDED.candidate_id,
+        party = EXCLUDED.party,
+        answer = EXCLUDED.answer,
+        pct = EXCLUDED.pct,
+        field_start = EXCLUDED.field_start,
+        field_end = EXCLUDED.field_end,
+        published_at = EXCLUDED.published_at,
+        sample_size = EXCLUDED.sample_size,
+        population = EXCLUDED.population,
+        methodology = EXCLUDED.methodology,
+        mode = EXCLUDED.mode,
+        margin_of_error = EXCLUDED.margin_of_error,
+        partisan = EXCLUDED.partisan,
+        cycle = EXCLUDED.cycle,
+        election_date = EXCLUDED.election_date,
+        record_type = EXCLUDED.record_type,
+        is_estimate = EXCLUDED.is_estimate,
+        confidence_score = EXCLUDED.confidence_score,
+        freshness_score = EXCLUDED.freshness_score,
+        source_payload = EXCLUDED.source_payload,
+        ingested_at = NOW(),
+        updated_at = NOW()
+      RETURNING (xmax = 0) AS inserted
     `,
-    params
+    [
+      row.dedupe_key, row.poll_id, row.source, row.source_url, row.source_dataset,
+      row.poll_type, row.pollster, row.sponsor, row.subject, row.state,
+      row.district, row.office, row.race_name, row.candidate_name, row.candidate_id,
+      row.party, row.answer, row.pct, row.field_start, row.field_end,
+      row.published_at, row.sample_size, row.population, row.methodology, row.mode,
+      row.margin_of_error, row.partisan, row.cycle, row.election_date, row.record_type,
+      row.is_estimate, row.confidence_score, row.freshness_score,
+      JSON.stringify(row.source_payload || {}),
+    ]
   );
 
-  return "inserted";
+  return result.rows[0]?.inserted ? "inserted" : "updated";
 }
 
-export async function ingestPollingSignals(limit = 8) {
-  await ensurePollingSignalsTable();
+export async function ingestPollingSignals(options = {}) {
+  await ensureUnifiedPollingSchema();
 
-  const targets = await getPollingIngestionTargets(limit);
-  const fromDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const normalizedOptions = typeof options === "number"
+    ? { limit: options }
+    : options || {};
 
-  let seen = 0;
-  let inserted = 0;
-  let updated = 0;
+  const pollTypes = Array.isArray(normalizedOptions.pollTypes)
+    ? normalizedOptions.pollTypes
+    : clean(normalizedOptions.pollType)
+      ? [normalizedOptions.pollType]
+      : clean(process.env.VOTEHUB_POLL_TYPES || "generic-ballot,approval,favorability,president,senate,governor,house")
+          .split(",")
+          .map((value) => clean(value))
+          .filter(Boolean);
 
-  for (const row of targets) {
-    const subject = buildSubject(row);
-    if (!subject) continue;
+  const runKey = `votehub-${Date.now()}-${crypto.randomUUID()}`;
+  await pool.query(
+    `INSERT INTO polling_ingestion_runs (run_key, provider, status, request_count) VALUES ($1, 'votehub', 'running', $2)`,
+    [runKey, pollTypes.length]
+  );
 
-    const polls = await fetchVoteHubPolls({ subject, fromDate });
+  let fetchedPollCount = 0;
+  let normalizedAnswerCount = 0;
+  let insertedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  const errors = [];
+  const diagnostics = [];
 
-    for (const item of polls) {
-      seen += 1;
+  for (const pollType of pollTypes) {
+    const startedAt = Date.now();
 
-      const result = await upsertPollingSignal({
-        external_id: externalId(item, `${subject}:${item?.end_date || item?.date || ""}`),
-        poll_type: item?.poll_type || item?.type || "",
-        pollster: item?.pollster || item?.sponsor || "",
-        subject: item?.subject || subject,
-        state: row.state,
-        office: row.office,
-        candidate_name: row.candidate,
-        candidate_id: row.candidate_id,
-        start_date: item?.start_date || item?.field_start || null,
-        end_date: item?.end_date || item?.field_end || item?.date || null,
-        sample_size: item?.sample_size || item?.n || null,
-        population: item?.population || "",
-        url: item?.url || "",
-        answers: parseAnswers(item),
-        raw_payload: item
+    try {
+      const polls = await fetchVoteHubPolls({
+        pollType,
+        subject: normalizedOptions.subject || "",
+        pollster: normalizedOptions.pollster || "",
+        fromDate: normalizedOptions.fromDate || "",
+        limit: normalizedOptions.limit || 500,
       });
 
-      if (result === "inserted") inserted += 1;
-      if (result === "updated") updated += 1;
+      fetchedPollCount += polls.length;
+      let sourceNormalized = 0;
+
+      for (const item of polls) {
+        const rows = normalizeVoteHubPoll(item, {
+          pollType,
+          subject: normalizedOptions.subject,
+          state: normalizedOptions.state,
+          office: normalizedOptions.office,
+        });
+
+        if (!rows.length) {
+          skippedCount += 1;
+          continue;
+        }
+
+        sourceNormalized += rows.length;
+        normalizedAnswerCount += rows.length;
+
+        for (const row of rows) {
+          const action = await upsertPollingResult(row);
+          if (action === "inserted") insertedCount += 1;
+          else updatedCount += 1;
+        }
+      }
+
+      diagnostics.push({
+        poll_type: pollType,
+        ok: true,
+        fetched_polls: polls.length,
+        normalized_answers: sourceNormalized,
+        latency_ms: Date.now() - startedAt,
+      });
+    } catch (error) {
+      errors.push({ poll_type: pollType, message: error.message });
+      diagnostics.push({
+        poll_type: pollType,
+        ok: false,
+        fetched_polls: 0,
+        normalized_answers: 0,
+        latency_ms: Date.now() - startedAt,
+        error: error.message,
+      });
     }
   }
 
+  const storedCount = insertedCount + updatedCount;
+  const status = storedCount > 0 && errors.length === 0
+    ? "complete"
+    : storedCount > 0
+      ? "degraded"
+      : "failed";
+
+  await pool.query(
+    `
+      UPDATE polling_ingestion_runs
+      SET status = $2,
+          fetched_poll_count = $3,
+          normalized_answer_count = $4,
+          inserted_count = $5,
+          updated_count = $6,
+          skipped_count = $7,
+          errors = $8::jsonb,
+          diagnostics = $9::jsonb,
+          completed_at = NOW()
+      WHERE run_key = $1
+    `,
+    [
+      runKey,
+      status,
+      fetchedPollCount,
+      normalizedAnswerCount,
+      insertedCount,
+      updatedCount,
+      skippedCount,
+      JSON.stringify(errors),
+      JSON.stringify({ sources: diagnostics }),
+    ]
+  );
+
   return {
-    success: true,
+    ok: storedCount > 0,
+    success: storedCount > 0,
+    build: "5.7.0",
     source: "votehub_polling",
-    targets: targets.length,
-    seen,
-    inserted,
-    updated
+    run_key: runKey,
+    status,
+    requests: pollTypes.length,
+    fetched_polls: fetchedPollCount,
+    normalized_answers: normalizedAnswerCount,
+    inserted: insertedCount,
+    updated: updatedCount,
+    skipped: skippedCount,
+    errors,
+    diagnostics,
+    completed_at: new Date().toISOString(),
   };
 }
 
 export async function getRecentPollingSignals(limit = 10) {
-  await ensurePollingSignalsTable();
+  await ensureUnifiedPollingSchema();
 
-  const { rows } = await pool.query(
+  const result = await pool.query(
     `
       SELECT
-        id,
+        poll_id AS external_id,
         source,
-        external_id,
         poll_type,
         pollster,
         subject,
@@ -321,31 +575,109 @@ export async function getRecentPollingSignals(limit = 10) {
         office,
         candidate_name,
         candidate_id,
-        start_date,
-        end_date,
+        field_start AS start_date,
+        field_end AS end_date,
         sample_size,
         population,
-        url,
-        answers,
-        raw_payload,
+        source_url AS url,
+        jsonb_build_array(
+          jsonb_build_object('choice', answer, 'pct', pct)
+        ) AS answers,
+        source_payload AS raw_payload,
         created_at,
         updated_at
-      FROM polling_signals
-      ORDER BY COALESCE(end_date::timestamp, updated_at, created_at) DESC, id DESC
+      FROM polling_results
+      ORDER BY COALESCE(field_end, published_at::date, updated_at::date) DESC NULLS LAST
       LIMIT $1
     `,
-    [limit]
+    [Math.max(1, Math.min(Number(limit) || 10, 500))]
   );
 
-  return rows || [];
+  return result.rows;
 }
 
-/*
-  Compatibility aliases.
-  These prevent Render from crashing if another file imports older names.
-*/
-export async function ingestPolling(limit = 8) {
-  return ingestPollingSignals(limit);
+export async function migrateLegacyPollingSignals() {
+  await ensureUnifiedPollingSchema();
+
+  const exists = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'polling_signals'
+    ) AS exists
+  `);
+
+  if (!exists.rows[0]?.exists) {
+    return { ok: true, migrated: 0, reason: "polling_signals table does not exist" };
+  }
+
+  const legacy = await pool.query(`SELECT * FROM polling_signals ORDER BY id`);
+  let migrated = 0;
+
+  for (const item of legacy.rows) {
+    const sourcePayload = item.raw_payload || {};
+    const answers = Array.isArray(item.answers) ? item.answers : [];
+    const normalized = normalizeVoteHubPoll(
+      {
+        ...sourcePayload,
+        id: item.external_id,
+        poll_type: item.poll_type,
+        pollster: item.pollster,
+        subject: item.subject,
+        state: item.state,
+        office: item.office,
+        start_date: item.start_date,
+        end_date: item.end_date,
+        sample_size: item.sample_size,
+        population: item.population,
+        url: item.url,
+        answers,
+      },
+      {}
+    );
+
+    for (const row of normalized) {
+      await upsertPollingResult(row);
+      migrated += 1;
+    }
+  }
+
+  return { ok: true, migrated };
+}
+
+// Compatibility aliases for older imports.
+export async function ensurePollingSignalsTable() {
+  return ensureUnifiedPollingSchema();
+}
+
+export async function upsertPollingSignal(input = {}) {
+  const normalized = normalizeVoteHubPoll(
+    {
+      id: input.external_id,
+      poll_type: input.poll_type,
+      pollster: input.pollster,
+      subject: input.subject,
+      state: input.state,
+      office: input.office,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      sample_size: input.sample_size,
+      population: input.population,
+      url: input.url,
+      answers: input.answers,
+      ...input.raw_payload,
+    },
+    {}
+  );
+
+  if (!normalized.length) return "skipped";
+
+  let lastAction = "skipped";
+  for (const row of normalized) lastAction = await upsertPollingResult(row);
+  return lastAction;
+}
+
+export async function ingestPolling(options = {}) {
+  return ingestPollingSignals(options);
 }
 
 export async function getRecentPolling(limit = 10) {
@@ -353,12 +685,15 @@ export async function getRecentPolling(limit = 10) {
 }
 
 export default {
+  ensureUnifiedPollingSchema,
   ensurePollingSignalsTable,
-  getPollingIngestionTargets,
   fetchVoteHubPolls,
+  normalizeVoteHubPoll,
+  upsertPollingResult,
   upsertPollingSignal,
   ingestPollingSignals,
-  getRecentPollingSignals,
   ingestPolling,
-  getRecentPolling
+  getRecentPollingSignals,
+  getRecentPolling,
+  migrateLegacyPollingSignals,
 };
