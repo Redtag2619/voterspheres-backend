@@ -1,4 +1,3 @@
-
 import {
   runPollingIntelligenceIngestion,
 } from "../services/pollingIntelligence.service.js";
@@ -11,7 +10,7 @@ export async function runPollingIntelligenceJob(options = {}) {
     return {
       ok: false,
       skipped: true,
-      reason: "Polling Intelligence ingestion is already running.",
+      reason: "Unified polling ingestion is already running.",
       last_result: lastResult,
     };
   }
@@ -20,34 +19,14 @@ export async function runPollingIntelligenceJob(options = {}) {
 
   try {
     lastResult = await runPollingIntelligenceIngestion({
-      includeHistorical:
-        options.includeHistorical ??
-        String(process.env.POLLING_INCLUDE_HISTORICAL || "false").toLowerCase() === "true",
-
-      generateEstimates:
-        options.generateEstimates ??
-        String(process.env.POLLING_GENERATE_ESTIMATES || "true").toLowerCase() !== "false",
-
-      estimateCycle:
-        Number(
-          options.estimateCycle ||
-          process.env.POLLING_ESTIMATE_CYCLE ||
-          new Date().getFullYear()
-        ),
-
-      lookbackDays:
-        Number(
-          options.lookbackDays ||
-          process.env.POLLING_LOOKBACK_DAYS ||
-          730
-        ),
-
-      retentionDays:
-        Number(
-          options.retentionDays ||
-          process.env.POLLING_RETENTION_DAYS ||
-          3650
-        ),
+      pollTypes: options.pollTypes,
+      pollType: options.pollType,
+      subject: options.subject,
+      pollster: options.pollster,
+      state: options.state,
+      office: options.office,
+      fromDate: options.fromDate,
+      limit: Number(options.limit || process.env.VOTEHUB_SYNC_LIMIT || 500),
     });
 
     return lastResult;
@@ -66,3 +45,4 @@ export function getPollingIntelligenceJobStatus() {
 }
 
 export default runPollingIntelligenceJob;
+
