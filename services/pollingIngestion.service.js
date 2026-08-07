@@ -129,19 +129,31 @@ const inferStateFromSubject = (subject = "") => {
 
   if (!text) return null;
 
-  // Prefer full state names, longest first, so compound names such as
-  // NORTH CAROLINA are resolved before shorter potential matches.
+  // VoteHub subjects commonly look like:
+  // "2026 Iowa"
+  // "2026 North Carolina"
+  // "2026 Michigan"
+  // Strip a leading election year before matching.
+  const withoutYear = text
+    .replace(/^(19|20)\d{2}\s+/, "")
+    .trim();
+
+  if (STATE_NAME_TO_CODE[withoutYear]) {
+    return STATE_NAME_TO_CODE[withoutYear];
+  }
+
+  // Fallback for subjects containing additional race text.
   const stateNames = Object.keys(STATE_NAME_TO_CODE)
     .filter((name) => name.length > 2)
     .sort((a, b) => b.length - a.length);
 
   for (const stateName of stateNames) {
-    const pattern = new RegExp(
-      `(?:^|[^A-Z])${stateName.replace(/\s+/g, "\\s+")}(?:$|[^A-Z])`,
-      "i"
-    );
-
-    if (pattern.test(text)) {
+    if (
+      withoutYear === stateName ||
+      withoutYear.startsWith(`${stateName} `) ||
+      withoutYear.endsWith(` ${stateName}`) ||
+      withoutYear.includes(` ${stateName} `)
+    ) {
       return STATE_NAME_TO_CODE[stateName];
     }
   }
