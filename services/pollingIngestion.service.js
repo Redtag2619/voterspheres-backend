@@ -1393,4 +1393,3 @@ export default {
   migrateLegacyPollingSignals,
 
 };
-
