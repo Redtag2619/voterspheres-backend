@@ -88,11 +88,13 @@ const STATE_NAME_TO_CODE = {
   WISCONSIN: "WI",
   WYOMING: "WY",
   "DISTRICT OF COLUMBIA": "DC",
-  DC: "DC",
 };
 
 const STATE_CODE_TO_NAME = Object.fromEntries(
-  Object.entries(STATE_NAME_TO_CODE).map(([name, code]) => [code, name])
+  Object.entries(STATE_NAME_TO_CODE).map(([name, code]) => [
+    code,
+    name,
+  ])
 );
 
 const normalizeState = (value = "") => {
@@ -114,9 +116,13 @@ const normalizeState = (value = "") => {
     return "US";
   }
 
-  if (STATE_CODE_TO_NAME[next]) return next;
+  if (STATE_CODE_TO_NAME[next]) {
+    return next;
+  }
 
-  if (STATE_NAME_TO_CODE[next]) return STATE_NAME_TO_CODE[next];
+  if (STATE_NAME_TO_CODE[next]) {
+    return STATE_NAME_TO_CODE[next];
+  }
 
   return null;
 };
@@ -127,13 +133,10 @@ const inferStateFromSubject = (subject = "") => {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
-  // VoteHub subjects commonly look like:
-  // "2026 Iowa"
-  // "2026 North Carolina"
-  // "2026 Michigan"
-  // Strip a leading election year before matching.
   const withoutYear = text
     .replace(/^(19|20)\d{2}\s+/, "")
     .trim();
@@ -142,9 +145,7 @@ const inferStateFromSubject = (subject = "") => {
     return STATE_NAME_TO_CODE[withoutYear];
   }
 
-  // Fallback for subjects containing additional race text.
   const stateNames = Object.keys(STATE_NAME_TO_CODE)
-    .filter((name) => name.length > 2)
     .sort((a, b) => b.length - a.length);
 
   for (const stateName of stateNames) {
@@ -164,15 +165,46 @@ const inferStateFromSubject = (subject = "") => {
 const stateDisplayName = (state = "") => {
   const code = normalizeState(state);
 
-  if (!code || code === "US") return "U.S.";
+  if (!code || code === "US") {
+    return "U.S.";
+  }
 
   const name = STATE_CODE_TO_NAME[code];
 
-  if (!name) return code;
+  if (!name) {
+    return code;
+  }
 
   return name
     .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase()
+    );
+};
+ 
+
+const normalizePollType = (value = "") => {
+
+  const next = lower(value).replace(/_/g, "-").replace(/\s+/g, "-");
+
+  if (!next) return "unknown";
+
+  if (next.includes("generic") && next.includes("ballot")) return "generic-ballot";
+
+  if (next.includes("approval")) return "approval";
+
+  if (next.includes("favor")) return "favorability";
+
+  if (next.includes("president")) return "president";
+
+  if (next.includes("senate")) return "senate";
+
+  if (next.includes("governor")) return "governor";
+
+  if (next.includes("house")) return "house";
+
+  return next;
+
 };
 
 const buildRaceName = ({
@@ -184,11 +216,15 @@ const buildRaceName = ({
 } = {}) => {
   const supplied = clean(suppliedRaceName);
 
-  // Preserve a real provider-supplied race/seat/question label.
-  if (supplied) return supplied;
+  if (supplied) {
+    return supplied;
+  }
 
   const geography = stateDisplayName(state);
-  const normalizedType = normalizePollType(pollType || office);
+  const normalizedType = normalizePollType(
+    pollType || office
+  );
+
   const normalizedOffice = lower(office);
 
   if (
@@ -242,34 +278,13 @@ const buildRaceName = ({
       : `${geography} Favorability`;
   }
 
-  return clean(`${geography} ${office || pollType || "Polling"}`);
+  return clean(
+    `${geography} ${office || pollType || "Polling"}`
+  );
 };
 
- const normalizePollType = (value = "") => {
 
-  const next = lower(value).replace(/_/g, "-").replace(/\s+/g, "-");
-
-  if (!next) return "unknown";
-
-  if (next.includes("generic") && next.includes("ballot")) return "generic-ballot";
-
-  if (next.includes("approval")) return "approval";
-
-  if (next.includes("favor")) return "favorability";
-
-  if (next.includes("president")) return "president";
-
-  if (next.includes("senate")) return "senate";
-
-  if (next.includes("governor")) return "governor";
-
-  if (next.includes("house")) return "house";
-
-  return next;
-
-};
-
- const normalizeDate = (value) => {
+const normalizeDate = (value) => {
 
   if (!value) return null;
 
@@ -283,6 +298,8 @@ const buildRaceName = ({
 
 };
 
+ 
+
 const normalizeTimestamp = (value) => {
 
   if (!value) return null;
@@ -293,9 +310,13 @@ const normalizeTimestamp = (value) => {
 
 };
 
+ 
+
 const sha256 = (value) =>
 
   crypto.createHash("sha256").update(String(value)).digest("hex");
+
+ 
 
 function firstValue(object = {}, keys = []) {
 
@@ -311,7 +332,9 @@ function firstValue(object = {}, keys = []) {
 
 }
 
- function sourcePollId(item = {}) {
+ 
+
+function sourcePollId(item = {}) {
 
   return clean(firstValue(item, [
 
@@ -329,6 +352,8 @@ function firstValue(object = {}, keys = []) {
 
 }
 
+ 
+
 function pollAnswers(item = {}) {
 
   const candidates = [
@@ -345,7 +370,11 @@ function pollAnswers(item = {}) {
 
   ];
 
+ 
+
   const raw = candidates.find(Array.isArray) || [];
+
+ 
 
   return raw
 
@@ -353,7 +382,9 @@ function pollAnswers(item = {}) {
 
       if (typeof answer === "string") return null;
 
-       const choice = clean(firstValue(answer, [
+ 
+
+      const choice = clean(firstValue(answer, [
 
         "choice",
 
@@ -373,7 +404,9 @@ function pollAnswers(item = {}) {
 
       ]));
 
-       const pct = toNumber(firstValue(answer, [
+ 
+
+      const pct = toNumber(firstValue(answer, [
 
         "pct",
 
@@ -389,9 +422,13 @@ function pollAnswers(item = {}) {
 
       ]));
 
-       if (!choice || pct === null) return null;
+ 
 
-       return {
+      if (!choice || pct === null) return null;
+
+ 
+
+      return {
 
         choice,
 
@@ -408,6 +445,8 @@ function pollAnswers(item = {}) {
     .filter(Boolean);
 
 }
+
+ 
 
 function freshnessScore(dateValue) {
 
@@ -435,6 +474,8 @@ function freshnessScore(dateValue) {
 
 }
 
+ 
+
 function confidenceScore({ sampleSize, marginOfError, population }) {
 
   let score = 65;
@@ -447,15 +488,19 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
   else if (sampleSize >= 300) score += 4;
 
+ 
+
   if (marginOfError !== null) {
 
-  if (marginOfError <= 2.5) score += 10;
+    if (marginOfError <= 2.5) score += 10;
 
     else if (marginOfError <= 3.5) score += 7;
 
     else if (marginOfError <= 5) score += 3;
 
   }
+
+ 
 
   const pop = lower(population);
 
@@ -465,15 +510,21 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
   else if (pop === "a") score += 1;
 
-   return Math.max(25, Math.min(98, score));
+ 
+
+  return Math.max(25, Math.min(98, score));
 
 }
 
- export async function ensureUnifiedPollingSchema() {
+ 
+
+export async function ensureUnifiedPollingSchema() {
 
   await pool.query(`CREATE TABLE IF NOT EXISTS polling_results (id BIGSERIAL PRIMARY KEY)`);
 
-   await pool.query(`
+ 
+
+  await pool.query(`
 
     ALTER TABLE polling_results
 
@@ -553,7 +604,9 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
   `);
 
-   await pool.query(`
+ 
+
+  await pool.query(`
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_polling_results_dedupe_key
 
@@ -563,7 +616,9 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
   `);
 
-   await pool.query(`
+ 
+
+  await pool.query(`
 
     CREATE TABLE IF NOT EXISTS polling_ingestion_runs (
 
@@ -601,7 +656,9 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
 }
 
- export async function fetchVoteHubPolls({
+ 
+
+export async function fetchVoteHubPolls({
 
   pollType = "",
 
@@ -620,6 +677,8 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
     process.env.VOTEHUB_POLLING_API_URL ||
 
     "https://api.votehub.com/polls";
+
+ 
 
   const response = await axios.get(endpoint, {
 
@@ -649,9 +708,13 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
   });
 
-   const payload = response?.data;
+ 
 
-   if (Array.isArray(payload)) return payload;
+  const payload = response?.data;
+
+ 
+
+  if (Array.isArray(payload)) return payload;
 
   if (Array.isArray(payload?.polls)) return payload.polls;
 
@@ -665,11 +728,15 @@ function confidenceScore({ sampleSize, marginOfError, population }) {
 
 }
 
+ 
+
 export function normalizeVoteHubPoll(item = {}, context = {}) {
 
   const answers = pollAnswers(item);
 
   if (!answers.length) return [];
+
+ 
 
   const pollId = sourcePollId(item) || sha256(JSON.stringify(item)).slice(0, 24);
 
@@ -697,27 +764,39 @@ export function normalizeVoteHubPoll(item = {}, context = {}) {
 
     : clean(subjectValue || context.subject);
 
- const explicitState =
-  normalizeState(
-    firstValue(item, ["state", "state_code", "location"]) ||
-    context.state
-  );
+  const explicitState = normalizeState(
+  firstValue(item, [
+    "state",
+    "state_code",
+    "location",
+  ]) || context.state
+);
 
-const inferredState = inferStateFromSubject(subject);
+const inferredState =
+  inferStateFromSubject(subject);
 
 const state =
   explicitState && explicitState !== "US"
     ? explicitState
-    : inferredState || explicitState || "US";
+    : inferredState ||
+      explicitState ||
+      "US";
 
 const office = clean(
-  firstValue(item, ["office", "office_type", "race_type"]) ||
-  context.office ||
-  pollType
+  firstValue(item, [
+    "office",
+    "office_type",
+    "race_type",
+  ]) ||
+    context.office ||
+    pollType
 );
 
 const district = clean(
-  firstValue(item, ["district", "district_number"])
+  firstValue(item, [
+    "district",
+    "district_number",
+  ])
 );
 
 const suppliedRaceName = firstValue(item, [
@@ -734,7 +813,7 @@ const raceName = buildRaceName({
   district,
   suppliedRaceName,
 });
- 
+
   const fieldStart = normalizeDate(firstValue(item, ["start_date", "field_start", "startDate"]));
 
   const fieldEnd = normalizeDate(firstValue(item, ["end_date", "field_end", "endDate", "date"]));
@@ -761,7 +840,9 @@ const raceName = buildRaceName({
 
   const electionDate = normalizeDate(firstValue(item, ["election_date", "electionDate"]));
 
-   return answers.map((answer) => {
+ 
+
+  return answers.map((answer) => {
 
     const dedupeKey = sha256([
 
@@ -778,6 +859,8 @@ const raceName = buildRaceName({
       pollType,
 
     ].join("|"));
+
+ 
 
     return {
 
@@ -855,13 +938,18 @@ const raceName = buildRaceName({
 
 }
 
+ 
+
 export async function upsertPollingResult(row = {}) {
 
   await ensureUnifiedPollingSchema();
 
+ 
+
   const result = await pool.query(
 
     `
+
       INSERT INTO polling_results (
 
         dedupe_key, poll_id, source, source_url, source_dataset,
@@ -996,13 +1084,19 @@ export async function upsertPollingResult(row = {}) {
 
   );
 
-   return result.rows[0]?.inserted ? "inserted" : "updated";
+ 
+
+  return result.rows[0]?.inserted ? "inserted" : "updated";
 
 }
+
+ 
 
 export async function ingestPollingSignals(options = {}) {
 
   await ensureUnifiedPollingSchema();
+
+ 
 
   const normalizedOptions = typeof options === "number"
 
@@ -1010,7 +1104,9 @@ export async function ingestPollingSignals(options = {}) {
 
     : options || {};
 
-   const pollTypes = Array.isArray(normalizedOptions.pollTypes)
+ 
+
+  const pollTypes = Array.isArray(normalizedOptions.pollTypes)
 
     ? normalizedOptions.pollTypes
 
@@ -1024,7 +1120,9 @@ export async function ingestPollingSignals(options = {}) {
 
       : [""];
 
-   const runKey = `votehub-${Date.now()}-${crypto.randomUUID()}`;
+ 
+
+  const runKey = `votehub-${Date.now()}-${crypto.randomUUID()}`;
 
   await pool.query(
 
@@ -1033,6 +1131,8 @@ export async function ingestPollingSignals(options = {}) {
     [runKey, pollTypes.length]
 
   );
+
+ 
 
   let fetchedPollCount = 0;
 
@@ -1048,11 +1148,15 @@ export async function ingestPollingSignals(options = {}) {
 
   const diagnostics = [];
 
+ 
+
   for (const pollType of pollTypes) {
 
     const startedAt = Date.now();
 
-     try {
+ 
+
+    try {
 
       const polls = await fetchVoteHubPolls({
 
@@ -1068,11 +1172,15 @@ export async function ingestPollingSignals(options = {}) {
 
       });
 
-       fetchedPollCount += polls.length;
+ 
+
+      fetchedPollCount += polls.length;
 
       let sourceNormalized = 0;
 
-       for (const item of polls) {
+ 
+
+      for (const item of polls) {
 
         const rows = normalizeVoteHubPoll(item, {
 
@@ -1086,7 +1194,9 @@ export async function ingestPollingSignals(options = {}) {
 
         });
 
-         if (!rows.length) {
+ 
+
+        if (!rows.length) {
 
           skippedCount += 1;
 
@@ -1094,11 +1204,15 @@ export async function ingestPollingSignals(options = {}) {
 
         }
 
-         sourceNormalized += rows.length;
+ 
+
+        sourceNormalized += rows.length;
 
         normalizedAnswerCount += rows.length;
 
-         for (const row of rows) {
+ 
+
+        for (const row of rows) {
 
           const action = await upsertPollingResult(row);
 
@@ -1110,7 +1224,9 @@ export async function ingestPollingSignals(options = {}) {
 
       }
 
-       diagnostics.push({
+ 
+
+      diagnostics.push({
 
         poll_type: pollType || "all",
 
@@ -1148,6 +1264,8 @@ export async function ingestPollingSignals(options = {}) {
 
   }
 
+ 
+
   const storedCount = insertedCount + updatedCount;
 
   const status = storedCount > 0 && errors.length === 0
@@ -1160,9 +1278,12 @@ export async function ingestPollingSignals(options = {}) {
 
       : "failed";
 
+ 
+
   await pool.query(
 
     `
+
       UPDATE polling_ingestion_runs
 
       SET status = $2,
@@ -1211,6 +1332,8 @@ export async function ingestPollingSignals(options = {}) {
 
   );
 
+ 
+
   return {
 
     ok: storedCount > 0,
@@ -1247,13 +1370,18 @@ export async function ingestPollingSignals(options = {}) {
 
 }
 
+ 
+
 export async function getRecentPollingSignals(limit = 10) {
 
   await ensureUnifiedPollingSchema();
 
+ 
+
   const result = await pool.query(
 
     `
+
       SELECT
 
         poll_id AS external_id,
@@ -1308,13 +1436,19 @@ export async function getRecentPollingSignals(limit = 10) {
 
   );
 
-   return result.rows;
+ 
+
+  return result.rows;
 
 }
+
+ 
 
 export async function migrateLegacyPollingSignals() {
 
   await ensureUnifiedPollingSchema();
+
+ 
 
   const exists = await pool.query(`
 
@@ -1328,15 +1462,21 @@ export async function migrateLegacyPollingSignals() {
 
   `);
 
+ 
+
   if (!exists.rows[0]?.exists) {
 
     return { ok: true, migrated: 0, reason: "polling_signals table does not exist" };
 
   }
 
+ 
+
   const legacy = await pool.query(`SELECT * FROM polling_signals ORDER BY id`);
 
   let migrated = 0;
+
+ 
 
   for (const item of legacy.rows) {
 
@@ -1380,7 +1520,9 @@ export async function migrateLegacyPollingSignals() {
 
     );
 
-     for (const row of normalized) {
+ 
+
+    for (const row of normalized) {
 
       await upsertPollingResult(row);
 
@@ -1390,9 +1532,13 @@ export async function migrateLegacyPollingSignals() {
 
   }
 
+ 
+
   return { ok: true, migrated };
 
 }
+
+ 
 
 // Compatibility aliases for older imports.
 
@@ -1401,6 +1547,8 @@ export async function ensurePollingSignalsTable() {
   return ensureUnifiedPollingSchema();
 
 }
+
+ 
 
 export async function upsertPollingSignal(input = {}) {
 
@@ -1440,7 +1588,11 @@ export async function upsertPollingSignal(input = {}) {
 
   );
 
+ 
+
   if (!normalized.length) return "skipped";
+
+ 
 
   let lastAction = "skipped";
 
@@ -1450,17 +1602,23 @@ export async function upsertPollingSignal(input = {}) {
 
 }
 
+ 
+
 export async function ingestPolling(options = {}) {
 
   return ingestPollingSignals(options);
 
 }
 
+ 
+
 export async function getRecentPolling(limit = 10) {
 
   return getRecentPollingSignals(limit);
 
 }
+
+ 
 
 export default {
 
