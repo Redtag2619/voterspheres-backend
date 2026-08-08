@@ -859,69 +859,384 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS = [
  
 
 async function unifiedTool(rawArgs, user) {
-
   const args = normalizeToolArgs(rawArgs);
 
   const data = await getUnifiedExecutiveIntelligence({
-
     user,
 
-    workspaceId: args.workspace_id || null,
+    workspaceId:
+      args.workspace_id ||
+      null,
 
-    state: clean(args.state),
+    state:
+      clean(args.state),
 
-    office: clean(args.office),
+    office:
+      clean(args.office),
 
-    risk: clean(args.risk),
-
+    risk:
+      clean(args.risk),
   });
 
- 
+  const sourceStatus =
+    Array.isArray(
+      data?.source_status
+    )
+      ? data.source_status
+      : [];
 
-  return toolResult({
+  const sourceModules =
+    Array.isArray(
+      data?.briefing
+        ?.source_modules
+    )
+      ? data.briefing
+          .source_modules
+      : [];
 
-    tool: "get_unified_executive_intelligence",
+  const degradedSources =
+    Array.isArray(
+      data?.briefing
+        ?.degraded_sources
+    )
+      ? data.briefing
+          .degraded_sources
+      : [];
+
+  const signals =
+    Array.isArray(
+      data?.signals
+    )
+      ? data.signals
+          .slice(0, 12)
+      : [];
+
+  const alerts =
+    Array.isArray(
+      data?.alerts
+    )
+      ? data.alerts
+          .slice(0, 12)
+      : [];
+
+  const recommendations =
+    Array.isArray(
+      data?.recommendations
+    )
+      ? data.recommendations
+          .slice(0, 12)
+      : [];
+
+  const decisionItems =
+    Array.isArray(
+      data?.decision_intelligence
+        ?.items
+    )
+      ? data.decision_intelligence
+          .items
+          .slice(0, 10)
+      : [];
+
+  const missions =
+    Array.isArray(
+      data?.missions
+    )
+      ? data.missions
+          .slice(0, 10)
+      : [];
+
+  const activity =
+    Array.isArray(
+      data?.activity
+    )
+      ? data.activity
+          .slice(0, 10)
+      : [];
+
+  const workspaces =
+    Array.isArray(
+      data?.workspaces
+    )
+      ? data.workspaces
+          .slice(0, 12)
+      : [];
+
+  const tasks =
+    Array.isArray(
+      data?.tasks
+    )
+      ? data.tasks
+          .slice(0, 20)
+      : [];
+
+  const sources =
+    sourceStatus.length
+      ? sourceStatus.map(
+          (source) => ({
+            provider:
+              "VoterSpheres",
+
+            source:
+              source?.key ||
+              "unknown",
+
+            name:
+              source?.key ||
+              "VoterSpheres intelligence source",
+
+            published_at:
+              source?.last_seen ||
+              source?.checked_at ||
+              data?.generated_at ||
+              null,
+
+            fetched_at:
+              source?.checked_at ||
+              now(),
+
+            confidence:
+              source?.ok
+                ? data?.health
+                    ?.intelligence_confidence ||
+                  85
+                : 55,
+
+            status:
+              source?.status ||
+              (
+                source?.ok
+                  ? "available"
+                  : "degraded"
+              ),
+
+            freshness:
+              source?.freshness ||
+              "unknown",
+
+            error:
+              source?.error ||
+              null,
+          })
+        )
+      : sourceModules.map(
+          (sourceName) => ({
+            provider:
+              "VoterSpheres",
+
+            source:
+              sourceName,
+
+            name:
+              sourceName,
+
+            published_at:
+              data?.generated_at ||
+              null,
+
+            fetched_at:
+              now(),
+
+            confidence:
+              data?.health
+                ?.intelligence_confidence ||
+              80,
+
+            status:
+              degradedSources.includes(
+                sourceName
+              )
+                ? "degraded"
+                : "available",
+          })
+        );
+
+  const voiceData = {
+    generated_at:
+      data?.generated_at ||
+      now(),
+
+    scope:
+      data?.scope ||
+      {},
+
+    health:
+      data?.health ||
+      {},
+
+    briefing:
+      data?.briefing ||
+      {},
 
     summary:
+      data?.summary ||
+      {},
 
-      data?.briefing?.strategic_summary ||
+    kpis:
+      data?.kpis ||
+      {},
 
+    source_status:
+      sourceStatus,
+
+    workspaces,
+
+    urgent_workspaces:
+      Array.isArray(
+        data?.urgent_workspaces
+      )
+        ? data.urgent_workspaces
+            .slice(0, 10)
+        : [],
+
+    tasks,
+
+    signals,
+
+    alerts,
+
+    recommendations,
+
+    strategy: {
+      recommendations:
+        Array.isArray(
+          data?.strategy
+            ?.recommendations
+        )
+          ? data.strategy
+              .recommendations
+              .slice(0, 10)
+          : [],
+    },
+
+    decision_intelligence: {
+      items:
+        decisionItems,
+    },
+
+    missions,
+
+    activity,
+
+    voice_projection: {
+      source_count:
+        sourceStatus.length ||
+        Number(
+          data?.summary
+            ?.source_count ||
+          0
+        ),
+
+      available_source_count:
+        sourceStatus.filter(
+          (source) =>
+            source?.status ===
+              "available" ||
+            source?.ok ===
+              true
+        ).length,
+
+      degraded_source_count:
+        sourceStatus.filter(
+          (source) =>
+            source?.status ===
+              "degraded" ||
+            source?.ok ===
+              false
+        ).length,
+
+      signal_count:
+        signals.length,
+
+      alert_count:
+        alerts.length,
+
+      recommendation_count:
+        recommendations.length,
+
+      decision_count:
+        decisionItems.length,
+
+      mission_count:
+        missions.length,
+
+      task_count:
+        tasks.length,
+
+      workspace_count:
+        workspaces.length,
+    },
+  };
+
+  console.log(
+    "[Executive Voice Unified] projection:",
+    {
+      source_count:
+        voiceData
+          .voice_projection
+          .source_count,
+
+      available_sources:
+        voiceData
+          .voice_projection
+          .available_source_count,
+
+      degraded_sources:
+        voiceData
+          .voice_projection
+          .degraded_source_count,
+
+      signals:
+        signals.length,
+
+      alerts:
+        alerts.length,
+
+      recommendations:
+        recommendations.length,
+
+      decisions:
+        decisionItems.length,
+
+      missions:
+        missions.length,
+
+      tasks:
+        tasks.length,
+    }
+  );
+
+  return toolResult({
+    tool:
+      "get_unified_executive_intelligence",
+
+    summary:
+      data?.briefing
+        ?.strategic_summary ||
       "Unified executive intelligence loaded.",
 
-    data,
+    data:
+      voiceData,
 
-    sources: [
+    sources,
 
-      {
+    warnings:
+      degradedSources.length
+        ? [
+            `Degraded sources: ${degradedSources.join(
+              ", "
+            )}`,
+          ]
+        : [],
 
-        source: "VoterSpheres Unified Executive Intelligence",
-
-        published_at: data?.generated_at || null,
-
-        fetched_at: now(),
-
-        confidence: data?.health?.intelligence_confidence || 80,
-
-      },
-
-    ],
-
-    warnings: data?.briefing?.degraded_sources?.length
-
-      ? [
-
-          `Degraded sources: ${data.briefing.degraded_sources.join(", ")}`,
-
-        ]
-
-      : [],
-
-    degraded: Boolean(data?.summary?.degraded_source_count),
-
+    degraded:
+      degradedSources.length >
+        0 ||
+      Boolean(
+        data?.summary
+          ?.degraded_source_count
+      ),
   });
-
 }
-
  
 
 async function databaseNews({ query, state, locality, limit, user }) {
