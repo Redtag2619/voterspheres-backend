@@ -1722,16 +1722,10 @@ async function fecTool(args = {}) {
  
 
   const live = await getOpenFecFinance({
-
-    candidate,
-
-    candidate_id: candidateId,
-
-    committee_id: committeeId,
-
-    cycle,
-
-  });
+  candidateId,
+  committeeId,
+  cycle,
+});
 
  
 
