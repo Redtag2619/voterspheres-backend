@@ -254,79 +254,302 @@ function resolveContext(payload = {}) {
 
  
 
-function makeCall(name, args, reason, priority) { return { name, arguments: args, reason, priority }; }
+function makeCall(
+  name,
+  args,
+  reason,
+  priority = 50
+) {
+  return {
+    name,
+    arguments: args,
+    reason,
+    priority,
+  };
+}
 
- 
-
-function buildToolPlan({ question, context, workspaceId, limit }) {
-
+function buildToolPlan({
+  question,
+  context,
+  workspaceId,
+  limit,
+}) {
   const calls = [];
 
-  const common = { query: question, state: context.state, office: context.office, locality: context.locality, cycle: context.cycle, limit, workspace_id: workspaceId };
-
- 
+  const common = {
+    query: question,
+    state: context.state,
+    office: context.office,
+    locality: context.locality,
+    cycle: context.cycle,
+    limit,
+    workspace_id: workspaceId,
+  };
 
   if (context.intent === "polling") {
+    calls.push(
+      makeCall(
+        "get_latest_polling",
+        {
+          candidate: context.candidate,
+          state: context.state,
+          office: context.office,
+          locality: context.locality,
+          limit,
+        },
+        "Retrieve polling directly relevant to the question.",
+        100
+      )
+    );
 
-    calls.push(makeCall("get_latest_polling", { candidate: context.candidate, state: context.state, office: context.office, locality: context.locality, limit }, "Retrieve polling directly relevant to the question.", 100));
-
-    calls.push(makeCall("search_live_news", { query: question, state: context.state, locality: context.locality, limit }, "Check current reporting for corroborating polling coverage.", 82));
-
+    calls.push(
+      makeCall(
+        "search_live_news",
+        {
+          query: question,
+          state: context.state,
+          locality: context.locality,
+          limit,
+        },
+        "Check current reporting for corroborating polling coverage.",
+        82
+      )
+    );
   } else if (context.intent === "finance") {
+    if (context.candidate) {
+      calls.push(
+        makeCall(
+          "get_candidate_live_intelligence",
+          {
+            candidate: context.candidate,
+            candidate_id: context.candidate_id,
+            committee_id: context.committee_id,
+            state: context.state,
+            office: context.office,
+            cycle: context.cycle,
+            limit,
+          },
+          "Resolve candidate identity and FEC identifiers.",
+          100
+        )
+      );
+    }
 
-    if (context.candidate) calls.push(makeCall("get_candidate_live_intelligence", { candidate: context.candidate, candidate_id: context.candidate_id, committee_id: context.committee_id, state: context.state, office: context.office, cycle: context.cycle, limit }, "Resolve candidate identity and FEC identifiers.", 100));
+    calls.push(
+      makeCall(
+        "get_fec_finance",
+        {
+          candidate: context.candidate,
+          candidate_id: context.candidate_id,
+          committee_id: context.committee_id,
+          cycle: context.cycle,
+        },
+        "Retrieve official FEC finance evidence.",
+        98
+      )
+    );
 
-    calls.push(makeCall("get_fec_finance", { candidate: context.candidate, candidate_id: context.candidate_id, committee_id: context.committee_id, cycle: context.cycle }, "Retrieve official FEC finance evidence.", 98));
-
-    if (context.candidate || context.state) calls.push(makeCall("get_candidate_statistics", { candidate: context.candidate, candidate_id: context.candidate_id, state: context.state, office: context.office, cycle: context.cycle }, "Load internal candidate identity evidence.", 88));
-
+    calls.push(
+      makeCall(
+        "get_candidate_statistics",
+        {
+          candidate: context.candidate,
+          candidate_id: context.candidate_id,
+          state: context.state,
+          office: context.office,
+          cycle: context.cycle,
+        },
+        "Load internal candidate identity evidence.",
+        88
+      )
+    );
   } else if (context.intent === "candidate") {
+    calls.push(
+      makeCall(
+        "get_candidate_live_intelligence",
+        {
+          candidate: context.candidate,
+          candidate_id: context.candidate_id,
+          committee_id: context.committee_id,
+          state: context.state,
+          office: context.office,
+          locality: context.locality,
+          cycle: context.cycle,
+          limit,
+        },
+        "Build candidate-specific intelligence.",
+        100
+      )
+    );
 
-    calls.push(makeCall("get_candidate_live_intelligence", { candidate: context.candidate, candidate_id: context.candidate_id, committee_id: context.committee_id, state: context.state, office: context.office, locality: context.locality, cycle: context.cycle, limit }, "Build candidate-specific intelligence.", 100));
+    calls.push(
+      makeCall(
+        "get_candidate_statistics",
+        {
+          candidate: context.candidate,
+          candidate_id: context.candidate_id,
+          state: context.state,
+          office: context.office,
+          cycle: context.cycle,
+        },
+        "Resolve stored candidate records.",
+        96
+      )
+    );
 
-    calls.push(makeCall("get_candidate_statistics", { candidate: context.candidate, candidate_id: context.candidate_id, state: context.state, office: context.office, cycle: context.cycle }, "Resolve stored candidate records.", 96));
-
-    calls.push(makeCall("search_live_news", { query: question, state: context.state, locality: context.locality, limit }, "Retrieve current candidate reporting.", 88));
-
+    calls.push(
+      makeCall(
+        "search_live_news",
+        {
+          query: question,
+          state: context.state,
+          locality: context.locality,
+          limit,
+        },
+        "Retrieve current candidate reporting.",
+        88
+      )
+    );
   } else if (context.intent === "operations") {
+    if (context.state) {
+      calls.push(
+        makeCall(
+          "get_state_operations",
+          {
+            state: context.state,
+            locality: context.locality,
+            workspace_id: workspaceId,
+          },
+          "Load state operational intelligence.",
+          100
+        )
+      );
+    }
 
-    if (context.state) calls.push(makeCall("get_state_operations", { state: context.state, locality: context.locality, workspace_id: workspaceId }, "Load state operational intelligence.", 100));
-
-    calls.push(makeCall("get_unified_executive_intelligence", common, "Load executive operational context.", 94));
-
+    calls.push(
+      makeCall(
+        "get_unified_executive_intelligence",
+        common,
+        "Load executive operational context.",
+        94
+      )
+    );
   } else if (context.intent === "administration") {
+    calls.push(
+      makeCall(
+        "get_election_administration_updates",
+        {
+          query: question,
+          state: context.state,
+          locality: context.locality,
+          limit,
+        },
+        "Retrieve election administration intelligence.",
+        100
+      )
+    );
 
-    calls.push(makeCall("get_election_administration_updates", { query: question, state: context.state, locality: context.locality, limit }, "Retrieve election administration intelligence.", 100));
-
-    calls.push(makeCall("search_live_news", { query: question, state: context.state, locality: context.locality, limit }, "Find corroborating current reporting.", 88));
-
+    calls.push(
+      makeCall(
+        "search_live_news",
+        {
+          query: question,
+          state: context.state,
+          locality: context.locality,
+          limit,
+        },
+        "Find corroborating current reporting.",
+        88
+      )
+    );
   } else if (context.intent === "legislative") {
-
-    calls.push(makeCall("get_legislative_updates", { query: question, limit }, "Retrieve official legislative evidence.", 100));
-
-  } else if (context.intent === "weather") {
-
-    if (context.latitude != null && context.longitude != null) calls.push(makeCall("get_weather_field_risk", { latitude: context.latitude, longitude: context.longitude, location: context.locality || context.state_name }, "Retrieve field weather risk.", 100));
-
+    calls.push(
+      makeCall(
+        "get_legislative_updates",
+        {
+          query: question,
+          limit,
+        },
+        "Retrieve official legislative evidence.",
+        100
+      )
+    );
+  } else if (
+    context.intent === "weather" &&
+    context.latitude != null &&
+    context.longitude != null
+  ) {
+    calls.push(
+      makeCall(
+        "get_weather_field_risk",
+        {
+          latitude: context.latitude,
+          longitude: context.longitude,
+          location: context.locality || context.state_name,
+        },
+        "Retrieve field weather risk.",
+        100
+      )
+    );
   } else {
+    if (context.state) {
+      calls.push(
+        makeCall(
+          "get_state_operations",
+          {
+            state: context.state,
+            locality: context.locality,
+            workspace_id: workspaceId,
+          },
+          "Load state intelligence context.",
+          92
+        )
+      );
+    }
 
-    if (context.state) calls.push(makeCall("get_state_operations", { state: context.state, locality: context.locality, workspace_id: workspaceId }, "Load state intelligence context.", 92));
+    calls.push(
+      makeCall(
+        "search_live_news",
+        {
+          query: question,
+          state: context.state,
+          locality: context.locality,
+          limit,
+        },
+        "Retrieve current political reporting.",
+        90
+      )
+    );
 
-    calls.push(makeCall("search_live_news", { query: question, state: context.state, locality: context.locality, limit }, "Retrieve current political reporting.", 90));
-
-    calls.push(makeCall("get_unified_executive_intelligence", common, "Load the broader VoterSpheres executive picture.", 82));
-
+    calls.push(
+      makeCall(
+        "get_unified_executive_intelligence",
+        common,
+        "Load the broader VoterSpheres executive picture.",
+        82
+      )
+    );
   }
 
- 
-
-  return [...new Map(calls.map(call => [`${call.name}:${JSON.stringify(call.arguments)}`, call])).values()]
-
+  return [
+    ...new Map(
+      calls.map((call) => [
+        `${call.name}:${JSON.stringify(call.arguments)}`,
+        call,
+      ])
+    ).values(),
+  ]
     .sort((a, b) => b.priority - a.priority)
-
-    .slice(0, clamp(MAX_TOOLS, 9, 1, 12));
-
-}) {
+    .slice(
+      0,
+      clamp(
+        MAX_TOOLS,
+        9,
+        1,
+        12
+      )
+    );
+}
 
   const common = { query: question, state: context.state, office: context.office, locality: context.locality, cycle: context.cycle, limit, workspace_id: workspaceId };
 
