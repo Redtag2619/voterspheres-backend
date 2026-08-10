@@ -54,6 +54,12 @@ const DEFAULT_TIMEOUT_MS =
 
   ) || 6000;
 
+const OPENFEC_TIMEOUT_MS =
+  Number(
+    process.env
+      .EXECUTIVE_VOICE_OPENFEC_TIMEOUT_MS
+  ) || 25000;
+
  
 
 const OPENAI_SDK_TIMEOUT_MS =
@@ -6663,17 +6669,11 @@ export async function getOpenFecFinance({
         endpoint,
 
         {
+         timeoutMs:
+           OPENFEC_TIMEOUT_MS,
 
-          timeoutMs:
-
-            DEFAULT_TIMEOUT_MS,
-
- 
-
-          label:
-
-            "OpenFEC",
-
+         label:
+           "OpenFEC",
         }
 
       );
@@ -9978,9 +9978,9 @@ export async function getExecutiveVoiceSourceHealth() {
 
  
 
-      timeout_ms:
-
-        DEFAULT_TIMEOUT_MS,
+     timeout_ms:
+      
+       OPENFEC_TIMEOUT_MS,
 
     },
 
