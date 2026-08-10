@@ -6,7 +6,7 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-const BUILD = "4.2.0-data-answer";
+const BUILD = "4.2.1-strict-finance-identity";
 
  
 
@@ -688,6 +688,36 @@ function detectOffice(
 
  
 
+function cleanupDetectedCandidate(value = "") {
+
+  return clean(value)
+
+    .replace(
+
+      /^(?:the\s+)?(?:latest|current|newest|most recent)?\s*(?:fec\s+)?(?:report|filing|finance|financials?)\s+for\s+/i,
+
+      ""
+
+    )
+
+    .replace(
+
+      /^(?:for|about|on)\s+/i,
+
+      ""
+
+    )
+
+    .replace(/[?.!,;:]+$/g, "")
+
+    .replace(/\s+/g, " ")
+
+    .trim();
+
+}
+
+ 
+
 function detectCandidate(
 
   question,
@@ -696,13 +726,11 @@ function detectCandidate(
 
 ) {
 
-  const explicit =
+  const explicit = cleanupDetectedCandidate(
 
-    clean(
+    suppliedCandidate
 
-      suppliedCandidate
-
-    );
+  );
 
  
 
@@ -714,29 +742,21 @@ function detectCandidate(
 
  
 
-  const text =
-
-    clean(
-
-      question
-
-    );
+  const text = clean(question);
 
  
 
-  const quoted =
+  const quoted = text.match(
 
-    text.match(
+    /["“]([^"”]{3,80})["”]/
 
-      /["“]([^"”]{3,80})["”]/
-
-    );
+  );
 
  
 
   if (quoted) {
 
-    return clean(
+    return cleanupDetectedCandidate(
 
       quoted[1]
 
@@ -746,55 +766,93 @@ function detectCandidate(
 
  
 
+  /*
+
+   * Finance-specific forms are checked first so a request such as
+
+   * "what is the current FEC report for jasmine crockett" resolves
+
+   * to "jasmine crockett", not "report for jasmine crockett".
+
+   */
+
+  const financeFor = text.match(
+
+    /(?:fec|finance|financial|report|filing|fundraising)[^\n]{0,50}?\bfor\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
+  );
+
+ 
+
+  if (financeFor) {
+
+    const candidate = cleanupDetectedCandidate(
+
+      financeFor[1]
+
+    );
+
+ 
+
+    if (candidate) {
+
+      return candidate;
+
+    }
+
+  }
+
+ 
+
   const patterns = [
 
-    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3})/i,
+    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
 
-    /([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
+    /([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
 
   ];
 
  
 
-  for (
+  for (const pattern of patterns) {
 
-    const pattern
+    const match = text.match(pattern);
 
-    of patterns
+ 
 
-  ) {
+    if (!match) {
 
-    const match =
+      continue;
 
-      text.match(pattern);
+    }
+
+ 
+
+    const candidate = cleanupDetectedCandidate(
+
+      match[1]
+
+    );
 
  
 
     if (
 
-      match &&
+      candidate &&
 
-      !Object.values(
+      !Object.values(STATE_NAMES).some(
 
-        STATE_NAMES
+        (stateName) =>
 
-      ).includes(
+          clean(stateName).toLowerCase() ===
 
-        clean(
-
-          match[1]
-
-        )
+          candidate.toLowerCase()
 
       )
 
     ) {
 
-      return clean(
-
-        match[1]
-
-      );
+      return candidate;
 
     }
 
@@ -1314,125 +1372,15 @@ function buildToolPlan({
 
     /*
 
-     * Finance is executed sequentially later so candidate resolution
+     * Finance identity resolution is intentionally isolated from
 
-     * can enrich the FEC request before get_fec_finance runs.
+     * get_candidate_live_intelligence because that composite tool can
 
-     *
+     * include polling/news providers. A pure FEC question must never
 
-     * The plan still describes every intended tool for diagnostics/UI.
+     * acquire VoteHub/polling evidence while resolving candidate identity.
 
      */
-
-    if (
-
-      context.candidate ||
-
-      context.candidate_id
-
-    ) {
-
-      calls.push(
-
-        makeCall(
-
-          "get_candidate_live_intelligence",
-
-          {
-
-            candidate:
-
-              context.candidate,
-
- 
-
-            candidate_id:
-
-              context.candidate_id,
-
- 
-
-            committee_id:
-
-              context.committee_id,
-
- 
-
-            state:
-
-              context.state,
-
- 
-
-            office:
-
-              context.office,
-
- 
-
-            cycle:
-
-              context.cycle,
-
- 
-
-            limit,
-
-          },
-
-          "Resolve candidate identity and FEC identifiers.",
-
-          100
-
-        )
-
-      );
-
-    }
-
- 
-
-    calls.push(
-
-      makeCall(
-
-        "get_fec_finance",
-
-        {
-
-          candidate:
-
-            context.candidate,
-
- 
-
-          candidate_id:
-
-            context.candidate_id,
-
- 
-
-          committee_id:
-
-            context.committee_id,
-
- 
-
-          cycle:
-
-            context.cycle,
-
-        },
-
-        "Retrieve official FEC finance evidence.",
-
-        98
-
-      )
-
-    );
-
- 
 
     if (
 
@@ -1482,15 +1430,57 @@ function buildToolPlan({
 
           },
 
-          "Load internal candidate identity evidence.",
+          "Resolve candidate identity from the VoterSpheres candidate database only.",
 
-          88
+          100
 
         )
 
       );
 
     }
+
+ 
+
+    calls.push(
+
+      makeCall(
+
+        "get_fec_finance",
+
+        {
+
+          candidate:
+
+            context.candidate,
+
+ 
+
+          candidate_id:
+
+            context.candidate_id,
+
+ 
+
+          committee_id:
+
+            context.committee_id,
+
+ 
+
+          cycle:
+
+            context.cycle,
+
+        },
+
+        "Retrieve official FEC finance evidence only after strict candidate identity validation.",
+
+        98
+
+      )
+
+    );
 
   } else if (
 
@@ -3388,7 +3378,261 @@ function recursivelyFindIdentity(
 
  
 
-function resolveIdentityFromResults(
+function normalizePersonTokens(value = "") {
+
+  return clean(value)
+
+    .toLowerCase()
+
+    .replace(/\b(jr|sr|ii|iii|iv)\.?\b/g, " ")
+
+    .replace(/[^a-z0-9]+/g, " ")
+
+    .split(/\s+/)
+
+    .map((token) => token.trim())
+
+    .filter(Boolean);
+
+}
+
+ 
+
+function candidateNamesMatch(
+
+  requestedName,
+
+  candidateName
+
+) {
+
+  const requested = normalizePersonTokens(
+
+    requestedName
+
+  );
+
+ 
+
+  const candidate = normalizePersonTokens(
+
+    candidateName
+
+  );
+
+ 
+
+  if (
+
+    !requested.length ||
+
+    !candidate.length
+
+  ) {
+
+    return false;
+
+  }
+
+ 
+
+  /*
+
+   * A one-token request such as "Crockett" is treated as a surname
+
+   * request and must match a complete token in the stored candidate name.
+
+   */
+
+  if (requested.length === 1) {
+
+    return candidate.includes(
+
+      requested[0]
+
+    );
+
+  }
+
+ 
+
+  /*
+
+   * For full names, every requested name token must exist in the
+
+   * candidate record. This handles both "Jasmine Crockett" and
+
+   * database forms such as "CROCKETT, JASMINE" without accepting an
+
+   * unrelated candidate merely because an ID was present in the result.
+
+   */
+
+  return requested.every(
+
+    (token) =>
+
+      candidate.includes(token)
+
+  );
+
+}
+
+ 
+
+function normalizeOffice(value = "") {
+
+  const lower = clean(value)
+
+    .toLowerCase()
+
+    .replace(/[^a-z0-9]+/g, " ")
+
+    .trim();
+
+ 
+
+  if (/\bhouse\b|congress/.test(lower)) {
+
+    return "house";
+
+  }
+
+ 
+
+  if (/\bsenate\b|senator/.test(lower)) {
+
+    return "senate";
+
+  }
+
+ 
+
+  if (/president/.test(lower)) {
+
+    return "president";
+
+  }
+
+ 
+
+  if (/governor/.test(lower)) {
+
+    return "governor";
+
+  }
+
+ 
+
+  return lower;
+
+}
+
+ 
+
+function candidateRecordState(record = {}) {
+
+  return clean(
+
+    record.state_code ||
+
+    record.state
+
+  ).toUpperCase();
+
+}
+
+ 
+
+function candidateRecordOffice(record = {}) {
+
+  return normalizeOffice(
+
+    record.office ||
+
+    record.office_full ||
+
+    record.office_name
+
+  );
+
+}
+
+ 
+
+function collectCandidateRecordsFromResult(result) {
+
+  const data = result?.data;
+
+ 
+
+  if (!data) {
+
+    return [];
+
+  }
+
+ 
+
+  const buckets = [
+
+    data.records,
+
+    data.candidates,
+
+    data.results,
+
+    data.candidate_records,
+
+    data.matches,
+
+  ];
+
+ 
+
+  const rows = buckets.find(
+
+    (bucket) => Array.isArray(bucket)
+
+  );
+
+ 
+
+  if (Array.isArray(rows)) {
+
+    return rows.filter(
+
+      (row) =>
+
+        row &&
+
+        typeof row === "object"
+
+    );
+
+  }
+
+ 
+
+  const direct = firstObject([
+
+    data.candidate,
+
+    data.profile,
+
+    data.record,
+
+  ]);
+
+ 
+
+  return direct ? [direct] : [];
+
+}
+
+ 
+
+function strictResolveCandidateIdentity(
 
   results,
 
@@ -3396,145 +3640,503 @@ function resolveIdentityFromResults(
 
 ) {
 
-  let candidate_id =
+  const requestedName = clean(
 
-    clean(
+    context.candidate
 
-      context.candidate_id
-
-    );
+  );
 
  
 
-  let committee_id =
+  const explicitCandidateId = clean(
 
-    clean(
+    context.candidate_id
 
-      context.committee_id
-
-    );
+  );
 
  
 
-  let candidate =
+  const explicitCommitteeId = clean(
 
-    clean(
+    context.committee_id
 
-      context.candidate
-
-    );
+  );
 
  
 
-  for (
+  /*
 
-    const result
+   * An explicitly supplied candidate ID is already deterministic.
 
-    of results
+   * Preserve it, while still carrying the requested display name.
 
-  ) {
+   */
 
-    const direct =
+  if (explicitCandidateId) {
 
-      extractCandidateRecord(
+    return {
 
-        result
+      ok: true,
 
-      );
+      ambiguous: false,
 
- 
+      candidate:
 
-    const identity =
+        requestedName || null,
 
-      direct
+      candidate_id:
 
-        ? {
+        explicitCandidateId,
 
-            candidate_id:
+      committee_id:
 
-              candidateIdFromObject(
+        explicitCommitteeId || null,
 
-                direct
+      record: null,
 
-              ),
+      matches: [],
 
- 
+      reason: "explicit-candidate-id",
 
-            committee_id:
-
-              committeeIdFromObject(
-
-                direct
-
-              ),
-
- 
-
-            candidate:
-
-              candidateNameFromObject(
-
-                direct
-
-              ),
-
-          }
-
-        : recursivelyFindIdentity(
-
-            result?.data
-
-          );
-
- 
-
-    candidate_id =
-
-      candidate_id ||
-
-      identity.candidate_id;
-
- 
-
-    committee_id =
-
-      committee_id ||
-
-      identity.committee_id;
-
- 
-
-    candidate =
-
-      candidate ||
-
-      identity.candidate;
-
- 
-
-    if (
-
-      candidate_id &&
-
-      candidate
-
-    ) {
-
-      break;
-
-    }
+    };
 
   }
 
  
 
+  if (!requestedName) {
+
+    return {
+
+      ok: false,
+
+      ambiguous: false,
+
+      candidate: null,
+
+      candidate_id: "",
+
+      committee_id:
+
+        explicitCommitteeId,
+
+      record: null,
+
+      matches: [],
+
+      reason: "candidate-name-required",
+
+    };
+
+  }
+
+ 
+
+  const statisticsResult = results.find(
+
+    (result) =>
+
+      result.tool ===
+
+      "get_candidate_statistics"
+
+  );
+
+ 
+
+  const rows = collectCandidateRecordsFromResult(
+
+    statisticsResult
+
+  );
+
+ 
+
+  const requestedState = clean(
+
+    context.state
+
+  ).toUpperCase();
+
+ 
+
+  const requestedOffice = normalizeOffice(
+
+    context.office
+
+  );
+
+ 
+
+  const matches = rows.filter(
+
+    (record) => {
+
+      const recordName = candidateNameFromObject(
+
+        record
+
+      );
+
+ 
+
+      if (
+
+        !candidateNamesMatch(
+
+          requestedName,
+
+          recordName
+
+        )
+
+      ) {
+
+        return false;
+
+      }
+
+ 
+
+      if (requestedState) {
+
+        const state = candidateRecordState(
+
+          record
+
+        );
+
+ 
+
+        if (
+
+          state &&
+
+          state !== requestedState
+
+        ) {
+
+          return false;
+
+        }
+
+      }
+
+ 
+
+      if (requestedOffice) {
+
+        const office = candidateRecordOffice(
+
+          record
+
+        );
+
+ 
+
+        if (
+
+          office &&
+
+          office !== requestedOffice
+
+        ) {
+
+          return false;
+
+        }
+
+      }
+
+ 
+
+      return Boolean(
+
+        candidateIdFromObject(record) ||
+
+        committeeIdFromObject(record)
+
+      );
+
+    }
+
+  );
+
+ 
+
+  if (!matches.length) {
+
+    return {
+
+      ok: false,
+
+      ambiguous: false,
+
+      candidate:
+
+        requestedName,
+
+      candidate_id: "",
+
+      committee_id:
+
+        explicitCommitteeId,
+
+      record: null,
+
+      matches: [],
+
+      reason: "no-strict-candidate-match",
+
+    };
+
+  }
+
+ 
+
+  /*
+
+   * Deduplicate duplicate database rows that point to the same FEC ID.
+
+   */
+
+  const uniqueMatches = [
+
+    ...new Map(
+
+      matches.map((record) => {
+
+        const candidateId = candidateIdFromObject(
+
+          record
+
+        );
+
+ 
+
+        const committeeId = committeeIdFromObject(
+
+          record
+
+        );
+
+ 
+
+        return [
+
+          `${candidateId}:${committeeId}`,
+
+          record,
+
+        ];
+
+      })
+
+    ).values(),
+
+  ];
+
+ 
+
+  if (uniqueMatches.length > 1) {
+
+    return {
+
+      ok: false,
+
+      ambiguous: true,
+
+      candidate:
+
+        requestedName,
+
+      candidate_id: "",
+
+      committee_id:
+
+        explicitCommitteeId,
+
+      record: null,
+
+      matches:
+
+        uniqueMatches.map((record) => ({
+
+          candidate:
+
+            candidateNameFromObject(record),
+
+          candidate_id:
+
+            candidateIdFromObject(record),
+
+          committee_id:
+
+            committeeIdFromObject(record),
+
+          state:
+
+            candidateRecordState(record),
+
+          office:
+
+            record.office ||
+
+            record.office_full ||
+
+            null,
+
+          district:
+
+            record.district || null,
+
+        })),
+
+      reason: "multiple-strict-candidate-matches",
+
+    };
+
+  }
+
+ 
+
+  const record = uniqueMatches[0];
+
+ 
+
   return {
 
-    candidate_id,
+    ok: true,
 
-    committee_id,
+    ambiguous: false,
 
-    candidate,
+    candidate:
+
+      candidateNameFromObject(record) ||
+
+      requestedName,
+
+    candidate_id:
+
+      candidateIdFromObject(record),
+
+    committee_id:
+
+      explicitCommitteeId ||
+
+      committeeIdFromObject(record),
+
+    record,
+
+    matches: [],
+
+    reason: "strict-candidate-match",
+
+  };
+
+}
+
+ 
+
+function createIdentityFailureResult(
+
+  fecTemplate,
+
+  identity,
+
+  context
+
+) {
+
+  const issue = identity.ambiguous
+
+    ? `Multiple FEC candidate identities matched ${context.candidate}. Specify the office or candidate ID before finance data is retrieved.`
+
+    : `No verified FEC candidate identity matched ${context.candidate || "the requested candidate"}. Finance retrieval was stopped to prevent returning another candidate's data.`;
+
+ 
+
+  return {
+
+    tool: "get_fec_finance",
+
+    reason:
+
+      fecTemplate?.reason ||
+
+      "Retrieve official FEC finance evidence.",
+
+    arguments:
+
+      fecTemplate?.arguments ||
+
+      {},
+
+    ok: false,
+
+    usable: false,
+
+    degraded: true,
+
+    summary: issue,
+
+    data: {
+
+      identity_resolution: {
+
+        requested_candidate:
+
+          context.candidate || null,
+
+        requested_state:
+
+          context.state || null,
+
+        requested_office:
+
+          context.office || null,
+
+        reason:
+
+          identity.reason,
+
+        matches:
+
+          identity.matches || [],
+
+      },
+
+      records: [],
+
+    },
+
+    sources: [],
+
+    warnings: [issue],
+
+    diagnostics: [
+
+      {
+
+        provider:
+
+          "strict_candidate_identity",
+
+        ok: false,
+
+        error: issue,
+
+        checked_at: now(),
+
+      },
+
+    ],
+
+    generated_at: now(),
+
+    latency_ms: 0,
+
+    meaningful_item_count: 0,
 
   };
 
@@ -3554,203 +4156,89 @@ async function executeFinancePlan({
 
  
 
-  const resolverCalls =
+  const statisticsCall = plan.tool_plan.find(
 
-    plan.tool_plan.filter(
+    (call) =>
 
-      (call) =>
+      call.name ===
 
-        call.name ===
+      "get_candidate_statistics"
 
-          "get_candidate_live_intelligence" ||
-
-        call.name ===
-
-          "get_candidate_statistics"
-
-    );
+  );
 
  
 
-  const fecTemplate =
+  const fecTemplate = plan.tool_plan.find(
 
-    plan.tool_plan.find(
+    (call) =>
 
-      (call) =>
+      call.name ===
 
-        call.name ===
+      "get_fec_finance"
 
-        "get_fec_finance"
-
-    );
+  );
 
  
 
   /*
 
-   * Run candidate identity tools first.
+   * Finance requests intentionally DO NOT execute
 
-   * This fixes the prior race where FEC executed before candidate resolution
+   * get_candidate_live_intelligence. Candidate identity comes only from
 
-   * could provide a candidate_id.
+   * the VoterSpheres candidate/statistics data path so polling/news tools
+
+   * cannot contaminate FEC-only evidence or sources.
 
    */
 
-  for (
-
-    const call
-
-    of resolverCalls
-
-  ) {
-
-    const result =
-
-      await executePlannedTool(
-
-        call,
-
-        user
-
-      );
-
- 
+  if (statisticsCall) {
 
     results.push(
 
-      result
+      await executePlannedTool(
+
+        statisticsCall,
+
+        user
+
+      )
 
     );
 
+  }
+
  
 
-    const identity =
+  const identity = strictResolveCandidateIdentity(
 
-      resolveIdentityFromResults(
+    results,
 
-        results,
+    plan.context
+
+  );
+
+ 
+
+  if (!fecTemplate) {
+
+    return results;
+
+  }
+
+ 
+
+  if (!identity.ok) {
+
+    results.push(
+
+      createIdentityFailureResult(
+
+        fecTemplate,
+
+        identity,
 
         plan.context
-
-      );
-
- 
-
-    if (
-
-      identity.candidate_id
-
-    ) {
-
-      break;
-
-    }
-
-  }
-
- 
-
-  const identity =
-
-    resolveIdentityFromResults(
-
-      results,
-
-      plan.context
-
-    );
-
- 
-
-  if (
-
-    fecTemplate
-
-  ) {
-
-    const fecCall = {
-
-      ...fecTemplate,
-
- 
-
-      arguments: {
-
-        ...fecTemplate.arguments,
-
- 
-
-        candidate:
-
-          identity.candidate ||
-
-          plan.context.candidate,
-
- 
-
-        candidate_id:
-
-          identity.candidate_id ||
-
-          plan.context.candidate_id,
-
- 
-
-        committee_id:
-
-          identity.committee_id ||
-
-          plan.context.committee_id,
-
- 
-
-        cycle:
-
-          plan.context.cycle,
-
-      },
-
-    };
-
- 
-
-    const fecResult =
-
-      await executePlannedTool(
-
-        fecCall,
-
-        user
-
-      );
-
- 
-
-    results.push(
-
-      fecResult
-
-    );
-
-  }
-
- 
-
-  /*
-
-   * Run any remaining planned tools not already executed.
-
-   */
-
-  const alreadyExecuted =
-
-    new Set(
-
-      results.map(
-
-        (item) =>
-
-          item.tool
 
       )
 
@@ -3758,57 +4246,57 @@ async function executeFinancePlan({
 
  
 
-  const remaining =
-
-    plan.tool_plan.filter(
-
-      (call) =>
-
-        !alreadyExecuted.has(
-
-          call.name
-
-        )
-
-    );
-
- 
-
-  if (
-
-    remaining.length
-
-  ) {
-
-    const extra =
-
-      await Promise.all(
-
-        remaining.map(
-
-          (call) =>
-
-            executePlannedTool(
-
-              call,
-
-              user
-
-            )
-
-        )
-
-      );
-
- 
-
-    results.push(
-
-      ...extra
-
-    );
+    return results;
 
   }
+
+ 
+
+  const fecCall = {
+
+    ...fecTemplate,
+
+    arguments: {
+
+      ...fecTemplate.arguments,
+
+      candidate:
+
+        identity.candidate ||
+
+        plan.context.candidate,
+
+      candidate_id:
+
+        identity.candidate_id,
+
+      committee_id:
+
+        identity.committee_id ||
+
+        plan.context.committee_id,
+
+      cycle:
+
+        plan.context.cycle,
+
+    },
+
+  };
+
+ 
+
+  results.push(
+
+    await executePlannedTool(
+
+      fecCall,
+
+      user
+
+    )
+
+  );
 
  
 
@@ -5808,7 +6296,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
     finance_resolution_mode:
 
-      "candidate-first-sequential",
+      "strict-candidate-statistics-only",
 
  
 
