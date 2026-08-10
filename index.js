@@ -330,7 +330,6 @@ app.use("/api/executive-voice", executiveVoiceRoutes);
 app.use("/api/unified-executive-intelligence", unifiedExecutiveIntelligenceRoutes);
 app.use("/api/executive-voice-tools", executiveVoiceToolsRoutes);
 app.use("/api/executive-voice-live-sources", executiveVoiceLiveSourcesRoutes);
-app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceOrchestratorRoutes);
 app.use("/api/executive-intelligence-orchestrator", executiveIntelligenceRoutes);
 app.use("/api/political-intelligence-fabric", politicalIntelligenceFabricRoutes);
 app.use("/api/polling-intelligence", pollingIntelligenceRoutes);
