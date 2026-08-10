@@ -859,384 +859,69 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS = [
  
 
 async function unifiedTool(rawArgs, user) {
+
   const args = normalizeToolArgs(rawArgs);
 
   const data = await getUnifiedExecutiveIntelligence({
+
     user,
 
-    workspaceId:
-      args.workspace_id ||
-      null,
+    workspaceId: args.workspace_id || null,
 
-    state:
-      clean(args.state),
+    state: clean(args.state),
 
-    office:
-      clean(args.office),
+    office: clean(args.office),
 
-    risk:
-      clean(args.risk),
+    risk: clean(args.risk),
+
   });
 
-  const sourceStatus =
-    Array.isArray(
-      data?.source_status
-    )
-      ? data.source_status
-      : [];
-
-  const sourceModules =
-    Array.isArray(
-      data?.briefing
-        ?.source_modules
-    )
-      ? data.briefing
-          .source_modules
-      : [];
-
-  const degradedSources =
-    Array.isArray(
-      data?.briefing
-        ?.degraded_sources
-    )
-      ? data.briefing
-          .degraded_sources
-      : [];
-
-  const signals =
-    Array.isArray(
-      data?.signals
-    )
-      ? data.signals
-          .slice(0, 12)
-      : [];
-
-  const alerts =
-    Array.isArray(
-      data?.alerts
-    )
-      ? data.alerts
-          .slice(0, 12)
-      : [];
-
-  const recommendations =
-    Array.isArray(
-      data?.recommendations
-    )
-      ? data.recommendations
-          .slice(0, 12)
-      : [];
-
-  const decisionItems =
-    Array.isArray(
-      data?.decision_intelligence
-        ?.items
-    )
-      ? data.decision_intelligence
-          .items
-          .slice(0, 10)
-      : [];
-
-  const missions =
-    Array.isArray(
-      data?.missions
-    )
-      ? data.missions
-          .slice(0, 10)
-      : [];
-
-  const activity =
-    Array.isArray(
-      data?.activity
-    )
-      ? data.activity
-          .slice(0, 10)
-      : [];
-
-  const workspaces =
-    Array.isArray(
-      data?.workspaces
-    )
-      ? data.workspaces
-          .slice(0, 12)
-      : [];
-
-  const tasks =
-    Array.isArray(
-      data?.tasks
-    )
-      ? data.tasks
-          .slice(0, 20)
-      : [];
-
-  const sources =
-    sourceStatus.length
-      ? sourceStatus.map(
-          (source) => ({
-            provider:
-              "VoterSpheres",
-
-            source:
-              source?.key ||
-              "unknown",
-
-            name:
-              source?.key ||
-              "VoterSpheres intelligence source",
-
-            published_at:
-              source?.last_seen ||
-              source?.checked_at ||
-              data?.generated_at ||
-              null,
-
-            fetched_at:
-              source?.checked_at ||
-              now(),
-
-            confidence:
-              source?.ok
-                ? data?.health
-                    ?.intelligence_confidence ||
-                  85
-                : 55,
-
-            status:
-              source?.status ||
-              (
-                source?.ok
-                  ? "available"
-                  : "degraded"
-              ),
-
-            freshness:
-              source?.freshness ||
-              "unknown",
-
-            error:
-              source?.error ||
-              null,
-          })
-        )
-      : sourceModules.map(
-          (sourceName) => ({
-            provider:
-              "VoterSpheres",
-
-            source:
-              sourceName,
-
-            name:
-              sourceName,
-
-            published_at:
-              data?.generated_at ||
-              null,
-
-            fetched_at:
-              now(),
-
-            confidence:
-              data?.health
-                ?.intelligence_confidence ||
-              80,
-
-            status:
-              degradedSources.includes(
-                sourceName
-              )
-                ? "degraded"
-                : "available",
-          })
-        );
-
-  const voiceData = {
-    generated_at:
-      data?.generated_at ||
-      now(),
-
-    scope:
-      data?.scope ||
-      {},
-
-    health:
-      data?.health ||
-      {},
-
-    briefing:
-      data?.briefing ||
-      {},
-
-    summary:
-      data?.summary ||
-      {},
-
-    kpis:
-      data?.kpis ||
-      {},
-
-    source_status:
-      sourceStatus,
-
-    workspaces,
-
-    urgent_workspaces:
-      Array.isArray(
-        data?.urgent_workspaces
-      )
-        ? data.urgent_workspaces
-            .slice(0, 10)
-        : [],
-
-    tasks,
-
-    signals,
-
-    alerts,
-
-    recommendations,
-
-    strategy: {
-      recommendations:
-        Array.isArray(
-          data?.strategy
-            ?.recommendations
-        )
-          ? data.strategy
-              .recommendations
-              .slice(0, 10)
-          : [],
-    },
-
-    decision_intelligence: {
-      items:
-        decisionItems,
-    },
-
-    missions,
-
-    activity,
-
-    voice_projection: {
-      source_count:
-        sourceStatus.length ||
-        Number(
-          data?.summary
-            ?.source_count ||
-          0
-        ),
-
-      available_source_count:
-        sourceStatus.filter(
-          (source) =>
-            source?.status ===
-              "available" ||
-            source?.ok ===
-              true
-        ).length,
-
-      degraded_source_count:
-        sourceStatus.filter(
-          (source) =>
-            source?.status ===
-              "degraded" ||
-            source?.ok ===
-              false
-        ).length,
-
-      signal_count:
-        signals.length,
-
-      alert_count:
-        alerts.length,
-
-      recommendation_count:
-        recommendations.length,
-
-      decision_count:
-        decisionItems.length,
-
-      mission_count:
-        missions.length,
-
-      task_count:
-        tasks.length,
-
-      workspace_count:
-        workspaces.length,
-    },
-  };
-
-  console.log(
-    "[Executive Voice Unified] projection:",
-    {
-      source_count:
-        voiceData
-          .voice_projection
-          .source_count,
-
-      available_sources:
-        voiceData
-          .voice_projection
-          .available_source_count,
-
-      degraded_sources:
-        voiceData
-          .voice_projection
-          .degraded_source_count,
-
-      signals:
-        signals.length,
-
-      alerts:
-        alerts.length,
-
-      recommendations:
-        recommendations.length,
-
-      decisions:
-        decisionItems.length,
-
-      missions:
-        missions.length,
-
-      tasks:
-        tasks.length,
-    }
-  );
+ 
 
   return toolResult({
-    tool:
-      "get_unified_executive_intelligence",
+
+    tool: "get_unified_executive_intelligence",
 
     summary:
-      data?.briefing
-        ?.strategic_summary ||
+
+      data?.briefing?.strategic_summary ||
+
       "Unified executive intelligence loaded.",
 
-    data:
-      voiceData,
+    data,
 
-    sources,
+    sources: [
 
-    warnings:
-      degradedSources.length
-        ? [
-            `Degraded sources: ${degradedSources.join(
-              ", "
-            )}`,
-          ]
-        : [],
+      {
 
-    degraded:
-      degradedSources.length >
-        0 ||
-      Boolean(
-        data?.summary
-          ?.degraded_source_count
-      ),
+        source: "VoterSpheres Unified Executive Intelligence",
+
+        published_at: data?.generated_at || null,
+
+        fetched_at: now(),
+
+        confidence: data?.health?.intelligence_confidence || 80,
+
+      },
+
+    ],
+
+    warnings: data?.briefing?.degraded_sources?.length
+
+      ? [
+
+          `Degraded sources: ${data.briefing.degraded_sources.join(", ")}`,
+
+        ]
+
+      : [],
+
+    degraded: Boolean(data?.summary?.degraded_source_count),
+
   });
+
 }
+
  
 
 async function databaseNews({ query, state, locality, limit, user }) {
@@ -1722,10 +1407,14 @@ async function fecTool(args = {}) {
  
 
   const live = await getOpenFecFinance({
-  candidateId,
-  committeeId,
-  cycle,
-});
+
+    candidateId,
+
+    committeeId,
+
+    cycle,
+
+  });
 
  
 
@@ -1885,45 +1574,263 @@ async function resolveCandidateProfile(rawArgs = {}) {
 
   const args = normalizeToolArgs(rawArgs);
 
-  const params = [];
+ 
 
-  const conditions = [];
+  const requestedInternalId = clean(args.candidate_id);
+
+  const requestedFecId = clean(args.fec_candidate_id).toUpperCase();
+
+  const requestedCandidate = clean(args.candidate);
+
+  const requestedState = normalizeExecutiveVoiceState(args.state || "");
+
+  const requestedOffice = clean(args.office);
+
+  const requestedCycle = clean(args.cycle);
 
  
 
-  if (args.candidate_id) {
+  /*
 
-    params.push(clean(args.candidate_id));
+   * Exact identity lookup first. candidate_id may come from an internal
 
-    conditions.push(`CAST(id AS text) = $${params.length}`);
+   * VoterSpheres row ID in some callers, while fec_candidate_id is the
+
+   * authoritative FEC identifier. Support both without conflating them.
+
+   */
+
+  if (requestedInternalId || requestedFecId) {
+
+    const params = [];
+
+    const conditions = [];
+
+ 
+
+    if (requestedInternalId) {
+
+      params.push(requestedInternalId);
+
+      conditions.push(`CAST(id AS text) = $${params.length}`);
+
+ 
+
+      if (/^[A-Z]\d[A-Z]{2}\d+$/i.test(requestedInternalId)) {
+
+        params.push(requestedInternalId.toUpperCase());
+
+        conditions.push(`UPPER(COALESCE(fec_candidate_id, '')) = $${params.length}`);
+
+      }
+
+    }
+
+ 
+
+    if (requestedFecId) {
+
+      params.push(requestedFecId);
+
+      conditions.push(`UPPER(COALESCE(fec_candidate_id, '')) = $${params.length}`);
+
+    }
+
+ 
+
+    const exact = await firstAvailable([
+
+      {
+
+        key: "candidates_exact_identity",
+
+        sql: `
+
+          SELECT *
+
+          FROM candidates
+
+          WHERE (${conditions.join(" OR ")})
+
+          ORDER BY
+
+            CASE WHEN LOWER(COALESCE(status, '')) = 'active' THEN 0 ELSE 1 END,
+
+            COALESCE(election_year, 0) DESC,
+
+            COALESCE(source_updated_at, updated_at, created_at) DESC,
+
+            id ASC
+
+          LIMIT 20
+
+        `,
+
+        params,
+
+      },
+
+    ]);
+
+ 
+
+    if (Array.isArray(exact?.rows) && exact.rows.length) {
+
+      return exact;
+
+    }
 
   }
 
-  if (args.candidate) {
+ 
 
-    params.push(`%${clean(args.candidate)}%`);
+  if (!requestedCandidate) {
 
-    conditions.push(`(
+    return {
 
-      COALESCE(name, '') ILIKE $${params.length}
+      key: "candidates",
 
-      OR (COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) ILIKE $${params.length}
+      ok: true,
 
-    )`);
+      rows: [],
 
-  }
+      error: null,
 
-  if (args.state) {
-
-    params.push(upper(args.state));
-
-    conditions.push(`UPPER(COALESCE(state, '')) = $${params.length}`);
+    };
 
   }
 
-  if (args.office) {
+ 
 
-    params.push(`%${clean(args.office)}%`);
+  /*
+
+   * Normalize human-entered names and FEC-style LAST, FIRST names.
+
+   * Example:
+
+   *   Jasmine Crockett -> CROCKETT, JASMINE
+
+   */
+
+  const normalizedName = requestedCandidate
+
+    .replace(/,/g, " ")
+
+    .replace(/\s+/g, " ")
+
+    .trim();
+
+ 
+
+  const nameParts = normalizedName
+
+    .split(" ")
+
+    .map((part) => clean(part))
+
+    .filter(Boolean);
+
+ 
+
+  const firstName =
+
+    nameParts.length >= 2 ? nameParts.slice(0, -1).join(" ") : "";
+
+ 
+
+  const lastName =
+
+    nameParts.length >= 2 ? nameParts.at(-1) : normalizedName;
+
+ 
+
+  const lastFirstComma =
+
+    firstName && lastName ? `${lastName}, ${firstName}` : normalizedName;
+
+ 
+
+  const lastFirstSpace =
+
+    firstName && lastName ? `${lastName} ${firstName}` : normalizedName;
+
+ 
+
+  const params = [
+
+    `%${normalizedName}%`,
+
+    `%${lastFirstComma}%`,
+
+    `%${lastFirstSpace}%`,
+
+  ];
+
+ 
+
+  const normalIndex = 1;
+
+  const commaIndex = 2;
+
+  const reverseIndex = 3;
+
+ 
+
+  const conditions = [
+
+    `(
+
+      COALESCE(name, '') ILIKE $${normalIndex}
+
+      OR COALESCE(full_name, '') ILIKE $${normalIndex}
+
+      OR (COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) ILIKE $${normalIndex}
+
+      OR COALESCE(name, '') ILIKE $${commaIndex}
+
+      OR COALESCE(full_name, '') ILIKE $${commaIndex}
+
+      OR COALESCE(name, '') ILIKE $${reverseIndex}
+
+      OR COALESCE(full_name, '') ILIKE $${reverseIndex}
+
+      OR (COALESCE(last_name, '') || ' ' || COALESCE(first_name, '')) ILIKE $${reverseIndex}
+
+    )`,
+
+  ];
+
+ 
+
+  if (requestedState) {
+
+    params.push(requestedState.toUpperCase());
+
+    conditions.push(`
+
+      UPPER(
+
+        COALESCE(
+
+          NULLIF(state_code, ''),
+
+          state,
+
+          ''
+
+        )
+
+      ) = $${params.length}
+
+    `);
+
+  }
+
+ 
+
+  if (requestedOffice) {
+
+    params.push(`%${requestedOffice}%`);
 
     conditions.push(`COALESCE(office, '') ILIKE $${params.length}`);
 
@@ -1931,9 +1838,25 @@ async function resolveCandidateProfile(rawArgs = {}) {
 
  
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  if (requestedCycle) {
 
-  return firstAvailable([
+    const numericCycle = Number(requestedCycle);
+
+ 
+
+    if (Number.isFinite(numericCycle) && numericCycle > 1900) {
+
+      params.push(numericCycle);
+
+      conditions.push(`(election_year = $${params.length} OR election_year IS NULL)`);
+
+    }
+
+  }
+
+ 
+
+  const response = await firstAvailable([
 
     {
 
@@ -1945,11 +1868,19 @@ async function resolveCandidateProfile(rawArgs = {}) {
 
         FROM candidates
 
-        ${where}
+        WHERE ${conditions.join(" AND ")}
 
-        ORDER BY COALESCE(updated_at, created_at) DESC
+        ORDER BY
 
-        LIMIT 5
+          CASE WHEN LOWER(COALESCE(status, '')) = 'active' THEN 0 ELSE 1 END,
+
+          COALESCE(election_year, 0) DESC,
+
+          COALESCE(source_updated_at, updated_at, created_at) DESC,
+
+          id ASC
+
+        LIMIT 20
 
       `,
 
@@ -1958,6 +1889,10 @@ async function resolveCandidateProfile(rawArgs = {}) {
     },
 
   ]);
+
+ 
+
+  return response;
 
 }
 
@@ -2027,29 +1962,37 @@ async function candidateLiveTool(rawArgs = {}, user = {}) {
 
   );
 
-  const resolvedFecCandidateId = firstValue(
+  const resolvedFecCandidateId = clean(
 
-    args.fec_candidate_id,
+    firstValue(
 
-    profile?.fec_candidate_id,
+      args.fec_candidate_id,
 
-    profile?.candidate_id,
+      profile?.fec_candidate_id,
 
-    profile?.fec_id
+      profile?.fec_id
 
-  );
+    ) || ""
 
-  const resolvedCommitteeId = firstValue(
+  ).toUpperCase();
 
-    args.committee_id,
+  const resolvedCommitteeId = clean(
 
-    profile?.committee_id,
+    firstValue(
 
-    profile?.principal_committee_id,
+      args.committee_id,
 
-    profile?.fec_committee_id
+      profile?.campaign_committee_id,
 
-  );
+      profile?.committee_id,
+
+      profile?.principal_committee_id,
+
+      profile?.fec_committee_id
+
+    ) || ""
+
+  ).toUpperCase();
 
  
 
