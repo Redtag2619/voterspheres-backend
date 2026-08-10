@@ -6662,21 +6662,62 @@ export async function getOpenFecFinance({
 
   try {
 
-    const payload =
+    let payload = null;
+let lastError = null;
 
+for (let attempt = 1; attempt <= 2; attempt += 1) {
+  try {
+    payload =
       await fetchJson(
-
         endpoint,
-
         {
-         timeoutMs:
-           OPENFEC_TIMEOUT_MS,
+          timeoutMs:
+            OPENFEC_TIMEOUT_MS,
 
-         label:
-           "OpenFEC",
+          label:
+            `OpenFEC attempt ${attempt}`,
         }
-
       );
+
+    lastError = null;
+    break;
+  } catch (error) {
+    lastError = error;
+
+    const message =
+      String(
+        error?.message ||
+        ""
+      );
+
+    const retryable =
+      /503|502|504|429|timeout/i.test(
+        message
+      );
+
+    if (
+      !retryable ||
+      attempt >= 2
+    ) {
+      throw error;
+    }
+
+    await new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          1200
+        )
+    );
+  }
+}
+
+if (
+  !payload &&
+  lastError
+) {
+  throw lastError;
+}
 
  
 
