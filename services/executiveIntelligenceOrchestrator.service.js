@@ -6,7 +6,7 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-const BUILD = "4.2.1-strict-finance-identity";
+const BUILD = "4.3.0-multi-identity-finance";
 
  
 
@@ -3666,13 +3666,45 @@ function strictResolveCandidateIdentity(
 
   /*
 
-   * An explicitly supplied candidate ID is already deterministic.
-
-   * Preserve it, while still carrying the requested display name.
+   * An explicitly supplied FEC candidate ID is deterministic.
 
    */
 
   if (explicitCandidateId) {
+
+    const identity = {
+
+      candidate:
+
+        requestedName || null,
+
+      candidate_id:
+
+        explicitCandidateId,
+
+      committee_id:
+
+        explicitCommitteeId || null,
+
+      state:
+
+        context.state || null,
+
+      office:
+
+        context.office || null,
+
+      district:
+
+        null,
+
+      record:
+
+        null,
+
+    };
+
+ 
 
     return {
 
@@ -3694,7 +3726,9 @@ function strictResolveCandidateIdentity(
 
       record: null,
 
-      matches: [],
+      matches: [identity],
+
+      identities: [identity],
 
       reason: "explicit-candidate-id",
 
@@ -3723,6 +3757,8 @@ function strictResolveCandidateIdentity(
       record: null,
 
       matches: [],
+
+      identities: [],
 
       reason: "candidate-name-required",
 
@@ -3886,6 +3922,8 @@ function strictResolveCandidateIdentity(
 
       matches: [],
 
+      identities: [],
+
       reason: "no-strict-candidate-match",
 
     };
@@ -3896,7 +3934,7 @@ function strictResolveCandidateIdentity(
 
   /*
 
-   * Deduplicate duplicate database rows that point to the same FEC ID.
+   * Deduplicate database rows that point to the same FEC identity.
 
    */
 
@@ -3938,11 +3976,71 @@ function strictResolveCandidateIdentity(
 
  
 
-  if (uniqueMatches.length > 1) {
+  const identities = uniqueMatches.map(
+
+    (record) => ({
+
+      candidate:
+
+        candidateNameFromObject(record) ||
+
+        requestedName,
+
+      candidate_id:
+
+        candidateIdFromObject(record),
+
+      committee_id:
+
+        explicitCommitteeId ||
+
+        committeeIdFromObject(record) ||
+
+        null,
+
+      state:
+
+        candidateRecordState(record) ||
+
+        null,
+
+      office:
+
+        record.office ||
+
+        record.office_full ||
+
+        record.office_name ||
+
+        null,
+
+      district:
+
+        record.district || null,
+
+      record,
+
+    })
+
+  );
+
+ 
+
+  if (identities.length > 1) {
+
+    /*
+
+     * Multiple exact identities are not treated as an error when the
+
+     * question does not specify an office. They are all valid records
+
+     * for the requested person and will each receive an FEC lookup.
+
+     */
 
     return {
 
-      ok: false,
+      ok: true,
 
       ambiguous: true,
 
@@ -3954,45 +4052,43 @@ function strictResolveCandidateIdentity(
 
       committee_id:
 
-        explicitCommitteeId,
+        explicitCommitteeId || null,
 
       record: null,
 
       matches:
 
-        uniqueMatches.map((record) => ({
+        identities.map((identity) => ({
 
           candidate:
 
-            candidateNameFromObject(record),
+            identity.candidate,
 
           candidate_id:
 
-            candidateIdFromObject(record),
+            identity.candidate_id,
 
           committee_id:
 
-            committeeIdFromObject(record),
+            identity.committee_id,
 
           state:
 
-            candidateRecordState(record),
+            identity.state,
 
           office:
 
-            record.office ||
-
-            record.office_full ||
-
-            null,
+            identity.office,
 
           district:
 
-            record.district || null,
+            identity.district,
 
         })),
 
-      reason: "multiple-strict-candidate-matches",
+      identities,
+
+      reason: "multiple-verified-candidate-identities",
 
     };
 
@@ -4000,7 +4096,7 @@ function strictResolveCandidateIdentity(
 
  
 
-  const record = uniqueMatches[0];
+  const identity = identities[0];
 
  
 
@@ -4012,31 +4108,31 @@ function strictResolveCandidateIdentity(
 
     candidate:
 
-      candidateNameFromObject(record) ||
-
-      requestedName,
+      identity.candidate,
 
     candidate_id:
 
-      candidateIdFromObject(record),
+      identity.candidate_id,
 
     committee_id:
 
-      explicitCommitteeId ||
+      identity.committee_id,
 
-      committeeIdFromObject(record),
+    record:
 
-    record,
+      identity.record,
 
-    matches: [],
+    matches:
+
+      identities,
+
+    identities,
 
     reason: "strict-candidate-match",
 
   };
 
 }
-
- 
 
 function createIdentityFailureResult(
 
@@ -4186,9 +4282,9 @@ async function executeFinancePlan({
 
    * get_candidate_live_intelligence. Candidate identity comes only from
 
-   * the VoterSpheres candidate/statistics data path so polling/news tools
+   * the VoterSpheres candidate/statistics database path, so polling/news
 
-   * cannot contaminate FEC-only evidence or sources.
+   * cannot contaminate an FEC-only request.
 
    */
 
@@ -4252,59 +4348,153 @@ async function executeFinancePlan({
 
  
 
-  const fecCall = {
+  const identities = Array.isArray(
 
-    ...fecTemplate,
+    identity.identities
 
-    arguments: {
+  ) && identity.identities.length
 
-      ...fecTemplate.arguments,
+    ? identity.identities
 
-      candidate:
+    : [
 
-        identity.candidate ||
+        {
 
-        plan.context.candidate,
+          candidate:
 
-      candidate_id:
+            identity.candidate,
 
-        identity.candidate_id,
+          candidate_id:
 
-      committee_id:
+            identity.candidate_id,
 
-        identity.committee_id ||
+          committee_id:
 
-        plan.context.committee_id,
+            identity.committee_id,
 
-      cycle:
+          state:
 
-        plan.context.cycle,
+            plan.context.state || null,
 
-    },
+          office:
 
-  };
+            plan.context.office || null,
+
+          district:
+
+            null,
+
+          record:
+
+            identity.record || null,
+
+        },
+
+      ];
 
  
 
-  results.push(
+  /*
 
-    await executePlannedTool(
+   * Retrieve every verified identity. We execute sequentially to avoid
 
-      fecCall,
+   * unnecessary OpenFEC bursts/rate-limit pressure and to keep diagnostics
 
-      user
+   * deterministic.
 
-    )
+   */
 
-  );
+  for (const resolved of identities) {
+
+    if (
+
+      !clean(resolved.candidate_id) &&
+
+      !clean(resolved.committee_id)
+
+    ) {
+
+      continue;
+
+    }
+
+ 
+
+    const fecCall = {
+
+      ...fecTemplate,
+
+      arguments: {
+
+        ...fecTemplate.arguments,
+
+        candidate:
+
+          resolved.candidate ||
+
+          plan.context.candidate,
+
+        candidate_id:
+
+          resolved.candidate_id || "",
+
+        committee_id:
+
+          resolved.committee_id ||
+
+          plan.context.committee_id ||
+
+          "",
+
+        cycle:
+
+          plan.context.cycle,
+
+        resolved_state:
+
+          resolved.state ||
+
+          plan.context.state ||
+
+          null,
+
+        resolved_office:
+
+          resolved.office ||
+
+          plan.context.office ||
+
+          null,
+
+        resolved_district:
+
+          resolved.district || null,
+
+      },
+
+    };
+
+ 
+
+    results.push(
+
+      await executePlannedTool(
+
+        fecCall,
+
+        user
+
+      )
+
+    );
+
+  }
 
  
 
   return results;
 
 }
-
- 
 
 async function executePlan({
 
@@ -4356,23 +4546,31 @@ async function executePlan({
 
  
 
-function getFecRecords(
+function getFecToolResults(
 
   results
 
 ) {
 
-  const result =
+  return results.filter(
 
-    findToolResult(
+    (result) =>
 
-      results,
+      result.tool ===
 
       "get_fec_finance"
 
-    );
+  );
+
+}
 
  
+
+function recordsFromFecResult(
+
+  result
+
+) {
 
   const data =
 
@@ -4441,6 +4639,30 @@ function getFecRecords(
 }
 
  
+
+function getFecRecords(
+
+  results
+
+) {
+
+  return getFecToolResults(
+
+    results
+
+  ).flatMap(
+
+    (result) =>
+
+      recordsFromFecResult(
+
+        result
+
+      )
+
+  );
+
+}
 
 function finiteNumber(
 
@@ -4940,33 +5162,27 @@ function buildFinanceInterpretation(
 
  
 
-function buildFinanceDataAnswer({
+function buildFinanceReport({
 
   context,
 
-  results,
-
-  sources,
+  result,
 
 }) {
 
-  const records =
+  const records = recordsFromFecResult(
 
-    getFecRecords(
+    result
 
-      results
-
-    );
+  );
 
  
 
-  const record =
+  const record = selectLatestFecRecord(
 
-    selectLatestFecRecord(
+    records
 
-      records
-
-    );
+  );
 
  
 
@@ -4978,29 +5194,27 @@ function buildFinanceDataAnswer({
 
  
 
-  const candidateId =
+  const candidateId = clean(
 
-    clean(
+    record.candidate_id ||
 
-      record.candidate_id ||
+    result?.arguments?.candidate_id ||
 
-      context.candidate_id
+    context.candidate_id
 
-    );
+  );
 
  
 
-  const reportType =
+  const reportType = clean(
 
-    clean(
+    record.last_report_type_full ||
 
-      record.last_report_type_full ||
+    record.report_type_full ||
 
-      record.report_type_full ||
+    record.report_type
 
-      record.report_type
-
-    );
+  );
 
  
 
@@ -5036,8 +5250,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "disbursements",
@@ -5047,8 +5259,6 @@ function buildFinanceDataAnswer({
       record.disbursements
 
     ),
-
- 
 
     metric(
 
@@ -5064,8 +5274,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "contributions",
@@ -5075,8 +5283,6 @@ function buildFinanceDataAnswer({
       record.contributions
 
     ),
-
- 
 
     metric(
 
@@ -5088,8 +5294,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "itemized_individual_contributions",
@@ -5099,8 +5303,6 @@ function buildFinanceDataAnswer({
       record.individual_itemized_contributions
 
     ),
-
- 
 
     metric(
 
@@ -5112,8 +5314,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "operating_expenditures",
@@ -5123,8 +5323,6 @@ function buildFinanceDataAnswer({
       record.operating_expenditures
 
     ),
-
- 
 
     metric(
 
@@ -5136,8 +5334,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "transfers_in",
@@ -5148,8 +5344,6 @@ function buildFinanceDataAnswer({
 
     ),
 
- 
-
     metric(
 
       "refunds",
@@ -5159,8 +5353,6 @@ function buildFinanceDataAnswer({
       record.contribution_refunds
 
     ),
-
- 
 
     metric(
 
@@ -5180,7 +5372,7 @@ function buildFinanceDataAnswer({
 
   const source =
 
-    sources.find(
+    result?.sources?.find(
 
       (item) =>
 
@@ -5206,43 +5398,193 @@ function buildFinanceDataAnswer({
 
     ) ||
 
+    result?.sources?.[0] ||
+
     null;
 
  
 
-  const candidateLabel =
+  const office = clean(
 
-    context.candidate ||
+    result?.arguments?.resolved_office ||
 
-    "Candidate";
+    context.office
 
- 
-
-  const title =
-
-    `Latest FEC Report — ${candidateLabel}`;
+  );
 
  
 
-  const lines = [
+  const district = clean(
 
-    title,
+    result?.arguments?.resolved_district
 
-    "",
-
-  ];
+  );
 
  
 
-  if (
+  const state = clean(
 
-    candidateId
+    result?.arguments?.resolved_state ||
 
-  ) {
+    context.state
+
+  );
+
+ 
+
+  const interpretation = buildFinanceInterpretation(
+
+    record
+
+  );
+
+ 
+
+  return {
+
+    candidate:
+
+      context.candidate ||
+
+      result?.arguments?.candidate ||
+
+      null,
+
+    candidate_id:
+
+      candidateId || null,
+
+    committee_id:
+
+      clean(
+
+        record.committee_id ||
+
+        result?.arguments?.committee_id ||
+
+        context.committee_id
+
+      ) || null,
+
+    state:
+
+      state || null,
+
+    office:
+
+      office || null,
+
+    district:
+
+      district || null,
+
+    cycle:
+
+      record.cycle ||
+
+      context.cycle ||
+
+      null,
+
+    report_type:
+
+      reportType || null,
+
+    coverage_start:
+
+      coverageStart,
+
+    coverage_end:
+
+      coverageEnd,
+
+    reporting_period:
+
+      source?.reporting_period ||
+
+      coverageEnd ||
+
+      null,
+
+    metrics,
+
+    interpretation,
+
+    record,
+
+    source,
+
+  };
+
+}
+
+ 
+
+function financeReportLabel(
+
+  report
+
+) {
+
+  const office = clean(
+
+    report?.office
+
+  );
+
+ 
+
+  const district = clean(
+
+    report?.district
+
+  );
+
+ 
+
+  if (office && district) {
+
+    return `${office} - ${district}`;
+
+  }
+
+ 
+
+  return (
+
+    office ||
+
+    report?.candidate_id ||
+
+    "FEC filing"
+
+  );
+
+}
+
+ 
+
+function appendFinanceReportLines(
+
+  lines,
+
+  report,
+
+  includeHeading = true
+
+) {
+
+  if (includeHeading) {
 
     lines.push(
 
-      `Candidate ID: ${candidateId}`
+      financeReportLabel(
+
+        report
+
+      ),
+
+      ""
 
     );
 
@@ -5250,15 +5592,11 @@ function buildFinanceDataAnswer({
 
  
 
-  if (
-
-    context.cycle
-
-  ) {
+  if (report.candidate_id) {
 
     lines.push(
 
-      `Cycle: ${context.cycle}`
+      `Candidate ID: ${report.candidate_id}`
 
     );
 
@@ -5266,15 +5604,11 @@ function buildFinanceDataAnswer({
 
  
 
-  if (
-
-    reportType
-
-  ) {
+  if (report.cycle) {
 
     lines.push(
 
-      `Report: ${reportType}`
+      `Cycle: ${report.cycle}`
 
     );
 
@@ -5282,17 +5616,25 @@ function buildFinanceDataAnswer({
 
  
 
-  if (
+  if (report.report_type) {
 
-    coverageStart
+    lines.push(
 
-  ) {
+      `Report: ${report.report_type}`
+
+    );
+
+  }
+
+ 
+
+  if (report.coverage_start) {
 
     lines.push(
 
       `Coverage start: ${formatDate(
 
-        coverageStart
+        report.coverage_start
 
       )}`
 
@@ -5302,17 +5644,13 @@ function buildFinanceDataAnswer({
 
  
 
-  if (
-
-    coverageEnd
-
-  ) {
+  if (report.coverage_end) {
 
     lines.push(
 
       `Coverage through: ${formatDate(
 
-        coverageEnd
+        report.coverage_end
 
       )}`
 
@@ -5326,13 +5664,7 @@ function buildFinanceDataAnswer({
 
  
 
-  for (
-
-    const item
-
-    of metrics
-
-  ) {
+  for (const item of report.metrics) {
 
     lines.push(
 
@@ -5344,19 +5676,9 @@ function buildFinanceDataAnswer({
 
  
 
-  const interpretation =
-
-    buildFinanceInterpretation(
-
-      record
-
-    );
-
- 
-
   if (
 
-    interpretation.length
+    report.interpretation.length
 
   ) {
 
@@ -5374,7 +5696,7 @@ function buildFinanceDataAnswer({
 
       const note
 
-      of interpretation
+      of report.interpretation
 
     ) {
 
@@ -5390,7 +5712,7 @@ function buildFinanceDataAnswer({
 
  
 
-  if (source) {
+  if (report.source) {
 
     lines.push(
 
@@ -5400,9 +5722,9 @@ function buildFinanceDataAnswer({
 
         clean(
 
-          source.name ||
+          report.source.name ||
 
-          source.source
+          report.source.source
 
         ) ||
 
@@ -5416,7 +5738,7 @@ function buildFinanceDataAnswer({
 
     if (
 
-      source.reporting_period
+      report.source.reporting_period
 
     ) {
 
@@ -5424,7 +5746,7 @@ function buildFinanceDataAnswer({
 
         `Reporting period: ${formatDate(
 
-          source.reporting_period
+          report.source.reporting_period
 
         )}`
 
@@ -5436,13 +5758,13 @@ function buildFinanceDataAnswer({
 
     if (
 
-      source.confidence != null
+      report.source.confidence != null
 
     ) {
 
       lines.push(
 
-        `Source confidence: ${source.confidence}%`
+        `Source confidence: ${report.source.confidence}%`
 
       );
 
@@ -5450,119 +5772,289 @@ function buildFinanceDataAnswer({
 
   }
 
+}
+
+ 
+
+function buildFinanceDataAnswer({
+
+  context,
+
+  results,
+
+  sources,
+
+}) {
+
+  const reports = getFecToolResults(
+
+    results
+
+  )
+
+    .filter(
+
+      (result) =>
+
+        result.usable
+
+    )
+
+    .map(
+
+      (result) =>
+
+        buildFinanceReport({
+
+          context,
+
+          result,
+
+        })
+
+    )
+
+    .filter(Boolean);
+
+ 
+
+  if (!reports.length) {
+
+    return null;
+
+  }
+
+ 
+
+  const candidateLabel =
+
+    context.candidate ||
+
+    "Candidate";
+
+ 
+
+  const multiple =
+
+    reports.length > 1;
+
+ 
+
+  const title = multiple
+
+    ? `Current FEC Reports - ${candidateLabel}`
+
+    : `Current FEC Report - ${candidateLabel}`;
+
+ 
+
+  const lines = [
+
+    title,
+
+    "",
+
+  ];
+
+ 
+
+  if (multiple) {
+
+    lines.push(
+
+      `VoterSpheres found ${reports.length} verified FEC candidate identities matching ${candidateLabel}. Because the request did not uniquely select one office, both verified reports are shown below.`,
+
+      ""
+
+    );
+
+  }
+
+ 
+
+  reports.forEach(
+
+    (report, index) => {
+
+      appendFinanceReportLines(
+
+        lines,
+
+        report,
+
+        multiple
+
+      );
+
+ 
+
+      if (
+
+        index <
+
+        reports.length - 1
+
+      ) {
+
+        lines.push(
+
+          "",
+
+          "---",
+
+          ""
+
+        );
+
+      }
+
+    }
+
+  );
+
+ 
+
+  const metrics = reports.flatMap(
+
+    (report) =>
+
+      report.metrics.map(
+
+        (item) => ({
+
+          ...item,
+
+          candidate_id:
+
+            report.candidate_id,
+
+          office:
+
+            report.office,
+
+          district:
+
+            report.district,
+
+        })
+
+      )
+
+  );
+
  
 
   return {
 
     type:
 
-      "fec_finance",
+      multiple
 
- 
+        ? "fec_finance_multi"
+
+        : "fec_finance",
 
     title,
 
- 
-
     candidate:
 
-      context.candidate ||
-
-      null,
-
- 
+      context.candidate || null,
 
     candidate_id:
 
-      candidateId ||
+      multiple
 
-      null,
+        ? null
 
- 
+        : reports[0].candidate_id,
 
     committee_id:
 
-      clean(
+      multiple
 
-        record.committee_id ||
+        ? null
 
-        context.committee_id
-
-      ) ||
-
-      null,
-
- 
+        : reports[0].committee_id,
 
     cycle:
 
-      record.cycle ||
-
       context.cycle ||
 
-      null,
+      reports[0].cycle ||
 
- 
+      null,
 
     report_type:
 
-      reportType ||
+      multiple
 
-      null,
+        ? null
 
- 
+        : reports[0].report_type,
 
     coverage_start:
 
-      coverageStart,
+      multiple
 
- 
+        ? null
+
+        : reports[0].coverage_start,
 
     coverage_end:
 
-      coverageEnd,
+      multiple
 
- 
+        ? null
+
+        : reports[0].coverage_end,
 
     reporting_period:
 
-      source?.reporting_period ||
+      multiple
 
-      coverageEnd ||
+        ? null
 
-      null,
-
- 
+        : reports[0].reporting_period,
 
     metrics,
 
- 
+    reports,
 
-    interpretation,
+    interpretation:
 
- 
+      reports.flatMap(
 
-    record,
+        (report) =>
 
- 
+          report.interpretation
 
-    source,
+      ),
 
- 
+    record:
+
+      multiple
+
+        ? null
+
+        : reports[0].record,
+
+    source:
+
+      multiple
+
+        ? null
+
+        : reports[0].source,
+
+    sources,
 
     answer:
 
-      lines.join(
-
-        "\n"
-
-      ),
+      lines.join("\n"),
 
   };
 
 }
-
- 
 
 function buildDataAnswer({
 
@@ -6296,7 +6788,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
     finance_resolution_mode:
 
-      "strict-candidate-statistics-only",
+      "strict-candidate-statistics-multi-identity",
 
  
 
@@ -7039,4 +7531,3 @@ export async function runExecutiveIntelligenceOrchestrator({
   };
 
 }
-
