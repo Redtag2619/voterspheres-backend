@@ -2,159 +2,163 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-/*
-
- * =========================================================
-
- * VoterSpheres Build 4.4
-
- * Unified Candidate Intelligence Bundle
-
- * FULL REPLACEMENT — RETURN CONTRACT FIX
-
- * =========================================================
-
- *
-
- * Preserves the current retrieval flow:
-
- *   1. Candidate statistics / verified identity resolution
-
- *   2. FEC finance for each verified identity
-
- *   3. Candidate polling
-
- *   4. Candidate news / articles
-
- *   5. Unified executive intelligence for signals / strategy
-
- *
-
- * Fixes the public return contract expected by
-
- * executiveIntelligenceOrchestrator.service.js:
-
- *   - ok
-
- *   - summary
-
- *   - data                <-- complete candidate bundle lives here
-
- *   - records
-
- *   - count
-
- *   - sources
-
- *   - warnings
-
- *   - diagnostics
-
- *   - degraded
-
- *   - generated_at
-
- *
-
- * Major bundle fields are also mirrored at top-level for
-
- * backward compatibility with existing callers.
-
- */
-
- 
-
-const BUILD = "4.4.1-candidate-bundle-contract";
-
-const PROVIDER = "candidate_intelligence_bundle";
+const BUILD = "4.4.0-unified-candidate-intelligence";
 
  
 
 const now = () => new Date().toISOString();
 
-const clean = (value = "") => String(value ?? "").trim();
+ 
 
-const arr = (value) => (Array.isArray(value) ? value : []);
+const clean = (value = "") =>
+
+  String(value ?? "").trim();
 
  
 
-function obj(value) {
+const arr = (value) =>
 
-  return value && typeof value === "object" && !Array.isArray(value)
+  Array.isArray(value)
+
+    ? value
+
+    : [];
+
+ 
+
+const obj = (value) =>
+
+  value &&
+
+  typeof value === "object" &&
+
+  !Array.isArray(value)
 
     ? value
 
     : {};
 
-}
+ 
+
+function normalizePersonName(
+
+  value = ""
+
+) {
+
+  const parts = clean(value)
+
+    .toLowerCase()
+
+    .replace(
+
+      /\b(jr|sr|ii|iii|iv)\.?\b/g,
+
+      " "
+
+    )
+
+    .replace(
+
+      /[^a-z0-9]+/g,
+
+      " "
+
+    )
+
+    .split(
+
+      /\s+/
+
+    )
+
+    .map(
+
+      (token) =>
+
+        token.trim()
+
+    )
+
+    .filter(Boolean);
 
  
 
-function uniqueStrings(values = []) {
-
-  return [
-
-    ...new Set(
-
-      arr(values)
-
-        .flat(Infinity)
-
-        .map((value) => clean(value))
-
-        .filter(Boolean)
-
-    ),
-
-  ];
-
-}
-
- 
-
-function normalizeName(value = "") {
-
-  return clean(value)
-
-    .replace(/,/g, " ")
-
-    .replace(/\s+/g, " ")
-
-    .trim()
-
-    .toLowerCase();
-
-}
-
- 
-
-function sortedNameKey(value = "") {
-
-  return normalizeName(value)
-
-    .split(" ")
-
-    .filter(Boolean)
-
-    .sort()
-
-    .join(" ");
+  return parts;
 
 }
 
  
 
-function candidateDisplayName(row = {}) {
+function candidateNamesMatch(
 
-  return clean(
+  requested,
 
-    row.full_name ||
+  stored
 
-      row.name ||
+) {
 
-      row.candidate_name ||
+  const left =
 
-      [row.first_name, row.last_name].filter(Boolean).join(" ")
+    normalizePersonName(
+
+      requested
+
+    );
+
+ 
+
+  const right =
+
+    normalizePersonName(
+
+      stored
+
+    );
+
+ 
+
+  if (
+
+    !left.length ||
+
+    !right.length
+
+  ) {
+
+    return false;
+
+  }
+
+ 
+
+  if (
+
+    left.length ===
+
+    1
+
+  ) {
+
+    return right.includes(
+
+      left[0]
+
+    );
+
+  }
+
+ 
+
+  return left.every(
+
+    (token) =>
+
+      right.includes(
+
+        token
+
+      )
 
   );
 
@@ -162,119 +166,129 @@ function candidateDisplayName(row = {}) {
 
  
 
-function sameCandidateName(requestedName, row = {}) {
+function candidateName(
 
-  const requested = sortedNameKey(requestedName);
+  row = {}
 
-  const stored = sortedNameKey(candidateDisplayName(row));
+) {
 
- 
+  return clean(
 
-  return Boolean(requested && stored && requested === stored);
+    row.full_name ||
 
-}
+    row.name ||
 
- 
+    row.candidate_name ||
 
-function normalizeOffice(value = "") {
+    [
 
-  const text = clean(value).toLowerCase();
+      row.first_name,
 
- 
+      row.middle_name,
 
-  if (!text) return "";
+      row.last_name,
 
-  if (text.includes("senate")) return "senate";
+    ]
 
-  if (text.includes("house") || text.includes("congress")) return "house";
+      .filter(Boolean)
 
-  if (text.includes("president")) return "president";
+      .join(" ")
 
-  if (text.includes("governor")) return "governor";
-
- 
-
-  return text;
+  );
 
 }
 
  
 
-function normalizeState(value = "") {
+function normalizeOffice(
 
-  return clean(value).toUpperCase();
+  value = ""
 
-}
+) {
 
- 
+  const lower =
 
-function candidateRowsFromTool(result) {
+    clean(value)
 
-  const data = obj(result?.data);
+      .toLowerCase()
 
- 
+      .replace(
 
-  if (Array.isArray(data.candidates)) return data.candidates;
+        /[^a-z0-9]+/g,
 
-  if (Array.isArray(data.records)) return data.records;
+        " "
 
-  if (Array.isArray(data.results)) return data.results;
+      )
 
-  if (Array.isArray(result?.records)) return result.records;
-
- 
-
-  return [];
-
-}
+      .trim();
 
  
 
-function normalizeIdentity(row = {}) {
+  if (
 
-  return {
+    /\bhouse\b|congress/.test(
 
-    id: row.id ?? null,
+      lower
 
-    candidate: candidateDisplayName(row) || null,
+    )
 
-    name: candidateDisplayName(row) || null,
+  ) {
 
-    party: row.party || null,
+    return "house";
 
-    state: row.state_code || row.state || null,
+  }
 
-    office: row.office || null,
+ 
 
-    district: row.district || null,
+  if (
 
-    cycle: row.election_year || row.cycle || null,
+    /\bsenate\b|senator/.test(
 
-    election_year: row.election_year || null,
+      lower
 
-    election_type: row.election_type || null,
+    )
 
-    incumbent: row.incumbent ?? null,
+  ) {
 
-    status: row.status || row.campaign_status || null,
+    return "senate";
 
-    fec_candidate_id: row.fec_candidate_id || row.candidate_id || null,
+  }
 
-    committee_id: row.campaign_committee_id || row.committee_id || null,
+ 
 
-    campaign_committee_id:
+  if (
 
-      row.campaign_committee_id || row.committee_id || null,
+    /president/.test(
 
-    campaign_committee_name: row.campaign_committee_name || null,
+      lower
 
-    website: row.website || null,
+    )
 
-    source: row.source || row.contact_source || null,
+  ) {
 
-    record: row,
+    return "president";
 
-  };
+  }
+
+ 
+
+  if (
+
+    /governor/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "governor";
+
+  }
+
+ 
+
+  return lower;
 
 }
 
@@ -284,105 +298,331 @@ function selectVerifiedIdentities(
 
   rows,
 
-  {
-
-    candidate = "",
-
-    candidateId = "",
-
-    committeeId = "",
-
-    state = "",
-
-    office = "",
-
-    cycle = "",
-
-  } = {}
+  context = {}
 
 ) {
 
-  const requestedCandidate = clean(candidate);
+  const requestedName =
 
-  const requestedCandidateId = clean(candidateId).toUpperCase();
+    clean(
 
-  const requestedCommitteeId = clean(committeeId).toUpperCase();
+      context.candidate
 
-  const requestedState = normalizeState(state);
+    );
 
-  const requestedOffice = normalizeOffice(office);
+ 
 
-  const requestedCycle = clean(cycle);
+  const requestedState =
+
+    clean(
+
+      context.state
+
+    ).toUpperCase();
+
+ 
+
+  const requestedOffice =
+
+    normalizeOffice(
+
+      context.office
+
+    );
+
+ 
+
+  const requestedCycle =
+
+    clean(
+
+      context.cycle
+
+    );
 
  
 
   return arr(rows)
 
-    .map(normalizeIdentity)
+    .filter(
 
-    .filter((identity) => {
+      (row) => {
 
-      if (requestedCandidateId) {
+        const storedName =
 
-        return (
+          candidateName(
 
-          clean(identity.fec_candidate_id).toUpperCase() === requestedCandidateId
+            row
+
+          );
+
+ 
+
+        if (
+
+          requestedName &&
+
+          !candidateNamesMatch(
+
+            requestedName,
+
+            storedName
+
+          )
+
+        ) {
+
+          return false;
+
+        }
+
+ 
+
+        if (
+
+          requestedState
+
+        ) {
+
+          const state =
+
+            clean(
+
+              row.state_code ||
+
+              row.state
+
+            ).toUpperCase();
+
+ 
+
+          if (
+
+            state &&
+
+            state !==
+
+              requestedState
+
+          ) {
+
+            return false;
+
+          }
+
+        }
+
+ 
+
+        if (
+
+          requestedOffice
+
+        ) {
+
+          const office =
+
+            normalizeOffice(
+
+              row.office ||
+
+              row.office_full
+
+            );
+
+ 
+
+          if (
+
+            office &&
+
+            office !==
+
+              requestedOffice
+
+          ) {
+
+            return false;
+
+          }
+
+        }
+
+ 
+
+        if (
+
+          requestedCycle &&
+
+          row.election_year &&
+
+          String(
+
+            row.election_year
+
+          ) !==
+
+            requestedCycle
+
+        ) {
+
+          return false;
+
+        }
+
+ 
+
+        return Boolean(
+
+          clean(
+
+            row.fec_candidate_id
+
+          ) ||
+
+          clean(
+
+            row.campaign_committee_id
+
+          )
 
         );
 
       }
 
- 
-
-      if (requestedCommitteeId) {
-
-        return clean(identity.committee_id).toUpperCase() === requestedCommitteeId;
-
-      }
-
- 
-
-      if (!requestedCandidate) return true;
-
- 
-
-      return sameCandidateName(requestedCandidate, identity.record);
-
-    })
-
-    .filter(
-
-      (identity) =>
-
-        !requestedState || normalizeState(identity.state) === requestedState
-
     )
 
-    .filter(
+    .map(
 
-      (identity) =>
+      (row) => ({
 
-        !requestedOffice || normalizeOffice(identity.office) === requestedOffice
+        candidate:
 
-    )
+          candidateName(
 
-    .filter(
+            row
 
-      (identity) =>
+          ) ||
 
-        !requestedCycle ||
+          requestedName,
 
-        !identity.cycle ||
+ 
 
-        String(identity.cycle) === requestedCycle
+        candidate_id:
 
-    )
+          clean(
 
-    .filter(
+            row.fec_candidate_id
 
-      (identity) =>
+          ) ||
 
-        clean(identity.fec_candidate_id) || clean(identity.committee_id)
+          null,
+
+ 
+
+        committee_id:
+
+          clean(
+
+            row.campaign_committee_id
+
+          ) ||
+
+          null,
+
+ 
+
+        state:
+
+          clean(
+
+            row.state_code ||
+
+            row.state
+
+          ) ||
+
+          null,
+
+ 
+
+        office:
+
+          clean(
+
+            row.office ||
+
+            row.office_full
+
+          ) ||
+
+          null,
+
+ 
+
+        district:
+
+          clean(
+
+            row.district
+
+          ) ||
+
+          null,
+
+ 
+
+        party:
+
+          clean(
+
+            row.party
+
+          ) ||
+
+          null,
+
+ 
+
+        election_year:
+
+          row.election_year ||
+
+          null,
+
+ 
+
+        incumbent:
+
+          row.incumbent ??
+
+          null,
+
+ 
+
+        status:
+
+          row.status ||
+
+          row.campaign_status ||
+
+          null,
+
+ 
+
+        website:
+
+          row.website ||
+
+          null,
+
+ 
+
+        record:
+
+          row,
+
+      })
 
     );
 
@@ -390,79 +630,263 @@ function selectVerifiedIdentities(
 
  
 
-function financeRecords(result) {
+async function safeTool(
 
-  const data = obj(result?.data);
+  name,
+
+  argumentsValue,
+
+  user
+
+) {
+
+  try {
+
+    return await executeExecutiveVoiceTool({
+
+      name,
+
+      arguments:
+
+        argumentsValue,
+
+      user,
+
+    });
+
+  } catch (
+
+    error
+
+  ) {
+
+    return {
+
+      ok:
+
+        false,
 
  
 
-  if (Array.isArray(data.records)) return data.records;
+      tool:
 
-  if (Array.isArray(data.finance)) return data.finance;
-
-  if (Array.isArray(data.results)) return data.results;
-
-  if (Array.isArray(result?.records)) return result.records;
+        name,
 
  
 
-  return [];
+      summary:
+
+        `${name} failed.`,
+
+ 
+
+      data:
+
+        null,
+
+ 
+
+      records:
+
+        [],
+
+ 
+
+      sources:
+
+        [],
+
+ 
+
+      warnings: [
+
+        error?.message ||
+
+        "Unknown tool failure.",
+
+      ],
+
+ 
+
+      diagnostics: [
+
+        {
+
+          provider:
+
+            name,
+
+ 
+
+          ok:
+
+            false,
+
+ 
+
+          error:
+
+            error?.message ||
+
+            "Unknown tool failure.",
+
+ 
+
+          checked_at:
+
+            now(),
+
+        },
+
+      ],
+
+ 
+
+      degraded:
+
+        true,
+
+ 
+
+      generated_at:
+
+        now(),
+
+    };
+
+  }
 
 }
 
  
 
-function pollingRecords(result) {
+function sourceKey(
 
-  const data = obj(result?.data);
+  source = {}
 
- 
+) {
 
-  if (Array.isArray(data.polls)) return data.polls;
+  return clean(
 
-  if (Array.isArray(data.records)) return data.records;
+    source.url ||
 
-  if (Array.isArray(data.results)) return data.results;
+    source.source_url ||
 
-  if (Array.isArray(result?.records)) return result.records;
+    source.name ||
 
- 
+    source.source ||
 
-  return [];
+    source.provider
 
-}
-
- 
-
-function newsRecords(result) {
-
-  const data = obj(result?.data);
-
- 
-
-  if (Array.isArray(data.articles)) return data.articles;
-
-  if (Array.isArray(data.news)) return data.news;
-
-  if (Array.isArray(data.records)) return data.records;
-
-  if (Array.isArray(data.results)) return data.results;
-
-  if (Array.isArray(result?.records)) return result.records;
-
- 
-
-  return [];
+  ).toLowerCase();
 
 }
 
  
 
-function extractStrategyRecommendations(result) {
+function mergeSources(
 
-  const data = obj(result?.data);
+  resultSets = []
 
-  const briefing = obj(data.briefing);
+) {
+
+  const map =
+
+    new Map();
+
+ 
+
+  for (
+
+    const set
+
+    of resultSets
+
+  ) {
+
+    for (
+
+      const source
+
+      of arr(
+
+        set?.sources
+
+      )
+
+    ) {
+
+      const key =
+
+        sourceKey(
+
+          source
+
+        );
+
+ 
+
+      if (
+
+        key &&
+
+        !map.has(
+
+          key
+
+        )
+
+      ) {
+
+        map.set(
+
+          key,
+
+          source
+
+        );
+
+      }
+
+    }
+
+  }
+
+ 
+
+  return [
+
+    ...map.values(),
+
+  ];
+
+}
+
+ 
+
+function strategyRowsFromUnified(
+
+  unified
+
+) {
+
+  const data =
+
+    obj(
+
+      unified?.data
+
+    );
+
+ 
+
+  const briefing =
+
+    obj(
+
+      data.briefing
+
+    );
 
  
 
@@ -484,9 +908,23 @@ function extractStrategyRecommendations(result) {
 
  
 
-  for (const value of candidates) {
+  for (
 
-    if (Array.isArray(value)) return value;
+    const value
+
+    of candidates
+
+  ) {
+
+    if (
+
+      Array.isArray(value)
+
+    ) {
+
+      return value;
+
+    }
 
   }
 
@@ -498,13 +936,39 @@ function extractStrategyRecommendations(result) {
 
  
 
-function extractPoliticalSignals(result) {
+function signalRowsFromUnified(
 
-  const data = obj(result?.data);
+  unified
 
-  const briefing = obj(data.briefing);
+) {
 
-  const intelligence = obj(data.intelligence);
+  const data =
+
+    obj(
+
+      unified?.data
+
+    );
+
+ 
+
+  const intelligence =
+
+    obj(
+
+      data.intelligence
+
+    );
+
+ 
+
+  const briefing =
+
+    obj(
+
+      data.briefing
+
+    );
 
  
 
@@ -522,9 +986,23 @@ function extractPoliticalSignals(result) {
 
  
 
-  for (const value of candidates) {
+  for (
 
-    if (Array.isArray(value)) return value;
+    const value
+
+    of candidates
+
+  ) {
+
+    if (
+
+      Array.isArray(value)
+
+    ) {
+
+      return value;
+
+    }
 
   }
 
@@ -536,59 +1014,51 @@ function extractPoliticalSignals(result) {
 
  
 
-function collectSources(results = []) {
+function recordsFromResult(
 
-  const seen = new Set();
+  result,
 
-  const output = [];
+  preferredKeys = []
 
- 
+) {
 
-  for (const result of results) {
+  const data =
 
-    for (const source of arr(result?.sources)) {
-
-      const item =
-
-        typeof source === "string"
-
-          ? {
-
-              name: source,
-
-              source,
-
-            }
-
-          : obj(source);
+    result?.data;
 
  
 
-      const key = clean(
+  if (
 
-        item.url ||
+    !data
 
-          item.source_url ||
+  ) {
 
-          item.name ||
+    return [];
 
-          item.source ||
-
-          item.provider ||
-
-          item.publisher
-
-      ).toLowerCase();
+  }
 
  
 
-      if (!key || seen.has(key)) continue;
+  for (
 
- 
+    const key
 
-      seen.add(key);
+    of preferredKeys
 
-      output.push(item);
+  ) {
+
+    if (
+
+      Array.isArray(
+
+        data?.[key]
+
+      )
+
+    ) {
+
+      return data[key];
 
     }
 
@@ -596,131 +1066,23 @@ function collectSources(results = []) {
 
  
 
-  return output;
+  if (
 
-}
+    Array.isArray(
 
- 
+      result.records
 
-function collectDiagnostics(results = []) {
+    )
 
-  return results.flatMap((result) => arr(result?.diagnostics));
+  ) {
 
-}
-
- 
-
-function collectWarnings(results = []) {
-
-  return uniqueStrings(
-
-    results.flatMap((result) => arr(result?.warnings))
-
-  );
-
-}
-
- 
-
-function isToolUsable(result, recordCount = 0) {
-
-  return Boolean(
-
-    result?.ok &&
-
-      (recordCount > 0 ||
-
-        arr(result?.sources).length > 0 ||
-
-        clean(result?.summary) ||
-
-        result?.data)
-
-  );
-
-}
-
- 
-
-async function runTool(name, args, user) {
-
-  const startedAt = Date.now();
-
- 
-
-  try {
-
-    const result = await executeExecutiveVoiceTool({
-
-      name,
-
-      arguments: args,
-
-      user,
-
-    });
-
- 
-
-    return {
-
-      ...(result && typeof result === "object" ? result : {}),
-
-      tool: result?.tool || name,
-
-      latency_ms:
-
-        result?.latency_ms ?? Date.now() - startedAt,
-
-    };
-
-  } catch (error) {
-
-    return {
-
-      ok: false,
-
-      tool: name,
-
-      summary: `${name} failed.`,
-
-      data: null,
-
-      records: [],
-
-      sources: [],
-
-      warnings: [error?.message || "Unknown tool failure."],
-
-      diagnostics: [
-
-        {
-
-          provider: name,
-
-          tool: name,
-
-          ok: false,
-
-          error: error?.message || "Unknown tool failure.",
-
-          latency_ms: Date.now() - startedAt,
-
-          checked_at: now(),
-
-        },
-
-      ],
-
-      degraded: true,
-
-      generated_at: now(),
-
-      latency_ms: Date.now() - startedAt,
-
-    };
+    return result.records;
 
   }
+
+ 
+
+  return [];
 
 }
 
@@ -728,45 +1090,65 @@ async function runTool(name, args, user) {
 
 export async function getCandidateIntelligenceBundle({
 
+ 
+
   candidate = "",
-
-  candidateId = "",
-
-  committeeId = "",
-
-  state = "",
-
-  office = "",
-
-  cycle = "",
-
-  locality = "",
-
-  workspaceId = 1,
-
-  limit = 12,
-
-  user = {},
-
-} = {}) {
-
-  const startedAt = Date.now();
 
  
 
-  const requestedCandidate = clean(candidate);
+  candidateId = "",
 
-  const requestedCandidateId = clean(candidateId);
+ 
 
-  const requestedCommitteeId = clean(committeeId);
+  state = "",
 
-  const requestedState = clean(state);
+ 
 
-  const requestedOffice = clean(office);
+  office = "",
 
-  const requestedCycle = clean(cycle);
+ 
 
-  const requestedLocality = clean(locality);
+  cycle = "",
+
+ 
+
+  locality = "",
+
+ 
+
+  workspaceId = 1,
+
+ 
+
+  limit = 12,
+
+ 
+
+  user = {},
+
+ 
+
+} = {}) {
+
+ 
+
+  const requestedCandidate =
+
+    clean(
+
+      candidate
+
+    );
+
+ 
+
+  const requestedCandidateId =
+
+    clean(
+
+      candidateId
+
+    );
 
  
 
@@ -774,21 +1156,25 @@ export async function getCandidateIntelligenceBundle({
 
     !requestedCandidate &&
 
-    !requestedCandidateId &&
-
-    !requestedCommitteeId
+    !requestedCandidateId
 
   ) {
 
-    const error = new Error(
+    const error =
 
-      "Candidate name, candidate ID, or committee ID is required."
+      new Error(
 
-    );
+        "Candidate name or candidate ID is required."
+
+      );
 
  
 
-    error.status = 400;
+    error.status =
+
+      400;
+
+ 
 
     throw error;
 
@@ -798,121 +1184,57 @@ export async function getCandidateIntelligenceBundle({
 
   /*
 
-   * ---------------------------------------------------------
-
-   * 1. Candidate identity / profile
-
-   * ---------------------------------------------------------
+   * 1. Candidate profile + strict identity resolution.
 
    */
 
- 
+  const statistics =
 
-  const candidateStatistics = await runTool(
+    await safeTool(
 
-    "get_candidate_statistics",
-
-    {
-
-      candidate: requestedCandidate,
-
-      candidate_id: requestedCandidateId,
-
-      fec_candidate_id: requestedCandidateId,
-
-      committee_id: requestedCommitteeId,
-
-      state: requestedState,
-
-      office: requestedOffice,
-
-      cycle: requestedCycle,
-
-      limit,
-
-    },
-
-    user
-
-  );
-
- 
-
-  const candidateRows = candidateRowsFromTool(candidateStatistics);
-
- 
-
-  const identities = selectVerifiedIdentities(candidateRows, {
-
-    candidate: requestedCandidate,
-
-    candidateId: requestedCandidateId,
-
-    committeeId: requestedCommitteeId,
-
-    state: requestedState,
-
-    office: requestedOffice,
-
-    cycle: requestedCycle,
-
-  });
-
- 
-
-  /*
-
-   * ---------------------------------------------------------
-
-   * 2. Official FEC finance — one lookup per verified identity
-
-   * ---------------------------------------------------------
-
-   */
-
- 
-
-  const financeResults = [];
-
- 
-
-  for (const identity of identities) {
-
-    const finance = await runTool(
-
-      "get_fec_finance",
+      "get_candidate_statistics",
 
       {
 
         candidate:
 
-          identity.candidate || requestedCandidate,
+          requestedCandidate,
 
  
-
-        /*
-
-         * executeExecutiveVoiceTool expects snake_case tool arguments.
-
-         * fecTool then hands the resolved IDs to the OpenFEC provider.
-
-         */
 
         candidate_id:
 
-          identity.fec_candidate_id || requestedCandidateId,
+          requestedCandidateId,
 
  
 
-        committee_id:
+        state:
 
-          identity.committee_id || requestedCommitteeId,
+          clean(
+
+            state
+
+          ),
+
+ 
+
+        office:
+
+          clean(
+
+            office
+
+          ),
 
  
 
         cycle:
 
-          requestedCycle || clean(identity.cycle),
+          clean(
+
+            cycle
+
+          ),
 
       },
 
@@ -922,27 +1244,151 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-    financeResults.push({
+  const identities =
 
-      ...finance,
+    selectVerifiedIdentities(
 
-      identity: {
+      statistics?.data
 
-        candidate: identity.candidate,
+        ?.candidates,
 
-        state: identity.state,
+      {
 
-        office: identity.office,
+        candidate:
 
-        district: identity.district,
+          requestedCandidate,
 
-        fec_candidate_id: identity.fec_candidate_id,
+ 
 
-        committee_id: identity.committee_id,
+        state,
 
-        cycle: identity.cycle,
+ 
 
-      },
+        office,
+
+ 
+
+        cycle,
+
+      }
+
+    );
+
+ 
+
+  /*
+
+   * Explicit candidate ID support.
+
+   */
+
+  if (
+
+    requestedCandidateId &&
+
+    !identities.some(
+
+      (identity) =>
+
+        identity.candidate_id ===
+
+        requestedCandidateId
+
+    )
+
+  ) {
+
+    identities.push({
+
+      candidate:
+
+        requestedCandidate ||
+
+        null,
+
+ 
+
+      candidate_id:
+
+        requestedCandidateId,
+
+ 
+
+      committee_id:
+
+        null,
+
+ 
+
+      state:
+
+        clean(
+
+          state
+
+        ) ||
+
+        null,
+
+ 
+
+      office:
+
+        clean(
+
+          office
+
+        ) ||
+
+        null,
+
+ 
+
+      district:
+
+        null,
+
+ 
+
+      party:
+
+        null,
+
+ 
+
+      election_year:
+
+        clean(
+
+          cycle
+
+        ) ||
+
+        null,
+
+ 
+
+      incumbent:
+
+        null,
+
+ 
+
+      status:
+
+        null,
+
+ 
+
+      website:
+
+        null,
+
+ 
+
+      record:
+
+        null,
 
     });
 
@@ -952,171 +1398,367 @@ export async function getCandidateIntelligenceBundle({
 
   /*
 
-   * ---------------------------------------------------------
+   * 2. Official FEC finance for every verified candidate identity.
 
-   * 3. Polling
-
-   * ---------------------------------------------------------
+   * The Executive Voice tool accepts snake_case arguments.
 
    */
 
+  const financeReports =
+
+    [];
+
  
 
-  const polling = await runTool(
+  for (
 
-    "get_latest_polling",
+    const identity
 
-    {
+    of identities
 
-      candidate: requestedCandidate || identities[0]?.candidate || "",
+  ) {
 
-      candidate_id:
+    if (
 
-        requestedCandidateId || identities[0]?.fec_candidate_id || "",
+      !clean(
 
-      state: requestedState || identities[0]?.state || "",
+        identity.candidate_id
 
-      office: requestedOffice || "",
+      ) &&
 
-      locality: requestedLocality,
+      !clean(
 
-      cycle: requestedCycle,
+        identity.committee_id
 
-      limit,
+      )
 
-    },
+    ) {
 
-    user
+      continue;
 
-  );
+    }
+
+ 
+
+    const result =
+
+      await safeTool(
+
+        "get_fec_finance",
+
+        {
+
+          candidate:
+
+            identity.candidate ||
+
+            requestedCandidate,
+
+ 
+
+          candidate_id:
+
+            identity.candidate_id ||
+
+            "",
+
+ 
+
+          committee_id:
+
+            identity.committee_id ||
+
+            "",
+
+ 
+
+          cycle:
+
+            clean(
+
+              cycle ||
+
+              identity.election_year
+
+            ),
+
+        },
+
+        user
+
+      );
+
+ 
+
+    financeReports.push({
+
+      identity,
+
+      result,
+
+    });
+
+  }
 
  
 
   /*
 
-   * ---------------------------------------------------------
-
-   * 4. Current news / articles
-
-   * ---------------------------------------------------------
+   * 3. Candidate polling.
 
    */
 
+  const polling =
+
+    await safeTool(
+
+      "get_latest_polling",
+
+      {
+
+        candidate:
+
+          requestedCandidate,
+
  
 
-  const news = await runTool(
+        state:
 
-    "search_live_news",
+          clean(
 
-    {
+            state ||
 
-      query: requestedCandidate || identities[0]?.candidate || "",
+            identities[0]
 
-      candidate: requestedCandidate || identities[0]?.candidate || "",
+              ?.state
 
-      state: requestedState || identities[0]?.state || "",
+          ),
 
-      office: requestedOffice || "",
+ 
 
-      locality: requestedLocality,
+        office:
 
-      cycle: requestedCycle,
+          clean(
 
-      limit,
+            office
 
-    },
+          ),
 
-    user
+ 
 
-  );
+        locality:
+
+          clean(
+
+            locality
+
+          ),
+
+ 
+
+        limit,
+
+      },
+
+      user
+
+    );
 
  
 
   /*
 
-   * ---------------------------------------------------------
-
-   * 5. Unified VoterSpheres operating context, signals, strategy
-
-   * ---------------------------------------------------------
+   * 4. Current candidate news/articles.
 
    */
 
- 
+  const news =
 
-  const unified = await runTool(
+    await safeTool(
 
-    "get_unified_executive_intelligence",
+      "search_live_news",
 
-    {
+      {
 
-      workspace_id: workspaceId,
+        query:
 
-      candidate: requestedCandidate || identities[0]?.candidate || "",
-
-      candidate_id:
-
-        requestedCandidateId || identities[0]?.fec_candidate_id || "",
-
-      state: requestedState || identities[0]?.state || "",
-
-      office: requestedOffice || "",
-
-      locality: requestedLocality,
-
-      cycle: requestedCycle,
-
-      limit,
-
-    },
-
-    user
-
-  );
+          requestedCandidate,
 
  
 
-  const financeReports = financeResults.map((result) => ({
+        state:
 
-    identity: result.identity,
+          clean(
 
-    ok: Boolean(result.ok),
+            state ||
 
-    summary: result.summary || "",
+            identities[0]
 
-    data: result.data ?? null,
+              ?.state
 
-    records: financeRecords(result),
-
-    sources: arr(result.sources),
-
-    warnings: arr(result.warnings),
-
-    diagnostics: arr(result.diagnostics),
-
-    degraded: Boolean(result.degraded),
-
-    generated_at: result.generated_at || null,
-
-  }));
+          ),
 
  
 
-  const polls = pollingRecords(polling);
+        locality:
 
-  const articles = newsRecords(news);
+          clean(
 
-  const signals = extractPoliticalSignals(unified);
+            locality
 
-  const recommendations = extractStrategyRecommendations(unified);
+          ),
 
  
 
-  const allResults = [
+        limit,
 
-    candidateStatistics,
+      },
 
-    ...financeResults,
+      user
+
+    );
+
+ 
+
+  /*
+
+   * 5. Existing VoterSpheres executive data fabric.
+
+   * We reuse the platform's current signals and strategy recommendations
+
+   * instead of creating a second strategy system.
+
+   */
+
+  const unified =
+
+    await safeTool(
+
+      "get_unified_executive_intelligence",
+
+      {
+
+        workspace_id:
+
+          workspaceId,
+
+ 
+
+        state:
+
+          clean(
+
+            state ||
+
+            identities[0]
+
+              ?.state
+
+          ),
+
+ 
+
+        office:
+
+          clean(
+
+            office
+
+          ),
+
+      },
+
+      user
+
+    );
+
+ 
+
+  const pollingRecords =
+
+    recordsFromResult(
+
+      polling,
+
+      [
+
+        "polls",
+
+        "records",
+
+        "results",
+
+      ]
+
+    );
+
+ 
+
+  const newsRecords =
+
+    recordsFromResult(
+
+      news,
+
+      [
+
+        "articles",
+
+        "records",
+
+        "results",
+
+        "news",
+
+      ]
+
+    );
+
+ 
+
+  const strategy =
+
+    strategyRowsFromUnified(
+
+      unified
+
+    );
+
+ 
+
+  const signals =
+
+    signalRowsFromUnified(
+
+      unified
+
+    );
+
+ 
+
+  const financeUsable =
+
+    financeReports.filter(
+
+      (entry) =>
+
+        entry.result?.ok
+
+    );
+
+ 
+
+  const allResultSets = [
+
+    statistics,
+
+    ...financeReports.map(
+
+      (entry) =>
+
+        entry.result
+
+    ),
 
     polling,
 
@@ -1128,89 +1770,145 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-  const sources = collectSources(allResults);
+  const warnings =
 
-  const warnings = collectWarnings(allResults);
+    allResultSets.flatMap(
 
-  const diagnostics = collectDiagnostics(allResults);
+      (result) =>
 
- 
+        arr(
 
-  const coverage = {
+          result?.warnings
 
-    profile: identities.length > 0,
+        )
 
-    finance: financeReports.some(
-
-      (report) => report.ok && report.records.length > 0
-
-    ),
-
-    polling: isToolUsable(polling, polls.length),
-
-    news: isToolUsable(news, articles.length),
-
-    signals: signals.length > 0,
-
-    strategy: recommendations.length > 0,
-
-  };
+    );
 
  
 
-  const usableSectionCount = Object.values(coverage).filter(Boolean).length;
+  const diagnostics =
 
-  const sectionCount = Object.keys(coverage).length;
+    allResultSets.flatMap(
+
+      (result) =>
+
+        arr(
+
+          result?.diagnostics
+
+        )
+
+    );
 
  
 
-  const data = {
+  const sources =
 
-    build: BUILD,
+    mergeSources(
 
-    provider: PROVIDER,
+      allResultSets
+
+    );
+
+ 
+
+  const usable =
+
+    Boolean(
+
+      identities.length ||
+
+      financeUsable.length ||
+
+      pollingRecords.length ||
+
+      newsRecords.length ||
+
+      signals.length ||
+
+      strategy.length
+
+    );
+
+ 
+
+  const bundleData = {
+
+    build:
+
+      BUILD,
+
+ 
+
+    provider:
+
+      "voterspheres_candidate_intelligence_bundle",
 
  
 
     candidate_query:
 
-      requestedCandidate || identities[0]?.candidate || null,
+      requestedCandidate,
 
  
 
     context: {
 
-      candidate:
-
-        requestedCandidate || identities[0]?.candidate || null,
-
-      candidate_id:
-
-        requestedCandidateId || null,
-
-      committee_id:
-
-        requestedCommitteeId || null,
-
       state:
 
-        requestedState || identities[0]?.state || null,
+        clean(
+
+          state ||
+
+          identities[0]
+
+            ?.state
+
+        ) ||
+
+        null,
+
+ 
 
       office:
 
-        requestedOffice || null,
+        clean(
+
+          office
+
+        ) ||
+
+        null,
+
+ 
 
       cycle:
 
-        requestedCycle || identities[0]?.cycle || null,
+        clean(
+
+          cycle
+
+        ) ||
+
+        null,
+
+ 
 
       locality:
 
-        requestedLocality || null,
+        clean(
 
-      workspace_id: workspaceId,
+          locality
 
-      limit,
+        ) ||
+
+        null,
+
+ 
+
+      workspace_id:
+
+        workspaceId,
 
     },
 
@@ -1222,13 +1920,21 @@ export async function getCandidateIntelligenceBundle({
 
     profile: {
 
-      primary: identities[0]?.record || null,
+      candidates:
 
-      candidates: identities.map((identity) => identity.record),
+        arr(
 
-      identity_count: identities.length,
+          statistics?.data
 
-      source_tool: "get_candidate_statistics",
+            ?.candidates
+
+        ),
+
+ 
+
+      verified_identities:
+
+        identities,
 
     },
 
@@ -1236,13 +1942,15 @@ export async function getCandidateIntelligenceBundle({
 
     finance: {
 
-      identity_count: identities.length,
+      reports:
 
-      reports: financeReports,
+        financeReports,
 
-      records: financeReports.flatMap((report) => report.records),
+ 
 
-      source_tool: "get_fec_finance",
+      verified_report_count:
+
+        financeUsable.length,
 
     },
 
@@ -1250,19 +1958,15 @@ export async function getCandidateIntelligenceBundle({
 
     polling: {
 
-      ...(obj(polling?.data)),
+      records:
 
-      polls,
+        pollingRecords,
 
-      records: polls,
+ 
 
-      count: polls.length,
+      source_result:
 
-      summary: polling?.summary || "",
-
-      source_tool: "get_latest_polling",
-
-      degraded: Boolean(polling?.degraded),
+        polling,
 
     },
 
@@ -1270,19 +1974,15 @@ export async function getCandidateIntelligenceBundle({
 
     news: {
 
-      ...(obj(news?.data)),
+      articles:
 
-      articles,
+        newsRecords,
 
-      records: articles,
+ 
 
-      count: articles.length,
+      source_result:
 
-      summary: news?.summary || "",
-
-      source_tool: "search_live_news",
-
-      degraded: Boolean(news?.degraded),
+        news,
 
     },
 
@@ -1294,57 +1994,79 @@ export async function getCandidateIntelligenceBundle({
 
     strategy: {
 
-      recommendations,
+      recommendations:
 
-      count: recommendations.length,
+        strategy,
+
+ 
 
       source:
 
-        recommendations.length > 0
+        strategy.length
 
           ? "VoterSpheres Unified Executive Intelligence"
 
           : null,
 
-      source_tool: "get_unified_executive_intelligence",
-
     },
 
  
 
-    operations: unified?.data ?? null,
+    operations:
+
+      unified?.data ||
+
+      null,
 
  
 
-    coverage,
+    coverage: {
+
+      profile:
+
+        identities.length >
+
+        0,
 
  
 
-    summary: {
+      finance:
 
-      verified_identity_count: identities.length,
+        financeUsable.length >
 
-      finance_report_count: financeReports.filter((report) => report.ok).length,
+        0,
 
-      finance_record_count: financeReports.reduce(
+ 
 
-        (sum, report) => sum + report.records.length,
+      polling:
 
-        0
+        pollingRecords.length >
 
-      ),
+        0,
 
-      polling_record_count: polls.length,
+ 
 
-      news_article_count: articles.length,
+      news:
 
-      political_signal_count: signals.length,
+        newsRecords.length >
 
-      strategy_recommendation_count: recommendations.length,
+        0,
 
-      usable_section_count: usableSectionCount,
+ 
 
-      section_count: sectionCount,
+      signals:
+
+        signals.length >
+
+        0,
+
+ 
+
+      strategy:
+
+        strategy.length >
+
+        0,
 
     },
 
@@ -1352,7 +2074,11 @@ export async function getCandidateIntelligenceBundle({
 
     sources,
 
+ 
+
     warnings,
+
+ 
 
     diagnostics,
 
@@ -1360,13 +2086,25 @@ export async function getCandidateIntelligenceBundle({
 
     raw: {
 
-      candidate_statistics: candidateStatistics,
+      candidate_statistics:
 
-      finance: financeResults,
+        statistics,
+
+ 
+
+      finance:
+
+        financeReports,
+
+ 
 
       polling,
 
+ 
+
       news,
+
+ 
 
       unified,
 
@@ -1374,135 +2112,69 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-    generated_at: now(),
+    generated_at:
+
+      now(),
 
   };
 
  
 
-  const ok = Boolean(
-
-    coverage.profile ||
-
-      coverage.finance ||
-
-      coverage.polling ||
-
-      coverage.news ||
-
-      coverage.signals ||
-
-      coverage.strategy
-
-  );
-
- 
-
-  const degraded = Boolean(
-
-    !ok ||
-
-      usableSectionCount < sectionCount ||
-
-      allResults.some((result) => Boolean(result?.degraded))
-
-  );
-
- 
-
-  const summaryParts = [
-
-    `${identities.length} verified candidate identit${
-
-      identities.length === 1 ? "y" : "ies"
-
-    }`,
-
-    `${data.summary.finance_record_count} FEC finance record${
-
-      data.summary.finance_record_count === 1 ? "" : "s"
-
-    }`,
-
-    `${polls.length} polling record${polls.length === 1 ? "" : "s"}`,
-
-    `${articles.length} news article${articles.length === 1 ? "" : "s"}`,
-
-    `${signals.length} political signal${signals.length === 1 ? "" : "s"}`,
-
-    `${recommendations.length} strategy recommendation${
-
-      recommendations.length === 1 ? "" : "s"
-
-    }`,
-
-  ];
-
- 
-
-  const summary = ok
-
-    ? `Unified candidate intelligence loaded for ${
-
-        requestedCandidate || identities[0]?.candidate || "the requested candidate"
-
-      }: ${summaryParts.join(", ")}.`
-
-    : `No verified candidate intelligence was available for ${
-
-        requestedCandidate || "the requested candidate"
-
-      }.`;
-
- 
-
-  /*
-
-   * =========================================================
-
-   * CRITICAL RETURN CONTRACT
-
-   * =========================================================
-
-   *
-
-   * The orchestrator reads result.data when it normalizes this tool.
-
-   * Therefore the COMPLETE bundle must live under data.
-
-   *
-
-   * Top-level mirrors remain for compatibility with any callers that
-
-   * consumed the pre-fix bundle shape directly.
-
-   */
-
- 
-
   return {
 
-    ok,
+    ok:
 
-    configured: true,
-
-    provider: PROVIDER,
-
-    tool: "get_candidate_intelligence_bundle",
-
-    build: BUILD,
-
-    summary,
+      usable,
 
  
 
-    data,
+    build:
+
+      BUILD,
 
  
 
-    records: identities,
+    provider:
 
-    count: identities.length,
+      "voterspheres_candidate_intelligence_bundle",
+
+ 
+
+    summary:
+
+      usable
+
+        ? `Unified candidate intelligence loaded for ${requestedCandidate || requestedCandidateId}: ${identities.length} verified identities, ${financeUsable.length} FEC reports, ${pollingRecords.length} polling records, ${newsRecords.length} news articles, ${signals.length} political signals, and ${strategy.length} strategy recommendations.`
+
+        : `No verified candidate intelligence was returned for ${requestedCandidate || requestedCandidateId}.`,
+
+ 
+
+    data:
+
+      bundleData,
+
+ 
+
+    records:
+
+      identities,
+
+ 
+
+    count:
+
+      identities.length +
+
+      financeUsable.length +
+
+      pollingRecords.length +
+
+      newsRecords.length +
+
+      signals.length +
+
+      strategy.length,
 
  
 
@@ -1512,47 +2184,39 @@ export async function getCandidateIntelligenceBundle({
 
     diagnostics,
 
-    degraded,
+ 
 
-    cached: false,
+    degraded:
 
-    stale: false,
+      !usable ||
+
+      Boolean(
+
+        warnings.length ||
+
+        financeReports.some((entry) => entry?.result?.degraded) ||
+
+        polling?.degraded ||
+
+        news?.degraded ||
+
+        unified?.degraded
+
+      ),
 
  
 
-    latency_ms: Date.now() - startedAt,
+    generated_at:
 
-    generated_at: data.generated_at,
+      bundleData.generated_at,
 
  
 
-    /* Backward-compatible mirrors */
-
-    candidate_query: data.candidate_query,
-
-    context: data.context,
-
-    identities: data.identities,
-
-    profile: data.profile,
-
-    finance: data.finance,
-
-    polling: data.polling,
-
-    news: data.news,
-
-    signals: data.signals,
-
-    strategy: data.strategy,
-
-    operations: data.operations,
-
-    coverage: data.coverage,
-
-    raw: data.raw,
+    ...bundleData,
 
   };
+
+ 
 
 }
 
@@ -1560,6 +2224,13 @@ export async function getCandidateIntelligenceBundle({
 
 export default {
 
+ 
+
   getCandidateIntelligenceBundle,
 
+ 
+
 };
+
+ 
+
