@@ -787,180 +787,117 @@ function extractJsonObject(value) {
  
 
 function detectState(
-
- 
-
   question,
-
- 
-
   suppliedState = ""
-
- 
-
 ) {
-
- 
+  /*
+   * ---------------------------------------------------------
+   * 1. Explicit state supplied by request always wins
+   * ---------------------------------------------------------
+   */
 
   const explicit =
-
- 
-
     clean(
-
- 
-
       suppliedState
-
- 
-
     ).toUpperCase();
 
- 
-
- 
-
- 
-
   if (
-
- 
-
-    STATE_NAMES[explicit]
-
- 
-
+    STATE_NAMES[
+      explicit
+    ]
   ) {
-
- 
-
     return explicit;
-
- 
-
   }
 
- 
+  /*
+   * ---------------------------------------------------------
+   * 2. Full state-name detection
+   * ---------------------------------------------------------
+   *
+   * Full names are safe to match case-insensitively:
+   *
+   *   Texas
+   *   texas
+   *   New York
+   *
+   * Use word boundaries so fragments inside unrelated words
+   * do not accidentally resolve to states.
+   */
 
- 
-
- 
-
-  const lower =
-
- 
-
+  const rawQuestion =
     clean(
-
- 
-
       question
-
- 
-
-    ).toLowerCase();
-
- 
-
-  for (
-
- 
-
-    const [name, code]
-
- 
-
-    of Object.entries(
-
- 
-
-      STATE_CODES
-
- 
-
-    )
-
- 
-
-  ) {
-
- 
-
-    if (
-
- 
-
-      lower.includes(name)
-
- 
-
-    ) {
-
- 
-
-      return code;
-
- 
-
-    }
-
- 
-
-  }
-
- 
-
- 
-
- 
-
-  const match =
-
- 
-
-    clean(
-
- 
-
-      question
-
- 
-
-    ).match(
-
- 
-
-      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/i
-
- 
-
     );
 
- 
+  const lower =
+    rawQuestion.toLowerCase();
 
- 
+  for (
+    const [name, code]
+    of Object.entries(
+      STATE_CODES
+    )
+  ) {
+    const escapedName =
+      name.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
 
- 
+    const stateNamePattern =
+      new RegExp(
+        `\\b${escapedName}\\b`,
+        "i"
+      );
 
-  return match
+    if (
+      stateNamePattern.test(
+        lower
+      )
+    ) {
+      return code;
+    }
+  }
 
- 
+  /*
+   * ---------------------------------------------------------
+   * 3. State-abbreviation detection
+   * ---------------------------------------------------------
+   *
+   * IMPORTANT:
+   *
+   * Do NOT use /i here.
+   *
+   * Otherwise normal English words such as:
+   *
+   *   "give me"
+   *
+   * cause "me" to resolve as Maine (ME).
+   *
+   * We only recognize abbreviations when the user actually
+   * typed the two-letter abbreviation in uppercase.
+   *
+   * Examples:
+   *
+   *   TX       -> Texas
+   *   in TX    -> Texas
+   *   GA race  -> Georgia
+   *   give me  -> NO STATE
+   */
 
-    ? match[1].toUpperCase()
+  const abbreviationMatch =
+    rawQuestion.match(
+      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/
+    );
 
- 
+  if (
+    abbreviationMatch
+  ) {
+    return abbreviationMatch[1];
+  }
 
-    : "";
-
- 
-
+  return "";
 }
-
- 
-
- 
-
- 
 
 function detectCycle(
 
