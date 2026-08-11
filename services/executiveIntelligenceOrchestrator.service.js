@@ -18,7 +18,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
-const BUILD = "4.4.1-unified-candidate-intelligence";
+const BUILD = "4.4.0-unified-candidate-intelligence";
 
  
 
@@ -787,117 +787,184 @@ function extractJsonObject(value) {
  
 
 function detectState(
+
+ 
+
   question,
+
+ 
+
   suppliedState = ""
+
+ 
+
 ) {
-  /*
-   * ---------------------------------------------------------
-   * 1. Explicit state supplied by request always wins
-   * ---------------------------------------------------------
-   */
+
+ 
 
   const explicit =
+
+ 
+
     clean(
+
+ 
+
       suppliedState
+
+ 
+
     ).toUpperCase();
 
+ 
+
+ 
+
+ 
+
   if (
-    STATE_NAMES[
-      explicit
-    ]
+
+ 
+
+    STATE_NAMES[explicit]
+
+ 
+
   ) {
+
+ 
+
     return explicit;
+
+ 
+
   }
 
-  /*
-   * ---------------------------------------------------------
-   * 2. Full state-name detection
-   * ---------------------------------------------------------
-   *
-   * Full names are safe to match case-insensitively:
-   *
-   *   Texas
-   *   texas
-   *   New York
-   *
-   * Use word boundaries so fragments inside unrelated words
-   * do not accidentally resolve to states.
-   */
+ 
 
-  const rawQuestion =
-    clean(
-      question
-    );
+ 
+
+ 
 
   const lower =
-    rawQuestion.toLowerCase();
+
+ 
+
+    clean(
+
+ 
+
+      question
+
+ 
+
+    ).toLowerCase();
+
+ 
+
+ 
+
+ 
 
   for (
-    const [name, code]
-    of Object.entries(
-      STATE_CODES
-    )
-  ) {
-    const escapedName =
-      name.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
 
-    const stateNamePattern =
-      new RegExp(
-        `\\b${escapedName}\\b`,
-        "i"
-      );
+ 
+
+    const [name, code]
+
+ 
+
+    of Object.entries(
+
+ 
+
+      STATE_CODES
+
+ 
+
+    )
+
+ 
+
+  ) {
+
+ 
 
     if (
-      stateNamePattern.test(
-        lower
-      )
+
+ 
+
+      lower.includes(name)
+
+ 
+
     ) {
+
+ 
+
       return code;
+
+ 
+
     }
+
+ 
+
   }
 
-  /*
-   * ---------------------------------------------------------
-   * 3. State-abbreviation detection
-   * ---------------------------------------------------------
-   *
-   * IMPORTANT:
-   *
-   * Do NOT use /i here.
-   *
-   * Otherwise normal English words such as:
-   *
-   *   "give me"
-   *
-   * cause "me" to resolve as Maine (ME).
-   *
-   * We only recognize abbreviations when the user actually
-   * typed the two-letter abbreviation in uppercase.
-   *
-   * Examples:
-   *
-   *   TX       -> Texas
-   *   in TX    -> Texas
-   *   GA race  -> Georgia
-   *   give me  -> NO STATE
-   */
+ 
 
-  const abbreviationMatch =
-    rawQuestion.match(
-      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/
+ 
+
+ 
+
+  const match =
+
+ 
+
+    clean(
+
+ 
+
+      question
+
+ 
+
+    ).match(
+
+ 
+
+      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/i
+
+ 
+
     );
 
-  if (
-    abbreviationMatch
-  ) {
-    return abbreviationMatch[1];
-  }
+ 
 
-  return "";
+ 
+
+ 
+
+  return match
+
+ 
+
+    ? match[1].toUpperCase()
+
+ 
+
+    : "";
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
 
 function detectCycle(
 
@@ -1343,23 +1410,7 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
-      /^(?:for|about|on|of)\s+/i,
-
- 
-
-      ""
-
- 
-
-    )
-
- 
-
-    .replace(
-
- 
-
-      /^(?:give me|show me|provide|create|build|prepare)\s+(?:a\s+)?(?:complete|full|current|latest)?\s*(?:candidate\s+)?(?:briefing|brief|assessment|profile|intelligence|report)\s+(?:on|about|for|of)\s+/i,
+      /^(?:for|about|on)\s+/i,
 
  
 
@@ -1491,146 +1542,6 @@ function detectCandidate(
 
  
 
-   * Broad candidate briefing forms must resolve the candidate name before
-
- 
-
-   * intent classification. Examples:
-
- 
-
-   * - give me a complete briefing on jasmine crockett
-
- 
-
-   * - full assessment of jasmine crockett
-
- 
-
-   * - tell me everything about jasmine crockett
-
- 
-
-   */
-
- 
-
-  const briefingFor = text.match(
-
- 
-
-    /(?:complete|full|candidate)?\s*(?:briefing|brief|assessment|profile|intelligence|overview)[^\n]{0,30}?\b(?:on|about|for|of)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){1,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
-
- 
-
-  );
-
- 
-
- 
-
- 
-
-  if (briefingFor) {
-
- 
-
-    const candidate = cleanupDetectedCandidate(
-
- 
-
-      briefingFor[1]
-
- 
-
-    );
-
- 
-
- 
-
- 
-
-    if (candidate) {
-
- 
-
-      return candidate;
-
- 
-
-    }
-
- 
-
-  }
-
- 
-
- 
-
- 
-
-  const everythingFor = text.match(
-
- 
-
-    /(?:tell me everything|everything|what should i know)[^\n]{0,20}?\b(?:about|on)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){1,3})(?=\s*(?:\?|$|,|\.))/i
-
- 
-
-  );
-
- 
-
- 
-
- 
-
-  if (everythingFor) {
-
- 
-
-    const candidate = cleanupDetectedCandidate(
-
- 
-
-      everythingFor[1]
-
- 
-
-    );
-
- 
-
- 
-
- 
-
-    if (candidate) {
-
- 
-
-      return candidate;
-
- 
-
-    }
-
- 
-
-  }
-
- 
-
- 
-
- 
-
-  /*
-
- 
-
    * Finance-specific forms are checked first so a request such as
 
  
@@ -1707,7 +1618,7 @@ function detectCandidate(
 
  
 
-    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for|briefing on|briefing about|briefing for|assessment of|assessment on|profile on|intelligence on)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
+    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
 
  
 
@@ -2059,6 +1970,42 @@ function classifyIntent(
 
  
 
+    context.candidate &&
+
+ 
+
+    /everything|complete briefing|full briefing|candidate briefing|complete assessment|full assessment|all intelligence|all data|what should i know|tell me everything|strategy|strategies|strategic|news|articles/.test(
+
+ 
+
+      lower
+
+ 
+
+    )
+
+ 
+
+  ) {
+
+ 
+
+    return "candidate_intelligence";
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
     /candidate|campaign|profile|biograph|tell me about|who is/.test(
 
  
@@ -2139,7 +2086,7 @@ function classifyIntent(
 
  
 
-    return "candidate_intelligence";
+    return "candidate";
 
  
 
@@ -3075,7 +3022,15 @@ function buildToolPlan({
 
  
 
-    "candidate_intelligence"
+      "candidate_intelligence" ||
+
+ 
+
+    context.intent ===
+
+ 
+
+      "candidate"
 
  
 
@@ -3116,18 +3071,6 @@ function buildToolPlan({
  
 
             context.candidate_id,
-
- 
-
- 
-
- 
-
-          committee_id:
-
- 
-
-            context.committee_id,
 
  
 
@@ -3203,327 +3146,11 @@ function buildToolPlan({
 
  
 
-        "Build verified candidate profile, FEC finance, polling, news, political signals, and VoterSpheres strategy intelligence in one bundle.",
+        "Build a verified candidate intelligence bundle across profile, official FEC finance, polling, current news, political signals, strategy recommendations, and executive operating context.",
 
  
 
         100
-
- 
-
-      )
-
- 
-
-    );
-
- 
-
-  } else if (
-
- 
-
-    context.intent ===
-
- 
-
-    "candidate"
-
- 
-
-  ) {
-
- 
-
-    calls.push(
-
- 
-
-      makeCall(
-
- 
-
-        "get_candidate_live_intelligence",
-
- 
-
-        {
-
- 
-
-          candidate:
-
- 
-
-            context.candidate,
-
- 
-
- 
-
- 
-
-          candidate_id:
-
- 
-
-            context.candidate_id,
-
- 
-
- 
-
- 
-
-          committee_id:
-
- 
-
-            context.committee_id,
-
- 
-
- 
-
- 
-
-          state:
-
- 
-
-            context.state,
-
- 
-
- 
-
- 
-
-          office:
-
- 
-
-            context.office,
-
- 
-
- 
-
- 
-
-          locality:
-
- 
-
-            context.locality,
-
- 
-
- 
-
- 
-
-          cycle:
-
- 
-
-            context.cycle,
-
- 
-
- 
-
- 
-
-          limit,
-
- 
-
-        },
-
- 
-
-        "Build candidate-specific intelligence.",
-
- 
-
-        100
-
- 
-
-      )
-
- 
-
-    );
-
- 
-
- 
-
- 
-
-    calls.push(
-
- 
-
-      makeCall(
-
- 
-
-        "get_candidate_statistics",
-
- 
-
-        {
-
- 
-
-          candidate:
-
- 
-
-            context.candidate,
-
- 
-
- 
-
- 
-
-          candidate_id:
-
- 
-
-            context.candidate_id,
-
- 
-
- 
-
- 
-
-          state:
-
- 
-
-            context.state,
-
- 
-
- 
-
- 
-
-          office:
-
- 
-
-            context.office,
-
- 
-
- 
-
- 
-
-          cycle:
-
- 
-
-            context.cycle,
-
- 
-
-        },
-
- 
-
-        "Resolve stored candidate records.",
-
- 
-
-        96
-
- 
-
-      )
-
- 
-
-    );
-
- 
-
- 
-
- 
-
-    calls.push(
-
- 
-
-      makeCall(
-
- 
-
-        "search_live_news",
-
- 
-
-        {
-
- 
-
-          query:
-
- 
-
-            question,
-
- 
-
- 
-
- 
-
-          state:
-
- 
-
-            context.state,
-
- 
-
- 
-
- 
-
-          locality:
-
- 
-
-            context.locality,
-
- 
-
- 
-
- 
-
-          limit,
-
- 
-
-        },
-
- 
-
-        "Retrieve current candidate reporting.",
-
- 
-
-        88
 
  
 
@@ -4635,6 +4262,66 @@ function normalizeToolResult(
 
  
 
+  const normalizedData =
+
+ 
+
+    call.name ===
+
+      "get_candidate_intelligence_bundle" &&
+
+    !value.data &&
+
+    (
+
+      value.identities ||
+
+      value.profile ||
+
+      value.finance ||
+
+      value.polling ||
+
+      value.news ||
+
+      value.strategy
+
+    )
+
+      ? {
+
+          identities: value.identities || [],
+
+          profile: value.profile || null,
+
+          finance: value.finance || null,
+
+          polling: value.polling || null,
+
+          news: value.news || null,
+
+          signals: value.signals || [],
+
+          strategy: value.strategy || null,
+
+          operations: value.operations || null,
+
+          coverage: value.coverage || null,
+
+          sources: value.sources || [],
+
+          warnings: value.warnings || [],
+
+          diagnostics: value.diagnostics || [],
+
+          generated_at: value.generated_at || null,
+
+        }
+
+      : value.data;
+
+ 
+
   const meaningful_item_count =
 
  
@@ -4643,7 +4330,7 @@ function normalizeToolResult(
 
  
 
-      value.data
+      normalizedData
 
  
 
@@ -4811,7 +4498,7 @@ function normalizeToolResult(
 
  
 
-      value.data ??
+      normalizedData ??
 
  
 
@@ -5015,18 +4702,6 @@ async function executePlannedTool(
 
  
 
-            committeeId:
-
- 
-
-              call.arguments?.committee_id,
-
- 
-
- 
-
- 
-
             state:
 
  
@@ -5179,7 +4854,7 @@ async function executePlannedTool(
 
  
 
-        "get_candidate_intelligence_bundle"
+          "get_candidate_intelligence_bundle"
 
  
 
@@ -12527,33 +12202,27 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
-function candidateBundleFromResults(results) {
+function candidateBundleRecords(
 
  
 
-  const result = results.find(
+  bundle,
 
  
 
-    (item) =>
+  key
 
  
 
-      item.tool ===
+) {
 
  
 
-      "get_candidate_intelligence_bundle" &&
+  const value =
 
  
 
-      item.usable
-
- 
-
-  );
+    bundle?.[key];
 
  
 
@@ -12561,7 +12230,127 @@ function candidateBundleFromResults(results) {
 
  
 
-  return result?.data || null;
+  if (
+
+ 
+
+    Array.isArray(value)
+
+ 
+
+  ) {
+
+ 
+
+    return value;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
+    Array.isArray(
+
+ 
+
+      value?.records
+
+ 
+
+    )
+
+ 
+
+  ) {
+
+ 
+
+    return value.records;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
+    Array.isArray(
+
+ 
+
+      value?.articles
+
+ 
+
+    )
+
+ 
+
+  ) {
+
+ 
+
+    return value.articles;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
+    Array.isArray(
+
+ 
+
+      value?.polls
+
+ 
+
+    )
+
+ 
+
+  ) {
+
+ 
+
+    return value.polls;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  return [];
 
  
 
@@ -12585,19 +12374,39 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+  sources,
+
+ 
+
 }) {
 
  
 
-  const bundle = candidateBundleFromResults(
+  const bundleResult =
 
  
 
-    results
+    results.find(
 
  
 
-  );
+      (item) =>
+
+ 
+
+        item.tool ===
+
+ 
+
+          "get_candidate_intelligence_bundle" &&
+
+ 
+
+        item.usable
+
+ 
+
+    );
 
  
 
@@ -12605,7 +12414,35 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  if (!bundle) {
+  const bundle =
+
+ 
+
+    bundleResult?.data;
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
+    !bundle ||
+
+ 
+
+    typeof bundle !==
+
+ 
+
+      "object"
+
+ 
+
+  ) {
 
  
 
@@ -12621,47 +12458,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  const identities = Array.isArray(
+  const identities =
 
  
 
-    bundle.identities
+    Array.isArray(
 
  
 
-  )
+      bundle.identities
 
  
 
-    ? bundle.identities
+    )
 
  
 
-    : [];
+      ? bundle.identities
 
  
 
- 
-
- 
-
-  const financeReports = Array.isArray(
-
- 
-
-    bundle.finance?.reports
-
- 
-
-  )
-
- 
-
-    ? bundle.finance.reports
-
- 
-
-    : [];
+      : [];
 
  
 
@@ -12669,47 +12486,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  const polls = Array.isArray(
+  const financeReports =
 
  
 
-    bundle.polling?.polls
+    Array.isArray(
 
  
 
-  )
+      bundle.finance?.reports
 
  
 
-    ? bundle.polling.polls
+    )
 
  
 
-    : [];
+      ? bundle.finance.reports
 
  
 
- 
-
- 
-
-  const articles = Array.isArray(
-
- 
-
-    bundle.news?.articles
-
- 
-
-  )
-
- 
-
-    ? bundle.news.articles
-
- 
-
-    : [];
+      : [];
 
  
 
@@ -12717,23 +12514,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  const signals = Array.isArray(
+  const polls =
 
  
 
-    bundle.signals
+    candidateBundleRecords(
 
  
 
-  )
+      bundle,
 
  
 
-    ? bundle.signals
+      "polling"
 
  
 
-    : [];
+    );
 
  
 
@@ -12741,23 +12538,79 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  const strategies = Array.isArray(
+  const articles =
 
  
 
-    bundle.strategy?.recommendations
+    candidateBundleRecords(
 
  
 
-  )
+      bundle,
 
  
 
-    ? bundle.strategy.recommendations
+      "news"
 
  
 
-    : [];
+    );
+
+ 
+
+ 
+
+ 
+
+  const signals =
+
+ 
+
+    Array.isArray(
+
+ 
+
+      bundle.signals
+
+ 
+
+    )
+
+ 
+
+      ? bundle.signals
+
+ 
+
+      : [];
+
+ 
+
+ 
+
+ 
+
+  const strategies =
+
+ 
+
+    Array.isArray(
+
+ 
+
+      bundle.strategy?.recommendations
+
+ 
+
+    )
+
+ 
+
+      ? bundle.strategy.recommendations
+
+ 
+
+      : [];
 
  
 
@@ -12769,11 +12622,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    context.candidate ||
+    identities[0]?.name ||
 
  
 
-    identities[0]?.candidate ||
+    context.candidate ||
 
  
 
@@ -12785,19 +12638,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+  const title =
+
+ 
+
+    `Unified Candidate Intelligence - ${candidateLabel}`;
+
+ 
+
+ 
+
+ 
+
   const lines = [
 
  
 
-    `Unified Candidate Intelligence - ${candidateLabel}`,
+    title,
 
  
 
     "",
-
- 
-
-    `Verified candidate identities: ${identities.length}`,
 
  
 
@@ -12809,7 +12670,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  identities.forEach((identity) => {
+  if (
+
+ 
+
+    identities.length
+
+ 
+
+  ) {
 
  
 
@@ -12817,39 +12686,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      `- ${identity.office || "Office"}${
-
- 
-
-        identity.district
-
- 
-
-          ? ` - ${identity.district}`
-
- 
-
-          : ""
-
- 
-
-      }: ${
-
- 
-
-        identity.candidate_id ||
-
- 
-
-        identity.committee_id ||
-
- 
-
-        "No FEC identifier"
-
- 
-
-      }`
+      `Verified candidate identities: ${identities.length}`
 
  
 
@@ -12857,7 +12694,115 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  });
+ 
+
+ 
+
+    for (
+
+ 
+
+      const identity of
+
+ 
+
+        identities.slice(
+
+ 
+
+          0,
+
+ 
+
+          6
+
+ 
+
+        )
+
+ 
+
+    ) {
+
+ 
+
+      lines.push(
+
+ 
+
+        `- ${
+
+ 
+
+          identity.office ||
+
+ 
+
+          "Office"
+
+ 
+
+        }${
+
+ 
+
+          identity.district
+
+ 
+
+            ? ` - ${identity.district}`
+
+ 
+
+            : ""
+
+ 
+
+        }: ${
+
+ 
+
+          identity.fec_candidate_id ||
+
+ 
+
+          identity.committee_id ||
+
+ 
+
+          "No FEC identifier"
+
+ 
+
+        }`
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+  } else {
+
+ 
+
+    lines.push(
+
+ 
+
+      "No verified candidate identity was returned."
+
+ 
+
+    );
+
+ 
+
+  }
 
  
 
@@ -12873,7 +12818,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    `FEC finance reports: ${financeReports.filter((item) => item?.ok).length}`,
+    `Official FEC reports: ${
+
+ 
+
+      financeReports.filter(
+
+ 
+
+        (report) =>
+
+ 
+
+          report?.ok
+
+ 
+
+      ).length
+
+ 
+
+    }`,
 
  
 
@@ -12881,7 +12846,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    `Current news articles: ${articles.length}`,
+    `News articles: ${articles.length}`,
 
  
 
@@ -12901,47 +12866,31 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  if (polls.length) {
+  if (
 
  
 
-    lines.push("", "Latest polling:");
+    polls.length
 
  
 
- 
+  ) {
 
  
 
-    polls.slice(0, 8).forEach((poll) => {
+    lines.push(
 
  
 
-      const parts = [
+      "",
 
  
 
-        poll.pollster || poll.source,
+      "Latest polling:"
 
  
 
-        poll.race || poll.office,
-
- 
-
-        poll.candidate_name || poll.answer,
-
- 
-
-        poll.pct != null ? `${poll.pct}%` : null,
-
- 
-
-        poll.field_end || poll.published_at,
-
- 
-
-      ].filter(Boolean);
+    );
 
  
 
@@ -12949,11 +12898,139 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      if (parts.length) {
+    for (
 
  
 
-        lines.push(`- ${parts.join(" - ")}`);
+      const poll of
+
+ 
+
+        polls.slice(
+
+ 
+
+          0,
+
+ 
+
+          5
+
+ 
+
+        )
+
+ 
+
+    ) {
+
+ 
+
+      const pollLine =
+
+ 
+
+        [
+
+ 
+
+          poll.pollster ||
+
+ 
+
+          poll.source,
+
+ 
+
+          poll.candidate_name ||
+
+ 
+
+          poll.answer ||
+
+ 
+
+          poll.choice,
+
+ 
+
+          poll.pct != null
+
+ 
+
+            ? `${poll.pct}%`
+
+ 
+
+            : null,
+
+ 
+
+          poll.field_end ||
+
+ 
+
+          poll.published_at ||
+
+ 
+
+          poll.date,
+
+ 
+
+        ]
+
+ 
+
+          .filter(
+
+ 
+
+            Boolean
+
+ 
+
+          )
+
+ 
+
+          .join(
+
+ 
+
+            " - "
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+      if (
+
+ 
+
+        pollLine
+
+ 
+
+      ) {
+
+ 
+
+        lines.push(
+
+ 
+
+          `- ${pollLine}`
+
+ 
+
+        );
 
  
 
@@ -12961,7 +13038,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    });
+    }
 
  
 
@@ -12973,39 +13050,31 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  if (articles.length) {
+  if (
 
  
 
-    lines.push("", "Recent reporting:");
+    articles.length
 
  
 
- 
+  ) {
 
  
 
-    articles.slice(0, 8).forEach((article) => {
+    lines.push(
 
  
 
-      const parts = [
+      "",
 
  
 
-        article.title || article.headline,
+      "Recent reporting:"
 
  
 
-        article.publisher || article.source,
-
- 
-
-        article.published_at || article.date,
-
- 
-
-      ].filter(Boolean);
+    );
 
  
 
@@ -13013,11 +13082,119 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      if (parts.length) {
+    for (
 
  
 
-        lines.push(`- ${parts.join(" - ")}`);
+      const article of
+
+ 
+
+        articles.slice(
+
+ 
+
+          0,
+
+ 
+
+          5
+
+ 
+
+        )
+
+ 
+
+    ) {
+
+ 
+
+      const articleLine =
+
+ 
+
+        [
+
+ 
+
+          article.title ||
+
+ 
+
+          article.headline,
+
+ 
+
+          article.publisher ||
+
+ 
+
+          article.source,
+
+ 
+
+          article.published_at ||
+
+ 
+
+          article.date,
+
+ 
+
+        ]
+
+ 
+
+          .filter(
+
+ 
+
+            Boolean
+
+ 
+
+          )
+
+ 
+
+          .join(
+
+ 
+
+            " - "
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+      if (
+
+ 
+
+        articleLine
+
+ 
+
+      ) {
+
+ 
+
+        lines.push(
+
+ 
+
+          `- ${articleLine}`
+
+ 
+
+        );
 
  
 
@@ -13025,7 +13202,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    });
+    }
 
  
 
@@ -13037,83 +13214,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  if (signals.length) {
+  if (
 
  
 
-    lines.push("", "Political signals:");
+    strategies.length
 
  
 
- 
-
- 
-
-    signals.slice(0, 8).forEach((signal) => {
-
- 
-
-      const value =
-
- 
-
-        typeof signal === "string"
-
- 
-
-          ? signal
-
- 
-
-          : clean(
-
- 
-
-              signal.title ||
-
- 
-
-              signal.summary ||
-
- 
-
-              signal.text
-
- 
-
-            );
-
- 
-
- 
-
- 
-
-      if (value) {
-
- 
-
-        lines.push(`- ${value}`);
-
- 
-
-      }
-
- 
-
-    });
-
- 
-
-  }
-
- 
-
- 
-
- 
-
-  if (strategies.length) {
+  ) {
 
  
 
@@ -13137,15 +13246,43 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    strategies.slice(0, 8).forEach((strategy) => {
+    for (
 
  
 
-      const value =
+      const strategy of
 
  
 
-        typeof strategy === "string"
+        strategies.slice(
+
+ 
+
+          0,
+
+ 
+
+          5
+
+ 
+
+        )
+
+ 
+
+    ) {
+
+ 
+
+      const text =
+
+ 
+
+        typeof strategy ===
+
+ 
+
+          "string"
 
  
 
@@ -13181,11 +13318,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      if (value) {
+      if (
 
  
 
-        lines.push(`- ${value}`);
+        text
+
+ 
+
+      ) {
+
+ 
+
+        lines.push(
+
+ 
+
+          `- ${text}`
+
+ 
+
+        );
 
  
 
@@ -13193,7 +13346,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    });
+    }
 
  
 
@@ -13217,11 +13370,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-    title:
-
- 
-
-      `Unified Candidate Intelligence - ${candidateLabel}`,
+    title,
 
  
 
@@ -13241,7 +13390,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.profile || null,
+      bundle.profile ||
+
+ 
+
+      null,
 
  
 
@@ -13249,7 +13402,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.finance || null,
+      bundle.finance ||
+
+ 
+
+      null,
 
  
 
@@ -13257,7 +13414,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.polling || null,
+      bundle.polling ||
+
+ 
+
+      null,
 
  
 
@@ -13265,7 +13426,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.news || null,
+      bundle.news ||
+
+ 
+
+      null,
 
  
 
@@ -13277,7 +13442,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.strategy || null,
+      bundle.strategy ||
+
+ 
+
+      null,
 
  
 
@@ -13285,7 +13454,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.operations || null,
+      bundle.operations ||
+
+ 
+
+      null,
 
  
 
@@ -13293,7 +13466,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.coverage || null,
+      bundle.coverage ||
+
+ 
+
+      null,
 
  
 
@@ -13301,7 +13478,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      bundle.sources || [],
+      bundle.sources ||
+
+ 
+
+      sources,
 
  
 
@@ -13313,7 +13494,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      lines.join("\n"),
+      lines.join(
+
+ 
+
+        "\n"
+
+ 
+
+      ),
 
  
 
@@ -13322,6 +13511,10 @@ function buildCandidateIntelligenceDataAnswer({
  
 
 }
+
+ 
+
+ 
 
  
 
@@ -13385,47 +13578,25 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
   if (
-
- 
 
     context.intent ===
 
- 
-
     "candidate_intelligence"
-
- 
 
   ) {
 
- 
-
     return buildCandidateIntelligenceDataAnswer({
-
- 
 
       context,
 
- 
-
       results,
 
- 
+      sources,
 
     });
 
- 
-
   }
-
- 
-
- 
 
  
 
@@ -13733,31 +13904,39 @@ function deterministicBrief({
 
  
 
-        gaps.length
+        dataAnswer.type ===
 
- 
+          "candidate_intelligence"
 
-          ? [
+          ? (gaps.length
 
- 
+              ? [
 
-              "Use the verified FEC filing data above and review any degraded supporting providers separately.",
+                  "Use the verified candidate sections that are available and review degraded or unavailable candidate providers separately.",
 
- 
+                  "Refresh polling, news, political signals, and strategy sources before treating a missing section as a strategic conclusion.",
 
-            ]
+                ]
 
- 
+              : [
 
-          : [
+                  "Continue monitoring new FEC filings, candidate polling, current reporting, political signals, and VoterSpheres strategy recommendations.",
 
- 
+                ])
 
-              "Continue monitoring subsequent FEC filings for changes in receipts, spending, cash position, transfers, and debt.",
+          : (gaps.length
 
- 
+              ? [
 
-            ],
+                  "Use the verified FEC filing data above and review any degraded supporting providers separately.",
+
+                ]
+
+              : [
+
+                  "Continue monitoring subsequent FEC filings for changes in receipts, spending, cash position, transfers, and debt.",
+
+                ]),
 
  
 
@@ -14601,15 +14780,19 @@ async function synthesizeWithOpenAI({
 
  
 
-            "For candidate intelligence questions, synthesize the verified candidate profile, FEC finance, polling, current news, political signals, and VoterSpheres strategy recommendations from the supplied candidate bundle.",
+            "For candidate intelligence questions, synthesize the verified profile, official FEC finance, polling, current news, political signals, and VoterSpheres strategy recommendations from the supplied candidate bundle.",
 
  
 
-            "Clearly distinguish sourced candidate facts from VoterSpheres strategy recommendations and executive interpretation.",
+            "For candidate intelligence, organize the answer as Executive Assessment, Verified Candidate Identity, FEC / Fundraising, Polling, Recent News, Political Signals, Strategy Recommendations, Risks / Data Gaps, and Immediate Actions. Omit sections that truly have no evidence rather than inventing content.",
 
  
 
-            "Do not invent a missing poll, article, signal, strategy recommendation, candidate identity, finance total, or source.",
+            "Finance values, poll percentages, article dates/headlines, candidate IDs, and source names must be copied exactly from retrieved evidence. Strategy recommendations must be labeled as VoterSpheres analysis rather than external fact.",
+
+ 
+
+            "Clearly distinguish provider facts from VoterSpheres strategy recommendations and executive interpretation. Never invent a missing candidate section.",
 
  
 
@@ -14902,18 +15085,6 @@ export function getExecutiveOrchestratorConfiguration() {
  
 
       "strict-candidate-statistics-multi-identity",
-
- 
-
- 
-
- 
-
-    candidate_intelligence_mode:
-
- 
-
-      "profile-finance-polling-news-signals-strategy",
 
  
 
@@ -15973,31 +16144,41 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
-    dataAnswer?.answer
+    plan.context.intent ===
 
- 
+      "finance" &&
+
+    dataAnswer?.answer
 
       ? dataAnswer.answer
 
- 
+      : plan.context.intent ===
 
-      : (
+          "candidate_intelligence"
 
- 
+        ? (
 
-          briefing.answer ||
+            briefing.answer ||
 
- 
+            briefing.executive_summary ||
 
-          briefing.executive_summary ||
+            dataAnswer?.answer ||
 
- 
+            briefing.headline
 
-          briefing.headline
+          )
 
- 
+        : (
 
-        );
+            briefing.answer ||
+
+            dataAnswer?.answer ||
+
+            briefing.executive_summary ||
+
+            briefing.headline
+
+          );
 
  
 
@@ -16286,30 +16467,6 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
       dataAnswer,
-
- 
-
- 
-
- 
-
-    candidate_intelligence:
-
- 
-
-      dataAnswer?.type ===
-
- 
-
-      "candidate_intelligence"
-
- 
-
-        ? dataAnswer
-
- 
-
-        : null,
 
  
 
