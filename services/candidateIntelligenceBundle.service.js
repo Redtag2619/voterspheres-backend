@@ -2,55 +2,197 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-const BUILD = "4.4.0";
-
-const now = () => new Date().toISOString();
-
-const clean = (value = "") => String(value ?? "").trim();
-
-const arr = (value) => Array.isArray(value) ? value : [];
-
-const obj = (value) =>
-
-  value && typeof value === "object" && !Array.isArray(value) ? value : {};
+const BUILD = "4.4.0-unified-candidate-intelligence";
 
  
 
-function normalizedName(value = "") {
+const now = () => new Date().toISOString();
+
+ 
+
+const clean = (value = "") =>
+
+  String(value ?? "").trim();
+
+ 
+
+const arr = (value) =>
+
+  Array.isArray(value)
+
+    ? value
+
+    : [];
+
+ 
+
+const obj = (value) =>
+
+  value &&
+
+  typeof value === "object" &&
+
+  !Array.isArray(value)
+
+    ? value
+
+    : {};
+
+ 
+
+function normalizePersonName(
+
+  value = ""
+
+) {
 
   const parts = clean(value)
 
-    .replace(/,/g, " ")
-
-    .replace(/\s+/g, " ")
-
     .toLowerCase()
 
-    .split(" ")
+    .replace(
+
+      /\b(jr|sr|ii|iii|iv)\.?\b/g,
+
+      " "
+
+    )
+
+    .replace(
+
+      /[^a-z0-9]+/g,
+
+      " "
+
+    )
+
+    .split(
+
+      /\s+/
+
+    )
+
+    .map(
+
+      (token) =>
+
+        token.trim()
+
+    )
 
     .filter(Boolean);
 
  
 
-  return parts.length >= 2
-
-    ? [...parts].sort().join(" ")
-
-    : parts.join(" ");
+  return parts;
 
 }
 
  
 
-function displayName(row = {}) {
+function candidateNamesMatch(
+
+  requested,
+
+  stored
+
+) {
+
+  const left =
+
+    normalizePersonName(
+
+      requested
+
+    );
+
+ 
+
+  const right =
+
+    normalizePersonName(
+
+      stored
+
+    );
+
+ 
+
+  if (
+
+    !left.length ||
+
+    !right.length
+
+  ) {
+
+    return false;
+
+  }
+
+ 
+
+  if (
+
+    left.length ===
+
+    1
+
+  ) {
+
+    return right.includes(
+
+      left[0]
+
+    );
+
+  }
+
+ 
+
+  return left.every(
+
+    (token) =>
+
+      right.includes(
+
+        token
+
+      )
+
+  );
+
+}
+
+ 
+
+function candidateName(
+
+  row = {}
+
+) {
 
   return clean(
 
     row.full_name ||
 
-      row.name ||
+    row.name ||
 
-      [row.first_name, row.last_name].filter(Boolean).join(" ")
+    row.candidate_name ||
+
+    [
+
+      row.first_name,
+
+      row.middle_name,
+
+      row.last_name,
+
+    ]
+
+      .filter(Boolean)
+
+      .join(" ")
 
   );
 
@@ -58,121 +200,445 @@ function displayName(row = {}) {
 
  
 
-function samePerson(requested, row) {
+function normalizeOffice(
 
-  return (
+  value = ""
 
-    normalizedName(requested) &&
+) {
 
-    normalizedName(requested) === normalizedName(displayName(row))
+  const lower =
 
-  );
+    clean(value)
+
+      .toLowerCase()
+
+      .replace(
+
+        /[^a-z0-9]+/g,
+
+        " "
+
+      )
+
+      .trim();
+
+ 
+
+  if (
+
+    /\bhouse\b|congress/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "house";
+
+  }
+
+ 
+
+  if (
+
+    /\bsenate\b|senator/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "senate";
+
+  }
+
+ 
+
+  if (
+
+    /president/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "president";
+
+  }
+
+ 
+
+  if (
+
+    /governor/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "governor";
+
+  }
+
+ 
+
+  return lower;
 
 }
 
  
 
-function officeKey(value = "") {
+function selectVerifiedIdentities(
 
-  const text = clean(value).toLowerCase();
+  rows,
 
-  if (text.includes("senate")) return "senate";
+  context = {}
 
-  if (text.includes("house") || text.includes("congress")) return "house";
+) {
 
-  if (text.includes("president")) return "president";
+  const requestedName =
 
-  if (text.includes("governor")) return "governor";
+    clean(
 
-  return text;
+      context.candidate
 
-}
+    );
 
  
 
-function selectIdentities(rows, context) {
+  const requestedState =
 
-  const state = clean(context.state).toUpperCase();
+    clean(
 
-  const office = officeKey(context.office);
+      context.state
 
-  const cycle = clean(context.cycle);
+    ).toUpperCase();
+
+ 
+
+  const requestedOffice =
+
+    normalizeOffice(
+
+      context.office
+
+    );
+
+ 
+
+  const requestedCycle =
+
+    clean(
+
+      context.cycle
+
+    );
 
  
 
   return arr(rows)
 
-    .filter((row) => !context.candidate || samePerson(context.candidate, row))
-
     .filter(
 
-      (row) =>
+      (row) => {
 
-        !state ||
+        const storedName =
 
-        clean(row.state_code || row.state).toUpperCase() === state
+          candidateName(
+
+            row
+
+          );
+
+ 
+
+        if (
+
+          requestedName &&
+
+          !candidateNamesMatch(
+
+            requestedName,
+
+            storedName
+
+          )
+
+        ) {
+
+          return false;
+
+        }
+
+ 
+
+        if (
+
+          requestedState
+
+        ) {
+
+          const state =
+
+            clean(
+
+              row.state_code ||
+
+              row.state
+
+            ).toUpperCase();
+
+ 
+
+          if (
+
+            state &&
+
+            state !==
+
+              requestedState
+
+          ) {
+
+            return false;
+
+          }
+
+        }
+
+ 
+
+        if (
+
+          requestedOffice
+
+        ) {
+
+          const office =
+
+            normalizeOffice(
+
+              row.office ||
+
+              row.office_full
+
+            );
+
+ 
+
+          if (
+
+            office &&
+
+            office !==
+
+              requestedOffice
+
+          ) {
+
+            return false;
+
+          }
+
+        }
+
+ 
+
+        if (
+
+          requestedCycle &&
+
+          row.election_year &&
+
+          String(
+
+            row.election_year
+
+          ) !==
+
+            requestedCycle
+
+        ) {
+
+          return false;
+
+        }
+
+ 
+
+        return Boolean(
+
+          clean(
+
+            row.fec_candidate_id
+
+          ) ||
+
+          clean(
+
+            row.campaign_committee_id
+
+          )
+
+        );
+
+      }
 
     )
 
-    .filter((row) => !office || officeKey(row.office) === office)
+    .map(
 
-    .filter(
+      (row) => ({
 
-      (row) =>
+        candidate:
 
-        !cycle ||
+          candidateName(
 
-        !row.election_year ||
+            row
 
-        String(row.election_year) === cycle
+          ) ||
 
-    )
+          requestedName,
 
-    .filter(
+ 
 
-      (row) =>
+        candidate_id:
 
-        clean(row.fec_candidate_id) ||
+          clean(
 
-        clean(row.campaign_committee_id)
+            row.fec_candidate_id
 
-    )
+          ) ||
 
-    .map((row) => ({
+          null,
 
-      id: row.id ?? null,
+ 
 
-      name: displayName(row),
+        committee_id:
 
-      party: row.party || null,
+          clean(
 
-      state: row.state_code || row.state || null,
+            row.campaign_committee_id
 
-      office: row.office || null,
+          ) ||
 
-      district: row.district || null,
+          null,
 
-      election_year: row.election_year || null,
+ 
 
-      incumbent: row.incumbent ?? null,
+        state:
 
-      status: row.status || row.campaign_status || null,
+          clean(
 
-      fec_candidate_id: row.fec_candidate_id || null,
+            row.state_code ||
 
-      committee_id: row.campaign_committee_id || null,
+            row.state
 
-      website: row.website || null,
+          ) ||
 
-      record: row,
+          null,
 
-    }));
+ 
+
+        office:
+
+          clean(
+
+            row.office ||
+
+            row.office_full
+
+          ) ||
+
+          null,
+
+ 
+
+        district:
+
+          clean(
+
+            row.district
+
+          ) ||
+
+          null,
+
+ 
+
+        party:
+
+          clean(
+
+            row.party
+
+          ) ||
+
+          null,
+
+ 
+
+        election_year:
+
+          row.election_year ||
+
+          null,
+
+ 
+
+        incumbent:
+
+          row.incumbent ??
+
+          null,
+
+ 
+
+        status:
+
+          row.status ||
+
+          row.campaign_status ||
+
+          null,
+
+ 
+
+        website:
+
+          row.website ||
+
+          null,
+
+ 
+
+        record:
+
+          row,
+
+      })
+
+    );
 
 }
 
  
 
-async function tool(name, args, user) {
+async function safeTool(
+
+  name,
+
+  argumentsValue,
+
+  user
+
+) {
 
   try {
 
@@ -180,47 +646,111 @@ async function tool(name, args, user) {
 
       name,
 
-      arguments: args,
+      arguments:
+
+        argumentsValue,
 
       user,
 
     });
 
-  } catch (error) {
+  } catch (
+
+    error
+
+  ) {
 
     return {
 
-      ok: false,
+      ok:
 
-      tool: name,
+        false,
 
-      summary: `${name} failed.`,
+ 
 
-      data: null,
+      tool:
 
-      sources: [],
+        name,
 
-      warnings: [error?.message || "Unknown tool failure."],
+ 
+
+      summary:
+
+        `${name} failed.`,
+
+ 
+
+      data:
+
+        null,
+
+ 
+
+      records:
+
+        [],
+
+ 
+
+      sources:
+
+        [],
+
+ 
+
+      warnings: [
+
+        error?.message ||
+
+        "Unknown tool failure.",
+
+      ],
+
+ 
 
       diagnostics: [
 
         {
 
-          provider: name,
+          provider:
 
-          ok: false,
+            name,
 
-          error: error?.message || "Unknown tool failure.",
+ 
 
-          checked_at: now(),
+          ok:
+
+            false,
+
+ 
+
+          error:
+
+            error?.message ||
+
+            "Unknown tool failure.",
+
+ 
+
+          checked_at:
+
+            now(),
 
         },
 
       ],
 
-      degraded: true,
+ 
 
-      generated_at: now(),
+      degraded:
+
+        true,
+
+ 
+
+      generated_at:
+
+        now(),
 
     };
 
@@ -230,93 +760,329 @@ async function tool(name, args, user) {
 
  
 
-function recommendationsFrom(unified) {
+function sourceKey(
 
-  const data = obj(unified?.data);
+  source = {}
 
- 
+) {
 
-  return arr(
+  return clean(
 
-    data.recommendations ||
+    source.url ||
 
-      data.strategy_recommendations ||
+    source.source_url ||
 
-      data.briefing?.recommendations ||
+    source.name ||
 
-      data.briefing?.recommended_actions ||
+    source.source ||
 
-      data.actions
+    source.provider
 
-  );
-
-}
-
- 
-
-function signalsFrom(unified) {
-
-  const data = obj(unified?.data);
-
- 
-
-  return arr(
-
-    data.signals ||
-
-      data.political_signals ||
-
-      data.intelligence?.signals ||
-
-      data.briefing?.signals
-
-  );
+  ).toLowerCase();
 
 }
 
  
 
-function mergeSources(results) {
+function mergeSources(
 
-  const seen = new Set();
+  resultSets = []
 
-  const output = [];
+) {
 
- 
+  const map =
 
-  for (const source of results.flatMap((result) => arr(result?.sources))) {
-
-    const item = typeof source === "string" ? { source } : obj(source);
-
-    const key = clean(
-
-      item.url ||
-
-        item.source_url ||
-
-        item.source ||
-
-        item.name ||
-
-        item.provider
-
-    );
+    new Map();
 
  
 
-    if (!key || seen.has(key)) continue;
+  for (
+
+    const set
+
+    of resultSets
+
+  ) {
+
+    for (
+
+      const source
+
+      of arr(
+
+        set?.sources
+
+      )
+
+    ) {
+
+      const key =
+
+        sourceKey(
+
+          source
+
+        );
 
  
 
-    seen.add(key);
+      if (
 
-    output.push(item);
+        key &&
+
+        !map.has(
+
+          key
+
+        )
+
+      ) {
+
+        map.set(
+
+          key,
+
+          source
+
+        );
+
+      }
+
+    }
 
   }
 
  
 
-  return output;
+  return [
+
+    ...map.values(),
+
+  ];
+
+}
+
+ 
+
+function strategyRowsFromUnified(
+
+  unified
+
+) {
+
+  const data =
+
+    obj(
+
+      unified?.data
+
+    );
+
+ 
+
+  const briefing =
+
+    obj(
+
+      data.briefing
+
+    );
+
+ 
+
+  const candidates = [
+
+    data.strategy_recommendations,
+
+    data.recommendations,
+
+    data.actions,
+
+    briefing.strategy_recommendations,
+
+    briefing.recommendations,
+
+    briefing.recommended_actions,
+
+  ];
+
+ 
+
+  for (
+
+    const value
+
+    of candidates
+
+  ) {
+
+    if (
+
+      Array.isArray(value)
+
+    ) {
+
+      return value;
+
+    }
+
+  }
+
+ 
+
+  return [];
+
+}
+
+ 
+
+function signalRowsFromUnified(
+
+  unified
+
+) {
+
+  const data =
+
+    obj(
+
+      unified?.data
+
+    );
+
+ 
+
+  const intelligence =
+
+    obj(
+
+      data.intelligence
+
+    );
+
+ 
+
+  const briefing =
+
+    obj(
+
+      data.briefing
+
+    );
+
+ 
+
+  const candidates = [
+
+    data.political_signals,
+
+    data.signals,
+
+    intelligence.signals,
+
+    briefing.signals,
+
+  ];
+
+ 
+
+  for (
+
+    const value
+
+    of candidates
+
+  ) {
+
+    if (
+
+      Array.isArray(value)
+
+    ) {
+
+      return value;
+
+    }
+
+  }
+
+ 
+
+  return [];
+
+}
+
+ 
+
+function recordsFromResult(
+
+  result,
+
+  preferredKeys = []
+
+) {
+
+  const data =
+
+    result?.data;
+
+ 
+
+  if (
+
+    !data
+
+  ) {
+
+    return [];
+
+  }
+
+ 
+
+  for (
+
+    const key
+
+    of preferredKeys
+
+  ) {
+
+    if (
+
+      Array.isArray(
+
+        data?.[key]
+
+      )
+
+    ) {
+
+      return data[key];
+
+    }
+
+  }
+
+ 
+
+  if (
+
+    Array.isArray(
+
+      result.records
+
+    )
+
+  ) {
+
+    return result.records;
+
+  }
+
+ 
+
+  return [];
 
 }
 
@@ -324,35 +1090,91 @@ function mergeSources(results) {
 
 export async function getCandidateIntelligenceBundle({
 
+ 
+
   candidate = "",
-
-  candidateId = "",
-
-  state = "",
-
-  office = "",
-
-  cycle = "",
-
-  locality = "",
-
-  workspaceId = 1,
-
-  limit = 12,
-
-  user = {},
-
-} = {}) {
-
-  const requestedCandidate = clean(candidate);
 
  
 
-  if (!requestedCandidate && !clean(candidateId)) {
+  candidateId = "",
 
-    const error = new Error("Candidate name or candidate ID is required.");
+ 
 
-    error.status = 400;
+  state = "",
+
+ 
+
+  office = "",
+
+ 
+
+  cycle = "",
+
+ 
+
+  locality = "",
+
+ 
+
+  workspaceId = 1,
+
+ 
+
+  limit = 12,
+
+ 
+
+  user = {},
+
+ 
+
+} = {}) {
+
+ 
+
+  const requestedCandidate =
+
+    clean(
+
+      candidate
+
+    );
+
+ 
+
+  const requestedCandidateId =
+
+    clean(
+
+      candidateId
+
+    );
+
+ 
+
+  if (
+
+    !requestedCandidate &&
+
+    !requestedCandidateId
+
+  ) {
+
+    const error =
+
+      new Error(
+
+        "Candidate name or candidate ID is required."
+
+      );
+
+ 
+
+    error.status =
+
+      400;
+
+ 
 
     throw error;
 
@@ -360,161 +1182,583 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-  const statistics = await tool(
+  /*
 
-    "get_candidate_statistics",
+   * 1. Candidate profile + strict identity resolution.
 
-    {
+   */
 
-      candidate: requestedCandidate,
+  const statistics =
 
-      candidate_id: clean(candidateId),
+    await safeTool(
 
-      state: clean(state),
+      "get_candidate_statistics",
 
-      office: clean(office),
+      {
 
-      cycle: clean(cycle),
+        candidate:
 
-    },
-
-    user
-
-  );
+          requestedCandidate,
 
  
 
-  const identities = selectIdentities(
+        candidate_id:
 
-    statistics?.data?.candidates,
-
-    {
-
-      candidate: requestedCandidate,
-
-      state,
-
-      office,
-
-      cycle,
-
-    }
-
-  );
+          requestedCandidateId,
 
  
 
-  const finance = [];
+        state:
+
+          clean(
+
+            state
+
+          ),
 
  
 
-  for (const identity of identities) {
+        office:
 
-    finance.push(
+          clean(
 
-      await tool(
+            office
 
-        "get_fec_finance",
+          ),
 
-        {
+ 
 
-          candidate: identity.name || requestedCandidate,
+        cycle:
 
-          candidateId: identity.fec_candidate_id || "",
+          clean(
 
-          committeeId: identity.committee_id || "",
+            cycle
 
-          cycle: clean(cycle || identity.election_year),
+          ),
 
-        },
+      },
 
-        user
-
-      )
+      user
 
     );
+
+ 
+
+  const identities =
+
+    selectVerifiedIdentities(
+
+      statistics?.data
+
+        ?.candidates,
+
+      {
+
+        candidate:
+
+          requestedCandidate,
+
+ 
+
+        state,
+
+ 
+
+        office,
+
+ 
+
+        cycle,
+
+      }
+
+    );
+
+ 
+
+  /*
+
+   * Explicit candidate ID support.
+
+   */
+
+  if (
+
+    requestedCandidateId &&
+
+    !identities.some(
+
+      (identity) =>
+
+        identity.candidate_id ===
+
+        requestedCandidateId
+
+    )
+
+  ) {
+
+    identities.push({
+
+      candidate:
+
+        requestedCandidate ||
+
+        null,
+
+ 
+
+      candidate_id:
+
+        requestedCandidateId,
+
+ 
+
+      committee_id:
+
+        null,
+
+ 
+
+      state:
+
+        clean(
+
+          state
+
+        ) ||
+
+        null,
+
+ 
+
+      office:
+
+        clean(
+
+          office
+
+        ) ||
+
+        null,
+
+ 
+
+      district:
+
+        null,
+
+ 
+
+      party:
+
+        null,
+
+ 
+
+      election_year:
+
+        clean(
+
+          cycle
+
+        ) ||
+
+        null,
+
+ 
+
+      incumbent:
+
+        null,
+
+ 
+
+      status:
+
+        null,
+
+ 
+
+      website:
+
+        null,
+
+ 
+
+      record:
+
+        null,
+
+    });
 
   }
 
  
 
-  const polling = await tool(
+  /*
 
-    "get_latest_polling",
+   * 2. Official FEC finance for every verified candidate identity.
 
-    {
+   * The Executive Voice tool accepts snake_case arguments.
 
-      candidate: requestedCandidate,
+   */
 
-      state: clean(state || identities[0]?.state),
+  const financeReports =
 
-      office: clean(office),
-
-      locality: clean(locality),
-
-      limit,
-
-    },
-
-    user
-
-  );
+    [];
 
  
 
-  const news = await tool(
+  for (
 
-    "search_live_news",
+    const identity
 
-    {
+    of identities
 
-      query: requestedCandidate,
+  ) {
 
-      state: clean(state || identities[0]?.state),
+    if (
 
-      locality: clean(locality),
+      !clean(
 
-      limit,
+        identity.candidate_id
 
-    },
+      ) &&
 
-    user
+      !clean(
 
-  );
+        identity.committee_id
 
- 
+      )
 
-  const unified = await tool(
+    ) {
 
-    "get_unified_executive_intelligence",
+      continue;
 
-    {
-
-      workspace_id: workspaceId,
-
-      state: clean(state || identities[0]?.state),
-
-      office: clean(office),
-
-    },
-
-    user
-
-  );
+    }
 
  
 
-  const strategy = recommendationsFrom(unified);
+    const result =
 
-  const signals = signalsFrom(unified);
+      await safeTool(
+
+        "get_fec_finance",
+
+        {
+
+          candidate:
+
+            identity.candidate ||
+
+            requestedCandidate,
 
  
 
-  const allResults = [
+          candidate_id:
+
+            identity.candidate_id ||
+
+            "",
+
+ 
+
+          committee_id:
+
+            identity.committee_id ||
+
+            "",
+
+ 
+
+          cycle:
+
+            clean(
+
+              cycle ||
+
+              identity.election_year
+
+            ),
+
+        },
+
+        user
+
+      );
+
+ 
+
+    financeReports.push({
+
+      identity,
+
+      result,
+
+    });
+
+  }
+
+ 
+
+  /*
+
+   * 3. Candidate polling.
+
+   */
+
+  const polling =
+
+    await safeTool(
+
+      "get_latest_polling",
+
+      {
+
+        candidate:
+
+          requestedCandidate,
+
+ 
+
+        state:
+
+          clean(
+
+            state ||
+
+            identities[0]
+
+              ?.state
+
+          ),
+
+ 
+
+        office:
+
+          clean(
+
+            office
+
+          ),
+
+ 
+
+        locality:
+
+          clean(
+
+            locality
+
+          ),
+
+ 
+
+        limit,
+
+      },
+
+      user
+
+    );
+
+ 
+
+  /*
+
+   * 4. Current candidate news/articles.
+
+   */
+
+  const news =
+
+    await safeTool(
+
+      "search_live_news",
+
+      {
+
+        query:
+
+          requestedCandidate,
+
+ 
+
+        state:
+
+          clean(
+
+            state ||
+
+            identities[0]
+
+              ?.state
+
+          ),
+
+ 
+
+        locality:
+
+          clean(
+
+            locality
+
+          ),
+
+ 
+
+        limit,
+
+      },
+
+      user
+
+    );
+
+ 
+
+  /*
+
+   * 5. Existing VoterSpheres executive data fabric.
+
+   * We reuse the platform's current signals and strategy recommendations
+
+   * instead of creating a second strategy system.
+
+   */
+
+  const unified =
+
+    await safeTool(
+
+      "get_unified_executive_intelligence",
+
+      {
+
+        workspace_id:
+
+          workspaceId,
+
+ 
+
+        state:
+
+          clean(
+
+            state ||
+
+            identities[0]
+
+              ?.state
+
+          ),
+
+ 
+
+        office:
+
+          clean(
+
+            office
+
+          ),
+
+      },
+
+      user
+
+    );
+
+ 
+
+  const pollingRecords =
+
+    recordsFromResult(
+
+      polling,
+
+      [
+
+        "polls",
+
+        "records",
+
+        "results",
+
+      ]
+
+    );
+
+ 
+
+  const newsRecords =
+
+    recordsFromResult(
+
+      news,
+
+      [
+
+        "articles",
+
+        "records",
+
+        "results",
+
+        "news",
+
+      ]
+
+    );
+
+ 
+
+  const strategy =
+
+    strategyRowsFromUnified(
+
+      unified
+
+    );
+
+ 
+
+  const signals =
+
+    signalRowsFromUnified(
+
+      unified
+
+    );
+
+ 
+
+  const financeUsable =
+
+    financeReports.filter(
+
+      (entry) =>
+
+        entry.result?.ok
+
+    );
+
+ 
+
+  const allResultSets = [
 
     statistics,
 
-    ...finance,
+    ...financeReports.map(
+
+      (entry) =>
+
+        entry.result
+
+    ),
 
     polling,
 
@@ -526,93 +1770,355 @@ export async function getCandidateIntelligenceBundle({
 
  
 
+  const warnings =
+
+    allResultSets.flatMap(
+
+      (result) =>
+
+        arr(
+
+          result?.warnings
+
+        )
+
+    );
+
+ 
+
+  const diagnostics =
+
+    allResultSets.flatMap(
+
+      (result) =>
+
+        arr(
+
+          result?.diagnostics
+
+        )
+
+    );
+
+ 
+
+  const sources =
+
+    mergeSources(
+
+      allResultSets
+
+    );
+
+ 
+
   return {
 
-    ok: allResults.some((result) => result?.ok),
+    ok:
 
-    build: BUILD,
+      Boolean(
 
-    provider: "voterspheres_candidate_intelligence_bundle",
+        identities.length ||
 
-    candidate_query: requestedCandidate,
+        financeUsable.length ||
+
+        pollingRecords.length ||
+
+        newsRecords.length ||
+
+        signals.length ||
+
+        strategy.length
+
+      ),
+
+ 
+
+    build:
+
+      BUILD,
+
+ 
+
+    provider:
+
+      "voterspheres_candidate_intelligence_bundle",
+
+ 
+
+    candidate_query:
+
+      requestedCandidate,
+
+ 
+
+    context: {
+
+      state:
+
+        clean(
+
+          state ||
+
+          identities[0]
+
+            ?.state
+
+        ) ||
+
+        null,
+
+ 
+
+      office:
+
+        clean(
+
+          office
+
+        ) ||
+
+        null,
+
+ 
+
+      cycle:
+
+        clean(
+
+          cycle
+
+        ) ||
+
+        null,
+
+ 
+
+      locality:
+
+        clean(
+
+          locality
+
+        ) ||
+
+        null,
+
+ 
+
+      workspace_id:
+
+        workspaceId,
+
+    },
+
+ 
 
     identities,
 
+ 
+
     profile: {
 
-      primary: identities[0]?.record || null,
+      candidates:
 
-      candidates: identities.map((identity) => identity.record),
+        arr(
+
+          statistics?.data
+
+            ?.candidates
+
+        ),
+
+ 
+
+      verified_identities:
+
+        identities,
 
     },
+
+ 
 
     finance: {
 
-      identity_count: identities.length,
+      reports:
 
-      reports: finance,
+        financeReports,
+
+ 
+
+      verified_report_count:
+
+        financeUsable.length,
 
     },
 
-    polling: polling?.data || null,
+ 
 
-    news: news?.data || null,
+    polling: {
+
+      records:
+
+        pollingRecords,
+
+ 
+
+      source_result:
+
+        polling,
+
+    },
+
+ 
+
+    news: {
+
+      articles:
+
+        newsRecords,
+
+ 
+
+      source_result:
+
+        news,
+
+    },
+
+ 
 
     signals,
 
+ 
+
     strategy: {
 
-      recommendations: strategy,
+      recommendations:
 
-      source: strategy.length
+        strategy,
 
-        ? "VoterSpheres Unified Executive Intelligence"
+ 
 
-        : null,
+      source:
+
+        strategy.length
+
+          ? "VoterSpheres Unified Executive Intelligence"
+
+          : null,
 
     },
 
-    operations: unified?.data || null,
+ 
+
+    operations:
+
+      unified?.data ||
+
+      null,
+
+ 
 
     coverage: {
 
-      profile: identities.length > 0,
+      profile:
 
-      finance: finance.some((result) => result?.ok),
+        identities.length >
 
-      polling: Boolean(polling?.ok),
+        0,
 
-      news: Boolean(news?.ok),
+ 
 
-      signals: signals.length > 0,
+      finance:
 
-      strategy: strategy.length > 0,
+        financeUsable.length >
+
+        0,
+
+ 
+
+      polling:
+
+        pollingRecords.length >
+
+        0,
+
+ 
+
+      news:
+
+        newsRecords.length >
+
+        0,
+
+ 
+
+      signals:
+
+        signals.length >
+
+        0,
+
+ 
+
+      strategy:
+
+        strategy.length >
+
+        0,
 
     },
 
-    sources: mergeSources(allResults),
+ 
 
-    warnings: allResults.flatMap((result) => arr(result?.warnings)),
+    sources,
 
-    diagnostics: allResults.flatMap((result) => arr(result?.diagnostics)),
+ 
+
+    warnings,
+
+ 
+
+    diagnostics,
+
+ 
 
     raw: {
 
-      candidate_statistics: statistics,
+      candidate_statistics:
 
-      finance,
+        statistics,
+
+ 
+
+      finance:
+
+        financeReports,
+
+ 
 
       polling,
 
+ 
+
       news,
+
+ 
 
       unified,
 
     },
 
-    generated_at: now(),
+ 
+
+    generated_at:
+
+      now(),
 
   };
+
+ 
 
 }
 
@@ -620,7 +2126,11 @@ export async function getCandidateIntelligenceBundle({
 
 export default {
 
+ 
+
   getCandidateIntelligenceBundle,
+
+ 
 
 };
 
