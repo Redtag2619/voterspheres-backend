@@ -862,54 +862,6 @@ function detectState(
 
  
 
-  const broadCandidateBriefing =
-
- 
-
-    Boolean(
-
- 
-
-      context.candidate &&
-
- 
-
-      /(?:complete|full|candidate)\s+(?:briefing|brief|assessment|profile|intelligence)|tell me everything|everything about|what should i know|strategy|strategies|strategic assessment/.test(
-
- 
-
-        lower
-
- 
-
-      )
-
- 
-
-    );
-
- 
-
- 
-
- 
-
-  if (broadCandidateBriefing) {
-
- 
-
-    return "candidate_intelligence";
-
- 
-
-  }
-
- 
-
- 
-
- 
-
   for (
 
  
