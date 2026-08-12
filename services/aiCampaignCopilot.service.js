@@ -1086,81 +1086,452 @@ async function storeMessage({
   return result.rows[0];
 }
 
-export async function askAiCampaignCopilot({ user = {}, payload = {} }) {
+export async function askAiCampaignCopilot({
+  user = {},
+  payload = {},
+}) {
   await ensureAiCampaignCopilotTables();
 
   const firmId = getFirmId(user);
   const userId = getUserId(user);
 
-  if (!firmId) throw new Error("Missing firm context.");
+  if (!firmId) {
+    throw new Error("Missing firm context.");
+  }
 
-  const prompt = clean(payload.prompt || payload.message || "");
-  if (!prompt) throw new Error("Prompt is required.");
+  const prompt = clean(
+    payload.prompt ||
+      payload.message ||
+      payload.question ||
+      ""
+  );
 
-  const workspaceId = normalizeWorkspaceId(payload.workspace_id);
-  let threadId = payload.thread_id || null;
+  if (!prompt) {
+    throw new Error("Prompt is required.");
+  }
 
-  if (!threadId) {
-    const thread = await pool.query(
-      `
-        INSERT INTO ai_campaign_copilot_threads (
-          firm_id, workspace_id, title, created_by, created_at, updated_at
-        )
-        VALUES ($1,$2,$3,$4,NOW(),NOW())
-        RETURNING *
-      `,
-      [
-        firmId,
-        workspaceId,
-        prompt.slice(0, 80) || "Campaign Co-Pilot Conversation",
-        userId,
-      ]
+  const workspaceId =
+    normalizeWorkspaceId(
+      payload.workspace_id
     );
 
-    threadId = thread.rows[0].id;
+  let threadId =
+    payload.thread_id ||
+    null;
+
+  /*
+   * Create the conversation thread first so candidate-intelligence
+   * responses are persisted exactly like normal Co-Pilot responses.
+   */
+  if (!threadId) {
+    const thread =
+      await pool.query(
+        `
+          INSERT INTO ai_campaign_copilot_threads (
+            firm_id,
+            workspace_id,
+            title,
+            created_by,
+            created_at,
+            updated_at
+          )
+          VALUES ($1,$2,$3,$4,NOW(),NOW())
+          RETURNING *
+        `,
+        [
+          firmId,
+          workspaceId,
+          prompt.slice(0, 80) ||
+            "Campaign Co-Pilot Conversation",
+          userId,
+        ]
+      );
+
+    threadId =
+      thread.rows[0].id;
   }
 
-  const classification = classifyQuestion(prompt);
-  const recentMessages = await getRecentThreadMessages({ firmId, threadId });
+  const classification =
+    classifyQuestion(prompt);
 
-  let platformContext = null;
-
-  if (classification.needsPlatform) {
-    platformContext = await getPlatformContext({
-      user,
+  const recentMessages =
+    await getRecentThreadMessages({
       firmId,
-      workspaceId,
+      threadId,
     });
-  }
 
-  let generated = null;
-  let answer = "";
-  let confidence = 82;
-  let citations = {};
-  let sources = classification.sources;
+  /*
+   * ============================================================
+   * BUILD 4.4 — UNIFIED CANDIDATE INTELLIGENCE DELEGATION
+   * ============================================================
+   *
+   * Executive Chief of Staff previously answered candidate
+   * briefings through the legacy AI Campaign Co-Pilot retrieval
+   * path. That caused:
+   *
+   *   search_live_news
+   *   get_unified_executive_intelligence
+   *   get_state_operations
+   *
+   * to run instead of the verified candidate intelligence bundle.
+   *
+   * We now ask the Executive Intelligence Orchestrator to classify
+   * the request first. If it is candidate_intelligence, the same
+   * Build 4.4 pipeline used by /executive-intelligence-orchestrator
+   * becomes the authoritative answer path.
+   */
 
-  if (classification.intent === "unsafe") {
-    generated = buildGeneralFallbackAnswer({
-      prompt,
-      classification,
-    });
-  } else if (classification.needsLLM) {
-    try {
-      const llmAnswer = await askOpenAI({
-        prompt,
-        classification,
-        platformContext,
-        recentMessages,
+  let orchestratorPlan =
+    null;
+
+  let orchestratorResult =
+    null;
+
+  let candidateOrchestration =
+    false;
+
+  try {
+    const {
+      planExecutiveIntelligence,
+      runExecutiveIntelligenceBrief,
+    } = await import(
+      "./executiveIntelligenceOrchestrator.service.js"
+    );
+
+    orchestratorPlan =
+      await planExecutiveIntelligence({
+        question:
+          prompt,
+
+        workspace_id:
+          workspaceId || 1,
+
+        candidate:
+          clean(
+            payload.candidate
+          ),
+
+        candidate_id:
+          clean(
+            payload.candidate_id ||
+              payload.fec_candidate_id
+          ),
+
+        committee_id:
+          clean(
+            payload.committee_id
+          ),
+
+        state:
+          clean(
+            payload.state
+          ),
+
+        office:
+          clean(
+            payload.office
+          ),
+
+        locality:
+          clean(
+            payload.locality
+          ),
+
+        cycle:
+          clean(
+            payload.cycle
+          ),
+
+        limit:
+          Number(
+            payload.limit ||
+              12
+          ),
       });
 
-      if (llmAnswer) {
+    if (
+      orchestratorPlan?.context?.intent ===
+      "candidate_intelligence"
+    ) {
+      candidateOrchestration =
+        true;
+
+      orchestratorResult =
+        await runExecutiveIntelligenceBrief({
+          question:
+            prompt,
+
+          workspace_id:
+            workspaceId || 1,
+
+          candidate:
+            clean(
+              payload.candidate ||
+                orchestratorPlan?.context
+                  ?.candidate
+            ),
+
+          candidate_id:
+            clean(
+              payload.candidate_id ||
+                payload.fec_candidate_id ||
+                orchestratorPlan?.context
+                  ?.candidate_id
+            ),
+
+          committee_id:
+            clean(
+              payload.committee_id ||
+                orchestratorPlan?.context
+                  ?.committee_id
+            ),
+
+          state:
+            clean(
+              payload.state ||
+                orchestratorPlan?.context
+                  ?.state
+            ),
+
+          office:
+            clean(
+              payload.office ||
+                orchestratorPlan?.context
+                  ?.office
+            ),
+
+          locality:
+            clean(
+              payload.locality ||
+                orchestratorPlan?.context
+                  ?.locality
+            ),
+
+          cycle:
+            clean(
+              payload.cycle ||
+                orchestratorPlan?.context
+                  ?.cycle
+            ),
+
+          limit:
+            Number(
+              payload.limit ||
+                12
+            ),
+        });
+    }
+  } catch (error) {
+    /*
+     * Never break ordinary Co-Pilot behavior if the orchestrator
+     * itself is unavailable. Non-candidate requests continue through
+     * the existing service below.
+     */
+    console.warn(
+      "[ai-campaign-copilot] Executive intelligence delegation failed:",
+      error?.message ||
+        error
+    );
+
+    candidateOrchestration =
+      false;
+
+    orchestratorResult =
+      null;
+  }
+
+  let platformContext =
+    null;
+
+  let generated =
+    null;
+
+  let answer =
+    "";
+
+  let confidence =
+    82;
+
+  let citations =
+    {};
+
+  let sources =
+    classification.sources;
+
+  let resolvedIntent =
+    classification.intent;
+
+  let resolvedAnswerType =
+    classification.answerType;
+
+  /*
+   * Candidate intelligence has priority over the legacy Co-Pilot
+   * platform/LLM path.
+   */
+  if (
+    candidateOrchestration &&
+    orchestratorResult?.answer
+  ) {
+    const orchestratorSources =
+      Array.isArray(
+        orchestratorResult.sources
+      )
+        ? orchestratorResult.sources
+        : Array.isArray(
+            orchestratorResult
+              ?.briefing?.sources
+          )
+          ? orchestratorResult
+              .briefing.sources
+          : [];
+
+    generated = {
+      answer:
+        orchestratorResult.answer,
+
+      confidence:
+        Number(
+          orchestratorResult.confidence ||
+            orchestratorResult
+              ?.briefing
+              ?.confidence ||
+            100
+        ),
+
+      /*
+       * Keep source metadata readable by the existing Co-Pilot UI.
+       */
+      sources:
+        orchestratorSources
+          .map(
+            (
+              source
+            ) =>
+              typeof source ===
+              "string"
+                ? source
+                : source?.label ||
+                  source?.name ||
+                  source?.source ||
+                  source?.provider ||
+                  source?.tool ||
+                  null
+          )
+          .filter(
+            Boolean
+          ),
+
+      citations:
+        orchestratorResult.citations ||
+        {},
+
+      orchestrator:
+        {
+          build:
+            orchestratorResult.build ||
+            orchestratorPlan?.build ||
+            null,
+
+          intent:
+            orchestratorPlan
+              ?.context
+              ?.intent ||
+            "candidate_intelligence",
+
+          context:
+            orchestratorPlan
+              ?.context ||
+            null,
+
+          tool_plan:
+            orchestratorPlan
+              ?.tool_plan ||
+            [],
+
+          coverage:
+            orchestratorResult
+              ?.execution
+              ?.coverage ||
+            orchestratorResult
+              ?.coverage ||
+            null,
+
+          data_answer:
+            orchestratorResult
+              ?.data_answer ||
+            null,
+        },
+    };
+
+    resolvedIntent =
+      "candidate_intelligence";
+
+    resolvedAnswerType =
+      "candidate_intelligence";
+  }
+
+  /*
+   * Only retrieve legacy platform context when the candidate
+   * orchestrator did not already produce the answer.
+   */
+  if (
+    !generated &&
+    classification.needsPlatform
+  ) {
+    platformContext =
+      await getPlatformContext({
+        user,
+        firmId,
+        workspaceId,
+      });
+  }
+
+  /*
+   * Existing safety handling.
+   */
+  if (
+    !generated &&
+    classification.intent ===
+      "unsafe"
+  ) {
+    generated =
+      buildGeneralFallbackAnswer({
+        prompt,
+        classification,
+      });
+  } else if (
+    !generated &&
+    classification.needsLLM
+  ) {
+    try {
+      const llmAnswer =
+        await askOpenAI({
+          prompt,
+          classification,
+          platformContext,
+          recentMessages,
+        });
+
+      if (
+        llmAnswer
+      ) {
         generated = {
-          answer: llmAnswer,
-          confidence: classification.needsLiveResearch ? 72 : 92,
-          sources: classification.sources,
+          answer:
+            llmAnswer,
+
+          confidence:
+            classification
+              .needsLiveResearch
+              ? 72
+              : 92,
+
+          sources:
+            classification.sources,
         };
       }
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.warn(
         "[ai-campaign-copilot] OpenAI failed, using fallback:",
         error.message
@@ -1168,110 +1539,216 @@ export async function askAiCampaignCopilot({ user = {}, payload = {} }) {
     }
   }
 
-  if (!generated && classification.needsPlatform && platformContext) {
-    generated = buildStaticPlatformAnswer({
-      prompt,
-      platformContext,
-    });
+  /*
+   * Existing deterministic platform fallback.
+   */
+  if (
+    !generated &&
+    classification.needsPlatform &&
+    platformContext
+  ) {
+    generated =
+      buildStaticPlatformAnswer({
+        prompt,
+        platformContext,
+      });
   }
 
-  if (!generated) {
-    generated = buildGeneralFallbackAnswer({
-      prompt,
-      classification,
-    });
+  /*
+   * Existing general fallback.
+   */
+  if (
+    !generated
+  ) {
+    generated =
+      buildGeneralFallbackAnswer({
+        prompt,
+        classification,
+      });
   }
 
-  answer = generated.answer;
-  confidence = generated.confidence || confidence;
-  citations = generated.citations || {};
-  sources = unique(generated.sources || sources || []);
+  answer =
+    generated.answer;
+
+  confidence =
+    generated.confidence ||
+    confidence;
+
+  citations =
+    generated.citations ||
+    {};
+
+  sources =
+    unique(
+      generated.sources ||
+        sources ||
+        []
+    );
 
   const contextSnapshot = {
     classification,
-    answer_type: classification.answerType,
+
+    resolved_intent:
+      resolvedIntent,
+
+    answer_type:
+      resolvedAnswerType,
+
     sources,
+
     confidence,
-    platform_context_available: Boolean(platformContext),
-    platform_summary: platformContext
-      ? {
-          mission_summary: platformContext.mission?.summary || {},
-          advisor_summary: platformContext.advisor?.summary || {},
-          war_room_summary: platformContext.warRoom?.summary || {},
-        }
-      : {},
-    generated_at: new Date().toISOString(),
+
+    platform_context_available:
+      Boolean(
+        platformContext
+      ),
+
+    candidate_orchestration:
+      candidateOrchestration,
+
+    orchestrator:
+      generated.orchestrator ||
+      null,
+
+    platform_summary:
+      platformContext
+        ? {
+            mission_summary:
+              platformContext
+                .mission
+                ?.summary ||
+              {},
+
+            advisor_summary:
+              platformContext
+                .advisor
+                ?.summary ||
+              {},
+
+            war_room_summary:
+              platformContext
+                .warRoom
+                ?.summary ||
+              {},
+          }
+        : {},
+
+    generated_at:
+      new Date()
+        .toISOString(),
   };
 
+  /*
+   * Persist user prompt.
+   */
   await storeMessage({
     firmId,
     threadId,
-    role: "user",
-    content: prompt,
+    role:
+      "user",
+    content:
+      prompt,
     contextSnapshot,
     userId,
-    answerType: "user_prompt",
-    sources: [],
-    confidence: 100,
+    answerType:
+      "user_prompt",
+    sources:
+      [],
+    confidence:
+      100,
   });
 
-  const assistantMessage = await storeMessage({
-    firmId,
-    threadId,
-    role: "assistant",
-    content: answer,
-    contextSnapshot,
-    userId,
-    answerType: classification.answerType,
-    sources,
-    confidence,
-  });
+  /*
+   * Persist authoritative assistant response.
+   */
+  const assistantMessage =
+    await storeMessage({
+      firmId,
+      threadId,
+      role:
+        "assistant",
+      content:
+        answer,
+      contextSnapshot,
+      userId,
+      answerType:
+        resolvedAnswerType,
+      sources,
+      confidence,
+    });
 
   await pool.query(
     `
       UPDATE ai_campaign_copilot_threads
       SET updated_at = NOW()
-      WHERE id = $1 AND firm_id = $2
+      WHERE id = $1
+        AND firm_id = $2
     `,
-    [threadId, firmId]
+    [
+      threadId,
+      firmId,
+    ]
   );
 
   return {
-    thread_id: Number(threadId),
-    message: assistantMessage,
+    thread_id:
+      Number(
+        threadId
+      ),
+
+    message:
+      assistantMessage,
+
     answer,
-    intent: classification.intent,
-    answer_type: classification.answerType,
-    needs_live_research: classification.needsLiveResearch,
-    live_research_connected: false,
+
+    intent:
+      resolvedIntent,
+
+    answer_type:
+      resolvedAnswerType,
+
+    candidate_orchestration:
+      candidateOrchestration,
+
+    orchestrator_build:
+      generated
+        ?.orchestrator
+        ?.build ||
+      null,
+
+    orchestrator_context:
+      generated
+        ?.orchestrator
+        ?.context ||
+      null,
+
+    orchestrator_tool_plan:
+      generated
+        ?.orchestrator
+        ?.tool_plan ||
+      [],
+
+    needs_live_research:
+      candidateOrchestration
+        ? true
+        : classification
+            .needsLiveResearch,
+
+    live_research_connected:
+      candidateOrchestration,
+
     sources,
+
     confidence,
+
     citations,
-    updated_at: new Date().toISOString(),
+
+    updated_at:
+      new Date()
+        .toISOString(),
   };
-}
 
-export async function listAiCampaignCopilotThreads({ user = {} }) {
-  await ensureAiCampaignCopilotTables();
-
-  const firmId = getFirmId(user);
-  if (!firmId) throw new Error("Missing firm context.");
-
-  const result = await pool.query(
-    `
-      SELECT *
-      FROM ai_campaign_copilot_threads
-      WHERE firm_id = $1
-      ORDER BY updated_at DESC
-      LIMIT 50
-    `,
-    [firmId]
-  );
-
-  return result.rows;
-}
-
-export async function getAiCampaignCopilotThread({ user = {}, threadId }) {
+}export async function getAiCampaignCopilotThread({ user = {}, threadId }) {
   await ensureAiCampaignCopilotTables();
 
   const firmId = getFirmId(user);
