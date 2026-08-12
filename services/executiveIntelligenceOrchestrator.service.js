@@ -3679,54 +3679,12 @@ function classifyIntent(
  
 
   if (
-
- 
-
- 
-
- 
-
-    /operations|operational|field|county|parish|task|workspace|readiness|execution|command center/.test(
-
- 
-
- 
-
- 
-
-      lower
-
- 
-
- 
-
- 
-
-    )
-
- 
-
- 
-
- 
-
-  ) {
-
- 
-
- if (
-
- 
-
-    return "operations";
-
- 
-
- 
-
- 
-
-  }
+  /operations|operational|field|county|parish|task|workspace|readiness|execution|command center/.test(
+    lower
+  )
+) {
+  return "operations";
+}
 
  
 
