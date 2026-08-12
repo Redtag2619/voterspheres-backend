@@ -19,7 +19,7 @@ import mailRoutes from "./routes/mail.routes.js";
 import platformRoutes from "./routes/platform.routes.js";
 import intelligenceRoutes from "./routes/intelligence.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
-import fecRoutes from "./routes/fec.routes.js";
+import fecRoutes from "./routes/fec.routes.js"; 
 import candidatesRoutes from "./routes/candidates.routes.js";
 import candidateProfilesRoutes from "./routes/candidateProfiles.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
