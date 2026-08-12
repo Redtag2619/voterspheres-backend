@@ -6296,13 +6296,6 @@ function buildToolPlan({
   context.intent ===
   "operations"
 ) {
-  /*
-   * State operations should only be queried for an explicit
-   * operations intent.
-   *
-   * Candidate intelligence requests frequently contain a state,
-   * but state presence alone must not trigger get_state_operations.
-   */
   if (
     context.state
   ) {
@@ -6319,95 +6312,20 @@ function buildToolPlan({
           workspace_id:
             workspaceId,
         },
-        "Retrieve state and locality operations intelligence.",
+        "Load state operational intelligence.",
         100
       )
     );
   }
-}
 
- 
-
- 
-
- 
-
-    }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-    calls.push(
-
- 
-
- 
-
- 
-
-      makeCall(
-
- 
-
- 
-
- 
-
-        "get_unified_executive_intelligence",
-
- 
-
- 
-
- 
-
-        common,
-
- 
-
- 
-
- 
-
-        "Load executive operational context.",
-
- 
-
- 
-
- 
-
-        94
-
- 
-
- 
-
- 
-
-      )
-
- 
-
- 
-
- 
-
-    );
-
- 
-
+  calls.push(
+    makeCall(
+      "get_unified_executive_intelligence",
+      common,
+      "Load executive operational context.",
+      94
+    )
+  );
  
 
  
