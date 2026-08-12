@@ -8975,754 +8975,1718 @@ function normalizePollingArgs(args = {}) {
 
  
 
-async function readStoredPollingRecords(args = {}) {
-
-  const { state } = normalizePollingArgs(args);
-
-  const office = clean(args.office);
-
-  const candidate = clean(args.candidate);
-
-  const locality = clean(args.locality);
-
-  const limit = clamp(args.limit, 20, 1, 100);
-
- 
-
-  try {
-
-    const metadata = await pool.query(
-
-      `SELECT column_name
-
-         FROM information_schema.columns
-
-        WHERE table_schema = 'public'
-
-          AND table_name = 'polling_results'`
-
-    );
-
- 
-
-    const columns = new Set(metadata.rows.map((row) => row.column_name));
-
-    if (!columns.size) {
-
-      return {
-
-        configured: false,
-
-        records: [],
-
-        error: "polling_results table is not configured.",
-
-        state,
-
-      };
-
-    }
-
- 
-
-    const stateColumn = columns.has("state")
-
-      ? "state"
-
-      : columns.has("state_code")
-
-        ? "state_code"
-
-        : null;
-
-    const officeColumn = columns.has("office") ? "office" : null;
-
-    const candidateColumn = ["candidate", "candidate_name", "name"].find((column) => columns.has(column));
-
-    const localityColumn = ["locality", "county", "county_name", "district"].find((column) => columns.has(column));
-
-    const dateColumn = ["field_end", "published_at", "updated_at", "created_at"].find((column) => columns.has(column));
-
- 
-
-    const conditions = [];
-
-    const params = [];
-
- 
-
-    if (state.code && stateColumn) {
-
-      params.push(state.code);
-
-      const codeParam = `$${params.length}`;
-
-      params.push(state.name || "");
-
-      const nameParam = `$${params.length}`;
-
-      conditions.push(
-
-        `(UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = ${codeParam} ` +
-
-        `OR UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = ${nameParam})`
-
-      );
-
-    } else if (state.input && stateColumn) {
-
-      params.push(state.input.toUpperCase());
-
-      conditions.push(`UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = $${params.length}`);
-
-    }
-
- 
-
-    if (office && officeColumn) {
-
-      params.push(`%${office}%`);
-
-      conditions.push(`"${officeColumn}" ILIKE $${params.length}`);
-
-    }
-
- 
-
-    if (candidate && candidateColumn) {
-
-      params.push(`%${candidate}%`);
-
-      conditions.push(`"${candidateColumn}" ILIKE $${params.length}`);
-
-    }
-
- 
-
-    if (locality && localityColumn) {
-
-      params.push(`%${locality}%`);
-
-      conditions.push(`"${localityColumn}" ILIKE $${params.length}`);
-
-    }
-
- 
-
-    const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    const orderSql = dateColumn ? `"${dateColumn}" DESC NULLS LAST` : "1";
-
-    const query = `SELECT * FROM polling_results ${whereSql} ORDER BY ${orderSql} LIMIT ${limit}`;
-
- 
-
-    console.log("[Executive Voice Polling] stored polling query", {
-
-      requested_state: state.input,
-
-      normalized_state_code: state.code,
-
-      normalized_state_name: state.name,
-
-      office: office || null,
-
-      candidate: candidate || null,
-
-      locality: locality || null,
-
-      limit,
-
-    });
-
- 
-
-    const queryResult = await pool.query(query, params);
-
- 
-
-    console.log("[Executive Voice Polling] stored polling result", {
-
-      count: queryResult.rows.length,
-
-      normalized_state_code: state.code,
-
-    });
-
- 
-
+async function getPollingTableMetadata() {
+  const metadata = await pool.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'polling_results'`
+  );
+
+  const columns = new Set(
+    metadata.rows.map((row) => row.column_name)
+  );
+
+  if (!columns.size) {
     return {
-
-      configured: true,
-
-      records: queryResult.rows,
-
-      error: null,
-
-      state,
-
+      configured: false,
+      columns,
+      stateColumn: null,
+      officeColumn: null,
+      candidateColumn: null,
+      localityColumn: null,
+      dateColumn: null,
     };
-
-  } catch (error) {
-
-    console.error("[Executive Voice Polling] stored polling lookup failed", {
-
-      message: errorMessage(error),
-
-      requested_state: state.input,
-
-      normalized_state_code: state.code,
-
-    });
-
- 
-
-    return {
-
-      configured: true,
-
-      records: [],
-
-      error: errorMessage(error),
-
-      state,
-
-    };
-
   }
 
+  return {
+    configured: true,
+    columns,
+
+    stateColumn: columns.has("state")
+      ? "state"
+      : columns.has("state_code")
+        ? "state_code"
+        : null,
+
+    officeColumn:
+      columns.has("office")
+        ? "office"
+        : null,
+
+    candidateColumn:
+      [
+        "candidate",
+        "candidate_name",
+        "name",
+      ].find((column) =>
+        columns.has(column)
+      ) || null,
+
+    localityColumn:
+      [
+        "locality",
+        "county",
+        "county_name",
+        "district",
+      ].find((column) =>
+        columns.has(column)
+      ) || null,
+
+    dateColumn:
+      [
+        "field_end",
+        "published_at",
+        "updated_at",
+        "created_at",
+      ].find((column) =>
+        columns.has(column)
+      ) || null,
+  };
 }
 
- 
 
-export async function getPollingProviderData(args = {}) {
+function buildPollingStateCondition({
+  state,
+  stateColumn,
+  conditions,
+  params,
+}) {
+  if (!stateColumn) {
+    return;
+  }
 
-  const provider = "polling_provider";
+  if (state?.code) {
+    params.push(state.code);
+    const codeParam = `$${params.length}`;
 
-  const startedAt = Date.now();
+    params.push(state.name || "");
+    const nameParam = `$${params.length}`;
 
-  const baseUrl = clean(process.env.POLLING_PROVIDER_URL);
+    conditions.push(
+      `(UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = ${codeParam} ` +
+      `OR UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = ${nameParam})`
+    );
 
-  const apiKey = clean(process.env.POLLING_PROVIDER_API_KEY);
+    return;
+  }
 
-  const { normalized: normalizedArgs, state } = normalizePollingArgs(args);
+  if (state?.input) {
+    params.push(
+      state.input.toUpperCase()
+    );
 
- 
+    conditions.push(
+      `UPPER(TRIM(COALESCE("${stateColumn}"::text, ''))) = $${params.length}`
+    );
+  }
+}
 
-  console.log("[Executive Voice Polling] provider request", {
 
-    input_state: clean(args.state_code || args.state) || null,
+async function queryStoredPollingRecords({
+  state,
+  office = "",
+  candidate = "",
+  locality = "",
+  limit = 20,
+  metadata,
+  queryType = "polling",
+} = {}) {
+  const {
+    stateColumn,
+    officeColumn,
+    candidateColumn,
+    localityColumn,
+    dateColumn,
+  } = metadata;
 
-    normalized_state: state.code,
+  const conditions = [];
+  const params = [];
 
-    provider_configured: Boolean(baseUrl),
-
-    limit: normalizedArgs.limit || null,
-
+  buildPollingStateCondition({
+    state,
+    stateColumn,
+    conditions,
+    params,
   });
 
- 
+  if (
+    clean(office) &&
+    officeColumn
+  ) {
+    params.push(
+      `%${clean(office)}%`
+    );
 
-  if (!baseUrl) {
-
-    const stored = await readStoredPollingRecords(normalizedArgs);
-
-    return result({
-
-      provider: "stored_polling",
-
-      ok: stored.records.length > 0,
-
-      configured: stored.configured,
-
-      summary: stored.records.length
-
-        ? `Found ${stored.records.length} stored polling records${state.code ? ` for ${state.code}` : ""}.`
-
-        : "No external polling provider is configured and no stored polling records were available.",
-
-      data: {
-
-        polls: stored.records,
-
-        records: stored.records,
-
-        fallback: "polling_results",
-
-        requested_state: state.input,
-
-        normalized_state: state.code,
-
-      },
-
-      records: stored.records,
-
-      warnings: [
-
-        "POLLING_PROVIDER_URL is missing; using the polling_results database fallback.",
-
-        ...(stored.error ? [stored.error] : []),
-
-      ],
-
-      diagnostics: [providerDiagnostic({
-
-        provider: "stored_polling",
-
-        ok: stored.records.length > 0,
-
-        startedAt,
-
-        itemCount: stored.records.length,
-
-        error: stored.error ? new Error(stored.error) : null,
-
-      })],
-
-      degraded: stored.records.length === 0,
-
-    });
-
+    conditions.push(
+      `"${officeColumn}" ILIKE $${params.length}`
+    );
   }
 
- 
+  if (
+    clean(candidate) &&
+    candidateColumn
+  ) {
+    params.push(
+      `%${clean(candidate)}%`
+    );
 
-  const params = new URLSearchParams();
+    conditions.push(
+      `"${candidateColumn}" ILIKE $${params.length}`
+    );
+  }
 
-  for (const [key, value] of Object.entries(normalizedArgs)) {
+  if (
+    clean(locality) &&
+    localityColumn
+  ) {
+    params.push(
+      `%${clean(locality)}%`
+    );
 
-    if (value !== undefined && value !== null && value !== "") {
+    conditions.push(
+      `"${localityColumn}" ILIKE $${params.length}`
+    );
+  }
 
-      params.set(key, String(value));
+  const whereSql =
+    conditions.length
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
 
+  const orderSql =
+    dateColumn
+      ? `"${dateColumn}" DESC NULLS LAST`
+      : "1";
+
+  const normalizedLimit =
+    clamp(
+      limit,
+      20,
+      1,
+      100
+    );
+
+  const query =
+    `SELECT * ` +
+    `FROM polling_results ` +
+    `${whereSql} ` +
+    `ORDER BY ${orderSql} ` +
+    `LIMIT ${normalizedLimit}`;
+
+  console.log(
+    "[Executive Voice Polling] stored polling query",
+    {
+      query_type:
+        queryType,
+
+      requested_state:
+        state?.input ||
+        null,
+
+      normalized_state_code:
+        state?.code ||
+        null,
+
+      normalized_state_name:
+        state?.name ||
+        null,
+
+      office:
+        clean(office) ||
+        null,
+
+      candidate:
+        clean(candidate) ||
+        null,
+
+      locality:
+        clean(locality) ||
+        null,
+
+      limit:
+        normalizedLimit,
+    }
+  );
+
+  const queryResult =
+    await pool.query(
+      query,
+      params
+    );
+
+  console.log(
+    "[Executive Voice Polling] stored polling result",
+    {
+      query_type:
+        queryType,
+
+      count:
+        queryResult.rows.length,
+
+      normalized_state_code:
+        state?.code ||
+        null,
+    }
+  );
+
+  return queryResult.rows;
+}
+
+
+function pollingRecordKey(
+  row = {}
+) {
+  const id =
+    row.id ||
+    row.poll_id ||
+    row.polling_id ||
+    row.observation_id;
+
+  if (id) {
+    return `id:${id}`;
+  }
+
+  return [
+    clean(
+      row.pollster ||
+      row.pollster_name ||
+      row.source
+    ).toLowerCase(),
+
+    clean(
+      row.candidate ||
+      row.candidate_name ||
+      row.name
+    ).toLowerCase(),
+
+    clean(
+      row.office
+    ).toLowerCase(),
+
+    clean(
+      row.race_name ||
+      row.race
+    ).toLowerCase(),
+
+    clean(
+      row.field_end ||
+      row.published_at ||
+      row.updated_at
+    ).toLowerCase(),
+
+    clean(
+      row.pct ||
+      row.percentage ||
+      row.value
+    ).toLowerCase(),
+  ].join("|");
+}
+
+
+function deduplicatePollingRecords(
+  rows = []
+) {
+  const seen =
+    new Map();
+
+  for (
+    const row of rows
+  ) {
+    if (
+      !row ||
+      typeof row !==
+        "object"
+    ) {
+      continue;
     }
 
+    const key =
+      pollingRecordKey(
+        row
+      );
+
+    if (
+      !seen.has(
+        key
+      )
+    ) {
+      seen.set(
+        key,
+        row
+      );
+    }
   }
 
- 
+  return sortByNewest(
+    [...seen.values()]
+  );
+}
 
-  const cacheKey = `polling:${baseUrl}:${params.toString()}`;
 
-  const freshCached = getFreshCached(cacheKey);
+async function readStoredPollingRecords(
+  args = {}
+) {
+  const {
+    state,
+  } =
+    normalizePollingArgs(
+      args
+    );
 
-  if (freshCached) return freshCached;
+  const office =
+    clean(
+      args.office
+    );
 
- 
+  const candidate =
+    clean(
+      args.candidate
+    );
+
+  const locality =
+    clean(
+      args.locality
+    );
+
+  const limit =
+    clamp(
+      args.limit,
+      20,
+      1,
+      100
+    );
 
   try {
+    const metadata =
+      await getPollingTableMetadata();
 
-    const separator = baseUrl.includes("?") ? "&" : "?";
+    if (
+      !metadata.configured
+    ) {
+      return {
+        configured:
+          false,
 
-    const requestUrl = params.toString()
+        records:
+          [],
 
-      ? `${baseUrl}${separator}${params.toString()}`
+        direct_records:
+          [],
 
-      : baseUrl;
+        candidate_context_records:
+          [],
 
- 
+        state_context_records:
+          [],
 
-    const payload = await fetchJson(requestUrl, {
+        coverage: {
+          direct_race:
+            false,
 
-      headers: {
+          candidate_context:
+            false,
 
-        Accept: "application/json",
-
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-
-      },
-
-      timeoutMs: DEFAULT_TIMEOUT_MS,
-
-      label: process.env.POLLING_PROVIDER_NAME || "Polling provider",
-
-    });
-
- 
-
-    const rawPolls =
-
-      payload?.polls ||
-
-      payload?.results ||
-
-      payload?.data?.polls ||
-
-      payload?.data?.results ||
-
-      payload?.data ||
-
-      (Array.isArray(payload) ? payload : []);
-
- 
-
-    const polls = sortByNewest(
-
-      Array.isArray(rawPolls)
-
-        ? rawPolls.map((poll) => ({
-
-            ...poll,
-
-            published_at: normalizeDate(
-
-              poll.published_at ||
-
-                poll.publishedAt ||
-
-                poll.field_end ||
-
-                poll.updated_at ||
-
-                poll.created_at
-
-            ),
-
-          }))
-
-        : []
-
-    );
-
- 
-
-    /*
-
-     * Critical fix: a successful HTTP response with zero external rows is not
-
-     * treated as authoritative emptiness. VoterSpheres may already have the
-
-     * requested polling snapshot in polling_results, so check the database
-
-     * before telling Executive Voice that no polling exists.
-
-     */
-
-    if (polls.length === 0) {
-
-      const stored = await readStoredPollingRecords(normalizedArgs);
-
- 
-
-      if (stored.records.length > 0) {
-
-        return setCached(
-
-          cacheKey,
-
-          result({
-
-            provider: "stored_polling",
-
-            ok: true,
-
-            configured: true,
-
-            summary:
-
-              `The external polling provider returned no matching rows; ` +
-
-              `returning ${stored.records.length} stored polling records${state.code ? ` for ${state.code}` : ""}.`,
-
-            data: {
-
-              polls: stored.records,
-
-              records: stored.records,
-
-              fallback: "polling_results",
-
-              external_provider_empty: true,
-
-              requested_state: state.input,
-
-              normalized_state: state.code,
-
-            },
-
-            records: stored.records,
-
-            sources: [],
-
-            warnings: [
-
-              "The configured external polling provider returned an empty result.",
-
-              "Using the polling_results database fallback.",
-
-              ...(stored.error ? [stored.error] : []),
-
-            ],
-
-            diagnostics: [
-
-              providerDiagnostic({
-
-                provider,
-
-                ok: false,
-
-                startedAt,
-
-                itemCount: 0,
-
-              }),
-
-              providerDiagnostic({
-
-                provider: "stored_polling",
-
-                ok: true,
-
-                startedAt,
-
-                itemCount: stored.records.length,
-
-              }),
-
-            ],
-
-            degraded: false,
-
-          }),
-
-          POLLING_CACHE_TTL_MS,
-
-          OFFICIAL_STALE_TTL_MS
-
-        );
-
-      }
-
-    }
-
- 
-
-    const latency = elapsedMs(startedAt);
-
-    const output = result({
-
-      provider,
-
-      ok: polls.length > 0,
-
-      summary: polls.length
-
-        ? `Found ${polls.length} external polling records.`
-
-        : "No external or stored polling records matched the request.",
-
-      data: {
-
-        polls,
-
-        requested_state: state.input,
-
-        normalized_state: state.code,
-
-      },
-
-      records: polls,
-
-      sources: polls.length
-
-        ? [sourceMeta({
-
-            name: process.env.POLLING_PROVIDER_NAME || "Configured polling provider",
-
-            url: baseUrl,
-
-            published_at:
-
-              polls[0]?.published_at ||
-
-              polls[0]?.field_end ||
-
-              polls[0]?.updated_at ||
-
-              null,
-
-            confidence: 84,
-
-            note:
-
-              "Polling responses should include pollster, field dates, sample size, population, and margin of error when available.",
-
-            provider,
-
-            latency_ms: latency,
-
-          })]
-
-        : [],
-
-      warnings: polls.some((poll) => !poll.field_end && !poll.published_at)
-
-        ? ["Some polling records did not include field dates or publication dates."]
-
-        : [],
-
-      diagnostics: [providerDiagnostic({
-
-        provider,
-
-        ok: polls.length > 0,
-
-        startedAt,
-
-        itemCount: polls.length,
-
-      })],
-
-      degraded: polls.length === 0,
-
-    });
-
- 
-
-    return setCached(
-
-      cacheKey,
-
-      output,
-
-      POLLING_CACHE_TTL_MS,
-
-      OFFICIAL_STALE_TTL_MS
-
-    );
-
-  } catch (error) {
-
-    const stored = await readStoredPollingRecords(normalizedArgs);
-
-    if (stored.records.length > 0) {
-
-      return result({
-
-        provider: "stored_polling",
-
-        ok: true,
-
-        summary:
-
-          `The external polling provider failed; returning ${stored.records.length} ` +
-
-          `stored polling records${state.code ? ` for ${state.code}` : ""}.`,
-
-        data: {
-
-          polls: stored.records,
-
-          records: stored.records,
-
-          fallback: "polling_results",
-
-          requested_state: state.input,
-
-          normalized_state: state.code,
-
+          state_context:
+            false,
         },
 
-        records: stored.records,
+        status:
+          "polling_table_unavailable",
 
-        warnings: [
+        error:
+          "polling_results table is not configured.",
 
-          errorMessage(error),
+        state,
+      };
+    }
 
-          "Using the polling_results database fallback.",
+    /*
+     * Tier 1:
+     * Requested race/context.
+     *
+     * Preserve the strict requested
+     * candidate + office combination.
+     */
+    const directRecords =
+      await queryStoredPollingRecords({
+        state,
+        office,
+        candidate,
+        locality,
+        limit,
+        metadata,
+        queryType:
+          "direct_race",
+      });
 
-          ...(stored.error ? [stored.error] : []),
+    /*
+     * Tier 2:
+     * Candidate context.
+     *
+     * Deliberately remove the office
+     * constraint. This allows us to
+     * discover polling involving the
+     * candidate in another race without
+     * pretending that it belongs to the
+     * requested race.
+     */
+    let candidateContextRecords =
+      [];
 
-        ],
+    if (
+      candidate
+    ) {
+      const candidateRows =
+        await queryStoredPollingRecords({
+          state,
+          candidate,
+          locality,
+          limit,
+          metadata,
+          queryType:
+            "candidate_context",
+        });
 
-        diagnostics: [providerDiagnostic({
+      const directKeys =
+        new Set(
+          directRecords.map(
+            pollingRecordKey
+          )
+        );
 
-          provider,
+      candidateContextRecords =
+        candidateRows.filter(
+          (row) =>
+            !directKeys.has(
+              pollingRecordKey(
+                row
+              )
+            )
+        );
+    }
 
-          ok: false,
+    /*
+     * Tier 3:
+     * State polling context.
+     *
+     * Remove candidate and office so
+     * Executive Voice can still describe
+     * the wider state polling environment.
+     */
+    const stateRows =
+      state?.code ||
+      state?.input
+        ? await queryStoredPollingRecords({
+            state,
+            locality,
+            limit,
+            metadata,
+            queryType:
+              "state_context",
+          })
+        : [];
+
+    const knownKeys =
+      new Set(
+        [
+          ...directRecords,
+          ...candidateContextRecords,
+        ].map(
+          pollingRecordKey
+        )
+      );
+
+    const stateContextRecords =
+      stateRows.filter(
+        (row) =>
+          !knownKeys.has(
+            pollingRecordKey(
+              row
+            )
+          )
+      );
+
+    const direct =
+      deduplicatePollingRecords(
+        directRecords
+      );
+
+    const candidateContext =
+      deduplicatePollingRecords(
+        candidateContextRecords
+      );
+
+    const stateContext =
+      deduplicatePollingRecords(
+        stateContextRecords
+      );
+
+    const coverage = {
+      direct_race:
+        direct.length >
+        0,
+
+      candidate_context:
+        candidateContext.length >
+        0,
+
+      state_context:
+        stateContext.length >
+        0,
+    };
+
+    let status =
+      "no_polling_available";
+
+    if (
+      coverage.direct_race
+    ) {
+      status =
+        "direct_race_available";
+    } else if (
+      coverage.candidate_context
+    ) {
+      status =
+        "candidate_context_available";
+    } else if (
+      coverage.state_context
+    ) {
+      status =
+        "state_context_available";
+    }
+
+    /*
+     * Backward-compatible records:
+     *
+     * Keep records/polls populated so
+     * existing Executive Voice consumers
+     * do not break.
+     *
+     * Priority:
+     * 1. direct race
+     * 2. candidate context
+     * 3. state context
+     */
+    const records =
+      direct.length
+        ? direct
+        : candidateContext.length
+          ? candidateContext
+          : stateContext;
+
+    console.log(
+      "[Executive Voice Polling] polling resolution",
+      {
+        candidate:
+          candidate ||
+          null,
+
+        requested_office:
+          office ||
+          null,
+
+        state:
+          state?.code ||
+          state?.input ||
+          null,
+
+        direct_count:
+          direct.length,
+
+        candidate_context_count:
+          candidateContext.length,
+
+        state_context_count:
+          stateContext.length,
+
+        status,
+      }
+    );
+
+    return {
+      configured:
+        true,
+
+      records,
+
+      direct_records:
+        direct,
+
+      candidate_context_records:
+        candidateContext,
+
+      state_context_records:
+        stateContext,
+
+      coverage,
+
+      status,
+
+      error:
+        null,
+
+      state,
+    };
+  } catch (
+    error
+  ) {
+    console.error(
+      "[Executive Voice Polling] stored polling lookup failed",
+      {
+        message:
+          errorMessage(
+            error
+          ),
+
+        requested_state:
+          state?.input ||
+          null,
+
+        normalized_state_code:
+          state?.code ||
+          null,
+      }
+    );
+
+    return {
+      configured:
+        true,
+
+      records:
+        [],
+
+      direct_records:
+        [],
+
+      candidate_context_records:
+        [],
+
+      state_context_records:
+        [],
+
+      coverage: {
+        direct_race:
+          false,
+
+        candidate_context:
+          false,
+
+        state_context:
+          false,
+      },
+
+      status:
+        "provider_error",
+
+      error:
+        errorMessage(
+          error
+        ),
+
+      state,
+    };
+  }
+}
+
+
+function pollingCoverageData(
+  stored,
+  {
+    state,
+    args = {},
+  } = {}
+) {
+  return {
+    polls:
+      stored.records,
+
+    records:
+      stored.records,
+
+    direct_records:
+      stored.direct_records ||
+      [],
+
+    candidate_context_records:
+      stored.candidate_context_records ||
+      [],
+
+    state_context_records:
+      stored.state_context_records ||
+      [],
+
+    coverage:
+      stored.coverage || {
+        direct_race:
+          false,
+
+        candidate_context:
+          false,
+
+        state_context:
+          false,
+      },
+
+    status:
+      stored.status ||
+      "no_polling_available",
+
+    requested_context: {
+      candidate:
+        clean(
+          args.candidate
+        ) ||
+        null,
+
+      state:
+        state?.code ||
+        state?.input ||
+        null,
+
+      office:
+        clean(
+          args.office
+        ) ||
+        null,
+
+      cycle:
+        clean(
+          args.cycle
+        ) ||
+        null,
+
+      locality:
+        clean(
+          args.locality
+        ) ||
+        null,
+    },
+
+    requested_state:
+      state?.input ||
+      null,
+
+    normalized_state:
+      state?.code ||
+      null,
+  };
+}
+
+
+function pollingSummary(
+  stored,
+  state
+) {
+  const directCount =
+    stored.direct_records
+      ?.length ||
+    0;
+
+  const candidateCount =
+    stored.candidate_context_records
+      ?.length ||
+    0;
+
+  const stateCount =
+    stored.state_context_records
+      ?.length ||
+    0;
+
+  if (
+    directCount >
+    0
+  ) {
+    return (
+      `Found ${directCount} direct requested-race polling records` +
+      `${state?.code ? ` for ${state.code}` : ""}.`
+    );
+  }
+
+  if (
+    candidateCount >
+    0
+  ) {
+    return (
+      `No direct requested-race polling records were found, but ` +
+      `${candidateCount} candidate-context polling records are available` +
+      `${state?.code ? ` for ${state.code}` : ""}.`
+    );
+  }
+
+  if (
+    stateCount >
+    0
+  ) {
+    return (
+      `No direct or candidate-specific polling records were found, but ` +
+      `${stateCount} state-context polling records are available` +
+      `${state?.code ? ` for ${state.code}` : ""}.`
+    );
+  }
+
+  return (
+    `No polling records matched the requested race, candidate, or state context` +
+    `${state?.code ? ` for ${state.code}` : ""}.`
+  );
+}
+
+
+export async function getPollingProviderData(
+  args = {}
+) {
+  const provider =
+    "polling_provider";
+
+  const startedAt =
+    Date.now();
+
+  const baseUrl =
+    clean(
+      process.env
+        .POLLING_PROVIDER_URL
+    );
+
+  const apiKey =
+    clean(
+      process.env
+        .POLLING_PROVIDER_API_KEY
+    );
+
+  const {
+    normalized:
+      normalizedArgs,
+
+    state,
+  } =
+    normalizePollingArgs(
+      args
+    );
+
+  console.log(
+    "[Executive Voice Polling] provider request",
+    {
+      input_state:
+        clean(
+          args.state_code ||
+          args.state
+        ) ||
+        null,
+
+      normalized_state:
+        state.code,
+
+      provider_configured:
+        Boolean(
+          baseUrl
+        ),
+
+      candidate:
+        clean(
+          args.candidate
+        ) ||
+        null,
+
+      office:
+        clean(
+          args.office
+        ) ||
+        null,
+
+      cycle:
+        clean(
+          args.cycle
+        ) ||
+        null,
+
+      limit:
+        normalizedArgs.limit ||
+        null,
+    }
+  );
+
+  /*
+   * No external provider:
+   * use VoterSpheres stored polling.
+   */
+  if (
+    !baseUrl
+  ) {
+    const stored =
+      await readStoredPollingRecords(
+        normalizedArgs
+      );
+
+    const providerHealthy =
+      !stored.error;
+
+    return result({
+      provider:
+        "stored_polling",
+
+      /*
+       * "ok" represents successful polling
+       * subsystem execution — not merely
+       * whether a direct race had rows.
+       */
+      ok:
+        providerHealthy,
+
+      configured:
+        stored.configured,
+
+      summary:
+        pollingSummary(
+          stored,
+          state
+        ),
+
+      data: {
+        ...pollingCoverageData(
+          stored,
+          {
+            state,
+            args:
+              normalizedArgs,
+          }
+        ),
+
+        fallback:
+          "polling_results",
+      },
+
+      records:
+        stored.records,
+
+      warnings: [
+        "POLLING_PROVIDER_URL is missing; using the polling_results database fallback.",
+
+        ...(
+          stored.error
+            ? [
+                stored.error,
+              ]
+            : []
+        ),
+      ],
+
+      diagnostics: [
+        providerDiagnostic({
+          provider:
+            "stored_polling",
+
+          ok:
+            providerHealthy,
 
           startedAt,
 
-          error,
+          itemCount:
+            stored.records.length,
 
-          itemCount: 0,
+          error:
+            stored.error
+              ? new Error(
+                  stored.error
+                )
+              : null,
+        }),
+      ],
 
-          timedOut: error?.code === "PROVIDER_TIMEOUT",
-
-        })],
-
-        degraded: true,
-
-      });
-
-    }
-
- 
-
-    const staleCached = getStaleCached(cacheKey);
-
-    const diagnostic = providerDiagnostic({
-
-      provider,
-
-      ok: false,
-
-      startedAt,
-
-      error,
-
-      itemCount: 0,
-
-      timedOut: error?.code === "PROVIDER_TIMEOUT",
-
+      /*
+       * Zero matching polls is not a
+       * provider degradation.
+       */
+      degraded:
+        !providerHealthy,
     });
-
- 
-
-    if (staleCached) {
-
-      return {
-
-        ...staleCached,
-
-        diagnostics: [...(staleCached.diagnostics || []), diagnostic],
-
-        warnings: [...(staleCached.warnings || []), errorMessage(error)],
-
-      };
-
-    }
-
- 
-
-    return result({
-
-      provider,
-
-      ok: false,
-
-      summary: "External polling-provider lookup failed and no stored polling records matched the request.",
-
-      data: {
-
-        polls: [],
-
-        requested_state: state.input,
-
-        normalized_state: state.code,
-
-      },
-
-      warnings: [errorMessage(error), ...(stored.error ? [stored.error] : [])],
-
-      diagnostics: [diagnostic],
-
-      degraded: true,
-
-    });
-
   }
 
+  const params =
+    new URLSearchParams();
+
+  for (
+    const [
+      key,
+      value,
+    ] of Object.entries(
+      normalizedArgs
+    )
+  ) {
+    if (
+      value !==
+        undefined &&
+      value !==
+        null &&
+      value !==
+        ""
+    ) {
+      params.set(
+        key,
+        String(
+          value
+        )
+      );
+    }
+  }
+
+  const cacheKey =
+    `polling:${baseUrl}:${params.toString()}`;
+
+  const freshCached =
+    getFreshCached(
+      cacheKey
+    );
+
+  if (
+    freshCached
+  ) {
+    return freshCached;
+  }
+
+  try {
+    const separator =
+      baseUrl.includes("?")
+        ? "&"
+        : "?";
+
+    const requestUrl =
+      params.toString()
+        ? `${baseUrl}${separator}${params.toString()}`
+        : baseUrl;
+
+    const payload =
+      await fetchJson(
+        requestUrl,
+        {
+          headers: {
+            Accept:
+              "application/json",
+
+            ...(
+              apiKey
+                ? {
+                    Authorization:
+                      `Bearer ${apiKey}`,
+                  }
+                : {}
+            ),
+          },
+
+          timeoutMs:
+            DEFAULT_TIMEOUT_MS,
+
+          label:
+            process.env
+              .POLLING_PROVIDER_NAME ||
+            "Polling provider",
+        }
+      );
+
+    const rawPolls =
+      payload?.polls ||
+      payload?.results ||
+      payload?.data
+        ?.polls ||
+      payload?.data
+        ?.results ||
+      payload?.data ||
+      (
+        Array.isArray(
+          payload
+        )
+          ? payload
+          : []
+      );
+
+    const externalPolls =
+      sortByNewest(
+        Array.isArray(
+          rawPolls
+        )
+          ? rawPolls.map(
+              (
+                poll
+              ) => ({
+                ...poll,
+
+                published_at:
+                  normalizeDate(
+                    poll.published_at ||
+                    poll.publishedAt ||
+                    poll.field_end ||
+                    poll.updated_at ||
+                    poll.created_at
+                  ),
+              })
+            )
+          : []
+      );
+
+    /*
+     * If the external provider has a
+     * direct response, preserve it.
+     */
+    if (
+      externalPolls.length >
+      0
+    ) {
+      const latency =
+        elapsedMs(
+          startedAt
+        );
+
+      const output =
+        result({
+          provider,
+
+          ok:
+            true,
+
+          summary:
+            `Found ${externalPolls.length} external polling records.`,
+
+          data: {
+            polls:
+              externalPolls,
+
+            records:
+              externalPolls,
+
+            direct_records:
+              externalPolls,
+
+            candidate_context_records:
+              [],
+
+            state_context_records:
+              [],
+
+            coverage: {
+              direct_race:
+                true,
+
+              candidate_context:
+                false,
+
+              state_context:
+                false,
+            },
+
+            status:
+              "direct_race_available",
+
+            requested_context: {
+              candidate:
+                clean(
+                  normalizedArgs
+                    .candidate
+                ) ||
+                null,
+
+              state:
+                state.code ||
+                state.input ||
+                null,
+
+              office:
+                clean(
+                  normalizedArgs
+                    .office
+                ) ||
+                null,
+
+              cycle:
+                clean(
+                  normalizedArgs
+                    .cycle
+                ) ||
+                null,
+
+              locality:
+                clean(
+                  normalizedArgs
+                    .locality
+                ) ||
+                null,
+            },
+
+            requested_state:
+              state.input,
+
+            normalized_state:
+              state.code,
+          },
+
+          records:
+            externalPolls,
+
+          sources: [
+            sourceMeta({
+              name:
+                process.env
+                  .POLLING_PROVIDER_NAME ||
+                "Configured polling provider",
+
+              url:
+                baseUrl,
+
+              published_at:
+                externalPolls[0]
+                  ?.published_at ||
+                externalPolls[0]
+                  ?.field_end ||
+                externalPolls[0]
+                  ?.updated_at ||
+                null,
+
+              confidence:
+                84,
+
+              note:
+                "Polling responses should include pollster, field dates, sample size, population, and margin of error when available.",
+
+              provider,
+
+              latency_ms:
+                latency,
+            }),
+          ],
+
+          warnings:
+            externalPolls.some(
+              (
+                poll
+              ) =>
+                !poll.field_end &&
+                !poll.published_at
+            )
+              ? [
+                  "Some polling records did not include field dates or publication dates.",
+                ]
+              : [],
+
+          diagnostics: [
+            providerDiagnostic({
+              provider,
+
+              ok:
+                true,
+
+              startedAt,
+
+              itemCount:
+                externalPolls.length,
+            }),
+          ],
+
+          degraded:
+            false,
+        });
+
+      return setCached(
+        cacheKey,
+        output,
+        POLLING_CACHE_TTL_MS,
+        OFFICIAL_STALE_TTL_MS
+      );
+    }
+
+    /*
+     * Healthy external response, but no
+     * direct rows.
+     *
+     * Resolve candidate and state context
+     * from VoterSpheres stored polling.
+     */
+    const stored =
+      await readStoredPollingRecords(
+        normalizedArgs
+      );
+
+    const storedHealthy =
+      !stored.error;
+
+    const output =
+      result({
+        provider:
+          stored.records.length
+            ? "stored_polling"
+            : provider,
+
+        /*
+         * External provider responded
+         * successfully. Therefore this is
+         * healthy even if there are zero
+         * matching polling records.
+         */
+        ok:
+          true,
+
+        configured:
+          true,
+
+        summary:
+          pollingSummary(
+            stored,
+            state
+          ),
+
+        data: {
+          ...pollingCoverageData(
+            stored,
+            {
+              state,
+              args:
+                normalizedArgs,
+            }
+          ),
+
+          fallback:
+            stored.records.length
+              ? "polling_results"
+              : null,
+
+          external_provider_empty:
+            true,
+        },
+
+        records:
+          stored.records,
+
+        warnings: [
+          "The configured external polling provider returned no direct matching rows.",
+
+          ...(
+            stored.records.length
+              ? [
+                  "VoterSpheres stored polling was used for candidate or state context.",
+                ]
+              : []
+          ),
+
+          ...(
+            stored.error
+              ? [
+                  stored.error,
+                ]
+              : []
+          ),
+        ],
+
+        diagnostics: [
+          providerDiagnostic({
+            provider,
+
+            ok:
+              true,
+
+            startedAt,
+
+            itemCount:
+              0,
+          }),
+
+          providerDiagnostic({
+            provider:
+              "stored_polling",
+
+            ok:
+              storedHealthy,
+
+            startedAt,
+
+            itemCount:
+              stored.records
+                .length,
+
+            error:
+              stored.error
+                ? new Error(
+                    stored.error
+                  )
+                : null,
+          }),
+        ],
+
+        degraded:
+          !storedHealthy,
+      });
+
+    return setCached(
+      cacheKey,
+      output,
+      POLLING_CACHE_TTL_MS,
+      OFFICIAL_STALE_TTL_MS
+    );
+  } catch (
+    error
+  ) {
+    /*
+     * External provider actually failed.
+     * Stored polling can preserve useful
+     * intelligence, but the provider
+     * failure should remain visible.
+     */
+    const stored =
+      await readStoredPollingRecords(
+        normalizedArgs
+      );
+
+    if (
+      stored.records.length >
+      0
+    ) {
+      return result({
+        provider:
+          "stored_polling",
+
+        ok:
+          true,
+
+        summary:
+          `The external polling provider failed; ${pollingSummary(
+            stored,
+            state
+          )}`,
+
+        data: {
+          ...pollingCoverageData(
+            stored,
+            {
+              state,
+              args:
+                normalizedArgs,
+            }
+          ),
+
+          fallback:
+            "polling_results",
+
+          external_provider_failed:
+            true,
+        },
+
+        records:
+          stored.records,
+
+        warnings: [
+          errorMessage(
+            error
+          ),
+
+          "Using the polling_results database fallback.",
+
+          ...(
+            stored.error
+              ? [
+                  stored.error,
+                ]
+              : []
+          ),
+        ],
+
+        diagnostics: [
+          providerDiagnostic({
+            provider,
+
+            ok:
+              false,
+
+            startedAt,
+
+            error,
+
+            itemCount:
+              0,
+
+            timedOut:
+              error?.code ===
+              "PROVIDER_TIMEOUT",
+          }),
+
+          providerDiagnostic({
+            provider:
+              "stored_polling",
+
+            ok:
+              !stored.error,
+
+            startedAt,
+
+            itemCount:
+              stored.records
+                .length,
+          }),
+        ],
+
+        /*
+         * This is genuinely degraded
+         * because the configured external
+         * provider failed, even though the
+         * database fallback succeeded.
+         */
+        degraded:
+          true,
+      });
+    }
+
+    const staleCached =
+      getStaleCached(
+        cacheKey
+      );
+
+    const diagnostic =
+      providerDiagnostic({
+        provider,
+
+        ok:
+          false,
+
+        startedAt,
+
+        error,
+
+        itemCount:
+          0,
+
+        timedOut:
+          error?.code ===
+          "PROVIDER_TIMEOUT",
+      });
+
+    if (
+      staleCached
+    ) {
+      return {
+        ...staleCached,
+
+        diagnostics: [
+          ...(
+            staleCached
+              .diagnostics ||
+            []
+          ),
+
+          diagnostic,
+        ],
+
+        warnings: [
+          ...(
+            staleCached
+              .warnings ||
+            []
+          ),
+
+          errorMessage(
+            error
+          ),
+        ],
+      };
+    }
+
+    return result({
+      provider,
+
+      ok:
+        false,
+
+      summary:
+        "External polling-provider lookup failed and no stored polling context was available.",
+
+      data: {
+        polls:
+          [],
+
+        records:
+          [],
+
+        direct_records:
+          [],
+
+        candidate_context_records:
+          [],
+
+        state_context_records:
+          [],
+
+        coverage: {
+          direct_race:
+            false,
+
+          candidate_context:
+            false,
+
+          state_context:
+            false,
+        },
+
+        status:
+          "provider_error",
+
+        requested_context: {
+          candidate:
+            clean(
+              normalizedArgs
+                .candidate
+            ) ||
+            null,
+
+          state:
+            state.code ||
+            state.input ||
+            null,
+
+          office:
+            clean(
+              normalizedArgs
+                .office
+            ) ||
+            null,
+
+          cycle:
+            clean(
+              normalizedArgs
+                .cycle
+            ) ||
+            null,
+
+          locality:
+            clean(
+              normalizedArgs
+                .locality
+            ) ||
+            null,
+        },
+
+        requested_state:
+          state.input,
+
+        normalized_state:
+          state.code,
+      },
+
+      warnings: [
+        errorMessage(
+          error
+        ),
+
+        ...(
+          stored.error
+            ? [
+                stored.error,
+              ]
+            : []
+        ),
+      ],
+
+      diagnostics: [
+        diagnostic,
+      ],
+
+      degraded:
+        true,
+    });
+  }
 }
 
  
