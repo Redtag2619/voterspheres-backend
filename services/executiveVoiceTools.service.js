@@ -1188,37 +1188,66 @@ async function pollingTool(rawArgs = {}) {
     (sortedPolls.length ? "polling_available" : "no_polling_available");
 
   const queryType =
-    live?.data?.query_type ||
-    resolution?.query_type ||
-    live?.query_type ||
-    null;
-
-  const directCount = Number(
-    firstValue(
-      live?.data?.direct_count,
-      resolution?.direct_count,
-      live?.direct_count,
-      0
-    )
+  live?.data?.query_type ||
+  resolution?.query_type ||
+  live?.query_type ||
+  (
+    status === "direct_race_available"
+      ? "direct_race"
+      : status === "candidate_context_available"
+        ? "candidate_context"
+        : status === "state_context_available"
+          ? "state_context"
+          : null
   );
 
-  const candidateContextCount = Number(
-    firstValue(
-      live?.data?.candidate_context_count,
-      resolution?.candidate_context_count,
-      live?.candidate_context_count,
-      0
-    )
-  );
+  const directRecords = Array.isArray(
+  live?.data?.direct_records
+)
+  ? live.data.direct_records
+  : [];
 
-  const stateContextCount = Number(
-    firstValue(
-      live?.data?.state_context_count,
-      resolution?.state_context_count,
-      live?.state_context_count,
-      0
-    )
-  );
+const candidateContextRecords = Array.isArray(
+  live?.data?.candidate_context_records
+)
+  ? live.data.candidate_context_records
+  : [];
+
+const stateContextRecords = Array.isArray(
+  live?.data?.state_context_records
+)
+  ? live.data.state_context_records
+  : [];
+
+const directCount = Number(
+  firstValue(
+    live?.data?.direct_count,
+    resolution?.direct_count,
+    live?.direct_count,
+    directRecords.length,
+    0
+  )
+);
+
+const candidateContextCount = Number(
+  firstValue(
+    live?.data?.candidate_context_count,
+    resolution?.candidate_context_count,
+    live?.candidate_context_count,
+    candidateContextRecords.length,
+    0
+  )
+);
+
+const stateContextCount = Number(
+  firstValue(
+    live?.data?.state_context_count,
+    resolution?.state_context_count,
+    live?.state_context_count,
+    stateContextRecords.length,
+    0
+  )
+);
 
   /*
    * If the provider/live-source layer returned polling, that result is
@@ -1268,6 +1297,11 @@ async function pollingTool(rawArgs = {}) {
 
         polls: sortedPolls,
         records: sortedPolls,
+        direct_records: directRecords,
+        candidate_context_records:
+          candidateContextRecords,
+        state_context_records:
+          stateContextRecords,
 
         provider: live?.provider || null,
         provider_priority:
