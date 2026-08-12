@@ -25031,142 +25031,85 @@ function buildCandidateIntelligenceDataAnswer({
  
 
   const polls =
-
- 
-
- 
-
- 
-
-    candidateBundleRecords(
-
- 
-
- 
-
- 
-
-      bundle,
-
- 
-
- 
-
- 
-
-      "polling"
-
- 
-
- 
-
- 
-
-    );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const articles =
-
- 
-
- 
-
- 
-
-    candidateBundleRecords(
-
- 
-
- 
-
- 
-
-      bundle,
-
- 
-
- 
-
- 
-
-      "news"
-
- 
-
- 
-
- 
-
-    );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const signals =
-
- 
-
- 
-
- 
-
-    Array.isArray(
-
- 
-
- 
-
- 
-
-      bundle.signals
-
- 
-
- 
-
- 
-
-    )
-
- 
-
- 
-
- 
-
-      ? bundle.signals
-
- 
-
- 
-
- 
-
-      : [];
+  Array.isArray(
+    bundle.polling?.records
+  )
+    ? bundle.polling.records
+    : [];
+
+const directPollingRecords =
+  Array.isArray(
+    bundle.polling?.direct_records
+  )
+    ? bundle.polling.direct_records
+    : [];
+
+const candidateContextPollingRecords =
+  Array.isArray(
+    bundle.polling?.candidate_context_records
+  )
+    ? bundle.polling.candidate_context_records
+    : [];
+
+const stateContextPollingRecords =
+  Array.isArray(
+    bundle.polling?.state_context_records
+  )
+    ? bundle.polling.state_context_records
+    : [];
+
+const directPollingCount =
+  Number(
+    bundle.polling?.direct_count ??
+    directPollingRecords.length ??
+    0
+  ) || 0;
+
+const candidateContextPollingCount =
+  Number(
+    bundle.polling?.candidate_context_count ??
+    candidateContextPollingRecords.length ??
+    0
+  ) || 0;
+
+const stateContextPollingCount =
+  Number(
+    bundle.polling?.state_context_count ??
+    stateContextPollingRecords.length ??
+    0
+  ) || 0;
+
+const pollingStatus =
+  String(
+    bundle.polling?.status ||
+    ""
+  ).trim();
+
+const pollingQueryType =
+  String(
+    bundle.polling?.query_type ||
+    ""
+  ).trim();
+
+const requestedPollingRace =
+  bundle.polling?.requested_race &&
+  typeof bundle.polling.requested_race === "object"
+    ? bundle.polling.requested_race
+    : {};
+
+const requestedPollingOffice =
+  String(
+    requestedPollingRace.office ||
+    context.office ||
+    ""
+  ).trim();
+
+const requestedPollingState =
+  String(
+    requestedPollingRace.state ||
+    context.state ||
+    ""
+  ).trim();
 
  
 
@@ -25605,86 +25548,142 @@ function buildCandidateIntelligenceDataAnswer({
  
 
   lines.push(
+  "",
+  `Official FEC reports: ${
+    financeReports.filter(
+      (report) =>
+        report?.ok
+    ).length
+  }`
+);
 
- 
-
- 
-
- 
-
-    "",
-
- 
-
- 
-
- 
-
-    `Official FEC reports: ${
-
- 
-
- 
-
- 
-
-      financeReports.filter(
-
-        (report) =>
-
-          report?.ok === true ||
-
-          report?.result?.ok === true
-
-      ).length
-
- 
-
- 
-
- 
-
-    }`,
-
- 
-
- 
-
- 
-
-    `Polling records: ${polls.length}`,
-
- 
-
- 
-
- 
-
-    `News articles: ${articles.length}`,
-
- 
-
- 
-
- 
-
-    `Political signals: ${signals.length}`,
-
- 
-
- 
-
- 
-
-    `Strategy recommendations: ${strategies.length}`
-
- 
-
- 
-
- 
-
+/*
+ * Polling is intentionally separated by intelligence context.
+ *
+ * Candidate-context or state-context polling must never be described
+ * as direct polling for the requested race.
+ */
+if (
+  pollingStatus ===
+    "direct_race_available" ||
+  directPollingCount > 0
+) {
+  lines.push(
+    `Direct${
+      requestedPollingOffice
+        ? ` ${requestedPollingOffice}`
+        : ""
+    } polling: ${directPollingCount}`
   );
+
+  if (
+    candidateContextPollingCount > 0
+  ) {
+    lines.push(
+      `Candidate-context polling: ${candidateContextPollingCount}`
+    );
+  }
+
+  if (
+    stateContextPollingCount > 0
+  ) {
+    lines.push(
+      `State polling context: ${stateContextPollingCount}`
+    );
+  }
+} else if (
+  pollingStatus ===
+    "candidate_context_available" ||
+  pollingQueryType ===
+    "candidate_context" ||
+  candidateContextPollingCount > 0
+) {
+  lines.push(
+    `Direct${
+      requestedPollingOffice
+        ? ` ${requestedPollingOffice}`
+        : ""
+    } polling: 0`
+  );
+
+  lines.push(
+    `Candidate-context polling: ${candidateContextPollingCount}`
+  );
+
+  if (
+    stateContextPollingCount > 0
+  ) {
+    lines.push(
+      `State polling context: ${stateContextPollingCount}`
+    );
+  }
+} else if (
+  pollingStatus ===
+    "state_context_available" ||
+  pollingQueryType ===
+    "state_context" ||
+  stateContextPollingCount > 0
+) {
+  lines.push(
+    `Direct${
+      requestedPollingOffice
+        ? ` ${requestedPollingOffice}`
+        : ""
+    } polling: 0`
+  );
+
+  lines.push(
+    "Candidate-context polling: 0"
+  );
+
+  lines.push(
+    `State polling context: ${stateContextPollingCount}`
+  );
+} else if (
+  bundle.polling?.source_result?.ok
+) {
+  /*
+   * Polling subsystem succeeded, but there were no applicable records.
+   * This is not a provider failure.
+   */
+  lines.push(
+    `Direct${
+      requestedPollingOffice
+        ? ` ${requestedPollingOffice}`
+        : ""
+    } polling: 0`
+  );
+
+  lines.push(
+    "Candidate-context polling: 0"
+  );
+
+  if (
+    requestedPollingState
+  ) {
+    lines.push(
+      `No applicable polling records were found for the requested ${requestedPollingState} context.`
+    );
+  } else {
+    lines.push(
+      "No applicable polling records were found."
+    );
+  }
+} else {
+  /*
+   * Preserve the distinction between unavailable polling and a valid
+   * zero-match result.
+   */
+  lines.push(
+    "Polling intelligence: unavailable or degraded"
+  );
+}
+
+lines.push(
+  `News articles: ${articles.length}`,
+  `Political signals: ${signals.length}`,
+  `Strategy recommendations: ${strategies.length}`
+);
 
  
 
@@ -25701,54 +25700,45 @@ function buildCandidateIntelligenceDataAnswer({
  
 
   if (
+  polls.length
+) {
+  let pollingSectionTitle =
+    "Latest polling:";
 
- 
-
- 
-
- 
-
-    polls.length
-
- 
-
- 
-
- 
-
+  if (
+    pollingStatus ===
+      "candidate_context_available" ||
+    pollingQueryType ===
+      "candidate_context"
   ) {
+    pollingSectionTitle =
+      "Latest candidate-context polling:";
+  } else if (
+    pollingStatus ===
+      "state_context_available" ||
+    pollingQueryType ===
+      "state_context"
+  ) {
+    pollingSectionTitle =
+      "Latest state polling context:";
+  } else if (
+    pollingStatus ===
+      "direct_race_available" ||
+    pollingQueryType ===
+      "direct_race"
+  ) {
+    pollingSectionTitle =
+      `Latest${
+        requestedPollingOffice
+          ? ` ${requestedPollingOffice}`
+          : ""
+      } polling:`;
+  }
 
- 
-
- 
-
- 
-
-    lines.push(
-
- 
-
- 
-
- 
-
-      "",
-
- 
-
- 
-
- 
-
-      "Latest polling:"
-
- 
-
- 
-
- 
-
-    );
+  lines.push(
+    "",
+    pollingSectionTitle
+  );
 
  
 
