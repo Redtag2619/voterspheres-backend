@@ -6,11 +6,31 @@ import OpenAI from "openai";
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
+ 
+
+ 
+
 import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.service.js";
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -26,7 +46,19 @@ const BUILD = "4.4.0-unified-candidate-intelligence";
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const ORCHESTRATOR_TIMEOUT_MS =
+
+ 
+
+ 
 
  
 
@@ -38,7 +70,19 @@ const ORCHESTRATOR_TIMEOUT_MS =
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const TOOL_TIMEOUT_MS =
+
+ 
+
+ 
 
  
 
@@ -50,7 +94,19 @@ const TOOL_TIMEOUT_MS =
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const SYNTHESIS_TIMEOUT_MS =
+
+ 
+
+ 
 
  
 
@@ -62,7 +118,19 @@ const SYNTHESIS_TIMEOUT_MS =
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const MAX_TOOLS =
+
+ 
+
+ 
 
  
 
@@ -74,7 +142,19 @@ const MAX_TOOLS =
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const MODEL =
+
+ 
+
+ 
 
  
 
@@ -86,7 +166,19 @@ const MODEL =
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const openai = process.env.OPENAI_API_KEY
+
+ 
+
+ 
 
  
 
@@ -94,7 +186,15 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
+ 
+
+ 
+
       apiKey: process.env.OPENAI_API_KEY,
+
+ 
+
+ 
 
  
 
@@ -102,11 +202,23 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
+ 
+
+ 
+
       maxRetries: 1,
 
  
 
+ 
+
+ 
+
     })
+
+ 
+
+ 
 
  
 
@@ -118,7 +230,19 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const STATE_NAMES = Object.freeze({
+
+ 
+
+ 
 
  
 
@@ -126,7 +250,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   AK: "Alaska",
+
+ 
+
+ 
 
  
 
@@ -134,7 +266,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   AR: "Arkansas",
+
+ 
+
+ 
 
  
 
@@ -142,7 +282,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   CO: "Colorado",
+
+ 
+
+ 
 
  
 
@@ -150,7 +298,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   DE: "Delaware",
+
+ 
+
+ 
 
  
 
@@ -158,7 +314,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   GA: "Georgia",
+
+ 
+
+ 
 
  
 
@@ -166,7 +330,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   ID: "Idaho",
+
+ 
+
+ 
 
  
 
@@ -174,7 +346,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   IN: "Indiana",
+
+ 
+
+ 
 
  
 
@@ -182,7 +362,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   KS: "Kansas",
+
+ 
+
+ 
 
  
 
@@ -190,7 +378,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   LA: "Louisiana",
+
+ 
+
+ 
 
  
 
@@ -198,7 +394,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   MD: "Maryland",
+
+ 
+
+ 
 
  
 
@@ -206,7 +410,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   MI: "Michigan",
+
+ 
+
+ 
 
  
 
@@ -214,7 +426,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   MS: "Mississippi",
+
+ 
+
+ 
 
  
 
@@ -222,7 +442,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   MT: "Montana",
+
+ 
+
+ 
 
  
 
@@ -230,7 +458,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   NV: "Nevada",
+
+ 
+
+ 
 
  
 
@@ -238,7 +474,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   NJ: "New Jersey",
+
+ 
+
+ 
 
  
 
@@ -246,7 +490,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   NY: "New York",
+
+ 
+
+ 
 
  
 
@@ -254,7 +506,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   ND: "North Dakota",
+
+ 
+
+ 
 
  
 
@@ -262,7 +522,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   OK: "Oklahoma",
+
+ 
+
+ 
 
  
 
@@ -270,7 +538,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   PA: "Pennsylvania",
+
+ 
+
+ 
 
  
 
@@ -278,7 +554,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   SC: "South Carolina",
+
+ 
+
+ 
 
  
 
@@ -286,7 +570,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   TN: "Tennessee",
+
+ 
+
+ 
 
  
 
@@ -294,7 +586,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   UT: "Utah",
+
+ 
+
+ 
 
  
 
@@ -302,7 +602,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   VA: "Virginia",
+
+ 
+
+ 
 
  
 
@@ -310,7 +618,15 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   WV: "West Virginia",
+
+ 
+
+ 
 
  
 
@@ -318,11 +634,23 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
   WY: "Wyoming",
 
  
 
+ 
+
+ 
+
   DC: "District of Columbia",
+
+ 
+
+ 
 
  
 
@@ -334,7 +662,19 @@ const STATE_NAMES = Object.freeze({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const STATE_CODES = Object.fromEntries(
+
+ 
+
+ 
 
  
 
@@ -342,7 +682,15 @@ const STATE_CODES = Object.fromEntries(
 
  
 
+ 
+
+ 
+
     name.toLowerCase(),
+
+ 
+
+ 
 
  
 
@@ -350,11 +698,27 @@ const STATE_CODES = Object.fromEntries(
 
  
 
+ 
+
+ 
+
   ])
 
  
 
+ 
+
+ 
+
 );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -370,7 +734,19 @@ const now = () => new Date().toISOString();
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const clean = (value = "") =>
+
+ 
+
+ 
 
  
 
@@ -382,7 +758,19 @@ const clean = (value = "") =>
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const unique = (values = []) =>
+
+ 
+
+ 
 
  
 
@@ -394,7 +782,19 @@ const unique = (values = []) =>
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 const clamp = (value, fallback, min, max) => {
+
+ 
+
+ 
 
  
 
@@ -406,7 +806,19 @@ const clamp = (value, fallback, min, max) => {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return Number.isFinite(number)
+
+ 
+
+ 
 
  
 
@@ -414,7 +826,15 @@ const clamp = (value, fallback, min, max) => {
 
  
 
+ 
+
+ 
+
     : fallback;
+
+ 
+
+ 
 
  
 
@@ -426,7 +846,19 @@ const clamp = (value, fallback, min, max) => {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function withTimeout(promise, timeoutMs, label) {
+
+ 
+
+ 
 
  
 
@@ -438,7 +870,19 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const timeout = new Promise((_resolve, reject) => {
+
+ 
+
+ 
 
  
 
@@ -446,7 +890,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
       () =>
+
+ 
+
+ 
 
  
 
@@ -454,7 +906,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
           Object.assign(
+
+ 
+
+ 
 
  
 
@@ -462,7 +922,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
               `${label} timed out after ${timeoutMs}ms.`
+
+ 
+
+ 
 
  
 
@@ -470,7 +938,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
             {
+
+ 
+
+ 
 
  
 
@@ -478,7 +954,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
             }
+
+ 
+
+ 
 
  
 
@@ -486,7 +970,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
         ),
+
+ 
+
+ 
 
  
 
@@ -494,7 +986,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -506,7 +1006,19 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return Promise.race([
+
+ 
+
+ 
 
  
 
@@ -514,7 +1026,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
     timeout,
+
+ 
+
+ 
 
  
 
@@ -522,7 +1042,15 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
     clearTimeout(timer)
+
+ 
+
+ 
 
  
 
@@ -530,7 +1058,19 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -542,7 +1082,15 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -550,7 +1098,15 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
     typeof value === "object"
+
+ 
+
+ 
 
  
 
@@ -558,11 +1114,27 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
     return value;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -574,7 +1146,15 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
     return JSON.parse(value);
+
+ 
+
+ 
 
  
 
@@ -582,11 +1162,23 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
     return null;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
 
  
 
@@ -598,7 +1190,19 @@ function safeJson(value) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function extractJsonObject(value) {
+
+ 
+
+ 
 
  
 
@@ -610,7 +1214,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (!text) {
+
+ 
+
+ 
 
  
 
@@ -618,7 +1234,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -634,11 +1262,27 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (direct) {
 
  
 
+ 
+
+ 
+
     return direct;
+
+ 
+
+ 
 
  
 
@@ -650,11 +1294,27 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const unfenced = text
 
  
 
+ 
+
+ 
+
     .replace(
+
+ 
+
+ 
 
  
 
@@ -662,11 +1322,23 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
       ""
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -674,7 +1346,15 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
       /```$/i,
+
+ 
+
+ 
 
  
 
@@ -682,11 +1362,27 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
     )
 
  
 
+ 
+
+ 
+
     .trim();
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -702,7 +1398,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (parsed) {
+
+ 
+
+ 
 
  
 
@@ -710,7 +1418,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -722,7 +1442,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
     text.indexOf("{");
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -734,7 +1466,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
     text.lastIndexOf("}");
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -746,7 +1490,15 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
     end > start
+
+ 
+
+ 
 
  
 
@@ -754,7 +1506,15 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
         text.slice(
+
+ 
+
+ 
 
  
 
@@ -762,7 +1522,15 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
           end + 1
+
+ 
+
+ 
 
  
 
@@ -770,7 +1538,15 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -778,7 +1554,19 @@ function extractJsonObject(value) {
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -790,7 +1578,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
   question,
+
+ 
+
+ 
 
  
 
@@ -798,7 +1594,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -806,11 +1610,23 @@ function detectState(
 
  
 
+ 
+
+ 
+
     clean(
 
  
 
+ 
+
+ 
+
       suppliedState
+
+ 
+
+ 
 
  
 
@@ -822,7 +1638,19 @@ function detectState(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -830,11 +1658,23 @@ function detectState(
 
  
 
+ 
+
+ 
+
   ) {
 
  
 
+ 
+
+ 
+
     return explicit;
+
+ 
+
+ 
 
  
 
@@ -846,7 +1686,19 @@ function detectState(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const lower =
+
+ 
+
+ 
 
  
 
@@ -854,11 +1706,27 @@ function detectState(
 
  
 
+ 
+
+ 
+
       question
 
  
 
+ 
+
+ 
+
     ).toLowerCase();
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -870,7 +1738,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
     const [name, code]
+
+ 
+
+ 
 
  
 
@@ -878,7 +1754,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
       STATE_CODES
+
+ 
+
+ 
 
  
 
@@ -886,7 +1770,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -894,7 +1786,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
       lower.includes(name)
+
+ 
+
+ 
 
  
 
@@ -902,11 +1802,23 @@ function detectState(
 
  
 
+ 
+
+ 
+
       return code;
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -918,7 +1830,19 @@ function detectState(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const match =
+
+ 
+
+ 
 
  
 
@@ -926,7 +1850,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
       question
+
+ 
+
+ 
 
  
 
@@ -934,11 +1866,27 @@ function detectState(
 
  
 
+ 
+
+ 
+
       /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/i
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -950,7 +1898,15 @@ function detectState(
 
  
 
+ 
+
+ 
+
     ? match[1].toUpperCase()
+
+ 
+
+ 
 
  
 
@@ -958,7 +1914,19 @@ function detectState(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -970,7 +1938,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
   question,
+
+ 
+
+ 
 
  
 
@@ -978,7 +1954,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -986,7 +1970,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     clean(
+
+ 
+
+ 
 
  
 
@@ -994,7 +1986,19 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1006,7 +2010,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     /^20\d{2}$/.test(
+
+ 
+
+ 
 
  
 
@@ -1014,7 +2026,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -1022,11 +2042,27 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     return explicit;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1038,7 +2074,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     clean(
+
+ 
+
+ 
 
  
 
@@ -1046,11 +2090,23 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     ).match(
 
  
 
+ 
+
+ 
+
       /\b(20\d{2})\b/
+
+ 
+
+ 
 
  
 
@@ -1062,7 +2118,19 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return (
+
+ 
+
+ 
 
  
 
@@ -1070,7 +2138,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     String(
+
+ 
+
+ 
 
  
 
@@ -1078,7 +2154,15 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -1086,7 +2170,19 @@ function detectCycle(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1098,7 +2194,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
   question,
+
+ 
+
+ 
 
  
 
@@ -1106,7 +2210,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -1114,11 +2226,23 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     clean(
 
  
 
+ 
+
+ 
+
       suppliedOffice
+
+ 
+
+ 
 
  
 
@@ -1130,7 +2254,19 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (explicit) {
+
+ 
+
+ 
 
  
 
@@ -1138,7 +2274,19 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1150,11 +2298,23 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     clean(
 
  
 
+ 
+
+ 
+
       question
+
+ 
+
+ 
 
  
 
@@ -1166,11 +2326,27 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const pairs = [
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1178,7 +2354,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "President",
+
+ 
+
+ 
 
  
 
@@ -1186,7 +2370,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1194,7 +2386,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "Governor",
+
+ 
+
+ 
 
  
 
@@ -1202,7 +2402,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1210,7 +2418,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "U.S. Senate",
+
+ 
+
+ 
 
  
 
@@ -1218,7 +2434,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1226,7 +2450,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "U.S. Senate",
+
+ 
+
+ 
 
  
 
@@ -1234,7 +2466,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1242,7 +2482,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "U.S. Senate",
+
+ 
+
+ 
 
  
 
@@ -1250,7 +2498,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1258,7 +2514,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "U.S. House",
+
+ 
+
+ 
 
  
 
@@ -1266,7 +2530,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1274,7 +2546,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "U.S. House",
+
+ 
+
+ 
 
  
 
@@ -1282,7 +2562,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1290,7 +2578,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "Attorney General",
+
+ 
+
+ 
 
  
 
@@ -1298,7 +2594,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -1306,11 +2610,23 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "Secretary of State",
 
  
 
+ 
+
+ 
+
     ],
+
+ 
+
+ 
 
  
 
@@ -1318,7 +2634,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       "mayor",
+
+ 
+
+ 
 
  
 
@@ -1326,7 +2650,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     ],
+
+ 
+
+ 
 
  
 
@@ -1338,7 +2670,19 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return (
+
+ 
+
+ 
 
  
 
@@ -1346,7 +2690,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
       ([needle]) =>
+
+ 
+
+ 
 
  
 
@@ -1354,7 +2706,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
           needle
+
+ 
+
+ 
 
  
 
@@ -1362,7 +2722,15 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
     )?.[1] ||
+
+ 
+
+ 
 
  
 
@@ -1370,11 +2738,27 @@ function detectOffice(
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1386,11 +2770,23 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
   return clean(value)
 
  
 
+ 
+
+ 
+
     .replace(
+
+ 
+
+ 
 
  
 
@@ -1398,11 +2794,23 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
       ""
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -1410,7 +2818,15 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
       /^(?:for|about|on)\s+/i,
+
+ 
+
+ 
 
  
 
@@ -1418,7 +2834,15 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -1426,11 +2850,23 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
     .replace(/\s+/g, " ")
 
  
 
+ 
+
+ 
+
     .trim();
+
+ 
+
+ 
 
  
 
@@ -1442,7 +2878,19 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function detectCandidate(
+
+ 
+
+ 
 
  
 
@@ -1450,7 +2898,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   suppliedCandidate = ""
+
+ 
+
+ 
 
  
 
@@ -1458,11 +2914,23 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   const explicit = cleanupDetectedCandidate(
 
  
 
+ 
+
+ 
+
     suppliedCandidate
+
+ 
+
+ 
 
  
 
@@ -1474,7 +2942,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (explicit) {
+
+ 
+
+ 
 
  
 
@@ -1482,7 +2962,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1498,7 +2990,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const quoted = text.match(
+
+ 
+
+ 
 
  
 
@@ -1506,7 +3010,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1518,7 +3034,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     return cleanupDetectedCandidate(
+
+ 
+
+ 
 
  
 
@@ -1526,11 +3050,27 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1542,7 +3082,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
    * Finance-specific forms are checked first so a request such as
+
+ 
+
+ 
 
  
 
@@ -1550,7 +3098,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
    * to "jasmine crockett", not "report for jasmine crockett".
+
+ 
+
+ 
 
  
 
@@ -1558,11 +3114,23 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   const financeFor = text.match(
 
  
 
+ 
+
+ 
+
     /(?:fec|finance|financial|report|filing|fundraising)[^\n]{0,50}?\bfor\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
+ 
+
+ 
 
  
 
@@ -1574,7 +3142,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (financeFor) {
+
+ 
+
+ 
 
  
 
@@ -1582,11 +3162,27 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
       financeFor[1]
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1598,7 +3194,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
       return candidate;
+
+ 
+
+ 
 
  
 
@@ -1606,7 +3210,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1618,11 +3234,23 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
 
  
 
+ 
+
+ 
+
     /([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
+
+ 
+
+ 
 
  
 
@@ -1634,7 +3262,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   for (const pattern of patterns) {
+
+ 
+
+ 
 
  
 
@@ -1646,7 +3286,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     if (!match) {
+
+ 
+
+ 
 
  
 
@@ -1654,7 +3306,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1666,11 +3330,27 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
       match[1]
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1682,7 +3362,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
       candidate &&
+
+ 
+
+ 
 
  
 
@@ -1690,7 +3378,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
         (stateName) =>
+
+ 
+
+ 
 
  
 
@@ -1698,7 +3394,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
           candidate.toLowerCase()
+
+ 
+
+ 
 
  
 
@@ -1706,7 +3410,15 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -1714,11 +3426,27 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
     }
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1730,7 +3458,19 @@ function detectCandidate(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -1742,7 +3482,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   question,
+
+ 
+
+ 
 
  
 
@@ -1750,7 +3498,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -1758,11 +3514,23 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
     clean(
 
  
 
+ 
+
+ 
+
       question
+
+ 
+
+ 
 
  
 
@@ -1774,7 +3542,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1782,7 +3562,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1790,7 +3578,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1798,6 +3594,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1806,7 +3606,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1814,7 +3626,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1822,7 +3642,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1830,6 +3658,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1838,7 +3670,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1846,7 +3690,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1854,7 +3706,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1862,6 +3722,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1870,7 +3734,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1878,7 +3754,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1886,7 +3770,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1894,6 +3786,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1902,7 +3798,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1910,7 +3818,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1918,7 +3834,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1926,6 +3850,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1934,7 +3862,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1942,7 +3882,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -1950,7 +3898,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1958,6 +3914,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -1966,7 +3926,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -1974,7 +3946,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
     /everything|complete briefing|full briefing|candidate briefing|complete assessment|full assessment|all intelligence|all data|what should i know|tell me everything|strategy|strategies|strategic|news|articles/.test(
+
+ 
+
+ 
 
  
 
@@ -1982,11 +3962,23 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
     )
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -1994,6 +3986,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -2002,7 +3998,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -2010,7 +4018,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -2018,7 +4034,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -2026,7 +4050,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       ? "candidate_intelligence"
+
+ 
+
+ 
 
  
 
@@ -2034,6 +4066,10 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -2042,7 +4078,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -2050,7 +4098,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
       lower
+
+ 
+
+ 
 
  
 
@@ -2058,7 +4114,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -2066,7 +4130,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2078,7 +4154,15 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
     context.candidate
+
+ 
+
+ 
 
  
 
@@ -2086,11 +4170,27 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
     return "candidate";
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2102,7 +4202,19 @@ function classifyIntent(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2114,7 +4226,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
   payload = {}
+
+ 
+
+ 
 
  
 
@@ -2122,7 +4242,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
   const question =
+
+ 
+
+ 
 
  
 
@@ -2130,7 +4258,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       payload.question ||
+
+ 
+
+ 
 
  
 
@@ -2138,11 +4274,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       payload.prompt
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2154,7 +4306,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
     question,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2166,7 +4330,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       detectState(
+
+ 
+
+ 
 
  
 
@@ -2174,11 +4346,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
         payload.state
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2190,7 +4378,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       detectOffice(
+
+ 
+
+ 
 
  
 
@@ -2198,11 +4394,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
         payload.office
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2214,7 +4426,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       detectCandidate(
+
+ 
+
+ 
 
  
 
@@ -2222,11 +4442,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
         payload.candidate
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2238,7 +4474,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       detectCycle(
+
+ 
+
+ 
 
  
 
@@ -2246,11 +4490,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
         payload.cycle
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2262,7 +4522,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       clean(
+
+ 
+
+ 
 
  
 
@@ -2270,7 +4538,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2282,7 +4562,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       clean(
+
+ 
+
+ 
 
  
 
@@ -2290,11 +4578,27 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
         payload.fec_candidate_id
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2306,11 +4610,23 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       clean(
 
  
 
+ 
+
+ 
+
         payload.committee_id
+
+ 
+
+ 
 
  
 
@@ -2322,7 +4638,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     latitude:
+
+ 
+
+ 
 
  
 
@@ -2334,7 +4662,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     longitude:
+
+ 
+
+ 
 
  
 
@@ -2342,7 +4682,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
   };
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2354,7 +4706,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
     STATE_NAMES[
+
+ 
+
+ 
 
  
 
@@ -2362,7 +4722,15 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
     ] ||
+
+ 
+
+ 
 
  
 
@@ -2374,7 +4742,19 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   context.intent =
+
+ 
+
+ 
 
  
 
@@ -2382,11 +4762,23 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
       question,
 
  
 
+ 
+
+ 
+
       context
+
+ 
+
+ 
 
  
 
@@ -2398,11 +4790,31 @@ function resolveContext(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return context;
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2414,7 +4826,15 @@ function makeCall(
 
  
 
+ 
+
+ 
+
   name,
+
+ 
+
+ 
 
  
 
@@ -2422,7 +4842,15 @@ function makeCall(
 
  
 
+ 
+
+ 
+
   reason,
+
+ 
+
+ 
 
  
 
@@ -2430,7 +4858,15 @@ function makeCall(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -2438,7 +4874,15 @@ function makeCall(
 
  
 
+ 
+
+ 
+
     name,
+
+ 
+
+ 
 
  
 
@@ -2446,7 +4890,15 @@ function makeCall(
 
  
 
+ 
+
+ 
+
       args,
+
+ 
+
+ 
 
  
 
@@ -2454,11 +4906,23 @@ function makeCall(
 
  
 
+ 
+
+ 
+
     priority,
 
  
 
+ 
+
+ 
+
   };
+
+ 
+
+ 
 
  
 
@@ -2470,7 +4934,19 @@ function makeCall(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function buildToolPlan({
+
+ 
+
+ 
 
  
 
@@ -2478,7 +4954,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -2486,11 +4970,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   limit,
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -2502,11 +4998,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const common = {
 
  
 
+ 
+
+ 
+
     query:
+
+ 
+
+ 
 
  
 
@@ -2518,7 +5030,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     state:
+
+ 
+
+ 
 
  
 
@@ -2530,7 +5054,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     office:
+
+ 
+
+ 
 
  
 
@@ -2542,7 +5078,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     locality:
+
+ 
+
+ 
 
  
 
@@ -2554,11 +5102,31 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     cycle:
 
  
 
+ 
+
+ 
+
       context.cycle,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2574,11 +5142,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     workspace_id:
 
  
 
+ 
+
+ 
+
       workspaceId,
+
+ 
+
+ 
 
  
 
@@ -2590,7 +5174,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -2598,7 +5194,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     "polling"
+
+ 
+
+ 
 
  
 
@@ -2606,7 +5210,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     calls.push(
+
+ 
+
+ 
 
  
 
@@ -2614,7 +5226,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "get_latest_polling",
+
+ 
+
+ 
 
  
 
@@ -2622,7 +5242,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           candidate:
+
+ 
+
+ 
 
  
 
@@ -2634,11 +5262,31 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           state:
 
  
 
+ 
+
+ 
+
             context.state,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2650,7 +5298,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.office,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2662,7 +5322,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.locality,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2674,7 +5346,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -2682,7 +5362,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         100
+
+ 
+
+ 
 
  
 
@@ -2690,7 +5378,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2702,7 +5402,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -2710,11 +5418,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         {
 
  
 
+ 
+
+ 
+
           query:
+
+ 
+
+ 
 
  
 
@@ -2726,7 +5446,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           state:
+
+ 
+
+ 
 
  
 
@@ -2738,7 +5470,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           locality:
+
+ 
+
+ 
 
  
 
@@ -2750,7 +5494,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           limit,
+
+ 
+
+ 
 
  
 
@@ -2758,7 +5514,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "Check current reporting for corroborating polling coverage.",
+
+ 
+
+ 
 
  
 
@@ -2766,7 +5530,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -2774,7 +5546,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   } else if (
+
+ 
+
+ 
 
  
 
@@ -2782,7 +5562,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     "finance"
+
+ 
+
+ 
 
  
 
@@ -2790,7 +5578,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     /*
+
+ 
+
+ 
 
  
 
@@ -2798,7 +5594,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
      * get_candidate_live_intelligence because that composite tool can
+
+ 
+
+ 
 
  
 
@@ -2806,7 +5610,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
      * acquire VoteHub/polling evidence while resolving candidate identity.
+
+ 
+
+ 
 
  
 
@@ -2814,7 +5626,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -2822,7 +5642,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       context.candidate_id ||
+
+ 
+
+ 
 
  
 
@@ -2830,7 +5658,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -2838,7 +5674,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         makeCall(
+
+ 
+
+ 
 
  
 
@@ -2846,11 +5690,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           {
 
  
 
+ 
+
+ 
+
             candidate:
+
+ 
+
+ 
 
  
 
@@ -2862,7 +5718,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             candidate_id:
+
+ 
+
+ 
 
  
 
@@ -2874,11 +5742,31 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             state:
 
  
 
+ 
+
+ 
+
               context.state,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2890,7 +5778,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
               context.office,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2902,7 +5802,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
               context.cycle,
+
+ 
+
+ 
 
  
 
@@ -2910,7 +5818,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           "Resolve candidate identity from the VoterSpheres candidate database only.",
+
+ 
+
+ 
 
  
 
@@ -2918,11 +5834,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         )
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -2934,7 +5862,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     calls.push(
+
+ 
+
+ 
 
  
 
@@ -2942,7 +5882,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "get_fec_finance",
+
+ 
+
+ 
 
  
 
@@ -2950,7 +5898,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           candidate:
+
+ 
+
+ 
 
  
 
@@ -2962,11 +5918,31 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           candidate_id:
 
  
 
+ 
+
+ 
+
             context.candidate_id,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2978,7 +5954,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.committee_id,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -2990,7 +5978,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.cycle,
+
+ 
+
+ 
 
  
 
@@ -2998,7 +5994,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "Retrieve official FEC finance evidence only after strict candidate identity validation.",
+
+ 
+
+ 
 
  
 
@@ -3006,7 +6010,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -3014,11 +6026,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   } else if (
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3026,7 +6050,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3034,7 +6066,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3042,7 +6082,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3050,11 +6098,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         {
 
  
 
+ 
+
+ 
+
           candidate:
+
+ 
+
+ 
 
  
 
@@ -3066,7 +6126,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           candidate_id:
+
+ 
+
+ 
 
  
 
@@ -3078,11 +6150,31 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           state:
 
  
 
+ 
+
+ 
+
             context.state,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3094,7 +6186,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.office,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3106,7 +6210,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.locality,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3118,7 +6234,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.cycle,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3130,7 +6258,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             workspaceId,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3142,7 +6282,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -3150,7 +6298,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         100
+
+ 
+
+ 
 
  
 
@@ -3158,7 +6314,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -3166,7 +6330,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3174,7 +6346,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3182,7 +6362,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       context.state
+
+ 
+
+ 
 
  
 
@@ -3190,7 +6378,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       calls.push(
+
+ 
+
+ 
 
  
 
@@ -3198,7 +6394,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           "get_state_operations",
+
+ 
+
+ 
 
  
 
@@ -3206,7 +6410,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             state:
+
+ 
+
+ 
 
  
 
@@ -3218,7 +6430,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             locality:
+
+ 
+
+ 
 
  
 
@@ -3230,7 +6454,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             workspace_id:
+
+ 
+
+ 
 
  
 
@@ -3238,7 +6474,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           },
+
+ 
+
+ 
 
  
 
@@ -3246,7 +6490,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           100
+
+ 
+
+ 
 
  
 
@@ -3254,7 +6506,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -3266,11 +6526,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     calls.push(
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3278,7 +6554,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         common,
+
+ 
+
+ 
 
  
 
@@ -3286,7 +6570,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         94
+
+ 
+
+ 
 
  
 
@@ -3294,7 +6586,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -3302,7 +6602,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3310,7 +6618,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3318,7 +6634,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3326,11 +6650,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         {
 
  
 
+ 
+
+ 
+
           query:
+
+ 
+
+ 
 
  
 
@@ -3342,7 +6678,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           state:
+
+ 
+
+ 
 
  
 
@@ -3354,7 +6702,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           locality:
+
+ 
+
+ 
 
  
 
@@ -3366,11 +6726,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           limit,
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -3378,11 +6754,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         100
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -3394,7 +6782,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     calls.push(
+
+ 
+
+ 
 
  
 
@@ -3402,7 +6802,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "search_live_news",
+
+ 
+
+ 
 
  
 
@@ -3410,11 +6818,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           query:
 
  
 
+ 
+
+ 
+
             question,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3426,7 +6850,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.state,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3438,6 +6874,10 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.locality,
 
  
@@ -3446,11 +6886,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           limit,
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -3458,7 +6914,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         88
+
+ 
+
+ 
 
  
 
@@ -3466,7 +6930,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -3474,7 +6946,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3482,7 +6962,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3490,7 +6978,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3498,7 +6994,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         {
+
+ 
+
+ 
 
  
 
@@ -3506,7 +7010,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             question,
+
+ 
+
+ 
 
  
 
@@ -3514,7 +7026,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -3522,7 +7042,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         100
+
+ 
+
+ 
 
  
 
@@ -3530,7 +7058,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -3538,7 +7074,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -3546,7 +7090,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     context.latitude != null &&
+
+ 
+
+ 
 
  
 
@@ -3554,7 +7106,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3562,7 +7122,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3570,11 +7138,23 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         {
 
  
 
+ 
+
+ 
+
           latitude:
+
+ 
+
+ 
 
  
 
@@ -3586,7 +7166,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           longitude:
+
+ 
+
+ 
 
  
 
@@ -3598,7 +7190,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           location:
+
+ 
+
+ 
 
  
 
@@ -3606,7 +7210,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             context.state_name,
+
+ 
+
+ 
 
  
 
@@ -3614,7 +7226,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "Retrieve field weather risk.",
+
+ 
+
+ 
 
  
 
@@ -3622,7 +7242,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -3630,7 +7258,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   } else {
+
+ 
+
+ 
 
  
 
@@ -3638,7 +7274,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       context.state
+
+ 
+
+ 
 
  
 
@@ -3646,7 +7290,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       calls.push(
+
+ 
+
+ 
 
  
 
@@ -3654,7 +7306,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           "get_state_operations",
+
+ 
+
+ 
 
  
 
@@ -3662,7 +7322,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             state:
+
+ 
+
+ 
 
  
 
@@ -3674,7 +7342,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             locality:
+
+ 
+
+ 
 
  
 
@@ -3686,7 +7366,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             workspace_id:
+
+ 
+
+ 
 
  
 
@@ -3694,7 +7386,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           },
+
+ 
+
+ 
 
  
 
@@ -3702,7 +7402,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           92
+
+ 
+
+ 
 
  
 
@@ -3710,7 +7418,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -3722,7 +7438,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     calls.push(
+
+ 
+
+ 
 
  
 
@@ -3730,7 +7458,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "search_live_news",
+
+ 
+
+ 
 
  
 
@@ -3738,7 +7474,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           query:
+
+ 
+
+ 
 
  
 
@@ -3750,7 +7494,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           state:
+
+ 
+
+ 
 
  
 
@@ -3762,7 +7518,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           locality:
+
+ 
+
+ 
 
  
 
@@ -3774,7 +7542,19 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           limit,
+
+ 
+
+ 
 
  
 
@@ -3782,7 +7562,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         "Retrieve current political reporting.",
+
+ 
+
+ 
 
  
 
@@ -3790,11 +7578,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       )
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3806,7 +7610,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       makeCall(
+
+ 
+
+ 
 
  
 
@@ -3814,7 +7626,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         common,
+
+ 
+
+ 
 
  
 
@@ -3822,7 +7642,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         82
+
+ 
+
+ 
 
  
 
@@ -3830,11 +7658,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3846,7 +7690,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     ...new Map(
+
+ 
+
+ 
 
  
 
@@ -3854,7 +7706,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         (call) => [
+
+ 
+
+ 
 
  
 
@@ -3862,7 +7722,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
             call.arguments
+
+ 
+
+ 
 
  
 
@@ -3870,7 +7738,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
           call,
+
+ 
+
+ 
 
  
 
@@ -3878,7 +7754,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -3886,7 +7770,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
   ]
+
+ 
+
+ 
 
  
 
@@ -3894,7 +7786,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       (a, b) =>
+
+ 
+
+ 
 
  
 
@@ -3902,7 +7802,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         a.priority
+
+ 
+
+ 
 
  
 
@@ -3910,7 +7818,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     .slice(
+
+ 
+
+ 
 
  
 
@@ -3918,7 +7834,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
       clamp(
+
+ 
+
+ 
 
  
 
@@ -3926,7 +7850,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         9,
+
+ 
+
+ 
 
  
 
@@ -3934,7 +7866,15 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
         12
+
+ 
+
+ 
 
  
 
@@ -3942,11 +7882,27 @@ function buildToolPlan({
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -3958,7 +7914,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
   value,
+
+ 
+
+ 
 
  
 
@@ -3966,11 +7930,23 @@ function countItems(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -3978,11 +7954,23 @@ function countItems(
 
  
 
+ 
+
+ 
+
     depth > 5
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -3990,6 +7978,10 @@ function countItems(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -3998,7 +7990,19 @@ function countItems(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -4006,7 +8010,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -4014,7 +8026,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       (
+
+ 
+
+ 
 
  
 
@@ -4022,7 +8042,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
         item
+
+ 
+
+ 
 
  
 
@@ -4030,7 +8058,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
         sum +
+
+ 
+
+ 
 
  
 
@@ -4038,7 +8074,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
           typeof item ===
+
+ 
+
+ 
 
  
 
@@ -4046,7 +8090,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
             ? countItems(
+
+ 
+
+ 
 
  
 
@@ -4054,7 +8106,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
                 depth + 1
+
+ 
+
+ 
 
  
 
@@ -4062,7 +8122,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
             : 1
+
+ 
+
+ 
 
  
 
@@ -4070,7 +8138,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       0
+
+ 
+
+ 
 
  
 
@@ -4078,7 +8154,19 @@ function countItems(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4090,7 +8178,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
     typeof value !==
+
+ 
+
+ 
 
  
 
@@ -4098,7 +8194,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -4106,7 +8210,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       ? 1
+
+ 
+
+ 
 
  
 
@@ -4114,7 +8226,19 @@ function countItems(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4126,7 +8250,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
     value
+
+ 
+
+ 
 
  
 
@@ -4134,7 +8266,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
     (
+
+ 
+
+ 
 
  
 
@@ -4142,7 +8282,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       child
+
+ 
+
+ 
 
  
 
@@ -4150,7 +8298,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       sum +
+
+ 
+
+ 
 
  
 
@@ -4158,7 +8314,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
         child,
+
+ 
+
+ 
 
  
 
@@ -4166,7 +8330,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
 
  
 
@@ -4174,7 +8346,15 @@ function countItems(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
 
  
 
@@ -4186,7 +8366,19 @@ function countItems(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function normalizeToolResult(
+
+ 
+
+ 
 
  
 
@@ -4194,7 +8386,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
   result,
+
+ 
+
+ 
 
  
 
@@ -4202,7 +8402,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -4210,7 +8418,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
     result &&
+
+ 
+
+ 
 
  
 
@@ -4218,11 +8434,23 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       "object"
 
  
 
+ 
+
+ 
+
       ? result
+
+ 
+
+ 
 
  
 
@@ -4234,7 +8462,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const sources =
+
+ 
+
+ 
 
  
 
@@ -4242,7 +8482,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       value.sources
+
+ 
+
+ 
 
  
 
@@ -4250,7 +8498,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       ? value.sources
+
+ 
+
+ 
 
  
 
@@ -4262,63 +8518,131 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const normalizedData =
+
+ 
+
+ 
 
  
 
     call.name ===
 
+ 
+
       "get_candidate_intelligence_bundle" &&
+
+ 
 
     !value.data &&
 
+ 
+
     (
+
+ 
 
       value.identities ||
 
+ 
+
       value.profile ||
+
+ 
 
       value.finance ||
 
+ 
+
       value.polling ||
+
+ 
 
       value.news ||
 
+ 
+
       value.strategy
+
+ 
 
     )
 
+ 
+
       ? {
+
+ 
 
           identities: value.identities || [],
 
+ 
+
           profile: value.profile || null,
+
+ 
 
           finance: value.finance || null,
 
+ 
+
           polling: value.polling || null,
+
+ 
 
           news: value.news || null,
 
+ 
+
           signals: value.signals || [],
+
+ 
 
           strategy: value.strategy || null,
 
+ 
+
           operations: value.operations || null,
+
+ 
 
           coverage: value.coverage || null,
 
+ 
+
           sources: value.sources || [],
+
+ 
 
           warnings: value.warnings || [],
 
+ 
+
           diagnostics: value.diagnostics || [],
+
+ 
 
           generated_at: value.generated_at || null,
 
+ 
+
         }
 
+ 
+
       : value.data;
+
+ 
+
+ 
 
  
 
@@ -4326,7 +8650,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
     countItems(
+
+ 
+
+ 
 
  
 
@@ -4334,7 +8666,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4346,7 +8690,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
     Boolean(
+
+ 
+
+ 
 
  
 
@@ -4354,7 +8706,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       (
+
+ 
+
+ 
 
  
 
@@ -4362,7 +8722,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
           0 ||
+
+ 
+
+ 
 
  
 
@@ -4370,11 +8738,23 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
           0
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -4386,11 +8766,27 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
 
  
 
+ 
+
+ 
+
     tool:
+
+ 
+
+ 
 
  
 
@@ -4402,7 +8798,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     reason:
+
+ 
+
+ 
 
  
 
@@ -4414,7 +8822,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     arguments:
+
+ 
+
+ 
 
  
 
@@ -4426,7 +8846,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     ok:
+
+ 
+
+ 
 
  
 
@@ -4434,11 +8866,27 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
         value.ok
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4454,7 +8902,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     degraded:
+
+ 
+
+ 
 
  
 
@@ -4462,11 +8922,27 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
         value.degraded
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4478,11 +8954,23 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       clean(
 
  
 
+ 
+
+ 
+
         value.summary
+
+ 
+
+ 
 
  
 
@@ -4494,7 +8982,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     data:
+
+ 
+
+ 
 
  
 
@@ -4502,7 +9002,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4518,7 +9030,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     warnings:
+
+ 
+
+ 
 
  
 
@@ -4526,7 +9050,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
         value.warnings
+
+ 
+
+ 
 
  
 
@@ -4534,7 +9066,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
         ? value.warnings.filter(
+
+ 
+
+ 
 
  
 
@@ -4542,11 +9082,27 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
           )
 
  
 
+ 
+
+ 
+
         : [],
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4558,7 +9114,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -4566,11 +9130,23 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       )
 
  
 
+ 
+
+ 
+
         ? value.diagnostics
+
+ 
+
+ 
 
  
 
@@ -4582,7 +9158,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     generated_at:
+
+ 
+
+ 
 
  
 
@@ -4590,7 +9178,15 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
       value.fetched_at ||
+
+ 
+
+ 
 
  
 
@@ -4602,7 +9198,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     latency_ms:
+
+ 
+
+ 
 
  
 
@@ -4614,7 +9222,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     meaningful_item_count,
+
+ 
+
+ 
 
  
 
@@ -4622,7 +9242,19 @@ function normalizeToolResult(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4634,7 +9266,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
   call,
+
+ 
+
+ 
 
  
 
@@ -4642,11 +9282,23 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   const started =
+
+ 
+
+ 
 
  
 
@@ -4658,7 +9310,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   try {
+
+ 
+
+ 
 
  
 
@@ -4666,7 +9330,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
       call.name ===
+
+ 
+
+ 
 
  
 
@@ -4674,11 +9346,23 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         ? getCandidateIntelligenceBundle({
 
  
 
+ 
+
+ 
+
             candidate:
+
+ 
+
+ 
 
  
 
@@ -4690,7 +9374,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             candidateId:
+
+ 
+
+ 
 
  
 
@@ -4702,7 +9398,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             state:
+
+ 
+
+ 
 
  
 
@@ -4714,7 +9422,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             office:
+
+ 
+
+ 
 
  
 
@@ -4726,7 +9446,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             cycle:
+
+ 
+
+ 
 
  
 
@@ -4738,7 +9470,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             locality:
+
+ 
+
+ 
 
  
 
@@ -4750,11 +9494,27 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             workspaceId:
 
  
 
+ 
+
+ 
+
               call.arguments?.workspace_id ||
+
+ 
+
+ 
 
  
 
@@ -4766,11 +9526,27 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             limit:
 
  
 
+ 
+
+ 
+
               call.arguments?.limit ||
+
+ 
+
+ 
 
  
 
@@ -4782,7 +9558,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             user,
+
+ 
+
+ 
 
  
 
@@ -4790,7 +9578,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         : executeExecutiveVoiceTool(
+
+ 
+
+ 
 
  
 
@@ -4798,7 +9594,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
               name:
+
+ 
+
+ 
 
  
 
@@ -4810,7 +9614,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
               arguments:
+
+ 
+
+ 
 
  
 
@@ -4822,11 +9638,27 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
               user,
 
  
 
+ 
+
+ 
+
             }
+
+ 
+
+ 
 
  
 
@@ -4838,7 +9670,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     const output =
+
+ 
+
+ 
 
  
 
@@ -4846,7 +9690,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         operation,
+
+ 
+
+ 
 
  
 
@@ -4854,7 +9706,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
           "get_candidate_intelligence_bundle"
+
+ 
+
+ 
 
  
 
@@ -4862,7 +9722,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
           : TOOL_TIMEOUT_MS,
+
+ 
+
+ 
 
  
 
@@ -4870,7 +9738,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4882,7 +9762,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
       call,
+
+ 
+
+ 
 
  
 
@@ -4890,7 +9778,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
       Date.now() -
+
+ 
+
+ 
 
  
 
@@ -4898,7 +9794,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -4906,11 +9810,23 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
     return {
 
  
 
+ 
+
+ 
+
       tool:
+
+ 
+
+ 
 
  
 
@@ -4922,7 +9838,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       reason:
+
+ 
+
+ 
 
  
 
@@ -4934,7 +9862,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       arguments:
+
+ 
+
+ 
 
  
 
@@ -4946,11 +9886,31 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       ok:
 
  
 
+ 
+
+ 
+
         false,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4962,7 +9922,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         false,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4974,7 +9946,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         true,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4986,7 +9970,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         `${call.name} failed.`,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -4998,7 +9994,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         null,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5010,7 +10018,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         [],
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5022,7 +10042,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         error?.message ||
+
+ 
+
+ 
 
  
 
@@ -5030,7 +10058,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
       ],
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5042,11 +10082,23 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         {
 
  
 
+ 
+
+ 
+
           provider:
+
+ 
+
+ 
 
  
 
@@ -5058,7 +10110,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           ok:
+
+ 
+
+ 
 
  
 
@@ -5070,11 +10134,27 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           error:
 
  
 
+ 
+
+ 
+
             error?.message ||
+
+ 
+
+ 
 
  
 
@@ -5086,11 +10166,27 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           latency_ms:
 
  
 
+ 
+
+ 
+
             Date.now() -
+
+ 
+
+ 
 
  
 
@@ -5102,7 +10198,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           checked_at:
+
+ 
+
+ 
 
  
 
@@ -5110,7 +10218,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -5122,11 +10238,31 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       generated_at:
 
  
 
+ 
+
+ 
+
         null,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5138,7 +10274,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
         Date.now() -
+
+ 
+
+ 
 
  
 
@@ -5150,7 +10294,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       meaningful_item_count:
+
+ 
+
+ 
 
  
 
@@ -5158,7 +10314,15 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
     };
+
+ 
+
+ 
 
  
 
@@ -5166,7 +10330,19 @@ async function executePlannedTool(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5178,7 +10354,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
   results
+
+ 
+
+ 
 
  
 
@@ -5186,7 +10370,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
   const map =
+
+ 
+
+ 
 
  
 
@@ -5198,7 +10390,19 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   for (
+
+ 
+
+ 
 
  
 
@@ -5206,7 +10410,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
     of results
+
+ 
+
+ 
 
  
 
@@ -5214,7 +10426,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
     for (
+
+ 
+
+ 
 
  
 
@@ -5222,7 +10442,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
       of result.sources
+
+ 
+
+ 
 
  
 
@@ -5230,7 +10458,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
       const key =
+
+ 
+
+ 
 
  
 
@@ -5238,7 +10474,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
           source?.url ||
+
+ 
+
+ 
 
  
 
@@ -5246,7 +10490,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
           source?.source ||
+
+ 
+
+ 
 
  
 
@@ -5254,11 +10506,23 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
           source?.provider
 
  
 
+ 
+
+ 
+
         ).toLowerCase() ||
+
+ 
+
+ 
 
  
 
@@ -5270,7 +10534,19 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -5278,7 +10554,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
       ) {
+
+ 
+
+ 
 
  
 
@@ -5286,7 +10570,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
           key,
+
+ 
+
+ 
 
  
 
@@ -5294,7 +10586,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
             ...source,
+
+ 
+
+ 
 
  
 
@@ -5302,7 +10602,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
               result.tool,
+
+ 
+
+ 
 
  
 
@@ -5310,7 +10618,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
         );
+
+ 
+
+ 
 
  
 
@@ -5318,11 +10634,27 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
     }
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5334,7 +10666,15 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
     ...map.values(),
+
+ 
+
+ 
 
  
 
@@ -5342,7 +10682,19 @@ function mergeSources(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5354,7 +10706,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
   results,
+
+ 
+
+ 
 
  
 
@@ -5362,11 +10722,23 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   const attempted =
+
+ 
+
+ 
 
  
 
@@ -5378,7 +10750,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const successful =
+
+ 
+
+ 
 
  
 
@@ -5386,7 +10770,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
       (item) =>
+
+ 
+
+ 
 
  
 
@@ -5394,7 +10786,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
     ).length;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5406,7 +10810,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
     results.filter(
+
+ 
+
+ 
 
  
 
@@ -5414,11 +10826,27 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         item.usable
 
  
 
+ 
+
+ 
+
     ).length;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5430,7 +10858,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
     results.filter(
+
+ 
+
+ 
 
  
 
@@ -5438,11 +10874,27 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         item.degraded
 
  
 
+ 
+
+ 
+
     ).length;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5454,7 +10906,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
     sources.filter(
+
+ 
+
+ 
 
  
 
@@ -5462,7 +10922,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         source.published_at ||
+
+ 
+
+ 
 
  
 
@@ -5470,7 +10938,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         source.freshness
+
+ 
+
+ 
 
  
 
@@ -5482,7 +10958,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const score =
+
+ 
+
+ 
 
  
 
@@ -5490,7 +10978,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
       ? Math.round(
+
+ 
+
+ 
 
  
 
@@ -5498,7 +10994,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
             useful /
+
+ 
+
+ 
 
  
 
@@ -5506,7 +11010,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
           ) *
+
+ 
+
+ 
 
  
 
@@ -5514,7 +11026,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
           Math.min(
+
+ 
+
+ 
 
  
 
@@ -5522,7 +11042,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
             sources.length *
+
+ 
+
+ 
 
  
 
@@ -5530,7 +11058,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
           ) +
+
+ 
+
+ 
 
  
 
@@ -5538,7 +11074,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
             10,
+
+ 
+
+ 
 
  
 
@@ -5546,7 +11090,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
               2
+
+ 
+
+ 
 
  
 
@@ -5554,7 +11106,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -5566,11 +11126,27 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
 
  
 
+ 
+
+ 
+
     attempted_tools:
+
+ 
+
+ 
 
  
 
@@ -5582,7 +11158,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     successful_tools:
+
+ 
+
+ 
 
  
 
@@ -5594,7 +11182,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     useful_tools:
+
+ 
+
+ 
 
  
 
@@ -5606,7 +11206,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     degraded_tools:
+
+ 
+
+ 
 
  
 
@@ -5618,7 +11230,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     source_count:
+
+ 
+
+ 
 
  
 
@@ -5630,7 +11254,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     dated_source_count:
+
+ 
+
+ 
 
  
 
@@ -5642,7 +11278,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     coverage_score:
+
+ 
+
+ 
 
  
 
@@ -5650,7 +11298,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         100,
+
+ 
+
+ 
 
  
 
@@ -5658,7 +11314,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5670,7 +11338,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
       useful > 0
+
+ 
+
+ 
 
  
 
@@ -5678,7 +11354,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
           ? "partial"
+
+ 
+
+ 
 
  
 
@@ -5686,7 +11370,15 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
         : "unavailable",
+
+ 
+
+ 
 
  
 
@@ -5694,7 +11386,19 @@ function buildCoverage(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5706,7 +11410,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
   coverage
+
+ 
+
+ 
 
  
 
@@ -5714,7 +11426,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -5722,7 +11442,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -5730,7 +11458,19 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5742,7 +11482,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
     100,
+
+ 
+
+ 
 
  
 
@@ -5750,7 +11498,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
       coverage.coverage_score *
+
+ 
+
+ 
 
  
 
@@ -5758,7 +11514,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
       Math.min(
+
+ 
+
+ 
 
  
 
@@ -5766,7 +11530,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
         coverage.source_count *
+
+ 
+
+ 
 
  
 
@@ -5774,7 +11546,15 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -5782,11 +11562,27 @@ function calculateConfidence(
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5798,7 +11594,15 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
   results,
+
+ 
+
+ 
 
  
 
@@ -5806,7 +11610,15 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -5814,7 +11626,15 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
     results.find(
+
+ 
+
+ 
 
  
 
@@ -5822,7 +11642,15 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
         item.tool === tool
+
+ 
+
+ 
 
  
 
@@ -5830,7 +11658,15 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
     null
+
+ 
+
+ 
 
  
 
@@ -5838,7 +11674,19 @@ function findToolResult(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5850,7 +11698,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
   values = []
+
+ 
+
+ 
 
  
 
@@ -5858,7 +11714,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
   for (
+
+ 
+
+ 
 
  
 
@@ -5866,7 +11730,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
     of values
+
+ 
+
+ 
 
  
 
@@ -5874,7 +11746,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -5882,7 +11762,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
       typeof value ===
+
+ 
+
+ 
 
  
 
@@ -5890,7 +11778,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
       !Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -5898,7 +11794,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -5906,7 +11810,15 @@ function firstObject(
 
  
 
+ 
+
+ 
+
       return value;
+
+ 
+
+ 
 
  
 
@@ -5914,7 +11826,19 @@ function firstObject(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5926,7 +11850,19 @@ function firstObject(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5938,7 +11874,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
   values = []
+
+ 
+
+ 
 
  
 
@@ -5946,7 +11890,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
   for (
+
+ 
+
+ 
 
  
 
@@ -5954,7 +11906,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
     of values
+
+ 
+
+ 
 
  
 
@@ -5962,7 +11922,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -5970,7 +11938,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
       value.length
+
+ 
+
+ 
 
  
 
@@ -5978,7 +11954,15 @@ function firstArray(
 
  
 
+ 
+
+ 
+
       return value;
+
+ 
+
+ 
 
  
 
@@ -5986,7 +11970,19 @@ function firstArray(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -5998,7 +11994,19 @@ function firstArray(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6010,7 +12018,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
   result
+
+ 
+
+ 
 
  
 
@@ -6018,7 +12034,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
   const data =
+
+ 
+
+ 
 
  
 
@@ -6030,7 +12054,19 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (!data) {
+
+ 
+
+ 
 
  
 
@@ -6038,7 +12074,19 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6050,7 +12098,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     data.records,
+
+ 
+
+ 
 
  
 
@@ -6058,7 +12114,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     data.results,
+
+ 
+
+ 
 
  
 
@@ -6066,11 +12130,27 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     data.matches,
 
  
 
+ 
+
+ 
+
   ];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6082,7 +12162,19 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     firstArray(arrays);
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6094,7 +12186,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     rows.length
+
+ 
+
+ 
 
  
 
@@ -6102,11 +12202,27 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     return rows[0];
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6118,7 +12234,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     data.candidate,
+
+ 
+
+ 
 
  
 
@@ -6126,7 +12250,15 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
     data.record,
+
+ 
+
+ 
 
  
 
@@ -6134,7 +12266,19 @@ function extractCandidateRecord(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6146,7 +12290,15 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
   value
+
+ 
+
+ 
 
  
 
@@ -6154,7 +12306,15 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -6162,7 +12322,15 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
     typeof value !==
+
+ 
+
+ 
 
  
 
@@ -6170,11 +12338,23 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
   ) {
 
  
 
+ 
+
+ 
+
     return "";
+
+ 
+
+ 
 
  
 
@@ -6186,7 +12366,19 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return clean(
+
+ 
+
+ 
 
  
 
@@ -6194,7 +12386,15 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
     value.candidate_id ||
+
+ 
+
+ 
 
  
 
@@ -6202,7 +12402,15 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
     value.external_id
+
+ 
+
+ 
 
  
 
@@ -6210,7 +12418,19 @@ function candidateIdFromObject(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6222,7 +12442,15 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
   value
+
+ 
+
+ 
 
  
 
@@ -6230,7 +12458,15 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -6238,7 +12474,15 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
     typeof value !==
+
+ 
+
+ 
 
  
 
@@ -6246,11 +12490,23 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
   ) {
 
  
 
+ 
+
+ 
+
     return "";
+
+ 
+
+ 
 
  
 
@@ -6262,7 +12518,19 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return clean(
+
+ 
+
+ 
 
  
 
@@ -6270,7 +12538,15 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
     value.committee_id ||
+
+ 
+
+ 
 
  
 
@@ -6278,7 +12554,15 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
     value.committeeId
+
+ 
+
+ 
 
  
 
@@ -6286,7 +12570,19 @@ function committeeIdFromObject(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6298,7 +12594,15 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
   value
+
+ 
+
+ 
 
  
 
@@ -6306,7 +12610,15 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -6314,7 +12626,15 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
     typeof value !==
+
+ 
+
+ 
 
  
 
@@ -6322,11 +12642,23 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
   ) {
 
  
 
+ 
+
+ 
+
     return "";
+
+ 
+
+ 
 
  
 
@@ -6338,7 +12670,19 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return clean(
+
+ 
+
+ 
 
  
 
@@ -6346,7 +12690,15 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
     value.name ||
+
+ 
+
+ 
 
  
 
@@ -6354,11 +12706,27 @@ function candidateNameFromObject(
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6370,7 +12738,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   value,
+
+ 
+
+ 
 
  
 
@@ -6378,7 +12754,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -6386,7 +12770,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     value == null ||
+
+ 
+
+ 
 
  
 
@@ -6394,7 +12786,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -6402,11 +12802,23 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       candidate_id:
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6414,7 +12826,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6422,11 +12842,23 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
 
  
 
+ 
+
+ 
+
     };
+
+ 
+
+ 
 
  
 
@@ -6438,7 +12870,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -6446,7 +12890,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -6454,7 +12906,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       const child
+
+ 
+
+ 
 
  
 
@@ -6462,7 +12922,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -6470,7 +12938,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         recursivelyFindIdentity(
+
+ 
+
+ 
 
  
 
@@ -6478,7 +12954,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
           depth + 1
+
+ 
+
+ 
 
  
 
@@ -6490,7 +12974,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -6498,7 +12994,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         found.committee_id
+
+ 
+
+ 
 
  
 
@@ -6506,11 +13010,23 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         return found;
 
  
 
+ 
+
+ 
+
       }
+
+ 
+
+ 
 
  
 
@@ -6522,7 +13038,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     return {
+
+ 
+
+ 
 
  
 
@@ -6530,7 +13058,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6538,7 +13074,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6546,7 +13090,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6554,7 +13106,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6566,7 +13130,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     typeof value !==
+
+ 
+
+ 
 
  
 
@@ -6574,7 +13146,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -6582,11 +13162,23 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       candidate_id:
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6594,7 +13186,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6602,7 +13202,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         "",
+
+ 
+
+ 
 
  
 
@@ -6610,7 +13218,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6622,7 +13242,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     candidate_id:
+
+ 
+
+ 
 
  
 
@@ -6630,11 +13258,27 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         value
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6646,7 +13290,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       committeeIdFromObject(
+
+ 
+
+ 
 
  
 
@@ -6654,7 +13306,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6666,7 +13330,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       candidateNameFromObject(
+
+ 
+
+ 
 
  
 
@@ -6674,7 +13346,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
 
  
 
@@ -6686,7 +13366,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -6694,7 +13386,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     direct.committee_id
+
+ 
+
+ 
 
  
 
@@ -6702,11 +13402,27 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     return direct;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6718,7 +13434,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     const child
+
+ 
+
+ 
 
  
 
@@ -6726,7 +13450,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       value
+
+ 
+
+ 
 
  
 
@@ -6734,7 +13466,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -6742,7 +13482,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       recursivelyFindIdentity(
+
+ 
+
+ 
 
  
 
@@ -6750,11 +13498,27 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         depth + 1
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6766,7 +13530,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
       found.candidate_id ||
+
+ 
+
+ 
 
  
 
@@ -6774,7 +13546,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -6782,7 +13562,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
         candidate_id:
+
+ 
+
+ 
 
  
 
@@ -6794,7 +13582,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         committee_id:
+
+ 
+
+ 
 
  
 
@@ -6806,7 +13606,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         candidate:
+
+ 
+
+ 
 
  
 
@@ -6814,7 +13626,15 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
           direct.candidate,
+
+ 
+
+ 
 
  
 
@@ -6822,11 +13642,27 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
     }
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6838,7 +13674,19 @@ function recursivelyFindIdentity(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6850,7 +13698,15 @@ function normalizePersonTokens(value = "") {
 
  
 
+ 
+
+ 
+
   return clean(value)
+
+ 
+
+ 
 
  
 
@@ -6858,7 +13714,15 @@ function normalizePersonTokens(value = "") {
 
  
 
+ 
+
+ 
+
     .replace(/\b(jr|sr|ii|iii|iv)\.?\b/g, " ")
+
+ 
+
+ 
 
  
 
@@ -6866,7 +13730,15 @@ function normalizePersonTokens(value = "") {
 
  
 
+ 
+
+ 
+
     .split(/\s+/)
+
+ 
+
+ 
 
  
 
@@ -6874,11 +13746,27 @@ function normalizePersonTokens(value = "") {
 
  
 
+ 
+
+ 
+
     .filter(Boolean);
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6890,7 +13778,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
   requestedName,
+
+ 
+
+ 
 
  
 
@@ -6898,7 +13794,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -6906,11 +13810,27 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
     requestedName
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6922,11 +13842,27 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
     candidateName
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -6938,7 +13874,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
     !requested.length ||
+
+ 
+
+ 
 
  
 
@@ -6946,7 +13890,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -6954,6 +13906,10 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
   }
 
  
@@ -6962,7 +13918,19 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -6970,7 +13938,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
    * request and must match a complete token in the stored candidate name.
+
+ 
+
+ 
 
  
 
@@ -6978,7 +13954,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
   if (requested.length === 1) {
+
+ 
+
+ 
 
  
 
@@ -6986,11 +13970,23 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
       requested[0]
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -7002,7 +13998,19 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -7010,7 +14018,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
    * candidate record. This handles both "Jasmine Crockett" and
+
+ 
+
+ 
 
  
 
@@ -7018,7 +14034,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
    * unrelated candidate merely because an ID was present in the result.
+
+ 
+
+ 
 
  
 
@@ -7026,7 +14050,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
   return requested.every(
+
+ 
+
+ 
 
  
 
@@ -7034,7 +14066,15 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
       candidate.includes(token)
+
+ 
+
+ 
 
  
 
@@ -7042,7 +14082,19 @@ function candidateNamesMatch(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7054,7 +14106,15 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
   const lower = clean(value)
+
+ 
+
+ 
 
  
 
@@ -7062,7 +14122,15 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
     .replace(/[^a-z0-9]+/g, " ")
+
+ 
+
+ 
 
  
 
@@ -7074,7 +14142,19 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (/\bhouse\b|congress/.test(lower)) {
+
+ 
+
+ 
 
  
 
@@ -7082,7 +14162,19 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7094,11 +14186,27 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
     return "senate";
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7110,11 +14218,27 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
     return "president";
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7126,11 +14250,27 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
     return "governor";
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7142,7 +14282,19 @@ function normalizeOffice(value = "") {
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7154,7 +14306,15 @@ function candidateRecordState(record = {}) {
 
  
 
+ 
+
+ 
+
   return clean(
+
+ 
+
+ 
 
  
 
@@ -7162,7 +14322,15 @@ function candidateRecordState(record = {}) {
 
  
 
+ 
+
+ 
+
     record.state
+
+ 
+
+ 
 
  
 
@@ -7170,7 +14338,19 @@ function candidateRecordState(record = {}) {
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7182,7 +14362,15 @@ function candidateRecordOffice(record = {}) {
 
  
 
+ 
+
+ 
+
   return normalizeOffice(
+
+ 
+
+ 
 
  
 
@@ -7190,7 +14378,15 @@ function candidateRecordOffice(record = {}) {
 
  
 
+ 
+
+ 
+
     record.office_full ||
+
+ 
+
+ 
 
  
 
@@ -7198,11 +14394,27 @@ function candidateRecordOffice(record = {}) {
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7214,7 +14426,19 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
   const data = result?.data;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7226,11 +14450,27 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     return [];
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7242,7 +14482,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     data.records,
+
+ 
+
+ 
 
  
 
@@ -7250,7 +14498,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     data.results,
+
+ 
+
+ 
 
  
 
@@ -7258,11 +14514,27 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     data.matches,
 
  
 
+ 
+
+ 
+
   ];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7274,11 +14546,27 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     (bucket) => Array.isArray(bucket)
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7290,7 +14578,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     return rows.filter(
+
+ 
+
+ 
 
  
 
@@ -7298,7 +14594,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
         row &&
+
+ 
+
+ 
 
  
 
@@ -7306,11 +14610,27 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7322,7 +14642,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     data.candidate,
+
+ 
+
+ 
 
  
 
@@ -7330,7 +14658,15 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
     data.record,
+
+ 
+
+ 
 
  
 
@@ -7342,7 +14678,19 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return direct ? [direct] : [];
+
+ 
+
+ 
 
  
 
@@ -7354,7 +14702,19 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function strictResolveCandidateIdentity(
+
+ 
+
+ 
 
  
 
@@ -7362,7 +14722,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   context
+
+ 
+
+ 
 
  
 
@@ -7370,7 +14738,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   const requestedName = clean(
+
+ 
+
+ 
 
  
 
@@ -7378,7 +14754,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7390,11 +14778,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     context.candidate_id
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7406,7 +14810,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     context.committee_id
+
+ 
+
+ 
 
  
 
@@ -7418,7 +14830,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -7426,7 +14850,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
    */
+
+ 
+
+ 
 
  
 
@@ -7434,7 +14866,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     const identity = {
+
+ 
+
+ 
 
  
 
@@ -7442,7 +14882,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         requestedName || null,
+
+ 
+
+ 
 
  
 
@@ -7450,7 +14898,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         explicitCandidateId,
+
+ 
+
+ 
 
  
 
@@ -7458,7 +14914,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         explicitCommitteeId || null,
+
+ 
+
+ 
 
  
 
@@ -7466,7 +14930,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         context.state || null,
+
+ 
+
+ 
 
  
 
@@ -7474,7 +14946,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         context.office || null,
+
+ 
+
+ 
 
  
 
@@ -7482,7 +14962,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         null,
+
+ 
+
+ 
 
  
 
@@ -7490,11 +14978,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         null,
 
  
 
+ 
+
+ 
+
     };
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7506,7 +15010,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       ok: true,
+
+ 
+
+ 
 
  
 
@@ -7514,7 +15026,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       candidate:
+
+ 
+
+ 
 
  
 
@@ -7522,7 +15042,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       candidate_id:
+
+ 
+
+ 
 
  
 
@@ -7530,7 +15058,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       committee_id:
+
+ 
+
+ 
 
  
 
@@ -7538,7 +15074,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       record: null,
+
+ 
+
+ 
 
  
 
@@ -7546,7 +15090,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identities: [identity],
+
+ 
+
+ 
 
  
 
@@ -7554,11 +15106,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     };
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7570,7 +15138,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     return {
+
+ 
+
+ 
 
  
 
@@ -7578,7 +15154,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       ambiguous: false,
+
+ 
+
+ 
 
  
 
@@ -7586,7 +15170,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       candidate_id: "",
+
+ 
+
+ 
 
  
 
@@ -7594,7 +15186,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         explicitCommitteeId,
+
+ 
+
+ 
 
  
 
@@ -7602,7 +15202,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       matches: [],
+
+ 
+
+ 
 
  
 
@@ -7610,7 +15218,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       reason: "candidate-name-required",
+
+ 
+
+ 
 
  
 
@@ -7618,7 +15234,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7630,7 +15258,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     (result) =>
+
+ 
+
+ 
 
  
 
@@ -7638,11 +15274,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       "get_candidate_statistics"
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7654,11 +15306,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     statisticsResult
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7670,7 +15338,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     context.state
+
+ 
+
+ 
 
  
 
@@ -7682,7 +15358,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const requestedOffice = normalizeOffice(
+
+ 
+
+ 
 
  
 
@@ -7690,7 +15378,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7702,7 +15402,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     (record) => {
+
+ 
+
+ 
 
  
 
@@ -7710,11 +15418,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         record
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7726,7 +15450,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         !candidateNamesMatch(
+
+ 
+
+ 
 
  
 
@@ -7734,7 +15466,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           recordName
+
+ 
+
+ 
 
  
 
@@ -7742,7 +15482,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       ) {
+
+ 
+
+ 
 
  
 
@@ -7750,7 +15498,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7762,11 +15522,23 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         const state = candidateRecordState(
 
  
 
+ 
+
+ 
+
           record
+
+ 
+
+ 
 
  
 
@@ -7778,7 +15550,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         if (
+
+ 
+
+ 
 
  
 
@@ -7786,7 +15570,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           state !== requestedState
+
+ 
+
+ 
 
  
 
@@ -7794,7 +15586,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           return false;
+
+ 
+
+ 
 
  
 
@@ -7802,7 +15602,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7814,7 +15626,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         const office = candidateRecordOffice(
+
+ 
+
+ 
 
  
 
@@ -7822,7 +15642,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7834,7 +15666,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           office &&
+
+ 
+
+ 
 
  
 
@@ -7842,7 +15682,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         ) {
+
+ 
+
+ 
 
  
 
@@ -7850,7 +15698,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         }
+
+ 
+
+ 
 
  
 
@@ -7862,7 +15718,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       return Boolean(
+
+ 
+
+ 
 
  
 
@@ -7870,7 +15738,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         committeeIdFromObject(record)
+
+ 
+
+ 
 
  
 
@@ -7878,11 +15754,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     }
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7894,7 +15786,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     return {
+
+ 
+
+ 
 
  
 
@@ -7902,7 +15802,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       ambiguous: false,
+
+ 
+
+ 
 
  
 
@@ -7910,7 +15818,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         requestedName,
+
+ 
+
+ 
 
  
 
@@ -7918,7 +15834,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       committee_id:
+
+ 
+
+ 
 
  
 
@@ -7926,7 +15850,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       record: null,
+
+ 
+
+ 
 
  
 
@@ -7934,7 +15866,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identities: [],
+
+ 
+
+ 
 
  
 
@@ -7942,11 +15882,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     };
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7958,7 +15914,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
    * Deduplicate database rows that point to the same FEC identity.
+
+ 
+
+ 
 
  
 
@@ -7966,7 +15930,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
   const uniqueMatches = [
+
+ 
+
+ 
 
  
 
@@ -7974,7 +15946,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       matches.map((record) => {
+
+ 
+
+ 
 
  
 
@@ -7982,11 +15962,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           record
 
  
 
+ 
+
+ 
+
         );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -7998,7 +15994,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           record
+
+ 
+
+ 
 
  
 
@@ -8010,7 +16014,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         return [
+
+ 
+
+ 
 
  
 
@@ -8018,7 +16034,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
           record,
+
+ 
+
+ 
 
  
 
@@ -8026,11 +16050,23 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       })
 
  
 
+ 
+
+ 
+
     ).values(),
+
+ 
+
+ 
 
  
 
@@ -8042,7 +16078,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const identities = uniqueMatches.map(
+
+ 
+
+ 
 
  
 
@@ -8050,7 +16098,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       candidate:
+
+ 
+
+ 
 
  
 
@@ -8058,7 +16114,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         requestedName,
+
+ 
+
+ 
 
  
 
@@ -8066,7 +16130,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         candidateIdFromObject(record),
+
+ 
+
+ 
 
  
 
@@ -8074,7 +16146,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         explicitCommitteeId ||
+
+ 
+
+ 
 
  
 
@@ -8082,7 +16162,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         null,
+
+ 
+
+ 
 
  
 
@@ -8090,11 +16178,23 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         candidateRecordState(record) ||
 
  
 
+ 
+
+ 
+
         null,
+
+ 
+
+ 
 
  
 
@@ -8102,7 +16202,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         record.office ||
+
+ 
+
+ 
 
  
 
@@ -8110,7 +16218,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         record.office_name ||
+
+ 
+
+ 
 
  
 
@@ -8118,7 +16234,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       district:
+
+ 
+
+ 
 
  
 
@@ -8126,11 +16250,23 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       record,
 
  
 
+ 
+
+ 
+
     })
+
+ 
+
+ 
 
  
 
@@ -8142,7 +16278,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (identities.length > 1) {
+
+ 
+
+ 
 
  
 
@@ -8150,7 +16298,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
      * Multiple exact identities are not treated as an error when the
+
+ 
+
+ 
 
  
 
@@ -8158,7 +16314,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
      * for the requested person and will each receive an FEC lookup.
+
+ 
+
+ 
 
  
 
@@ -8166,7 +16330,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     return {
+
+ 
+
+ 
 
  
 
@@ -8174,7 +16346,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       ambiguous: true,
+
+ 
+
+ 
 
  
 
@@ -8182,7 +16362,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         requestedName,
+
+ 
+
+ 
 
  
 
@@ -8190,7 +16378,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       committee_id:
+
+ 
+
+ 
 
  
 
@@ -8198,7 +16394,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       record: null,
+
+ 
+
+ 
 
  
 
@@ -8206,7 +16410,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
         identities.map((identity) => ({
+
+ 
+
+ 
 
  
 
@@ -8214,7 +16426,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.candidate,
+
+ 
+
+ 
 
  
 
@@ -8222,7 +16442,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.candidate_id,
+
+ 
+
+ 
 
  
 
@@ -8230,7 +16458,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.committee_id,
+
+ 
+
+ 
 
  
 
@@ -8238,7 +16474,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.state,
+
+ 
+
+ 
 
  
 
@@ -8246,7 +16490,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.office,
+
+ 
+
+ 
 
  
 
@@ -8254,7 +16506,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
             identity.district,
+
+ 
+
+ 
 
  
 
@@ -8262,7 +16522,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identities,
+
+ 
+
+ 
 
  
 
@@ -8270,11 +16538,27 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     };
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8290,7 +16574,19 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
+
+ 
+
+ 
 
  
 
@@ -8298,7 +16594,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     ambiguous: false,
+
+ 
+
+ 
 
  
 
@@ -8306,7 +16610,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identity.candidate,
+
+ 
+
+ 
 
  
 
@@ -8314,7 +16626,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identity.candidate_id,
+
+ 
+
+ 
 
  
 
@@ -8322,7 +16642,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identity.committee_id,
+
+ 
+
+ 
 
  
 
@@ -8330,7 +16658,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identity.record,
+
+ 
+
+ 
 
  
 
@@ -8338,7 +16674,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
       identities,
+
+ 
+
+ 
 
  
 
@@ -8346,7 +16690,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
     reason: "strict-candidate-match",
+
+ 
+
+ 
 
  
 
@@ -8354,7 +16706,15 @@ function strictResolveCandidateIdentity(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
 
  
 
@@ -8362,7 +16722,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
   fecTemplate,
+
+ 
+
+ 
 
  
 
@@ -8370,7 +16738,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
   context
+
+ 
+
+ 
 
  
 
@@ -8378,11 +16754,23 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
   const issue = identity.ambiguous
 
  
 
+ 
+
+ 
+
     ? `Multiple FEC candidate identities matched ${context.candidate}. Specify the office or candidate ID before finance data is retrieved.`
+
+ 
+
+ 
 
  
 
@@ -8394,7 +16782,19 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
+
+ 
+
+ 
 
  
 
@@ -8402,7 +16802,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     reason:
+
+ 
+
+ 
 
  
 
@@ -8410,7 +16818,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
       "Retrieve official FEC finance evidence.",
+
+ 
+
+ 
 
  
 
@@ -8418,7 +16834,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
       fecTemplate?.arguments ||
+
+ 
+
+ 
 
  
 
@@ -8426,7 +16850,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     ok: false,
+
+ 
+
+ 
 
  
 
@@ -8434,7 +16866,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     degraded: true,
+
+ 
+
+ 
 
  
 
@@ -8442,7 +16882,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     data: {
+
+ 
+
+ 
 
  
 
@@ -8450,7 +16898,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         requested_candidate:
+
+ 
+
+ 
 
  
 
@@ -8458,7 +16914,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         requested_state:
+
+ 
+
+ 
 
  
 
@@ -8466,7 +16930,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         requested_office:
+
+ 
+
+ 
 
  
 
@@ -8474,7 +16946,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         reason:
+
+ 
+
+ 
 
  
 
@@ -8482,7 +16962,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         matches:
+
+ 
+
+ 
 
  
 
@@ -8490,7 +16978,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
       },
+
+ 
+
+ 
 
  
 
@@ -8498,7 +16994,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     },
+
+ 
+
+ 
 
  
 
@@ -8506,7 +17010,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     warnings: [issue],
+
+ 
+
+ 
 
  
 
@@ -8514,7 +17026,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
       {
+
+ 
+
+ 
 
  
 
@@ -8522,7 +17042,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
           "strict_candidate_identity",
+
+ 
+
+ 
 
  
 
@@ -8530,7 +17058,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
         error: issue,
+
+ 
+
+ 
 
  
 
@@ -8538,7 +17074,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
       },
+
+ 
+
+ 
 
  
 
@@ -8546,7 +17090,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     generated_at: now(),
+
+ 
+
+ 
 
  
 
@@ -8554,7 +17106,15 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
     meaningful_item_count: 0,
+
+ 
+
+ 
 
  
 
@@ -8562,7 +17122,19 @@ function createIdentityFailureResult(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8574,7 +17146,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   plan,
+
+ 
+
+ 
 
  
 
@@ -8582,7 +17162,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -8594,7 +17182,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const statisticsCall = plan.tool_plan.find(
+
+ 
+
+ 
 
  
 
@@ -8602,7 +17202,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       call.name ===
+
+ 
+
+ 
 
  
 
@@ -8610,7 +17218,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8622,7 +17242,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     (call) =>
+
+ 
+
+ 
 
  
 
@@ -8630,7 +17258,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       "get_fec_finance"
+
+ 
+
+ 
 
  
 
@@ -8642,7 +17278,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -8650,7 +17298,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
    * get_candidate_live_intelligence. Candidate identity comes only from
+
+ 
+
+ 
 
  
 
@@ -8658,7 +17314,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
    * cannot contaminate an FEC-only request.
+
+ 
+
+ 
 
  
 
@@ -8666,7 +17330,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   if (statisticsCall) {
+
+ 
+
+ 
 
  
 
@@ -8674,7 +17346,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       await executePlannedTool(
+
+ 
+
+ 
 
  
 
@@ -8682,7 +17362,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         user
+
+ 
+
+ 
 
  
 
@@ -8690,11 +17378,27 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8706,7 +17410,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     results,
+
+ 
+
+ 
 
  
 
@@ -8714,7 +17426,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8726,11 +17450,27 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     return results;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8742,7 +17482,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     results.push(
+
+ 
+
+ 
 
  
 
@@ -8750,7 +17498,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         fecTemplate,
+
+ 
+
+ 
 
  
 
@@ -8758,7 +17514,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         plan.context
+
+ 
+
+ 
 
  
 
@@ -8766,7 +17530,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8778,7 +17554,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8790,7 +17578,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     identity.identities
+
+ 
+
+ 
 
  
 
@@ -8798,7 +17594,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     ? identity.identities
+
+ 
+
+ 
 
  
 
@@ -8806,7 +17610,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         {
+
+ 
+
+ 
 
  
 
@@ -8814,7 +17626,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             identity.candidate,
+
+ 
+
+ 
 
  
 
@@ -8822,7 +17642,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             identity.candidate_id,
+
+ 
+
+ 
 
  
 
@@ -8830,7 +17658,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             identity.committee_id,
+
+ 
+
+ 
 
  
 
@@ -8838,7 +17674,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             plan.context.state || null,
+
+ 
+
+ 
 
  
 
@@ -8846,7 +17690,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             plan.context.office || null,
+
+ 
+
+ 
 
  
 
@@ -8854,7 +17706,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             null,
+
+ 
+
+ 
 
  
 
@@ -8862,11 +17722,23 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
             identity.record || null,
 
  
 
+ 
+
+ 
+
         },
+
+ 
+
+ 
 
  
 
@@ -8878,7 +17750,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -8886,7 +17770,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
    * unnecessary OpenFEC bursts/rate-limit pressure and to keep diagnostics
+
+ 
+
+ 
 
  
 
@@ -8894,7 +17786,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
    */
+
+ 
+
+ 
 
  
 
@@ -8902,7 +17802,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -8910,7 +17818,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       !clean(resolved.committee_id)
+
+ 
+
+ 
 
  
 
@@ -8918,11 +17834,27 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       continue;
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -8934,7 +17866,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       ...fecTemplate,
+
+ 
+
+ 
 
  
 
@@ -8942,7 +17882,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         ...fecTemplate.arguments,
+
+ 
+
+ 
 
  
 
@@ -8950,7 +17898,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           resolved.candidate ||
+
+ 
+
+ 
 
  
 
@@ -8958,7 +17914,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         candidate_id:
+
+ 
+
+ 
 
  
 
@@ -8966,7 +17930,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         committee_id:
+
+ 
+
+ 
 
  
 
@@ -8974,7 +17946,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           plan.context.committee_id ||
+
+ 
+
+ 
 
  
 
@@ -8982,7 +17962,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         cycle:
+
+ 
+
+ 
 
  
 
@@ -8990,7 +17978,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         resolved_state:
+
+ 
+
+ 
 
  
 
@@ -8998,11 +17994,23 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           plan.context.state ||
 
  
 
+ 
+
+ 
+
           null,
+
+ 
+
+ 
 
  
 
@@ -9010,7 +18018,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           resolved.office ||
+
+ 
+
+ 
 
  
 
@@ -9018,7 +18034,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           null,
+
+ 
+
+ 
 
  
 
@@ -9026,11 +18050,23 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
           resolved.district || null,
 
  
 
+ 
+
+ 
+
       },
+
+ 
+
+ 
 
  
 
@@ -9042,7 +18078,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     results.push(
+
+ 
+
+ 
 
  
 
@@ -9050,7 +18098,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
         fecCall,
+
+ 
+
+ 
 
  
 
@@ -9058,7 +18114,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -9066,7 +18130,19 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9078,7 +18154,15 @@ async function executeFinancePlan({
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
 
  
 
@@ -9086,7 +18170,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
   plan,
+
+ 
+
+ 
 
  
 
@@ -9094,7 +18186,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -9102,7 +18202,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
     plan.context.intent ===
+
+ 
+
+ 
 
  
 
@@ -9110,7 +18218,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -9118,7 +18234,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
       plan,
+
+ 
+
+ 
 
  
 
@@ -9126,11 +18250,27 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
     });
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9142,7 +18282,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
     plan.tool_plan.map(
+
+ 
+
+ 
 
  
 
@@ -9150,7 +18298,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
         executePlannedTool(
+
+ 
+
+ 
 
  
 
@@ -9158,7 +18314,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
           user
+
+ 
+
+ 
 
  
 
@@ -9166,7 +18330,15 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -9174,7 +18346,19 @@ async function executePlan({
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9186,7 +18370,15 @@ function getFecToolResults(
 
  
 
+ 
+
+ 
+
   results
+
+ 
+
+ 
 
  
 
@@ -9194,7 +18386,15 @@ function getFecToolResults(
 
  
 
+ 
+
+ 
+
   return results.filter(
+
+ 
+
+ 
 
  
 
@@ -9202,7 +18402,15 @@ function getFecToolResults(
 
  
 
+ 
+
+ 
+
       result.tool ===
+
+ 
+
+ 
 
  
 
@@ -9210,11 +18418,27 @@ function getFecToolResults(
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9226,7 +18450,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
   result
+
+ 
+
+ 
 
  
 
@@ -9234,7 +18466,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
   const data =
+
+ 
+
+ 
 
  
 
@@ -9246,7 +18486,19 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (!data) {
+
+ 
+
+ 
 
  
 
@@ -9254,7 +18506,19 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9266,7 +18530,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -9274,11 +18546,23 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     )
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -9286,7 +18570,19 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9298,7 +18594,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -9306,7 +18610,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -9314,11 +18626,27 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     return data.finance;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9330,7 +18658,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -9338,7 +18674,15 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -9346,11 +18690,27 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
     return data.results;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9362,7 +18722,19 @@ function recordsFromFecResult(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9374,11 +18746,23 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
   results
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -9386,7 +18770,15 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
     results
+
+ 
+
+ 
 
  
 
@@ -9394,7 +18786,15 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
     (result) =>
+
+ 
+
+ 
 
  
 
@@ -9402,7 +18802,15 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
         result
+
+ 
+
+ 
 
  
 
@@ -9410,7 +18818,15 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
 
  
 
@@ -9418,7 +18834,15 @@ function getFecRecords(
 
  
 
+ 
+
+ 
+
 function finiteNumber(
+
+ 
+
+ 
 
  
 
@@ -9426,11 +18850,23 @@ function finiteNumber(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   const number =
+
+ 
+
+ 
 
  
 
@@ -9442,7 +18878,19 @@ function finiteNumber(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return Number.isFinite(
+
+ 
+
+ 
 
  
 
@@ -9450,7 +18898,15 @@ function finiteNumber(
 
  
 
+ 
+
+ 
+
   )
+
+ 
+
+ 
 
  
 
@@ -9458,11 +18914,27 @@ function finiteNumber(
 
  
 
+ 
+
+ 
+
     : null;
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9474,7 +18946,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
   value
+
+ 
+
+ 
 
  
 
@@ -9482,7 +18962,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
   const number =
+
+ 
+
+ 
 
  
 
@@ -9494,7 +18982,19 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -9502,7 +19002,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -9510,7 +19018,19 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9522,7 +19042,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
     "en-US",
+
+ 
+
+ 
 
  
 
@@ -9530,7 +19058,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
       style:
+
+ 
+
+ 
 
  
 
@@ -9542,7 +19078,19 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       currency:
+
+ 
+
+ 
 
  
 
@@ -9554,11 +19102,31 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       minimumFractionDigits:
 
  
 
+ 
+
+ 
+
         2,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9570,7 +19138,15 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
         2,
+
+ 
+
+ 
 
  
 
@@ -9578,11 +19154,27 @@ function formatCurrency(
 
  
 
+ 
+
+ 
+
   ).format(number);
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9594,7 +19186,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
   value
+
+ 
+
+ 
 
  
 
@@ -9602,7 +19202,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
   if (!value) {
+
+ 
+
+ 
 
  
 
@@ -9610,7 +19218,19 @@ function formatDate(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9622,7 +19242,19 @@ function formatDate(
 
  
 
+ 
+
+ 
+
     new Date(value);
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9634,7 +19266,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
     Number.isNaN(
+
+ 
+
+ 
 
  
 
@@ -9642,7 +19282,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -9650,11 +19298,27 @@ function formatDate(
 
  
 
+ 
+
+ 
+
     return clean(value);
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9666,7 +19330,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
     "en-US",
+
+ 
+
+ 
 
  
 
@@ -9674,11 +19346,27 @@ function formatDate(
 
  
 
+ 
+
+ 
+
       year:
 
  
 
+ 
+
+ 
+
         "numeric",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9690,7 +19378,19 @@ function formatDate(
 
  
 
+ 
+
+ 
+
         "long",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9702,7 +19402,19 @@ function formatDate(
 
  
 
+ 
+
+ 
+
         "numeric",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9714,7 +19426,15 @@ function formatDate(
 
  
 
+ 
+
+ 
+
         "UTC",
+
+ 
+
+ 
 
  
 
@@ -9722,11 +19442,27 @@ function formatDate(
 
  
 
+ 
+
+ 
+
   ).format(date);
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9738,7 +19474,15 @@ function metric(
 
  
 
+ 
+
+ 
+
   key,
+
+ 
+
+ 
 
  
 
@@ -9746,7 +19490,15 @@ function metric(
 
  
 
+ 
+
+ 
+
   value,
+
+ 
+
+ 
 
  
 
@@ -9754,11 +19506,23 @@ function metric(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   const number =
+
+ 
+
+ 
 
  
 
@@ -9770,7 +19534,19 @@ function metric(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -9778,7 +19554,15 @@ function metric(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -9786,7 +19570,19 @@ function metric(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9798,7 +19594,15 @@ function metric(
 
  
 
+ 
+
+ 
+
     key,
+
+ 
+
+ 
 
  
 
@@ -9806,11 +19610,23 @@ function metric(
 
  
 
+ 
+
+ 
+
     value:
 
  
 
+ 
+
+ 
+
       number,
+
+ 
+
+ 
 
  
 
@@ -9822,7 +19638,19 @@ function metric(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     display_value:
+
+ 
+
+ 
 
  
 
@@ -9830,7 +19658,15 @@ function metric(
 
  
 
+ 
+
+ 
+
       "currency"
+
+ 
+
+ 
 
  
 
@@ -9838,7 +19674,15 @@ function metric(
 
  
 
+ 
+
+ 
+
             number
+
+ 
+
+ 
 
  
 
@@ -9846,7 +19690,15 @@ function metric(
 
  
 
+ 
+
+ 
+
         : String(
+
+ 
+
+ 
 
  
 
@@ -9854,7 +19706,15 @@ function metric(
 
  
 
+ 
+
+ 
+
           ),
+
+ 
+
+ 
 
  
 
@@ -9862,7 +19722,19 @@ function metric(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9874,7 +19746,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   records = []
+
+ 
+
+ 
 
  
 
@@ -9882,7 +19762,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -9890,7 +19778,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -9898,7 +19794,19 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -9910,7 +19818,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
     (record) =>
+
+ 
+
+ 
 
  
 
@@ -9918,7 +19834,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
         record?.coverage_end_date ||
+
+ 
+
+ 
 
  
 
@@ -9926,7 +19850,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
         record?.coverage_through_date ||
+
+ 
+
+ 
 
  
 
@@ -9934,11 +19866,23 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
         0
 
  
 
+ 
+
+ 
+
       ).getTime() ||
+
+ 
+
+ 
 
  
 
@@ -9950,7 +19894,19 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return [
+
+ 
+
+ 
 
  
 
@@ -9958,7 +19914,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   ].sort(
+
+ 
+
+ 
 
  
 
@@ -9966,7 +19930,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
       dateValue(b) -
+
+ 
+
+ 
 
  
 
@@ -9974,7 +19946,15 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
   )[0];
+
+ 
+
+ 
 
  
 
@@ -9986,7 +19966,19 @@ function selectLatestFecRecord(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function buildFinanceInterpretation(
+
+ 
+
+ 
 
  
 
@@ -9994,7 +19986,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -10002,7 +20002,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     return [];
+
+ 
+
+ 
 
  
 
@@ -10014,7 +20022,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const receipts =
+
+ 
+
+ 
 
  
 
@@ -10022,11 +20042,27 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       record.receipts
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10038,7 +20074,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     finiteNumber(
+
+ 
+
+ 
 
  
 
@@ -10046,7 +20090,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10058,7 +20114,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     finiteNumber(
+
+ 
+
+ 
 
  
 
@@ -10066,7 +20130,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       record.cash_on_hand_end_period ??
+
+ 
+
+ 
 
  
 
@@ -10074,7 +20146,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10086,7 +20170,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     finiteNumber(
+
+ 
+
+ 
 
  
 
@@ -10094,7 +20186,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10106,7 +20210,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     finiteNumber(
+
+ 
+
+ 
 
  
 
@@ -10114,11 +20226,27 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       record.debts_owed_by_committee
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10134,7 +20262,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -10142,7 +20282,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     disbursements != null
+
+ 
+
+ 
 
  
 
@@ -10150,7 +20298,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -10158,7 +20314,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       receipts
+
+ 
+
+ 
 
  
 
@@ -10166,7 +20330,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       notes.push(
+
+ 
+
+ 
 
  
 
@@ -10174,7 +20346,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
           disbursements
+
+ 
+
+ 
 
  
 
@@ -10182,7 +20362,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
           receipts
+
+ 
+
+ 
 
  
 
@@ -10190,7 +20378,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -10198,7 +20394,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       notes.push(
+
+ 
+
+ 
 
  
 
@@ -10206,7 +20410,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
           receipts
+
+ 
+
+ 
 
  
 
@@ -10214,7 +20426,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
           disbursements
+
+ 
+
+ 
 
  
 
@@ -10222,11 +20442,23 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       );
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -10238,7 +20470,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -10246,7 +20490,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     receipts != null &&
+
+ 
+
+ 
 
  
 
@@ -10254,7 +20506,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -10262,7 +20522,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
       cash /
+
+ 
+
+ 
 
  
 
@@ -10274,7 +20542,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -10282,7 +20562,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -10290,7 +20578,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
         `Period-end cash on hand is ${formatCurrency(
+
+ 
+
+ 
 
  
 
@@ -10298,7 +20594,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
         )}, a relatively small share of the ${formatCurrency(
+
+ 
+
+ 
 
  
 
@@ -10306,7 +20610,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
         )} in reported receipts.`
+
+ 
+
+ 
 
  
 
@@ -10314,7 +20626,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -10326,7 +20646,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -10334,7 +20666,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     transfersOut > 0
+
+ 
+
+ 
 
  
 
@@ -10342,7 +20682,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     notes.push(
+
+ 
+
+ 
 
  
 
@@ -10350,7 +20698,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
         transfersOut
+
+ 
+
+ 
 
  
 
@@ -10358,11 +20714,27 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10374,7 +20746,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     debts === 0
+
+ 
+
+ 
 
  
 
@@ -10382,7 +20762,15 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     notes.push(
+
+ 
+
+ 
 
  
 
@@ -10390,11 +20778,27 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10406,7 +20810,19 @@ function buildFinanceInterpretation(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10418,7 +20834,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -10426,7 +20850,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -10434,11 +20866,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     result
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10450,11 +20898,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     records
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10466,11 +20930,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     return null;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10482,7 +20962,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.candidate_id ||
+
+ 
+
+ 
 
  
 
@@ -10490,11 +20978,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     context.candidate_id
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10506,7 +21010,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.last_report_type_full ||
+
+ 
+
+ 
 
  
 
@@ -10514,11 +21026,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.report_type
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10530,7 +21058,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.coverage_end_date ||
+
+ 
+
+ 
 
  
 
@@ -10538,11 +21074,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.coverage_through_date ||
 
  
 
+ 
+
+ 
+
     null;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10554,11 +21106,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record.coverage_start_date ||
 
  
 
+ 
+
+ 
+
     null;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10570,7 +21138,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10578,7 +21154,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Total receipts",
+
+ 
+
+ 
 
  
 
@@ -10586,11 +21170,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10598,7 +21194,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Total disbursements",
+
+ 
+
+ 
 
  
 
@@ -10606,11 +21210,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10618,7 +21234,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Cash on hand",
+
+ 
+
+ 
 
  
 
@@ -10626,7 +21250,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
         record.cash_on_hand_end_period ??
+
+ 
+
+ 
 
  
 
@@ -10634,11 +21266,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10646,7 +21290,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Total contributions",
+
+ 
+
+ 
 
  
 
@@ -10654,11 +21306,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10666,7 +21330,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Individual contributions",
+
+ 
+
+ 
 
  
 
@@ -10674,11 +21346,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10686,7 +21370,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Itemized individual contributions",
+
+ 
+
+ 
 
  
 
@@ -10694,11 +21386,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10706,7 +21410,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Unitemized individual contributions",
+
+ 
+
+ 
 
  
 
@@ -10714,11 +21426,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10726,7 +21450,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Operating expenditures",
+
+ 
+
+ 
 
  
 
@@ -10734,11 +21466,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10746,7 +21490,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Transfers to other authorized committees",
+
+ 
+
+ 
 
  
 
@@ -10754,11 +21506,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10766,7 +21530,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Transfers from other authorized committees",
+
+ 
+
+ 
 
  
 
@@ -10774,11 +21546,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
 
  
 
+ 
+
+ 
+
     metric(
+
+ 
+
+ 
 
  
 
@@ -10786,7 +21570,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "Contribution refunds",
+
+ 
+
+ 
 
  
 
@@ -10794,7 +21586,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
+
+ 
+
+ 
 
  
 
@@ -10802,7 +21602,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       "debts_owed_by_committee",
+
+ 
+
+ 
 
  
 
@@ -10810,7 +21618,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       record.last_debts_owed_by_committee ??
+
+ 
+
+ 
 
  
 
@@ -10818,7 +21634,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     ),
+
+ 
+
+ 
 
  
 
@@ -10830,7 +21654,19 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const source =
+
+ 
+
+ 
 
  
 
@@ -10838,7 +21674,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       (item) =>
+
+ 
+
+ 
 
  
 
@@ -10846,7 +21690,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
           item.provider
+
+ 
+
+ 
 
  
 
@@ -10854,7 +21706,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
           "openfec" ||
+
+ 
+
+ 
 
  
 
@@ -10862,7 +21722,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
           clean(
+
+ 
+
+ 
 
  
 
@@ -10870,7 +21738,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
             item.source
+
+ 
+
+ 
 
  
 
@@ -10878,7 +21754,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -10886,7 +21770,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     result?.sources?.[0] ||
+
+ 
+
+ 
 
  
 
@@ -10898,7 +21790,19 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const office = clean(
+
+ 
+
+ 
 
  
 
@@ -10906,11 +21810,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     context.office
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10922,11 +21842,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     result?.arguments?.resolved_district
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10938,7 +21874,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     result?.arguments?.resolved_state ||
+
+ 
+
+ 
 
  
 
@@ -10946,7 +21890,19 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10958,11 +21914,27 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     record
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -10974,7 +21946,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     candidate:
+
+ 
+
+ 
 
  
 
@@ -10982,11 +21962,23 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       result?.arguments?.candidate ||
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -10994,7 +21986,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       candidateId || null,
+
+ 
+
+ 
 
  
 
@@ -11002,7 +22002,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       clean(
+
+ 
+
+ 
 
  
 
@@ -11010,7 +22018,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
         result?.arguments?.committee_id ||
+
+ 
+
+ 
 
  
 
@@ -11018,7 +22034,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       ) || null,
+
+ 
+
+ 
 
  
 
@@ -11026,7 +22050,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       state || null,
+
+ 
+
+ 
 
  
 
@@ -11034,7 +22066,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       office || null,
+
+ 
+
+ 
 
  
 
@@ -11042,7 +22082,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       district || null,
+
+ 
+
+ 
 
  
 
@@ -11050,7 +22098,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       record.cycle ||
+
+ 
+
+ 
 
  
 
@@ -11058,7 +22114,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -11066,7 +22130,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       reportType || null,
+
+ 
+
+ 
 
  
 
@@ -11074,7 +22146,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       coverageStart,
+
+ 
+
+ 
 
  
 
@@ -11082,7 +22162,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       coverageEnd,
+
+ 
+
+ 
 
  
 
@@ -11090,7 +22178,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       source?.reporting_period ||
+
+ 
+
+ 
 
  
 
@@ -11098,7 +22194,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -11106,7 +22210,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     interpretation,
+
+ 
+
+ 
 
  
 
@@ -11114,7 +22226,15 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
     source,
+
+ 
+
+ 
 
  
 
@@ -11122,7 +22242,19 @@ function buildFinanceReport({
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11134,7 +22266,15 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
   report
+
+ 
+
+ 
 
  
 
@@ -11142,7 +22282,15 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
   const office = clean(
+
+ 
+
+ 
 
  
 
@@ -11150,7 +22298,19 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11162,11 +22322,27 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
     report?.district
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11178,11 +22354,27 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
     return `${office} - ${district}`;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11194,7 +22386,15 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
     office ||
+
+ 
+
+ 
 
  
 
@@ -11202,11 +22402,23 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
     "FEC filing"
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
 
  
 
@@ -11218,7 +22430,19 @@ function financeReportLabel(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function appendFinanceReportLines(
+
+ 
+
+ 
 
  
 
@@ -11226,7 +22450,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
   report,
+
+ 
+
+ 
 
  
 
@@ -11234,7 +22466,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
 ) {
+
+ 
+
+ 
 
  
 
@@ -11242,7 +22482,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11250,7 +22498,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         report
+
+ 
+
+ 
 
  
 
@@ -11258,7 +22514,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       ""
+
+ 
+
+ 
 
  
 
@@ -11266,7 +22530,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11278,7 +22554,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11286,11 +22570,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11302,7 +22602,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11310,11 +22618,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11326,7 +22650,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11334,11 +22666,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11350,7 +22698,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11358,7 +22714,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         report.coverage_start
+
+ 
+
+ 
 
  
 
@@ -11366,11 +22730,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11382,7 +22762,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11390,7 +22778,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         report.coverage_end
+
+ 
+
+ 
 
  
 
@@ -11398,11 +22794,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     );
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11418,7 +22830,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   for (const item of report.metrics) {
+
+ 
+
+ 
 
  
 
@@ -11426,7 +22850,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       `${item.label}: ${item.display_value}`
+
+ 
+
+ 
 
  
 
@@ -11434,7 +22866,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11446,7 +22890,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     report.interpretation.length
+
+ 
+
+ 
 
  
 
@@ -11454,7 +22906,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11462,7 +22922,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       "Executive interpretation:"
+
+ 
+
+ 
 
  
 
@@ -11474,7 +22942,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     for (
+
+ 
+
+ 
 
  
 
@@ -11482,7 +22962,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       of report.interpretation
+
+ 
+
+ 
 
  
 
@@ -11490,7 +22978,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       lines.push(
+
+ 
+
+ 
 
  
 
@@ -11498,7 +22994,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -11506,7 +23010,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11518,7 +23034,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11526,7 +23050,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       `Source: ${
+
+ 
+
+ 
 
  
 
@@ -11534,7 +23066,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
           report.source.name ||
+
+ 
+
+ 
 
  
 
@@ -11542,7 +23082,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         ) ||
+
+ 
+
+ 
 
  
 
@@ -11550,7 +23098,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       }`
+
+ 
+
+ 
 
  
 
@@ -11562,7 +23118,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -11570,7 +23138,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -11578,7 +23154,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         `Reporting period: ${formatDate(
+
+ 
+
+ 
 
  
 
@@ -11586,7 +23170,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
         )}`
+
+ 
+
+ 
 
  
 
@@ -11594,7 +23186,19 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11606,7 +23210,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       report.source.confidence != null
+
+ 
+
+ 
 
  
 
@@ -11614,7 +23226,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       lines.push(
+
+ 
+
+ 
 
  
 
@@ -11622,7 +23242,15 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -11630,11 +23258,27 @@ function appendFinanceReportLines(
 
  
 
+ 
+
+ 
+
   }
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11646,7 +23290,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -11654,7 +23306,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
   sources,
+
+ 
+
+ 
 
  
 
@@ -11662,7 +23322,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
   const reports = getFecToolResults(
+
+ 
+
+ 
 
  
 
@@ -11670,7 +23338,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
   )
+
+ 
+
+ 
 
  
 
@@ -11678,7 +23354,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       (result) =>
+
+ 
+
+ 
 
  
 
@@ -11686,7 +23370,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -11694,7 +23386,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       (result) =>
+
+ 
+
+ 
 
  
 
@@ -11702,7 +23402,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
           context,
+
+ 
+
+ 
 
  
 
@@ -11710,11 +23418,23 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         })
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -11726,11 +23446,27 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (!reports.length) {
 
  
 
+ 
+
+ 
+
     return null;
+
+ 
+
+ 
 
  
 
@@ -11742,7 +23478,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const candidateLabel =
+
+ 
+
+ 
 
  
 
@@ -11750,7 +23498,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     "Candidate";
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11762,7 +23522,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     reports.length > 1;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11774,7 +23546,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     ? `Current FEC Reports - ${candidateLabel}`
+
+ 
+
+ 
 
  
 
@@ -11786,7 +23566,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const lines = [
+
+ 
+
+ 
 
  
 
@@ -11794,11 +23586,27 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     "",
 
  
 
+ 
+
+ 
+
   ];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11810,7 +23618,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     lines.push(
+
+ 
+
+ 
 
  
 
@@ -11818,7 +23634,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       ""
+
+ 
+
+ 
 
  
 
@@ -11826,7 +23650,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11838,7 +23674,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     (report, index) => {
+
+ 
+
+ 
 
  
 
@@ -11846,7 +23690,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         lines,
+
+ 
+
+ 
 
  
 
@@ -11854,7 +23706,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         multiple
+
+ 
+
+ 
 
  
 
@@ -11866,7 +23726,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -11874,7 +23746,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         reports.length - 1
+
+ 
+
+ 
 
  
 
@@ -11882,7 +23762,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         lines.push(
+
+ 
+
+ 
 
  
 
@@ -11890,7 +23778,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
           "---",
+
+ 
+
+ 
 
  
 
@@ -11898,7 +23794,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         );
+
+ 
+
+ 
 
  
 
@@ -11906,11 +23810,27 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     }
 
  
 
+ 
+
+ 
+
   );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -11922,7 +23842,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     (report) =>
+
+ 
+
+ 
 
  
 
@@ -11930,7 +23858,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         (item) => ({
+
+ 
+
+ 
 
  
 
@@ -11938,7 +23874,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
           candidate_id:
+
+ 
+
+ 
 
  
 
@@ -11946,7 +23890,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
           office:
+
+ 
+
+ 
 
  
 
@@ -11954,7 +23906,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
           district:
+
+ 
+
+ 
 
  
 
@@ -11962,11 +23922,23 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         })
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -11978,7 +23950,19 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
+
+ 
+
+ 
 
  
 
@@ -11986,7 +23970,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       multiple
+
+ 
+
+ 
 
  
 
@@ -11994,7 +23986,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         : "fec_finance",
+
+ 
+
+ 
 
  
 
@@ -12002,7 +24002,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     candidate:
+
+ 
+
+ 
 
  
 
@@ -12010,7 +24018,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     candidate_id:
+
+ 
+
+ 
 
  
 
@@ -12018,7 +24034,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12026,7 +24050,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     committee_id:
+
+ 
+
+ 
 
  
 
@@ -12034,7 +24066,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12042,7 +24082,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     cycle:
+
+ 
+
+ 
 
  
 
@@ -12050,7 +24098,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       reports[0].cycle ||
+
+ 
+
+ 
 
  
 
@@ -12058,7 +24114,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     report_type:
+
+ 
+
+ 
 
  
 
@@ -12066,7 +24130,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12074,7 +24146,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     coverage_start:
+
+ 
+
+ 
 
  
 
@@ -12082,7 +24162,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12090,7 +24178,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     coverage_end:
+
+ 
+
+ 
 
  
 
@@ -12098,7 +24194,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12106,7 +24210,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     reporting_period:
+
+ 
+
+ 
 
  
 
@@ -12114,7 +24226,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12122,7 +24242,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     metrics,
+
+ 
+
+ 
 
  
 
@@ -12130,7 +24258,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     interpretation:
+
+ 
+
+ 
 
  
 
@@ -12138,7 +24274,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         (report) =>
+
+ 
+
+ 
 
  
 
@@ -12146,7 +24290,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
 
  
 
@@ -12154,11 +24306,23 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       multiple
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12166,7 +24330,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     source:
+
+ 
+
+ 
 
  
 
@@ -12174,7 +24346,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
         ? null
+
+ 
+
+ 
 
  
 
@@ -12182,7 +24362,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
     sources,
+
+ 
+
+ 
 
  
 
@@ -12190,7 +24378,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
       lines.join("\n"),
+
+ 
+
+ 
 
  
 
@@ -12198,7 +24394,15 @@ function buildFinanceDataAnswer({
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
 
  
 
@@ -12206,7 +24410,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
   bundle,
+
+ 
+
+ 
 
  
 
@@ -12214,11 +24426,23 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
 ) {
 
  
 
+ 
+
+ 
+
   const value =
+
+ 
+
+ 
 
  
 
@@ -12230,7 +24454,19 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -12238,7 +24474,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -12246,7 +24490,19 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12258,7 +24514,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12266,11 +24530,23 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     )
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -12278,7 +24554,19 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12290,7 +24578,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12298,7 +24594,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -12306,11 +24610,27 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     return value.articles;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12322,7 +24642,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12330,7 +24658,15 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -12338,11 +24674,27 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
     return value.polls;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12354,7 +24706,19 @@ function candidateBundleRecords(
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12366,7 +24730,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -12374,7 +24746,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   sources,
+
+ 
+
+ 
 
  
 
@@ -12382,7 +24762,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   const bundleResult =
+
+ 
+
+ 
 
  
 
@@ -12390,7 +24778,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       (item) =>
+
+ 
+
+ 
 
  
 
@@ -12398,7 +24794,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           "get_candidate_intelligence_bundle" &&
+
+ 
+
+ 
 
  
 
@@ -12406,7 +24810,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12418,7 +24834,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     bundleResult?.data;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12430,7 +24858,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     !bundle ||
+
+ 
+
+ 
 
  
 
@@ -12438,7 +24874,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "object"
+
+ 
+
+ 
 
  
 
@@ -12446,11 +24890,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     return null;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12462,7 +24922,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12470,7 +24938,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -12478,7 +24954,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       : [];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12490,7 +24978,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12498,7 +24994,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -12506,7 +25010,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       : [];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12518,7 +25034,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     candidateBundleRecords(
+
+ 
+
+ 
 
  
 
@@ -12526,11 +25050,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "polling"
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12542,7 +25082,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     candidateBundleRecords(
+
+ 
+
+ 
 
  
 
@@ -12550,11 +25098,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "news"
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12566,7 +25130,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12574,7 +25146,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     )
+
+ 
+
+ 
 
  
 
@@ -12582,7 +25162,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       : [];
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12594,7 +25186,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -12602,11 +25202,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     )
 
  
 
+ 
+
+ 
+
       ? bundle.strategy.recommendations
+
+ 
+
+ 
 
  
 
@@ -12618,19 +25230,35 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-  const candidateLabel =
+ 
 
  
+
+ 
+
+ 
+
+  const candidateLabel =
 
     identities[0]?.name ||
 
- 
+    identities[0]?.candidate ||
+
+    identities[0]?.record?.name ||
+
+    identities[0]?.record?.full_name ||
 
     context.candidate ||
 
+    "Candidate";
+
  
 
-    "Candidate";
+ 
+
+ 
+
+ 
 
  
 
@@ -12642,7 +25270,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     `Unified Candidate Intelligence - ${candidateLabel}`;
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12654,11 +25294,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     title,
 
  
 
+ 
+
+ 
+
     "",
+
+ 
+
+ 
 
  
 
@@ -12670,7 +25322,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -12678,7 +25342,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -12686,11 +25358,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       `Verified candidate identities: ${identities.length}`
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12702,7 +25390,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       const identity of
+
+ 
+
+ 
 
  
 
@@ -12710,7 +25406,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           0,
+
+ 
+
+ 
 
  
 
@@ -12718,7 +25422,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -12726,7 +25438,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       lines.push(
+
+ 
+
+ 
 
  
 
@@ -12734,7 +25454,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           identity.office ||
+
+ 
+
+ 
 
  
 
@@ -12742,7 +25470,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         }${
+
+ 
+
+ 
 
  
 
@@ -12750,7 +25486,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
             ? ` - ${identity.district}`
+
+ 
+
+ 
 
  
 
@@ -12758,19 +25502,33 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         }: ${
+
+ 
+
+ 
 
  
 
           identity.fec_candidate_id ||
 
- 
+          identity.candidate_id ||
+
+          identity.record?.fec_candidate_id ||
 
           identity.committee_id ||
 
- 
+          identity.record?.campaign_committee_id ||
 
           "No FEC identifier"
+
+ 
+
+ 
 
  
 
@@ -12778,7 +25536,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
 
  
 
@@ -12786,7 +25552,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   } else {
+
+ 
+
+ 
 
  
 
@@ -12794,7 +25568,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "No verified candidate identity was returned."
+
+ 
+
+ 
 
  
 
@@ -12802,7 +25584,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -12814,7 +25608,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     "",
+
+ 
+
+ 
 
  
 
@@ -12822,19 +25624,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
-      financeReports.filter(
+ 
 
  
+
+      financeReports.filter(
 
         (report) =>
 
- 
+          report?.ok === true ||
 
-          report?.ok
-
- 
+          report?.result?.ok === true
 
       ).length
+
+ 
+
+ 
 
  
 
@@ -12842,7 +25648,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     `Polling records: ${polls.length}`,
+
+ 
+
+ 
 
  
 
@@ -12850,11 +25664,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     `Political signals: ${signals.length}`,
 
  
 
+ 
+
+ 
+
     `Strategy recommendations: ${strategies.length}`
+
+ 
+
+ 
 
  
 
@@ -12866,7 +25692,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -12874,7 +25712,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -12882,7 +25728,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "",
+
+ 
+
+ 
 
  
 
@@ -12890,6 +25744,10 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     );
 
  
@@ -12898,7 +25756,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     for (
+
+ 
+
+ 
 
  
 
@@ -12906,7 +25776,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         polls.slice(
+
+ 
+
+ 
 
  
 
@@ -12914,7 +25792,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           5
+
+ 
+
+ 
 
  
 
@@ -12922,7 +25808,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -12930,7 +25824,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         [
+
+ 
+
+ 
 
  
 
@@ -12938,7 +25840,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           poll.source,
+
+ 
+
+ 
 
  
 
@@ -12946,7 +25856,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           poll.answer ||
+
+ 
+
+ 
 
  
 
@@ -12954,7 +25872,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           poll.pct != null
+
+ 
+
+ 
 
  
 
@@ -12962,7 +25888,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
             : null,
+
+ 
+
+ 
 
  
 
@@ -12970,7 +25904,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           poll.published_at ||
+
+ 
+
+ 
 
  
 
@@ -12978,7 +25920,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         ]
+
+ 
+
+ 
 
  
 
@@ -12986,7 +25936,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
             Boolean
+
+ 
+
+ 
 
  
 
@@ -12994,11 +25952,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           .join(
 
  
 
+ 
+
+ 
+
             " - "
+
+ 
+
+ 
 
  
 
@@ -13010,7 +25980,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -13018,7 +26000,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       ) {
+
+ 
+
+ 
 
  
 
@@ -13026,7 +26016,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           `- ${pollLine}`
+
+ 
+
+ 
 
  
 
@@ -13034,11 +26032,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       }
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -13050,7 +26060,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -13058,7 +26080,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -13066,11 +26096,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "",
 
  
 
+ 
+
+ 
+
       "Recent reporting:"
+
+ 
+
+ 
 
  
 
@@ -13082,7 +26124,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     for (
+
+ 
+
+ 
 
  
 
@@ -13090,7 +26144,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         articles.slice(
+
+ 
+
+ 
 
  
 
@@ -13098,7 +26160,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           5
+
+ 
+
+ 
 
  
 
@@ -13106,7 +26176,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -13114,7 +26192,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         [
+
+ 
+
+ 
 
  
 
@@ -13122,7 +26208,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           article.headline,
+
+ 
+
+ 
 
  
 
@@ -13130,7 +26224,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           article.source,
+
+ 
+
+ 
 
  
 
@@ -13138,7 +26240,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           article.date,
+
+ 
+
+ 
 
  
 
@@ -13146,7 +26256,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           .filter(
+
+ 
+
+ 
 
  
 
@@ -13154,7 +26272,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           )
+
+ 
+
+ 
 
  
 
@@ -13162,7 +26288,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
             " - "
+
+ 
+
+ 
 
  
 
@@ -13174,7 +26308,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -13182,7 +26328,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       ) {
+
+ 
+
+ 
 
  
 
@@ -13190,7 +26344,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           `- ${articleLine}`
+
+ 
+
+ 
 
  
 
@@ -13198,11 +26360,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       }
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -13214,7 +26388,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   if (
+
+ 
+
+ 
 
  
 
@@ -13222,7 +26408,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -13230,11 +26424,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       "",
 
  
 
+ 
+
+ 
+
       "VoterSpheres strategy recommendations:"
+
+ 
+
+ 
 
  
 
@@ -13246,7 +26452,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     for (
+
+ 
+
+ 
 
  
 
@@ -13254,7 +26472,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         strategies.slice(
+
+ 
+
+ 
 
  
 
@@ -13262,7 +26488,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           5
+
+ 
+
+ 
 
  
 
@@ -13270,7 +26504,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -13278,7 +26520,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         typeof strategy ===
+
+ 
+
+ 
 
  
 
@@ -13286,7 +26536,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           ? strategy
+
+ 
+
+ 
 
  
 
@@ -13294,7 +26552,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
               strategy.title ||
+
+ 
+
+ 
 
  
 
@@ -13302,11 +26568,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
               strategy.summary ||
 
  
 
+ 
+
+ 
+
               strategy.rationale
+
+ 
+
+ 
 
  
 
@@ -13318,7 +26596,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       if (
+
+ 
+
+ 
 
  
 
@@ -13326,7 +26616,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       ) {
+
+ 
+
+ 
 
  
 
@@ -13334,7 +26632,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
           `- ${text}`
+
+ 
+
+ 
 
  
 
@@ -13342,7 +26648,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       }
+
+ 
+
+ 
 
  
 
@@ -13350,7 +26664,19 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -13362,7 +26688,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     type:
+
+ 
+
+ 
 
  
 
@@ -13370,7 +26704,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     title,
+
+ 
+
+ 
 
  
 
@@ -13378,7 +26720,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       candidateLabel,
+
+ 
+
+ 
 
  
 
@@ -13386,7 +26736,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     profile:
+
+ 
+
+ 
 
  
 
@@ -13394,7 +26752,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13402,11 +26768,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       bundle.finance ||
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13414,11 +26792,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       bundle.polling ||
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13426,11 +26816,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       bundle.news ||
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13438,7 +26840,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     strategy:
+
+ 
+
+ 
 
  
 
@@ -13446,7 +26856,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13454,11 +26872,23 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       bundle.operations ||
 
  
 
+ 
+
+ 
+
       null,
+
+ 
+
+ 
 
  
 
@@ -13466,7 +26896,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       bundle.coverage ||
+
+ 
+
+ 
 
  
 
@@ -13474,7 +26912,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     sources:
+
+ 
+
+ 
 
  
 
@@ -13482,7 +26928,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
       sources,
+
+ 
+
+ 
 
  
 
@@ -13490,7 +26944,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
     answer:
+
+ 
+
+ 
 
  
 
@@ -13498,7 +26960,15 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
         "\n"
+
+ 
+
+ 
 
  
 
@@ -13506,11 +26976,27 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+ 
+
+ 
+
   };
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -13522,7 +27008,15 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -13530,7 +27024,15 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
   sources,
+
+ 
+
+ 
 
  
 
@@ -13538,11 +27040,23 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
   if (
 
  
 
+ 
+
+ 
+
     context.intent ===
+
+ 
+
+ 
 
  
 
@@ -13550,7 +27064,15 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
   ) {
+
+ 
+
+ 
 
  
 
@@ -13558,7 +27080,15 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
       context,
+
+ 
+
+ 
 
  
 
@@ -13566,7 +27096,15 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
       sources,
+
+ 
+
+ 
 
  
 
@@ -13574,33 +27112,67 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
 
  
 
   if (
 
+ 
+
     context.intent ===
+
+ 
 
     "candidate_intelligence"
 
+ 
+
   ) {
+
+ 
 
     return buildCandidateIntelligenceDataAnswer({
 
+ 
+
       context,
+
+ 
 
       results,
 
+ 
+
       sources,
 
+ 
+
     });
+
+ 
 
   }
 
  
 
+ 
+
+ 
+
   return null;
+
+ 
+
+ 
 
  
 
@@ -13612,7 +27184,19 @@ function buildDataAnswer({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 function deterministicBrief({
+
+ 
+
+ 
 
  
 
@@ -13620,7 +27204,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
   context,
+
+ 
+
+ 
 
  
 
@@ -13628,7 +27220,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
   coverage,
+
+ 
+
+ 
 
  
 
@@ -13636,7 +27236,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
   sources,
+
+ 
+
+ 
 
  
 
@@ -13644,7 +27252,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -13652,7 +27268,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     dataAnswer?.answer
+
+ 
+
+ 
 
  
 
@@ -13660,7 +27284,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     const gaps =
+
+ 
+
+ 
 
  
 
@@ -13668,7 +27300,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         .filter(
+
+ 
+
+ 
 
  
 
@@ -13676,7 +27316,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             !item.usable
+
+ 
+
+ 
 
  
 
@@ -13684,7 +27332,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         .map(
+
+ 
+
+ 
 
  
 
@@ -13692,7 +27348,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             tool:
+
+ 
+
+ 
 
  
 
@@ -13704,7 +27368,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
             issue:
+
+ 
+
+ 
 
  
 
@@ -13712,7 +27388,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
               item.summary ||
+
+ 
+
+ 
 
  
 
@@ -13720,7 +27404,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           })
+
+ 
+
+ 
 
  
 
@@ -13732,11 +27424,27 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     return {
 
  
 
+ 
+
+ 
+
       headline:
+
+ 
+
+ 
 
  
 
@@ -13748,11 +27456,31 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       executive_summary:
 
  
 
+ 
+
+ 
+
         dataAnswer.answer,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -13764,7 +27492,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         Array.isArray(
+
+ 
+
+ 
 
  
 
@@ -13772,7 +27508,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -13780,7 +27524,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
               (
+
+ 
+
+ 
 
  
 
@@ -13788,7 +27540,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                 index
+
+ 
+
+ 
 
  
 
@@ -13796,7 +27556,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                 rank:
+
+ 
+
+ 
 
  
 
@@ -13808,7 +27576,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
                 finding:
+
+ 
+
+ 
 
  
 
@@ -13820,7 +27600,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
                 support:
+
+ 
+
+ 
 
  
 
@@ -13828,7 +27620,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
               })
+
+ 
+
+ 
 
  
 
@@ -13836,7 +27636,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           : [
+
+ 
+
+ 
 
  
 
@@ -13844,7 +27652,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                 rank:
+
+ 
+
+ 
 
  
 
@@ -13856,7 +27672,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
                 finding:
+
+ 
+
+ 
 
  
 
@@ -13868,7 +27696,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
                 support:
+
+ 
+
+ 
 
  
 
@@ -13876,7 +27716,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
               },
+
+ 
+
+ 
 
  
 
@@ -13888,7 +27736,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       risks_and_gaps:
+
+ 
+
+ 
 
  
 
@@ -13900,43 +27760,95 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       recommended_actions:
+
+ 
+
+ 
 
  
 
         dataAnswer.type ===
 
+ 
+
           "candidate_intelligence"
+
+ 
 
           ? (gaps.length
 
+ 
+
               ? [
+
+ 
 
                   "Use the verified candidate sections that are available and review degraded or unavailable candidate providers separately.",
 
+ 
+
                   "Refresh polling, news, political signals, and strategy sources before treating a missing section as a strategic conclusion.",
+
+ 
 
                 ]
 
+ 
+
               : [
+
+ 
 
                   "Continue monitoring new FEC filings, candidate polling, current reporting, political signals, and VoterSpheres strategy recommendations.",
 
+ 
+
                 ])
+
+ 
 
           : (gaps.length
 
+ 
+
               ? [
+
+ 
 
                   "Use the verified FEC filing data above and review any degraded supporting providers separately.",
 
+ 
+
                 ]
+
+ 
 
               : [
 
+ 
+
                   "Continue monitoring subsequent FEC filings for changes in receipts, spending, cash position, transfers, and debt.",
 
+ 
+
                 ]),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -13948,7 +27860,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         dataAnswer.answer,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -13964,7 +27888,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       source_count:
+
+ 
+
+ 
 
  
 
@@ -13976,7 +27912,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       data_answer:
+
+ 
+
+ 
 
  
 
@@ -13984,7 +27932,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     };
+
+ 
+
+ 
 
  
 
@@ -13996,7 +27952,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const usable =
+
+ 
+
+ 
 
  
 
@@ -14004,11 +27972,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       (item) =>
 
  
 
+ 
+
+ 
+
         item.usable
+
+ 
+
+ 
 
  
 
@@ -14020,7 +28000,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const findings =
+
+ 
+
+ 
 
  
 
@@ -14028,7 +28020,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       .slice(
+
+ 
+
+ 
 
  
 
@@ -14036,7 +28036,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         8
+
+ 
+
+ 
 
  
 
@@ -14044,7 +28052,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       .map(
+
+ 
+
+ 
 
  
 
@@ -14052,7 +28068,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           item,
+
+ 
+
+ 
 
  
 
@@ -14060,11 +28084,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         ) => ({
 
  
 
+ 
+
+ 
+
           rank:
+
+ 
+
+ 
 
  
 
@@ -14076,11 +28112,27 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           finding:
 
  
 
+ 
+
+ 
+
             item.summary ||
+
+ 
+
+ 
 
  
 
@@ -14092,7 +28144,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           support:
+
+ 
+
+ 
 
  
 
@@ -14100,11 +28164,27 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         })
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14116,7 +28196,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     results
+
+ 
+
+ 
 
  
 
@@ -14124,7 +28212,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         (item) =>
+
+ 
+
+ 
 
  
 
@@ -14132,7 +28228,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -14140,11 +28244,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         (item) => ({
 
  
 
+ 
+
+ 
+
           tool:
+
+ 
+
+ 
 
  
 
@@ -14156,7 +28272,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           issue:
+
+ 
+
+ 
 
  
 
@@ -14164,7 +28292,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             item.summary ||
+
+ 
+
+ 
 
  
 
@@ -14172,11 +28308,27 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         })
 
  
 
+ 
+
+ 
+
       );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14188,7 +28340,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     [
+
+ 
+
+ 
 
  
 
@@ -14196,7 +28356,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       context.office,
+
+ 
+
+ 
 
  
 
@@ -14204,7 +28372,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       context.locality,
+
+ 
+
+ 
 
  
 
@@ -14212,7 +28388,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     ]
+
+ 
+
+ 
 
  
 
@@ -14220,7 +28404,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         Boolean
+
+ 
+
+ 
 
  
 
@@ -14228,11 +28420,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       .join(
 
  
 
+ 
+
+ 
+
         " - "
+
+ 
+
+ 
 
  
 
@@ -14244,7 +28448,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const headline =
+
+ 
+
+ 
 
  
 
@@ -14252,7 +28468,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
     `No verified live intelligence is currently available${
+
+ 
+
+ 
 
  
 
@@ -14260,11 +28484,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         ? ` for ${scope}`
 
  
 
+ 
+
+ 
+
         : ""
+
+ 
+
+ 
 
  
 
@@ -14276,7 +28512,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const answer =
+
+ 
+
+ 
 
  
 
@@ -14284,7 +28532,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       ? [
+
+ 
+
+ 
 
  
 
@@ -14292,7 +28548,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           "",
+
+ 
+
+ 
 
  
 
@@ -14300,7 +28564,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             (item) =>
+
+ 
+
+ 
 
  
 
@@ -14308,7 +28580,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           ),
+
+ 
+
+ 
 
  
 
@@ -14316,7 +28596,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           `Evidence status: ${coverage.evidence_status}. Confidence: ${confidence}%. Tools with usable evidence: ${coverage.useful_tools}/${coverage.attempted_tools}. Sources: ${sources.length}.`,
+
+ 
+
+ 
 
  
 
@@ -14324,7 +28612,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             ? `Data gaps: ${gaps
+
+ 
+
+ 
 
  
 
@@ -14332,7 +28628,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                   0,
+
+ 
+
+ 
 
  
 
@@ -14340,7 +28644,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                 )
+
+ 
+
+ 
 
  
 
@@ -14348,7 +28660,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                   (item) =>
+
+ 
+
+ 
 
  
 
@@ -14356,7 +28676,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                 )
+
+ 
+
+ 
 
  
 
@@ -14364,7 +28692,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
                   "; "
+
+ 
+
+ 
 
  
 
@@ -14372,7 +28708,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             : "No major provider gaps were reported.",
+
+ 
+
+ 
 
  
 
@@ -14380,11 +28724,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           "\n"
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -14396,7 +28752,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
+
+ 
+
+ 
 
  
 
@@ -14408,7 +28776,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     executive_summary:
+
+ 
+
+ 
 
  
 
@@ -14416,7 +28796,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         .map(
+
+ 
+
+ 
 
  
 
@@ -14424,7 +28812,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             item.finding
+
+ 
+
+ 
 
  
 
@@ -14432,7 +28828,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         .join(
+
+ 
+
+ 
 
  
 
@@ -14440,7 +28844,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         ) ||
+
+ 
+
+ 
 
  
 
@@ -14452,7 +28864,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     key_findings:
+
+ 
+
+ 
 
  
 
@@ -14464,7 +28888,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     risks_and_gaps:
+
+ 
+
+ 
 
  
 
@@ -14476,7 +28912,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     recommended_actions:
+
+ 
+
+ 
 
  
 
@@ -14484,7 +28932,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
         ? [
+
+ 
+
+ 
 
  
 
@@ -14492,7 +28948,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
           ]
+
+ 
+
+ 
 
  
 
@@ -14500,11 +28964,27 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
             "Continue monitoring for new verified filings, polls, and reporting.",
 
  
 
+ 
+
+ 
+
           ],
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14520,7 +29000,23 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     confidence,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14532,7 +29028,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       sources.length,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14544,7 +29052,15 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
       dataAnswer,
+
+ 
+
+ 
 
  
 
@@ -14552,7 +29068,19 @@ function deterministicBrief({
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14564,7 +29092,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
   question,
+
+ 
+
+ 
 
  
 
@@ -14572,7 +29108,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
   results,
+
+ 
+
+ 
 
  
 
@@ -14580,7 +29124,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
   confidence,
+
+ 
+
+ 
 
  
 
@@ -14588,7 +29140,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
   deterministic,
+
+ 
+
+ 
 
  
 
@@ -14596,7 +29156,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
 }) {
+
+ 
+
+ 
 
  
 
@@ -14604,7 +29172,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
     !openai ||
+
+ 
+
+ 
 
  
 
@@ -14612,7 +29188,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
       0
+
+ 
+
+ 
 
  
 
@@ -14620,11 +29204,27 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
     return null;
 
  
 
+ 
+
+ 
+
   }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14636,7 +29236,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
     results
+
+ 
+
+ 
 
  
 
@@ -14644,7 +29252,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
         (item) =>
+
+ 
+
+ 
 
  
 
@@ -14652,7 +29268,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
       )
+
+ 
+
+ 
 
  
 
@@ -14660,11 +29284,23 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
         (item) => ({
 
  
 
+ 
+
+ 
+
           tool:
+
+ 
+
+ 
 
  
 
@@ -14676,7 +29312,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           summary:
+
+ 
+
+ 
 
  
 
@@ -14688,7 +29336,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           data:
+
+ 
+
+ 
 
  
 
@@ -14700,7 +29360,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           sources:
+
+ 
+
+ 
 
  
 
@@ -14712,7 +29384,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           warnings:
+
+ 
+
+ 
 
  
 
@@ -14720,7 +29404,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
         })
+
+ 
+
+ 
 
  
 
@@ -14732,7 +29424,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const response =
+
+ 
+
+ 
 
  
 
@@ -14740,7 +29444,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
       openai.responses.create(
+
+ 
+
+ 
 
  
 
@@ -14748,7 +29460,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
           model:
+
+ 
+
+ 
 
  
 
@@ -14760,7 +29480,19 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
           input: [
+
+ 
+
+ 
 
  
 
@@ -14768,7 +29500,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "Use only the supplied retrieved evidence. Do not use unsupported model memory as current political fact.",
+
+ 
+
+ 
 
  
 
@@ -14776,7 +29516,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "For finance questions, answer with the actual FEC numbers first. Do not replace actual values with a generic statement such as 'Found 1 record.'",
+
+ 
+
+ 
 
  
 
@@ -14784,7 +29532,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "For candidate intelligence, organize the answer as Executive Assessment, Verified Candidate Identity, FEC / Fundraising, Polling, Recent News, Political Signals, Strategy Recommendations, Risks / Data Gaps, and Immediate Actions. Omit sections that truly have no evidence rather than inventing content.",
+
+ 
+
+ 
 
  
 
@@ -14792,7 +29548,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "Clearly distinguish provider facts from VoterSpheres strategy recommendations and executive interpretation. Never invent a missing candidate section.",
+
+ 
+
+ 
 
  
 
@@ -14800,7 +29564,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "State exact publication dates, field dates, filing periods, and reporting periods when present.",
+
+ 
+
+ 
 
  
 
@@ -14808,7 +29580,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             "Any interpretation must be clearly supported by the retrieved numbers.",
+
+ 
+
+ 
 
  
 
@@ -14816,7 +29596,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             `Question: ${question}`,
+
+ 
+
+ 
 
  
 
@@ -14824,11 +29612,23 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               context
 
  
 
+ 
+
+ 
+
             )}`,
+
+ 
+
+ 
 
  
 
@@ -14836,11 +29636,23 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               coverage
 
  
 
+ 
+
+ 
+
             )}`,
+
+ 
+
+ 
 
  
 
@@ -14848,7 +29660,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             `Sources: ${JSON.stringify(
+
+ 
+
+ 
 
  
 
@@ -14856,7 +29676,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
                 0,
+
+ 
+
+ 
 
  
 
@@ -14864,11 +29692,23 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               )
 
  
 
+ 
+
+ 
+
             )}`,
+
+ 
+
+ 
 
  
 
@@ -14876,7 +29716,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               dataAnswer
+
+ 
+
+ 
 
  
 
@@ -14884,7 +29732,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               0,
+
+ 
+
+ 
 
  
 
@@ -14892,7 +29748,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             )}`,
+
+ 
+
+ 
 
  
 
@@ -14900,7 +29764,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               evidence
+
+ 
+
+ 
 
  
 
@@ -14908,7 +29780,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               0,
+
+ 
+
+ 
 
  
 
@@ -14916,7 +29796,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
             )}`,
+
+ 
+
+ 
 
  
 
@@ -14924,7 +29812,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
               deterministic
+
+ 
+
+ 
 
  
 
@@ -14932,7 +29828,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
           ].join(
+
+ 
+
+ 
 
  
 
@@ -14940,7 +29844,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
           ),
+
+ 
+
+ 
 
  
 
@@ -14948,7 +29860,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
 
  
 
@@ -14956,11 +29876,27 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
       "Executive briefing synthesis"
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14972,7 +29908,15 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
     response?.output_text ||
+
+ 
+
+ 
 
  
 
@@ -14980,11 +29924,27 @@ async function synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
   );
 
  
 
+ 
+
+ 
+
 }
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -14996,11 +29956,23 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
   return {
 
  
 
+ 
+
+ 
+
     ok:
+
+ 
+
+ 
 
  
 
@@ -15012,11 +29984,31 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     build:
 
  
 
+ 
+
+ 
+
       BUILD,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15028,7 +30020,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       MODEL,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15040,7 +30044,15 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       Boolean(
+
+ 
+
+ 
 
  
 
@@ -15048,7 +30060,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15060,7 +30084,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       "retrieved-evidence-required",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15072,7 +30108,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       true,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15084,7 +30132,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       "strict-candidate-statistics-multi-identity",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15096,7 +30156,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       ORCHESTRATOR_TIMEOUT_MS,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15108,7 +30180,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       TOOL_TIMEOUT_MS,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15120,7 +30204,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       SYNTHESIS_TIMEOUT_MS,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15132,7 +30228,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       MAX_TOOLS,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15144,11 +30252,23 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
       now(),
 
  
 
+ 
+
+ 
+
   };
+
+ 
+
+ 
 
  
 
@@ -15160,7 +30280,19 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 export function createExecutiveIntelligencePlan({
+
+ 
+
+ 
 
  
 
@@ -15168,7 +30300,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
 } = {}) {
+
+ 
+
+ 
 
  
 
@@ -15176,7 +30316,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     clean(
+
+ 
+
+ 
 
  
 
@@ -15184,7 +30332,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       payload.query ||
+
+ 
+
+ 
 
  
 
@@ -15192,7 +30348,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15204,7 +30372,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     throw Object.assign(
+
+ 
+
+ 
 
  
 
@@ -15212,7 +30388,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
         "A question, query, or prompt is required."
+
+ 
+
+ 
 
  
 
@@ -15220,7 +30404,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       {
+
+ 
+
+ 
 
  
 
@@ -15228,7 +30420,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
           400,
+
+ 
+
+ 
 
  
 
@@ -15236,7 +30436,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
 
  
 
@@ -15248,7 +30456,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const context =
+
+ 
+
+ 
 
  
 
@@ -15256,11 +30476,27 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       payload
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15272,7 +30508,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     Number(
+
+ 
+
+ 
 
  
 
@@ -15280,7 +30524,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       payload.workspaceId ||
+
+ 
+
+ 
 
  
 
@@ -15288,7 +30540,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15300,7 +30564,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
     clamp(
+
+ 
+
+ 
 
  
 
@@ -15308,7 +30580,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       12,
+
+ 
+
+ 
 
  
 
@@ -15316,7 +30596,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       20
+
+ 
+
+ 
 
  
 
@@ -15328,11 +30616,27 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   return {
 
  
 
+ 
+
+ 
+
     ok:
+
+ 
+
+ 
 
  
 
@@ -15344,11 +30648,31 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     build:
 
  
 
+ 
+
+ 
+
       BUILD,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15364,7 +30688,23 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     context,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15376,7 +30716,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       workspaceId,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15392,7 +30744,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     tool_plan:
+
+ 
+
+ 
 
  
 
@@ -15400,7 +30764,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
         question,
+
+ 
+
+ 
 
  
 
@@ -15408,7 +30780,15 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
         workspaceId,
+
+ 
+
+ 
 
  
 
@@ -15416,7 +30796,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       }),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15428,11 +30820,23 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
       now(),
 
  
 
+ 
+
+ 
+
   };
+
+ 
+
+ 
 
  
 
@@ -15444,7 +30848,19 @@ export function createExecutiveIntelligencePlan({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
 export async function runExecutiveIntelligenceOrchestrator({
+
+ 
+
+ 
 
  
 
@@ -15452,7 +30868,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
   payload = {},
+
+ 
+
+ 
 
  
 
@@ -15460,7 +30884,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
   const startedAt =
+
+ 
+
+ 
 
  
 
@@ -15472,7 +30904,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const plan =
+
+ 
+
+ 
 
  
 
@@ -15480,11 +30924,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       payload,
 
  
 
+ 
+
+ 
+
     });
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15496,7 +30956,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     await withTimeout(
+
+ 
+
+ 
 
  
 
@@ -15504,7 +30972,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         plan,
+
+ 
+
+ 
 
  
 
@@ -15512,7 +30988,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       }),
+
+ 
+
+ 
 
  
 
@@ -15520,11 +31004,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       "Executive Intelligence Orchestrator"
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15536,7 +31036,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     mergeSources(
+
+ 
+
+ 
 
  
 
@@ -15544,7 +31052,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15556,7 +31076,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     buildCoverage(
+
+ 
+
+ 
 
  
 
@@ -15564,11 +31092,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       sources
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15580,7 +31124,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     calculateConfidence(
+
+ 
+
+ 
 
  
 
@@ -15588,7 +31140,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15600,7 +31164,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     unique(
+
+ 
+
+ 
 
  
 
@@ -15608,7 +31180,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         (item) =>
+
+ 
+
+ 
 
  
 
@@ -15616,7 +31196,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
             (warning) =>
+
+ 
+
+ 
 
  
 
@@ -15624,7 +31212,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
           )
+
+ 
+
+ 
 
  
 
@@ -15632,7 +31228,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15644,7 +31252,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     results.flatMap(
+
+ 
+
+ 
 
  
 
@@ -15652,7 +31268,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         item.diagnostics.map(
+
+ 
+
+ 
 
  
 
@@ -15660,7 +31284,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
             ...diagnostic,
+
+ 
+
+ 
 
  
 
@@ -15668,7 +31300,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
               item.tool,
+
+ 
+
+ 
 
  
 
@@ -15676,7 +31316,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         )
+
+ 
+
+ 
 
  
 
@@ -15688,7 +31336,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   const dataAnswer =
+
+ 
+
+ 
 
  
 
@@ -15696,7 +31356,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       context:
+
+ 
+
+ 
 
  
 
@@ -15708,7 +31376,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       results,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15720,7 +31404,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     });
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15732,11 +31428,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     deterministicBrief({
 
  
 
+ 
+
+ 
+
       question:
+
+ 
+
+ 
 
  
 
@@ -15748,7 +31456,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       context:
+
+ 
+
+ 
 
  
 
@@ -15760,7 +31480,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       results,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15776,7 +31512,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       confidence,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15792,7 +31544,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       dataAnswer,
+
+ 
+
+ 
 
  
 
@@ -15804,7 +31568,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   let synthesisProvider =
+
+ 
+
+ 
 
  
 
@@ -15816,7 +31592,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   try {
+
+ 
+
+ 
 
  
 
@@ -15824,11 +31612,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       await synthesizeWithOpenAI({
 
  
 
+ 
+
+ 
+
         question:
+
+ 
+
+ 
 
  
 
@@ -15840,11 +31640,31 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         context:
 
  
 
+ 
+
+ 
+
           plan.context,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15860,6 +31680,14 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         coverage,
 
  
@@ -15868,7 +31696,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         confidence,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15884,7 +31728,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         deterministic:
+
+ 
+
+ 
 
  
 
@@ -15896,7 +31752,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         dataAnswer,
+
+ 
+
+ 
 
  
 
@@ -15908,7 +31776,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     if (
+
+ 
+
+ 
 
  
 
@@ -15916,7 +31796,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       clean(
+
+ 
+
+ 
 
  
 
@@ -15924,7 +31812,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         ai.executive_summary
+
+ 
+
+ 
 
  
 
@@ -15932,7 +31828,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     ) {
+
+ 
+
+ 
 
  
 
@@ -15940,7 +31844,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
        * Keep structured data_answer deterministic even when OpenAI
+
+ 
+
+ 
 
  
 
@@ -15948,7 +31860,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
        */
+
+ 
+
+ 
 
  
 
@@ -15956,11 +31876,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         ...briefing,
 
  
 
+ 
+
+ 
+
         ...ai,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -15976,7 +31912,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         source_count:
+
+ 
+
+ 
 
  
 
@@ -15988,11 +31936,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
         data_answer:
 
  
 
+ 
+
+ 
+
           dataAnswer,
+
+ 
+
+ 
 
  
 
@@ -16004,7 +31968,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       synthesisProvider =
+
+ 
+
+ 
 
  
 
@@ -16012,7 +31988,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     }
+
+ 
+
+ 
 
  
 
@@ -16020,7 +32004,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     warnings.push(
+
+ 
+
+ 
 
  
 
@@ -16028,7 +32020,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         error?.message ||
+
+ 
+
+ 
 
  
 
@@ -16036,7 +32036,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       }`
+
+ 
+
+ 
 
  
 
@@ -16048,11 +32056,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     diagnostics.push({
 
  
 
+ 
+
+ 
+
       provider:
+
+ 
+
+ 
 
  
 
@@ -16064,7 +32088,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       tool:
+
+ 
+
+ 
 
  
 
@@ -16076,7 +32112,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       ok:
+
+ 
+
+ 
 
  
 
@@ -16088,11 +32136,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       error:
 
  
 
+ 
+
+ 
+
         error?.message ||
+
+ 
+
+ 
 
  
 
@@ -16104,7 +32168,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       checked_at:
+
+ 
+
+ 
 
  
 
@@ -16112,7 +32188,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     });
+
+ 
+
+ 
 
  
 
@@ -16124,7 +32208,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
   /*
+
+ 
+
+ 
 
  
 
@@ -16132,7 +32228,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
    * The AI can add interpretation, but it cannot hide the actual filing data.
+
+ 
+
+ 
 
  
 
@@ -16140,45 +32244,95 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
   const finalAnswer =
+
+ 
+
+ 
 
  
 
     plan.context.intent ===
 
+ 
+
       "finance" &&
+
+ 
 
     dataAnswer?.answer
 
+ 
+
       ? dataAnswer.answer
+
+ 
 
       : plan.context.intent ===
 
+ 
+
           "candidate_intelligence"
+
+ 
 
         ? (
 
+ 
+
             briefing.answer ||
+
+ 
 
             briefing.executive_summary ||
 
+ 
+
             dataAnswer?.answer ||
 
+ 
+
             briefing.headline
+
+ 
 
           )
 
+ 
+
         : (
+
+ 
 
             briefing.answer ||
 
+ 
+
             dataAnswer?.answer ||
+
+ 
 
             briefing.executive_summary ||
 
+ 
+
             briefing.headline
 
+ 
+
           );
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16190,7 +32344,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
     ok:
+
+ 
+
+ 
 
  
 
@@ -16198,7 +32360,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       0,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16210,7 +32384,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       BUILD,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16222,7 +32408,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       "executive_intelligence_orchestrator",
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16234,7 +32432,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       coverage.evidence_status !==
+
+ 
+
+ 
 
  
 
@@ -16246,7 +32452,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     live_data_available:
+
+ 
+
+ 
 
  
 
@@ -16254,7 +32472,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       0,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16266,7 +32496,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       coverage.useful_tools >
+
+ 
+
+ 
 
  
 
@@ -16278,7 +32516,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     evidence_status:
+
+ 
+
+ 
 
  
 
@@ -16290,7 +32540,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     question:
+
+ 
+
+ 
 
  
 
@@ -16302,7 +32564,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     context:
+
+ 
+
+ 
 
  
 
@@ -16314,7 +32588,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     workspace_id:
+
+ 
+
+ 
 
  
 
@@ -16326,11 +32612,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     plan: {
 
  
 
+ 
+
+ 
+
       tool_count:
+
+ 
+
+ 
 
  
 
@@ -16342,11 +32644,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       tools:
 
  
 
+ 
+
+ 
+
         plan.tool_plan,
+
+ 
+
+ 
 
  
 
@@ -16358,7 +32676,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     execution: {
+
+ 
+
+ 
 
  
 
@@ -16366,11 +32696,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         new Date(
 
  
 
+ 
+
+ 
+
           startedAt
+
+ 
+
+ 
 
  
 
@@ -16382,7 +32724,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       completed_at:
+
+ 
+
+ 
 
  
 
@@ -16394,7 +32748,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       latency_ms:
+
+ 
+
+ 
 
  
 
@@ -16402,7 +32768,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         startedAt,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16418,7 +32796,23 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
       confidence,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16430,7 +32824,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         synthesisProvider,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16442,7 +32848,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         Boolean(
+
+ 
+
+ 
 
  
 
@@ -16450,7 +32864,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         ),
+
+ 
+
+ 
 
  
 
@@ -16462,11 +32884,31 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     data_answer:
 
  
 
+ 
+
+ 
+
       dataAnswer,
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16482,7 +32924,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     answer:
+
+ 
+
+ 
 
  
 
@@ -16494,7 +32948,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     tool_results:
+
+ 
+
+ 
 
  
 
@@ -16506,7 +32972,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     evidence:
+
+ 
+
+ 
 
  
 
@@ -16514,7 +32992,15 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         (item) =>
+
+ 
+
+ 
 
  
 
@@ -16522,7 +33008,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16538,7 +33036,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     warnings:
+
+ 
+
+ 
 
  
 
@@ -16546,11 +33056,27 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
         warnings
 
  
 
+ 
+
+ 
+
       ),
+
+ 
+
+ 
+
+ 
+
+ 
 
  
 
@@ -16566,7 +33092,19 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
+ 
+
+ 
+
     generated_at:
+
+ 
+
+ 
 
  
 
@@ -16574,9 +33112,16 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+ 
+
+ 
+
   };
 
  
 
-}
+ 
 
+ 
+
+}
