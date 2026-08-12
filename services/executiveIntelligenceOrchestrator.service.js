@@ -6987,31 +6987,50 @@ function buildToolPlan({
 
  
 
-  } else {
+  } else if (
+  context.intent ===
+  "candidate_intelligence"
+) {
+  calls.push(
+    makeCall(
+      "get_candidate_intelligence_bundle",
+      {
+        candidate:
+          context.candidate,
 
- 
+        candidate_id:
+          context.candidate_id,
 
- 
+        committee_id:
+          context.committee_id,
 
- 
+        state:
+          context.state,
 
-    if (
+        office:
+          context.office,
 
- 
+        locality:
+          context.locality,
 
- 
+        cycle:
+          context.cycle,
 
- 
+        workspace_id:
+          workspaceId,
 
-      context.state
+        limit,
+      },
+      "Build a verified candidate intelligence bundle across profile, official FEC finance, polling, current news, political signals, strategy recommendations, and executive operating context.",
+      100
+    )
+  );
 
- 
+} else {
 
- 
-
- 
-
-    ) {
+  if (
+    context.state
+  ) {
 
  
 
