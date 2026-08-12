@@ -6334,183 +6334,39 @@ function buildToolPlan({
 
  
 
-    context.intent ===
-
- 
-
- 
-
- 
-
-    "operations"
-
- 
-
- 
-
- 
-
+    } else if (
+  context.intent ===
+  "operations"
+) {
+  /*
+   * State operations should only be queried for an explicit
+   * operations intent.
+   *
+   * Candidate intelligence requests frequently contain a state,
+   * but state presence alone must not trigger get_state_operations.
+   */
+  if (
+    context.state
   ) {
-
- 
-
- 
-
- 
-
-    if (
-
- 
-
- 
-
- 
-
-      context.state
-
- 
-
- 
-
- 
-
-    ) {
-
- 
-
- 
-
- 
-
-      calls.push(
-
- 
-
- 
-
- 
-
-        makeCall(
-
- 
-
- 
-
- 
-
-          "get_state_operations",
-
- 
-
- 
-
- 
-
-          {
-
- 
-
- 
-
- 
-
-            state:
-
- 
-
- 
-
- 
-
-              context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-            locality:
-
- 
-
- 
-
- 
-
-              context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-            workspace_id:
-
- 
-
- 
-
- 
-
-              workspaceId,
-
- 
-
- 
-
- 
-
-          },
-
- 
-
- 
-
- 
-
-          "Load state operational intelligence.",
-
- 
-
- 
-
- 
-
-          100
-
- 
-
- 
-
- 
-
-        )
-
- 
-
- 
-
- 
-
-      );
+    calls.push(
+      makeCall(
+        "get_state_operations",
+        {
+          state:
+            context.state,
+
+          locality:
+            context.locality,
+
+          workspace_id:
+            workspaceId,
+        },
+        "Retrieve state and locality operations intelligence.",
+        100
+      )
+    );
+  }
+}
 
  
 
