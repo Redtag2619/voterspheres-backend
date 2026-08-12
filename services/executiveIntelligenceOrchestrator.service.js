@@ -25111,6 +25111,25 @@ const requestedPollingState =
     ""
   ).trim();
 
+const articles =
+  candidateBundleRecords(
+    bundle,
+    "news"
+  );
+
+const signals =
+  Array.isArray(
+    bundle.signals
+  )
+    ? bundle.signals
+    : [];
+
+const strategies =
+  Array.isArray(
+    bundle.strategy?.recommendations
+  )
+    ? bundle.strategy.recommendations
+    : [];
  
 
  
