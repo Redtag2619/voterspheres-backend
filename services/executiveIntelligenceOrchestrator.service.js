@@ -25502,11 +25502,12 @@ const strategies =
   lines.push(
   "",
   `Official FEC reports: ${
-    financeReports.filter(
-      (report) =>
-        report?.ok
-    ).length
-  }`
+  financeReports.filter(
+    (report) =>
+      report?.ok === true ||
+      report?.result?.ok === true
+  ).length
+}`
 );
 
 /*
