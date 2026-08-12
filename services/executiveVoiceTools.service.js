@@ -606,16 +606,6 @@ export const EXECUTIVE_VOICE_TOOL_DEFINITIONS = [
 
         candidate: { type: "string" },
 
-        candidate_id: { type: ["number", "string", "null"] },
-
-        fec_candidate_id: { type: ["string", "null"] },
-
-        committee_id: { type: ["string", "null"] },
-
-        state: stateProperty(),
-
-        office: { type: "string" },
-
         locality: { type: "string" },
 
         cycle: { type: ["integer", "string", "null"] },
@@ -1133,265 +1123,359 @@ async function newsTool(rawArgs, user) {
  
 
 async function pollingTool(rawArgs = {}) {
-
   const args = normalizeToolArgs(rawArgs);
 
   const state = clean(args.state);
-
   const office = clean(args.office);
-
   const candidate = clean(args.candidate);
-
   const locality = clean(args.locality);
-
+  const cycle = clean(args.cycle);
   const limit = clamp(args.limit, 10, 1, 20);
 
- 
-
   console.log("[Executive Voice Polling] normalized arguments:", {
-
     input_state: rawArgs?.state || null,
-
     normalized_state: state || null,
-
     office: office || null,
-
     candidate: candidate || null,
-
     locality: locality || null,
-
+    cycle: cycle || null,
     limit,
-
   });
 
- 
-
+  /*
+   * The live-source polling service now owns polling resolution.
+   *
+   * It can resolve:
+   *
+   *   direct_race
+   *   candidate_context
+   *   state_context
+   *
+   * Do not flatten that distinction here. Executive Voice needs to know
+   * whether the returned polling actually matches the requested race or is
+   * contextual polling involving the candidate/state.
+   */
   const live = await getPollingProviderData({
-
     state,
-
     office,
-
     candidate,
-
     locality,
-
+    cycle,
     limit,
-
   });
 
- 
+  const livePolls = Array.isArray(live?.data?.polls)
+    ? live.data.polls
+    : Array.isArray(live?.records)
+      ? live.records
+      : [];
 
-  const livePolls = Array.isArray(live?.data?.polls) ? live.data.polls : [];
+  const sortedPolls = sortNewest(livePolls).slice(0, limit);
 
- 
+  /*
+   * Preserve the resolution metadata produced by
+   * executiveVoiceLiveSources.service.js.
+   */
+  const resolution =
+    live?.data?.resolution ||
+    live?.resolution ||
+    null;
 
-  if (livePolls.length) {
+  const status =
+    live?.data?.status ||
+    resolution?.status ||
+    live?.status ||
+    (sortedPolls.length ? "polling_available" : "no_polling_available");
+
+  const queryType =
+    live?.data?.query_type ||
+    resolution?.query_type ||
+    live?.query_type ||
+    null;
+
+  const directCount = Number(
+    firstValue(
+      live?.data?.direct_count,
+      resolution?.direct_count,
+      live?.direct_count,
+      0
+    )
+  );
+
+  const candidateContextCount = Number(
+    firstValue(
+      live?.data?.candidate_context_count,
+      resolution?.candidate_context_count,
+      live?.candidate_context_count,
+      0
+    )
+  );
+
+  const stateContextCount = Number(
+    firstValue(
+      live?.data?.state_context_count,
+      resolution?.state_context_count,
+      live?.state_context_count,
+      0
+    )
+  );
+
+  /*
+   * If the provider/live-source layer returned polling, that result is
+   * authoritative. This includes stored polling returned through the
+   * live-source service.
+   */
+  if (sortedPolls.length) {
+    const inferredStatus =
+      status && status !== "polling_available"
+        ? status
+        : directCount > 0
+          ? "direct_race_available"
+          : candidateContextCount > 0
+            ? "candidate_context_available"
+            : stateContextCount > 0
+              ? "state_context_available"
+              : "polling_available";
+
+    const inferredQueryType =
+      queryType ||
+      (directCount > 0
+        ? "direct_race"
+        : candidateContextCount > 0
+          ? "candidate_context"
+          : stateContextCount > 0
+            ? "state_context"
+            : null);
 
     return toolResult({
-
       tool: "get_latest_polling",
-
       ok: true,
 
       summary:
-
-        live?.summary || `Found ${Math.min(livePolls.length, limit)} polling records.`,
+        live?.summary ||
+        (inferredStatus === "candidate_context_available"
+          ? `No direct ${office || "requested-race"} polling was found, but ${sortedPolls.length} candidate-context polling records are available for ${candidate || "the requested candidate"}.`
+          : inferredStatus === "state_context_available"
+            ? `No direct requested-race polling was found, but ${sortedPolls.length} state-context polling records are available for ${state || "the requested state"}.`
+            : `Found ${sortedPolls.length} polling records.`),
 
       data: {
-
         state: state || null,
-
         office: office || null,
-
         candidate: candidate || null,
-
         locality: locality || null,
+        cycle: cycle || null,
 
-        polls: sortNewest(livePolls).slice(0, limit),
+        polls: sortedPolls,
+        records: sortedPolls,
 
-        provider_priority: live?.data?.provider_priority || "external",
+        provider: live?.provider || null,
+        provider_priority:
+          live?.data?.provider_priority ||
+          live?.provider_priority ||
+          live?.provider ||
+          "polling-source",
 
+        query_type: inferredQueryType,
+        status: inferredStatus,
+
+        direct_count: directCount,
+        candidate_context_count: candidateContextCount,
+        state_context_count: stateContextCount,
+
+        direct_race_available: directCount > 0,
+        candidate_context_available: candidateContextCount > 0,
+        state_context_available: stateContextCount > 0,
+
+        requested_race: {
+          state: state || null,
+          office: office || null,
+          candidate: candidate || null,
+          locality: locality || null,
+          cycle: cycle || null,
+        },
+
+        resolution: resolution || {
+          status: inferredStatus,
+          query_type: inferredQueryType,
+          direct_count: directCount,
+          candidate_context_count: candidateContextCount,
+          state_context_count: stateContextCount,
+        },
       },
 
       sources: live?.sources || [],
-
       warnings: live?.warnings || [],
-
       diagnostics: live?.diagnostics || [],
-
       degraded: Boolean(live?.degraded),
-
     });
-
   }
 
- 
-
+  /*
+   * Compatibility fallback.
+   *
+   * Normally getPollingProviderData() already performs the polling_results
+   * fallback. Keep this secondary path so Executive Voice remains compatible
+   * with older deployments/tables.
+   */
   const params = [];
-
   const conditions = [];
 
- 
-
   if (state) {
-
     params.push(state.toUpperCase());
-
     conditions.push(`UPPER(COALESCE(state, '')) = $${params.length}`);
-
   }
 
   if (office) {
-
     params.push(`%${office}%`);
-
     conditions.push(`COALESCE(office, '') ILIKE $${params.length}`);
-
   }
 
   if (candidate) {
-
     params.push(`%${candidate}%`);
-
     conditions.push(`COALESCE(candidate_name, '') ILIKE $${params.length}`);
-
   }
 
   if (locality) {
-
     params.push(`%${locality}%`);
-
     conditions.push(`COALESCE(locality, '') ILIKE $${params.length}`);
-
   }
 
- 
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where = conditions.length
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
 
   params.push(limit);
 
- 
-
   const response = await firstAvailable([
-
     {
-
       key: "polling_results",
-
       sql: `
-
         SELECT *
-
         FROM polling_results
-
         ${where}
-
-        ORDER BY COALESCE(field_end, published_at, updated_at, created_at) DESC
-
+        ORDER BY COALESCE(
+          field_end,
+          published_at,
+          updated_at,
+          created_at
+        ) DESC
         LIMIT $${params.length}
-
       `,
-
       params,
-
     },
 
     {
-
       key: "polls",
-
       sql: `
-
         SELECT *
-
         FROM polls
-
         ${where}
-
-        ORDER BY COALESCE(field_end, published_at, updated_at, created_at) DESC
-
+        ORDER BY COALESCE(
+          field_end,
+          published_at,
+          updated_at,
+          created_at
+        ) DESC
         LIMIT $${params.length}
-
       `,
-
       params,
-
     },
 
     {
-
       key: "election_polls",
-
       sql: `
-
         SELECT *
-
         FROM election_polls
-
         ${where}
-
-        ORDER BY COALESCE(field_end, published_at, updated_at, created_at) DESC
-
+        ORDER BY COALESCE(
+          field_end,
+          published_at,
+          updated_at,
+          created_at
+        ) DESC
         LIMIT $${params.length}
-
       `,
-
       params,
-
     },
-
   ]);
 
- 
+  const fallbackPolls = sortNewest(response.rows || []).slice(0, limit);
 
   return toolResult({
-
     tool: "get_latest_polling",
 
-    ok: response.rows.length > 0,
+    ok: fallbackPolls.length > 0,
 
-    summary: response.rows.length
-
-      ? `Found ${response.rows.length} stored polling records.`
-
-      : "No current polling records are available.",
+    summary: fallbackPolls.length
+      ? `Found ${fallbackPolls.length} stored direct-race polling records.`
+      : live?.summary || "No current polling records are available.",
 
     data: {
-
       state: state || null,
-
       office: office || null,
-
       candidate: candidate || null,
-
       locality: locality || null,
+      cycle: cycle || null,
 
-      polls: sortNewest(response.rows).slice(0, limit),
+      polls: fallbackPolls,
+      records: fallbackPolls,
 
       provider_priority: "local-fallback",
 
+      query_type: fallbackPolls.length ? "direct_race" : null,
+
+      status: fallbackPolls.length
+        ? "direct_race_available"
+        : "no_polling_available",
+
+      direct_count: fallbackPolls.length,
+      candidate_context_count: 0,
+      state_context_count: 0,
+
+      direct_race_available: fallbackPolls.length > 0,
+      candidate_context_available: false,
+      state_context_available: false,
+
+      requested_race: {
+        state: state || null,
+        office: office || null,
+        candidate: candidate || null,
+        locality: locality || null,
+        cycle: cycle || null,
+      },
+
+      resolution: {
+        status: fallbackPolls.length
+          ? "direct_race_available"
+          : "no_polling_available",
+
+        query_type: fallbackPolls.length
+          ? "direct_race"
+          : null,
+
+        direct_count: fallbackPolls.length,
+        candidate_context_count: 0,
+        state_context_count: 0,
+      },
     },
 
     sources: live?.sources || [],
 
-    warnings: [
-
-      ...(live?.warnings || []),
-
-      ...(!response.ok && response.error ? [response.error] : []),
-
-    ],
+    warnings: uniqueWarnings([
+      live?.warnings || [],
+      !response.ok && response.error
+        ? [response.error]
+        : [],
+    ]),
 
     diagnostics: live?.diagnostics || [],
 
-    degraded: response.rows.length === 0,
-
+    degraded:
+      fallbackPolls.length === 0 ||
+      Boolean(live?.degraded),
   });
-
 }
-
  
 
 async function fecTool(args = {}) {
