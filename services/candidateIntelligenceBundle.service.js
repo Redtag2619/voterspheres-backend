@@ -1675,22 +1675,95 @@ export async function getCandidateIntelligenceBundle({
  
 
   const pollingRecords =
+  recordsFromResult(
+    polling,
+    [
+      "polls",
+      "records",
+      "results",
+    ]
+  );
 
-    recordsFromResult(
+const pollingData =
+  polling?.data &&
+  typeof polling.data === "object"
+    ? polling.data
+    : {};
 
-      polling,
+const directPollingRecords =
+  Array.isArray(
+    pollingData.direct_records
+  )
+    ? pollingData.direct_records
+    : [];
 
-      [
+const candidateContextPollingRecords =
+  Array.isArray(
+    pollingData.candidate_context_records
+  )
+    ? pollingData.candidate_context_records
+    : [];
 
-        "polls",
+const stateContextPollingRecords =
+  Array.isArray(
+    pollingData.state_context_records
+  )
+    ? pollingData.state_context_records
+    : [];
 
-        "records",
+const directPollingCount =
+  Number(
+    pollingData.direct_count ??
+    directPollingRecords.length ??
+    0
+  ) || 0;
 
-        "results",
+const candidateContextPollingCount =
+  Number(
+    pollingData.candidate_context_count ??
+    candidateContextPollingRecords.length ??
+    0
+  ) || 0;
 
-      ]
+const stateContextPollingCount =
+  Number(
+    pollingData.state_context_count ??
+    stateContextPollingRecords.length ??
+    0
+  ) || 0;
 
-    );
+const pollingStatus =
+  clean(
+    pollingData.status
+  ) ||
+  (
+    directPollingCount > 0
+      ? "direct_race_available"
+      : candidateContextPollingCount > 0
+        ? "candidate_context_available"
+        : stateContextPollingCount > 0
+          ? "state_context_available"
+          : polling?.ok
+            ? "no_polling_available"
+            : "provider_error"
+  );
+
+const pollingQueryType =
+  clean(
+    pollingData.query_type
+  ) ||
+  (
+    pollingStatus ===
+    "direct_race_available"
+      ? "direct_race"
+      : pollingStatus ===
+          "candidate_context_available"
+        ? "candidate_context"
+        : pollingStatus ===
+            "state_context_available"
+          ? "state_context"
+          : null
+  );
 
  
 
@@ -1957,18 +2030,89 @@ export async function getCandidateIntelligenceBundle({
  
 
     polling: {
+  /*
+   * Backward-compatible record collection.
+   *
+   * These are the records returned by get_latest_polling,
+   * which may represent direct-race, candidate-context,
+   * or state-context polling.
+   */
+  records:
+    pollingRecords,
 
-      records:
+  /*
+   * Explicit polling-resolution metadata.
+   *
+   * This prevents candidate-context polling from being
+   * interpreted as direct polling for the requested office.
+   */
+  status:
+    pollingStatus,
 
-        pollingRecords,
+  query_type:
+    pollingQueryType,
 
- 
+  direct_count:
+    directPollingCount,
 
-      source_result:
+  candidate_context_count:
+    candidateContextPollingCount,
 
-        polling,
+  state_context_count:
+    stateContextPollingCount,
 
+  direct_race_available:
+    Boolean(
+      pollingData.direct_race_available ??
+      directPollingCount > 0
+    ),
+
+  candidate_context_available:
+    Boolean(
+      pollingData.candidate_context_available ??
+      candidateContextPollingCount > 0
+    ),
+
+  state_context_available:
+    Boolean(
+      pollingData.state_context_available ??
+      stateContextPollingCount > 0
+    ),
+
+  direct_records:
+    directPollingRecords,
+
+  candidate_context_records:
+    candidateContextPollingRecords,
+
+  state_context_records:
+    stateContextPollingRecords,
+
+  requested_race:
+    pollingData.requested_race ||
+    null,
+
+  resolution:
+    pollingData.resolution || {
+      status:
+        pollingStatus,
+
+      query_type:
+        pollingQueryType,
+
+      direct_count:
+        directPollingCount,
+
+      candidate_context_count:
+        candidateContextPollingCount,
+
+      state_context_count:
+        stateContextPollingCount,
     },
+
+  source_result:
+    polling,
+},
 
  
 
@@ -2039,10 +2183,19 @@ export async function getCandidateIntelligenceBundle({
  
 
       polling:
+  Boolean(
+    polling?.ok ||
+    pollingRecords.length > 0
+  ),
 
-        pollingRecords.length >
+polling_direct_race:
+  directPollingCount > 0,
 
-        0,
+polling_candidate_context:
+  candidateContextPollingCount > 0,
+
+polling_state_context:
+  stateContextPollingCount > 0,
 
  
 
@@ -2144,7 +2297,26 @@ export async function getCandidateIntelligenceBundle({
 
       usable
 
-        ? `Unified candidate intelligence loaded for ${requestedCandidate || requestedCandidateId}: ${identities.length} verified identities, ${financeUsable.length} FEC reports, ${pollingRecords.length} polling records, ${newsRecords.length} news articles, ${signals.length} political signals, and ${strategy.length} strategy recommendations.`
+        ? `Unified candidate intelligence loaded for ${
+    requestedCandidate ||
+    requestedCandidateId
+  }: ${
+    identities.length
+  } verified identities, ${
+    financeUsable.length
+  } FEC reports, ${
+    directPollingCount
+  } direct-race polling records, ${
+    candidateContextPollingCount
+  } candidate-context polling records, ${
+    stateContextPollingCount
+  } state-context polling records, ${
+    newsRecords.length
+  } news articles, ${
+    signals.length
+  } political signals, and ${
+    strategy.length
+  } strategy recommendations.`
 
         : `No verified candidate intelligence was returned for ${requestedCandidate || requestedCandidateId}.`,
 
@@ -2231,6 +2403,3 @@ export default {
  
 
 };
-
- 
-
