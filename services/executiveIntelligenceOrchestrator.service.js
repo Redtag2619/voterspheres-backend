@@ -6284,14 +6284,7 @@ function buildToolPlan({
 
  
 
-  } else if (
-
  
-
- 
-
- 
-
     } else if (
   context.intent ===
   "operations"
@@ -25399,7 +25392,7 @@ lines.push(
     pollingSectionTitle =
       "Latest candidate-context polling:";
   } else if (
-    pollingStatus ===
+    pollingStatfus ===
       "state_context_available" ||
     pollingQueryType ===
       "state_context"
