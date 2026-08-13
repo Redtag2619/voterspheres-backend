@@ -2623,583 +2623,188 @@ function cleanupDetectedCandidate(value = "") {
  
 
 function detectCandidate(
-
- 
-
- 
-
- 
-
   question,
-
- 
-
- 
-
- 
-
   suppliedCandidate = ""
-
- 
-
- 
-
- 
-
 ) {
-
- 
-
- 
-
- 
-
-  const explicit = cleanupDetectedCandidate(
-
- 
-
- 
-
- 
-
-    suppliedCandidate
-
- 
-
- 
-
- 
-
-  );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
+  const explicit =
+    cleanupDetectedCandidate(
+      suppliedCandidate
+    );
 
   if (explicit) {
-
- 
-
- 
-
- 
-
     return explicit;
-
- 
-
- 
-
- 
-
   }
 
- 
+  const text =
+    clean(question);
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const text = clean(question);
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const quoted = text.match(
-
- 
-
- 
-
- 
-
-    /["“]([^"”]{3,80})["”]/
-
- 
-
- 
-
- 
-
-  );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  if (quoted) {
-
- 
-
- 
-
- 
-
-    return cleanupDetectedCandidate(
-
- 
-
- 
-
- 
-
-      quoted[1]
-
- 
-
- 
-
- 
-
-    );
-
- 
-
- 
-
- 
-
+  if (!text) {
+    return "";
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
   /*
-
- 
-
- 
-
- 
-
-   * Finance-specific forms are checked first so a request such as
-
- 
-
- 
-
- 
-
-   * "what is the current FEC report for jasmine crockett" resolves
-
- 
-
- 
-
- 
-
-   * to "jasmine crockett", not "report for jasmine crockett".
-
- 
-
- 
-
- 
-
+   * Quoted candidate:
+   *   briefing on "Jasmine Crockett"
    */
-
- 
-
- 
-
- 
-
-  const financeFor = text.match(
-
- 
-
- 
-
- 
-
-    /(?:fec|finance|financial|report|filing|fundraising)[^\n]{0,50}?\bfor\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
-
- 
-
- 
-
- 
-
-  );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  if (financeFor) {
-
- 
-
- 
-
- 
-
-    const candidate = cleanupDetectedCandidate(
-
- 
-
- 
-
- 
-
-      financeFor[1]
-
- 
-
- 
-
- 
-
+  const quoted =
+    text.match(
+      /["“]([^"”]{3,80})["”]/
     );
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
+  if (quoted) {
+    const candidate =
+      cleanupDetectedCandidate(
+        quoted[1]
+      );
 
     if (candidate) {
-
- 
-
- 
-
- 
-
       return candidate;
-
- 
-
- 
-
- 
-
     }
-
- 
-
- 
-
- 
-
   }
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const patterns = [
-
- 
-
- 
-
- 
-
-    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
-
- 
-
- 
-
- 
-
-    /([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
-
- 
-
- 
-
- 
-
-  ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  for (const pattern of patterns) {
-
- 
-
- 
-
- 
-
-    const match = text.match(pattern);
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-    if (!match) {
-
- 
-
- 
-
- 
-
-      continue;
-
- 
-
- 
-
- 
-
-    }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-    const candidate = cleanupDetectedCandidate(
-
- 
-
- 
-
- 
-
-      match[1]
-
- 
-
- 
-
- 
-
+  /*
+   * Finance/FEC-specific forms.
+   *
+   * Examples:
+   *   current FEC report for Jasmine Crockett
+   *   fundraising for Jasmine Crockett
+   *   finance report for Jasmine Crockett
+   */
+  const financeFor =
+    text.match(
+      /(?:fec|finance|financial|report|filing|fundraising)[^\n]{0,50}?\bfor\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
     );
 
- 
+  if (financeFor) {
+    const candidate =
+      cleanupDetectedCandidate(
+        financeFor[1]
+      );
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-    if (
-
- 
-
- 
-
- 
-
-      candidate &&
-
- 
-
- 
-
- 
-
-      !Object.values(STATE_NAMES).some(
-
- 
-
- 
-
- 
-
-        (stateName) =>
-
- 
-
- 
-
- 
-
-          clean(stateName).toLowerCase() ===
-
- 
-
- 
-
- 
-
-          candidate.toLowerCase()
-
- 
-
- 
-
- 
-
-      )
-
- 
-
- 
-
- 
-
-    ) {
-
- 
-
- 
-
- 
-
+    if (candidate) {
       return candidate;
-
- 
-
- 
-
- 
-
     }
-
- 
-
- 
-
- 
-
   }
 
- 
+  /*
+   * Executive candidate briefing forms.
+   *
+   * Examples:
+   *   give me a complete briefing on Jasmine Crockett
+   *   full briefing about Jasmine Crockett
+   *   candidate briefing for Jasmine Crockett
+   *   assessment of Jasmine Crockett
+   */
+  const briefingFor =
+    text.match(
+      /(?:complete\s+briefing|full\s+briefing|candidate\s+briefing|briefing|complete\s+assessment|full\s+assessment|assessment|intelligence)\s+(?:on|about|for|of)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+    );
 
- 
+  if (briefingFor) {
+    const candidate =
+      cleanupDetectedCandidate(
+        briefingFor[1]
+      );
 
- 
+    if (
+      candidate &&
+      !Object.values(
+        STATE_NAMES
+      ).some(
+        (stateName) =>
+          clean(
+            stateName
+          ).toLowerCase() ===
+          candidate.toLowerCase()
+      )
+    ) {
+      return candidate;
+    }
+  }
 
- 
+  /*
+   * "Brief me on..." form.
+   */
+  const briefMe =
+    text.match(
+      /\bbrief\s+me\s+(?:on|about)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+    );
 
- 
+  if (briefMe) {
+    const candidate =
+      cleanupDetectedCandidate(
+        briefMe[1]
+      );
 
- 
+    if (candidate) {
+      return candidate;
+    }
+  }
 
- 
+  /*
+   * "Tell me everything about..." form.
+   */
+  const everythingAbout =
+    text.match(
+      /(?:tell\s+me\s+everything\s+(?:about|on)|everything\s+(?:about|on)|what\s+should\s+i\s+know\s+(?:about|on))\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+    );
+
+  if (everythingAbout) {
+    const candidate =
+      cleanupDetectedCandidate(
+        everythingAbout[1]
+      );
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  /*
+   * General candidate forms.
+   */
+  const patterns = [
+    /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
+
+    /([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
+  ];
+
+  for (
+    const pattern
+    of patterns
+  ) {
+    const match =
+      text.match(
+        pattern
+      );
+
+    if (!match) {
+      continue;
+    }
+
+    const candidate =
+      cleanupDetectedCandidate(
+        match[1]
+      );
+
+    if (
+      candidate &&
+      !Object.values(
+        STATE_NAMES
+      ).some(
+        (stateName) =>
+          clean(
+            stateName
+          ).toLowerCase() ===
+          candidate.toLowerCase()
+      )
+    ) {
+      return candidate;
+    }
+  }
 
   return "";
-
- 
-
- 
-
- 
-
 }
-
  
 
  
