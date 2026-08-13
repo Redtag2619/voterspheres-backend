@@ -1575,351 +1575,87 @@ function extractJsonObject(value) {
  
 
 function detectState(
-
- 
-
- 
-
- 
-
   question,
-
- 
-
- 
-
- 
-
   suppliedState = ""
-
- 
-
- 
-
- 
-
 ) {
-
- 
-
- 
-
- 
-
   const explicit =
-
- 
-
- 
-
- 
-
     clean(
-
- 
-
- 
-
- 
-
       suppliedState
-
- 
-
- 
-
- 
-
     ).toUpperCase();
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
+  /*
+   * Explicit payload state always has priority.
+   */
   if (
-
- 
-
- 
-
- 
-
     STATE_NAMES[explicit]
-
- 
-
- 
-
- 
-
   ) {
-
- 
-
- 
-
- 
-
     return explicit;
-
- 
-
- 
-
- 
-
   }
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const lower =
-
- 
-
- 
-
- 
-
+  const raw =
     clean(
-
- 
-
- 
-
- 
-
       question
-
- 
-
- 
-
- 
-
-    ).toLowerCase();
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  for (
-
- 
-
- 
-
- 
-
-    const [name, code]
-
- 
-
- 
-
- 
-
-    of Object.entries(
-
- 
-
- 
-
- 
-
-      STATE_CODES
-
- 
-
- 
-
- 
-
-    )
-
- 
-
- 
-
- 
-
-  ) {
-
- 
-
- 
-
- 
-
-    if (
-
- 
-
- 
-
- 
-
-      lower.includes(name)
-
- 
-
- 
-
- 
-
-    ) {
-
- 
-
- 
-
- 
-
-      return code;
-
- 
-
- 
-
- 
-
-    }
-
- 
-
- 
-
- 
-
-  }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-  const match =
-
- 
-
- 
-
- 
-
-    clean(
-
- 
-
- 
-
- 
-
-      question
-
- 
-
- 
-
- 
-
-    ).match(
-
- 
-
- 
-
- 
-
-      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/i
-
- 
-
- 
-
- 
-
     );
 
- 
+  const lower =
+    raw.toLowerCase();
 
- 
+  /*
+   * First resolve full state names.
+   *
+   * Use word boundaries so names such as "maine" or "texas"
+   * are matched as geographic terms rather than substrings.
+   */
+  for (
+    const [name, code]
+    of Object.entries(
+      STATE_CODES
+    )
+  ) {
+    const escapedName =
+      String(name)
+        .replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
 
- 
+    const stateNamePattern =
+      new RegExp(
+        `\\b${escapedName}\\b`,
+        "i"
+      );
 
- 
+    if (
+      stateNamePattern.test(
+        raw
+      )
+    ) {
+      return code;
+    }
+  }
 
- 
+  /*
+   * Postal abbreviations are intentionally CASE-SENSITIVE.
+   *
+   * This prevents ordinary English words from being interpreted
+   * as states:
+   *
+   *   "give me a briefing"  -> must NOT resolve ME / Maine
+   *   "or should we..."     -> must NOT resolve OR / Oregon
+   *   "in the race..."      -> must NOT resolve IN / Indiana
+   *
+   * Explicit geographic text such as "TX", "GA", "PA", etc.
+   * still resolves normally.
+   */
+  const postalMatch =
+    raw.match(
+      /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/
+    );
 
- 
-
- 
-
-  return match
-
- 
-
- 
-
- 
-
-    ? match[1].toUpperCase()
-
- 
-
- 
-
- 
-
+  return postalMatch
+    ? postalMatch[1]
     : "";
-
- 
-
- 
-
- 
-
 }
-
  
 
  
@@ -32792,7 +32528,7 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
  
-
+f
  
 
       now(),
