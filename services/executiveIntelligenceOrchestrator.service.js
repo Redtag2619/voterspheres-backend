@@ -398,6 +398,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
+
   MD: "Maryland",
 
  
@@ -797,6 +798,7 @@ const clamp = (value, fallback, min, max) => {
  
 
  
+
 
   const number = Number.parseInt(value, 10);
 
@@ -1198,6 +1200,7 @@ function safeJson(value) {
 
  
 
+
 function extractJsonObject(value) {
 
  
@@ -1598,6 +1601,7 @@ function detectState(
     );
 
   const lower =
+
     raw.toLowerCase();
 
   /*
@@ -1997,6 +2001,7 @@ function detectOffice(
  
 
  
+
 
   if (explicit) {
 
@@ -2398,6 +2403,7 @@ function detectOffice(
 
  
 
+
   ];
 
  
@@ -2798,6 +2804,7 @@ function detectCandidate(
           ).toLowerCase() ===
           candidate.toLowerCase()
       )
+
     ) {
       return candidate;
     }
@@ -3199,6 +3206,7 @@ function classifyIntent(
 
  
 
+
  
 
   ) {
@@ -3598,6 +3606,7 @@ function resolveContext(
  
 
  
+
 
  
 
@@ -3999,6 +4008,7 @@ function resolveContext(
 
  
 
+
  
 
   context.state_name =
@@ -4398,6 +4408,7 @@ function buildToolPlan({
  
 
  
+
 
  
 
@@ -4799,6 +4810,7 @@ function buildToolPlan({
 
  
 
+
  
 
           limit,
@@ -5198,6 +5210,7 @@ function buildToolPlan({
  
 
  
+
 
  
 
@@ -5599,6 +5612,7 @@ function buildToolPlan({
 
  
 
+
  
 
         100
@@ -5997,6 +6011,7 @@ function buildToolPlan({
  
 
  
+
 
  
 
@@ -6399,6 +6414,7 @@ function buildToolPlan({
 
  
 
+
  
 
  
@@ -6798,6 +6814,7 @@ function buildToolPlan({
         (call) => [
 
  
+
 
  
 
@@ -7199,6 +7216,7 @@ function countItems(
 
  
 
+
  
 
  
@@ -7598,6 +7616,7 @@ function normalizeToolResult(
       : [];
 
  
+
 
  
 
@@ -7999,6 +8018,7 @@ function normalizeToolResult(
 
  
 
+
  
 
  
@@ -8398,6 +8418,7 @@ async function executePlannedTool(
  
 
  
+
 
  
 
@@ -8799,6 +8820,7 @@ async function executePlannedTool(
 
  
 
+
  
 
  
@@ -9198,6 +9220,7 @@ async function executePlannedTool(
  
 
  
+
 
  
 
@@ -9599,6 +9622,7 @@ function mergeSources(
 
  
 
+
  
 
  
@@ -9998,6 +10022,7 @@ function buildCoverage(
     sources.filter(
 
  
+
 
  
 
@@ -10399,6 +10424,7 @@ function buildCoverage(
 
  
 
+
  
 
  
@@ -10798,6 +10824,7 @@ function firstObject(
 ) {
 
  
+
 
  
 
@@ -11199,6 +11226,7 @@ function extractCandidateRecord(
 
  
 
+
  
 
  
@@ -11598,6 +11626,7 @@ function committeeIdFromObject(
   }
 
  
+
 
  
 
@@ -11999,6 +12028,7 @@ function recursivelyFindIdentity(
 
  
 
+
  
 
  
@@ -12398,6 +12428,7 @@ function recursivelyFindIdentity(
       ),
 
  
+
 
  
 
@@ -12799,6 +12830,7 @@ function normalizePersonTokens(value = "") {
 
  
 
+
  
 
  
@@ -13198,6 +13230,7 @@ function normalizeOffice(value = "") {
   const lower = clean(value)
 
  
+
 
  
 
@@ -13599,6 +13632,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
+
  
 
  
@@ -13998,6 +14032,7 @@ function strictResolveCandidateIdentity(
       committee_id:
 
  
+
 
  
 
@@ -14399,6 +14434,7 @@ function strictResolveCandidateIdentity(
 
  
 
+
  
 
  
@@ -14798,6 +14834,7 @@ function strictResolveCandidateIdentity(
       }
 
  
+
 
  
 
@@ -15199,6 +15236,7 @@ function strictResolveCandidateIdentity(
 
  
 
+
  
 
  
@@ -15598,6 +15636,7 @@ function strictResolveCandidateIdentity(
             identity.district,
 
  
+
 
  
 
@@ -15999,6 +16038,7 @@ function createIdentityFailureResult(
 
  
 
+
  
 
  
@@ -16398,6 +16438,7 @@ async function executeFinancePlan({
    * the VoterSpheres candidate/statistics database path, so polling/news
 
  
+
 
  
 
@@ -16799,6 +16840,7 @@ async function executeFinancePlan({
 
  
 
+
  
 
  
@@ -17198,6 +17240,7 @@ async function executeFinancePlan({
         user
 
  
+
 
  
 
@@ -17599,6 +17642,7 @@ function recordsFromFecResult(
 
  
 
+
  
 
  
@@ -17998,6 +18042,7 @@ function finiteNumber(
     ? number
 
  
+
 
  
 
@@ -18399,6 +18444,7 @@ function formatDate(
 
  
 
+
  
 
  
@@ -18798,6 +18844,7 @@ function metric(
           ),
 
  
+
 
  
 
@@ -19199,6 +19246,7 @@ function buildFinanceInterpretation(
 
  
 
+
  
 
  
@@ -19598,6 +19646,7 @@ function buildFinanceInterpretation(
   ) {
 
  
+
 
  
 
@@ -19999,6 +20048,7 @@ function buildFinanceReport({
 
  
 
+
  
 
  
@@ -20398,6 +20448,7 @@ function buildFinanceReport({
     ),
 
  
+
 
  
 
@@ -20799,6 +20850,7 @@ function buildFinanceReport({
 
  
 
+
  
 
  
@@ -21198,6 +21250,7 @@ function buildFinanceReport({
       context.cycle ||
 
  
+
 
  
 
@@ -21599,6 +21652,7 @@ function appendFinanceReportLines(
 
  
 
+
  
 
  
@@ -21998,6 +22052,7 @@ function appendFinanceReportLines(
     lines.push(
 
  
+
 
  
 
@@ -22399,6 +22454,7 @@ function buildFinanceDataAnswer({
 
  
 
+
  
 
  
@@ -22798,6 +22854,7 @@ function buildFinanceDataAnswer({
         multiple
 
  
+
 
  
 
@@ -23199,6 +23256,7 @@ function buildFinanceDataAnswer({
 
  
 
+
  
 
  
@@ -23598,6 +23656,7 @@ function candidateBundleRecords(
   if (
 
  
+
 
  
 
@@ -23999,6 +24058,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
+
  
 
  
@@ -24397,6 +24457,7 @@ const strategies =
  
 
  
+
 
           6
 
@@ -24798,6 +24859,7 @@ lines.push(
 
  
 
+
  
 
       const poll of
@@ -25197,6 +25259,7 @@ lines.push(
  
 
  
+
 
  
 
@@ -25598,6 +25661,7 @@ lines.push(
 
  
 
+
  
 
               strategy.summary ||
@@ -25997,6 +26061,7 @@ lines.push(
  
 
  
+
 
  
 
@@ -26398,6 +26463,7 @@ function deterministicBrief({
 
  
 
+
  
 
  
@@ -26797,6 +26863,7 @@ function deterministicBrief({
  
 
       recommended_actions:
+
 
  
 
@@ -27198,6 +27265,7 @@ function deterministicBrief({
 
         })
 
+
  
 
  
@@ -27597,6 +27665,7 @@ function deterministicBrief({
  
 
             (item) =>
+
 
  
 
@@ -27998,6 +28067,7 @@ function deterministicBrief({
 
             "Continue monitoring for new verified filings, polls, and reporting.",
 
+
  
 
  
@@ -28397,6 +28467,7 @@ async function synthesizeWithOpenAI({
  
 
           sources:
+
 
  
 
@@ -28798,6 +28869,7 @@ async function synthesizeWithOpenAI({
 
               evidence
 
+
  
 
  
@@ -29197,6 +29269,7 @@ export function getExecutiveOrchestratorConfiguration() {
  
 
  
+
 
  
 
@@ -29598,6 +29671,7 @@ export function createExecutiveIntelligencePlan({
 
     clamp(
 
+
  
 
  
@@ -29997,6 +30071,7 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
       executePlan({
+
 
  
 
@@ -30398,6 +30473,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
         plan.context,
 
+
  
 
  
@@ -30797,6 +30873,7 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
       });
+
 
  
 
@@ -31198,6 +31275,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+
  
 
  
@@ -31597,6 +31675,7 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
  
+
 
  
 
@@ -31998,6 +32077,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
+
  
 
  
@@ -32133,7 +32213,7 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
  
-f
+      now()
  
 
       
@@ -32153,3 +32233,4 @@ f
  
 
 }
+
