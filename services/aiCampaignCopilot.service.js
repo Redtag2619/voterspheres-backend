@@ -578,6 +578,46 @@ function detectIntent(prompt = "") {
 
  
 
+function isCandidateBriefingRequest({ prompt = "", payload = {} } = {}) {
+
+  const value = clean(prompt);
+
+  const hasBriefingLanguage =
+
+    /\b(?:(?:complete\s+(?:detailed\s+)?|comprehensive\s+|full\s+|detailed\s+)(?:candidate\s+)?briefing|candidate\s+briefing|brief\s+me\s+(?:on|about|for)|complete\s+(?:candidate\s+)?assessment)\b/i.test(
+
+      value
+
+    );
+
+  const hasCandidate = Boolean(
+
+    clean(
+
+      payload.candidate ||
+
+      payload.candidate_id ||
+
+      payload.fec_candidate_id
+
+    ) ||
+
+    value.match(
+
+      /\b(?:briefing|assessment)\s+(?:on|about|for|of)\s+[a-z][a-z.'-]+(?:\s+[a-z][a-z.'-]+){1,3}/i
+
+    )
+
+  );
+
+ 
+
+  return hasBriefingLanguage && hasCandidate;
+
+}
+
+ 
+
 function classifyQuestion(prompt = "") {
 
   const value = lower(prompt);
@@ -2386,11 +2426,31 @@ export async function askAiCampaignCopilot({
 
  
 
-  const classification =
+  const candidateBriefingRequest =
+
+    isCandidateBriefingRequest({ prompt, payload });
 
  
 
-    classifyQuestion(prompt);
+  const classification = candidateBriefingRequest
+
+    ? {
+
+        intent: "candidate_intelligence",
+
+        answerType: "candidate_intelligence",
+
+        needsPlatform: false,
+
+        needsLLM: false,
+
+        needsLiveResearch: true,
+
+        sources: [],
+
+      }
+
+    : classifyQuestion(prompt);
 
  
 
@@ -2603,6 +2663,8 @@ export async function askAiCampaignCopilot({
  
 
     candidateOrchestration =
+
+      candidateBriefingRequest ||
 
       orchestratorPlan
 
@@ -2840,7 +2902,7 @@ export async function askAiCampaignCopilot({
 
             orchestratorPlan?.build ||
 
-            "4.5.1-production-formatter",
+            "4.5.2-production-routing-and-news",
 
           execution: {
 
