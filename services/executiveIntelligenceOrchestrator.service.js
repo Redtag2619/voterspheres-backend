@@ -10,7 +10,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
-const BUILD = "4.5.1-production-formatter";
+const BUILD = "4.5.2-production-routing-and-news";
 
  
 
@@ -467,6 +467,56 @@ function cleanPublisherFromTitle(title = "", publisher = "") {
     )
 
     .trim();
+
+}
+
+ 
+
+function comparableNarrativeText(value = "") {
+
+  return sanitizeNarrativeText(value)
+
+    .toLowerCase()
+
+    .replace(/[^a-z0-9]+/g, " ")
+
+    .trim();
+
+}
+
+ 
+
+function isRedundantArticleSummary(summary, title, publisher) {
+
+  const summaryText = comparableNarrativeText(summary);
+
+  const titleText = comparableNarrativeText(title);
+
+  const publisherText = comparableNarrativeText(publisher);
+
+ 
+
+  if (!summaryText || !titleText) {
+
+    return !summaryText;
+
+  }
+
+ 
+
+  return (
+
+    summaryText === titleText ||
+
+    summaryText === `${titleText} ${publisherText}`.trim() ||
+
+    (summaryText.startsWith(`${titleText} `) &&
+
+      comparableNarrativeText(summaryText.slice(titleText.length)) ===
+
+        publisherText)
+
+  );
 
 }
 
@@ -12434,7 +12484,21 @@ lines.push(
 
  
 
-        if (articleSummary) {
+        if (
+
+          articleSummary &&
+
+          !isRedundantArticleSummary(
+
+            articleSummary,
+
+            articleTitle,
+
+            publisher
+
+          )
+
+        ) {
 
           lines.push(
 
@@ -15577,5 +15641,4 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
 }
-
 
