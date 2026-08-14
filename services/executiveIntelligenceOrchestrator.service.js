@@ -10,7 +10,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
-const BUILD = "4.5.2-production-routing-and-news";
+const BUILD = "4.5.3-candidate-intent-precedence";
 
  
 
@@ -1925,6 +1925,34 @@ function classifyIntent(
  
 
     ).toLowerCase();
+
+ 
+
+  /*
+
+   * A complete candidate briefing is a parent intent. It must be
+
+   * resolved before finance, polling, news, signals, or strategy
+
+   * keywords contained in the requested briefing sections.
+
+   */
+
+  if (
+
+    context.candidate &&
+
+    /everything|complete (?:detailed )?briefing|detailed briefing|comprehensive briefing|full briefing|candidate briefing|complete assessment|full assessment|all intelligence|all data|what should i know|tell me everything/.test(
+
+      lower
+
+    )
+
+  ) {
+
+    return "candidate_intelligence";
+
+  }
 
  
 
