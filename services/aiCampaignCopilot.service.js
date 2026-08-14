@@ -2840,7 +2840,7 @@ export async function askAiCampaignCopilot({
 
             orchestratorPlan?.build ||
 
-            "4.5.0-grounded-candidate-briefings",
+            "4.5.1-production-formatter",
 
           execution: {
 
