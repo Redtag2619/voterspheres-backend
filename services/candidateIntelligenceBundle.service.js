@@ -398,6 +398,7 @@ function selectVerifiedIdentities(
 
           if (
 
+
             state &&
 
             state !==
@@ -798,6 +799,7 @@ function mergeSources(
 
   for (
 
+
     const set
 
     of resultSets
@@ -1088,6 +1090,42 @@ function recordsFromResult(
 
  
 
+function normalizeResultLimit(value, fallback = 12) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(Math.trunc(numeric), 1), 100);
+}
+
+function compactToolResultArrays(result, limit) {
+  if (!result || typeof result !== "object") {
+    return result;
+  }
+
+  const compactData =
+    result.data &&
+    typeof result.data === "object" &&
+    !Array.isArray(result.data)
+      ? Object.fromEntries(
+          Object.entries(result.data).map(([key, value]) => [
+            key,
+            Array.isArray(value) ? value.slice(0, limit) : value,
+          ])
+        )
+      : result.data;
+
+  return {
+    ...result,
+    data: compactData,
+    records: Array.isArray(result.records)
+      ? result.records.slice(0, limit)
+      : result.records,
+  };
+}
+
 export async function getCandidateIntelligenceBundle({
 
  
@@ -1132,6 +1170,12 @@ export async function getCandidateIntelligenceBundle({
 
  
 
+  const normalizedLimit =
+    normalizeResultLimit(
+      limit,
+      12
+    );
+
   const requestedCandidate =
 
     clean(
@@ -1155,6 +1199,7 @@ export async function getCandidateIntelligenceBundle({
   if (
 
     !requestedCandidate &&
+
 
     !requestedCandidateId
 
@@ -1508,7 +1553,7 @@ export async function getCandidateIntelligenceBundle({
 
    */
 
-  const polling =
+  const rawPolling =
 
     await safeTool(
 
@@ -1556,7 +1601,9 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-        limit,
+
+        limit:
+          normalizedLimit,
 
       },
 
@@ -1565,6 +1612,17 @@ export async function getCandidateIntelligenceBundle({
     );
 
  
+
+  /*
+   * Providers may return every stored poll even when a limit is requested.
+   * Bound every polling array before it is reused in raw diagnostics,
+   * orchestrator responses, or Co-Pilot persistence snapshots.
+   */
+  const polling =
+    compactToolResultArrays(
+      rawPolling,
+      normalizedLimit
+    );
 
   /*
 
@@ -1610,7 +1668,8 @@ export async function getCandidateIntelligenceBundle({
 
  
 
-        limit,
+        limit:
+          normalizedLimit,
 
       },
 
@@ -1682,6 +1741,9 @@ export async function getCandidateIntelligenceBundle({
       "records",
       "results",
     ]
+  ).slice(
+    0,
+    normalizedLimit
   );
 
 const pollingData =
@@ -1694,43 +1756,61 @@ const directPollingRecords =
   Array.isArray(
     pollingData.direct_records
   )
-    ? pollingData.direct_records
+    ? pollingData.direct_records.slice(
+        0,
+        normalizedLimit
+      )
     : [];
 
 const candidateContextPollingRecords =
   Array.isArray(
     pollingData.candidate_context_records
   )
-    ? pollingData.candidate_context_records
+    ? pollingData.candidate_context_records.slice(
+        0,
+        normalizedLimit
+      )
     : [];
 
 const stateContextPollingRecords =
   Array.isArray(
     pollingData.state_context_records
   )
-    ? pollingData.state_context_records
+    ? pollingData.state_context_records.slice(
+        0,
+        normalizedLimit
+      )
     : [];
 
 const directPollingCount =
-  Number(
-    pollingData.direct_count ??
-    directPollingRecords.length ??
-    0
-  ) || 0;
+  Math.min(
+    Number(
+      pollingData.direct_count ??
+      directPollingRecords.length ??
+      0
+    ) || 0,
+    normalizedLimit
+  );
 
 const candidateContextPollingCount =
-  Number(
-    pollingData.candidate_context_count ??
-    candidateContextPollingRecords.length ??
-    0
-  ) || 0;
+  Math.min(
+    Number(
+      pollingData.candidate_context_count ??
+      candidateContextPollingRecords.length ??
+      0
+    ) || 0,
+    normalizedLimit
+  );
 
 const stateContextPollingCount =
-  Number(
-    pollingData.state_context_count ??
-    stateContextPollingRecords.length ??
-    0
-  ) || 0;
+  Math.min(
+    Number(
+      pollingData.state_context_count ??
+      stateContextPollingRecords.length ??
+      0
+    ) || 0,
+    normalizedLimit
+  );
 
 const pollingStatus =
   clean(
@@ -1922,6 +2002,7 @@ const pollingQueryType =
     candidate_query:
 
       requestedCandidate,
+
 
  
 
@@ -2322,6 +2403,7 @@ polling_state_context:
 
  
 
+
     data:
 
       bundleData,
@@ -2403,3 +2485,4 @@ export default {
  
 
 };
+
