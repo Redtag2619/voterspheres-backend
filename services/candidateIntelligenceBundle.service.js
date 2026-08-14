@@ -2,7 +2,7 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-const BUILD = "4.5.2-production-routing-and-news";
+const BUILD = "4.5.3-candidate-intent-precedence";
 
  
 
