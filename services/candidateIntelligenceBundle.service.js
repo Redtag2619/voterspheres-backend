@@ -2,7 +2,7 @@ import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 
  
 
-const BUILD = "4.5.0-grounded-candidate-briefings";
+const BUILD = "4.5.1-production-formatter";
 
  
 
@@ -4297,5 +4297,4 @@ export default {
  
 
 };
-
 
