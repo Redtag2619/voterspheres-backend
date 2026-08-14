@@ -24813,7 +24813,7 @@ lines.push(
     pollingSectionTitle =
       "Latest candidate-context polling:";
   } else if (
-    pollingStatfus ===
+    pollingStatus ===
       "state_context_available" ||
     pollingQueryType ===
       "state_context"
