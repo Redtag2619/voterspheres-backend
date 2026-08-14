@@ -2,23 +2,7 @@ import OpenAI from "openai";
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
-
- 
-
- 
 
  
 
@@ -26,31 +10,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-const BUILD = "4.4.0-unified-candidate-intelligence";
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
+const BUILD = "4.5.0-grounded-candidate-briefings";
 
  
 
@@ -58,23 +18,7 @@ const ORCHESTRATOR_TIMEOUT_MS =
 
  
 
- 
-
- 
-
   Number(process.env.EXECUTIVE_ORCHESTRATOR_TIMEOUT_MS) || 45000;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -82,23 +26,7 @@ const TOOL_TIMEOUT_MS =
 
  
 
- 
-
- 
-
   Number(process.env.EXECUTIVE_ORCHESTRATOR_TOOL_TIMEOUT_MS) || 30000;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -106,23 +34,7 @@ const SYNTHESIS_TIMEOUT_MS =
 
  
 
- 
-
- 
-
   Number(process.env.EXECUTIVE_ORCHESTRATOR_SYNTHESIS_TIMEOUT_MS) || 18000;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -130,23 +42,7 @@ const MAX_TOOLS =
 
  
 
- 
-
- 
-
   Number(process.env.EXECUTIVE_ORCHESTRATOR_MAX_TOOLS) || 9;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -154,23 +50,7 @@ const MODEL =
 
  
 
- 
-
- 
-
   process.env.EXECUTIVE_ORCHESTRATOR_MODEL || "gpt-5-mini";
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -178,15 +58,7 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
- 
-
- 
-
   ? new OpenAI({
-
- 
-
- 
 
  
 
@@ -194,15 +66,7 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
- 
-
- 
-
       timeout: SYNTHESIS_TIMEOUT_MS,
-
- 
-
- 
 
  
 
@@ -210,15 +74,7 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
- 
-
- 
-
     })
-
- 
-
- 
 
  
 
@@ -226,23 +82,7 @@ const openai = process.env.OPENAI_API_KEY
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 const STATE_NAMES = Object.freeze({
-
- 
-
- 
 
  
 
@@ -250,15 +90,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   AK: "Alaska",
-
- 
-
- 
 
  
 
@@ -266,15 +98,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   AR: "Arkansas",
-
- 
-
- 
 
  
 
@@ -282,15 +106,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   CO: "Colorado",
-
- 
-
- 
 
  
 
@@ -298,15 +114,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   DE: "Delaware",
-
- 
-
- 
 
  
 
@@ -314,15 +122,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   GA: "Georgia",
-
- 
-
- 
 
  
 
@@ -330,15 +130,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   ID: "Idaho",
-
- 
-
- 
 
  
 
@@ -346,15 +138,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   IN: "Indiana",
-
- 
-
- 
 
  
 
@@ -362,15 +146,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   KS: "Kansas",
-
- 
-
- 
 
  
 
@@ -378,15 +154,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   LA: "Louisiana",
-
- 
-
- 
 
  
 
@@ -394,16 +162,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
-
   MD: "Maryland",
-
- 
-
- 
 
  
 
@@ -411,15 +170,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   MI: "Michigan",
-
- 
-
- 
 
  
 
@@ -427,15 +178,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   MS: "Mississippi",
-
- 
-
- 
 
  
 
@@ -443,15 +186,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   MT: "Montana",
-
- 
-
- 
 
  
 
@@ -459,15 +194,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   NV: "Nevada",
-
- 
-
- 
 
  
 
@@ -475,15 +202,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   NJ: "New Jersey",
-
- 
-
- 
 
  
 
@@ -491,15 +210,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   NY: "New York",
-
- 
-
- 
 
  
 
@@ -507,15 +218,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   ND: "North Dakota",
-
- 
-
- 
 
  
 
@@ -523,15 +226,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   OK: "Oklahoma",
-
- 
-
- 
 
  
 
@@ -539,15 +234,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   PA: "Pennsylvania",
-
- 
-
- 
 
  
 
@@ -555,15 +242,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   SC: "South Carolina",
-
- 
-
- 
 
  
 
@@ -571,15 +250,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   TN: "Tennessee",
-
- 
-
- 
 
  
 
@@ -587,15 +258,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   UT: "Utah",
-
- 
-
- 
 
  
 
@@ -603,15 +266,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   VA: "Virginia",
-
- 
-
- 
 
  
 
@@ -619,15 +274,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   WV: "West Virginia",
-
- 
-
- 
 
  
 
@@ -635,15 +282,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
   WY: "Wyoming",
-
- 
-
- 
 
  
 
@@ -651,23 +290,7 @@ const STATE_NAMES = Object.freeze({
 
  
 
- 
-
- 
-
 });
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -675,15 +298,7 @@ const STATE_CODES = Object.fromEntries(
 
  
 
- 
-
- 
-
   Object.entries(STATE_NAMES).map(([code, name]) => [
-
- 
-
- 
 
  
 
@@ -691,15 +306,7 @@ const STATE_CODES = Object.fromEntries(
 
  
 
- 
-
- 
-
     code,
-
- 
-
- 
 
  
 
@@ -707,23 +314,7 @@ const STATE_CODES = Object.fromEntries(
 
  
 
- 
-
- 
-
 );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -731,23 +322,7 @@ const now = () => new Date().toISOString();
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 const clean = (value = "") =>
-
- 
-
- 
 
  
 
@@ -755,23 +330,7 @@ const clean = (value = "") =>
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 const unique = (values = []) =>
-
- 
-
- 
 
  
 
@@ -779,40 +338,11 @@ const unique = (values = []) =>
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 const clamp = (value, fallback, min, max) => {
 
  
 
- 
-
- 
-
-
   const number = Number.parseInt(value, 10);
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -820,15 +350,7 @@ const clamp = (value, fallback, min, max) => {
 
  
 
- 
-
- 
-
     ? Math.min(max, Math.max(min, number))
-
- 
-
- 
 
  
 
@@ -836,23 +358,7 @@ const clamp = (value, fallback, min, max) => {
 
  
 
- 
-
- 
-
 };
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -860,23 +366,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
   let timer;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -884,15 +374,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
     timer = setTimeout(
-
- 
-
- 
 
  
 
@@ -900,15 +382,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
         reject(
-
- 
-
- 
 
  
 
@@ -916,15 +390,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
             new Error(
-
- 
-
- 
 
  
 
@@ -932,15 +398,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
             ),
-
- 
-
- 
 
  
 
@@ -948,15 +406,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
               code: "ORCHESTRATOR_TIMEOUT",
-
- 
-
- 
 
  
 
@@ -964,23 +414,11 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
           )
 
  
 
- 
-
- 
-
         ),
-
- 
-
- 
 
  
 
@@ -988,15 +426,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -1004,23 +434,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return Promise.race([
-
- 
-
- 
 
  
 
@@ -1028,15 +442,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
     timeout,
-
- 
-
- 
 
  
 
@@ -1044,15 +450,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
     clearTimeout(timer)
-
- 
-
- 
 
  
 
@@ -1060,23 +458,7 @@ function withTimeout(promise, timeoutMs, label) {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1084,15 +466,7 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -1100,23 +474,11 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
     typeof value === "object"
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -1124,23 +486,7 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1148,15 +494,7 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
     return JSON.parse(value);
-
- 
-
- 
 
  
 
@@ -1164,15 +502,7 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
     return null;
-
- 
-
- 
 
  
 
@@ -1180,32 +510,11 @@ function safeJson(value) {
 
  
 
- 
-
- 
-
 }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-
 function extractJsonObject(value) {
-
- 
-
- 
 
  
 
@@ -1213,23 +522,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (!text) {
-
- 
-
- 
 
  
 
@@ -1237,23 +530,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1261,23 +538,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (direct) {
-
- 
-
- 
 
  
 
@@ -1285,23 +546,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1309,15 +554,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     .replace(
-
- 
-
- 
 
  
 
@@ -1325,15 +562,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
       ""
-
- 
-
- 
 
  
 
@@ -1341,15 +570,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     .replace(
-
- 
-
- 
 
  
 
@@ -1357,15 +578,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
       ""
-
- 
-
- 
 
  
 
@@ -1373,23 +586,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     .trim();
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1397,23 +594,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (parsed) {
-
- 
-
- 
 
  
 
@@ -1421,23 +602,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1445,23 +610,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     text.indexOf("{");
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1469,23 +618,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     text.lastIndexOf("}");
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1493,15 +626,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
     end > start
-
- 
-
- 
 
  
 
@@ -1509,15 +634,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
         text.slice(
-
- 
-
- 
 
  
 
@@ -1525,15 +642,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
           end + 1
-
- 
-
- 
 
  
 
@@ -1541,15 +650,7 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -1557,120 +658,175 @@ function extractJsonObject(value) {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
 function detectState(
+
   question,
+
   suppliedState = ""
+
 ) {
+
   const explicit =
+
     clean(
+
       suppliedState
+
     ).toUpperCase();
 
+ 
+
   /*
+
    * Explicit payload state always has priority.
+
    */
+
   if (
+
     STATE_NAMES[explicit]
+
   ) {
+
     return explicit;
+
   }
 
+ 
+
   const raw =
+
     clean(
+
       question
+
     );
+
+ 
 
   const lower =
 
+ 
+
     raw.toLowerCase();
 
+ 
+
   /*
+
    * First resolve full state names.
+
    *
+
    * Use word boundaries so names such as "maine" or "texas"
+
    * are matched as geographic terms rather than substrings.
+
    */
+
   for (
+
     const [name, code]
+
     of Object.entries(
+
       STATE_CODES
+
     )
+
   ) {
+
     const escapedName =
+
       String(name)
+
         .replace(
+
           /[.*+?^${}()|[\]\\]/g,
+
           "\\$&"
+
         );
 
+ 
+
     const stateNamePattern =
+
       new RegExp(
+
         `\\b${escapedName}\\b`,
+
         "i"
+
       );
 
+ 
+
     if (
+
       stateNamePattern.test(
+
         raw
+
       )
+
     ) {
+
       return code;
+
     }
+
   }
 
+ 
+
   /*
+
    * Postal abbreviations are intentionally CASE-SENSITIVE.
+
    *
+
    * This prevents ordinary English words from being interpreted
+
    * as states:
+
    *
+
    *   "give me a briefing"  -> must NOT resolve ME / Maine
+
    *   "or should we..."     -> must NOT resolve OR / Oregon
+
    *   "in the race..."      -> must NOT resolve IN / Indiana
+
    *
+
    * Explicit geographic text such as "TX", "GA", "PA", etc.
+
    * still resolves normally.
+
    */
+
   const postalMatch =
+
     raw.match(
+
       /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/
+
     );
 
+ 
+
   return postalMatch
+
     ? postalMatch[1]
+
     : "";
+
 }
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1678,15 +834,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
   question,
-
- 
-
- 
 
  
 
@@ -1694,15 +842,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -1710,15 +850,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -1726,31 +858,11 @@ function detectCycle(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -1758,15 +870,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
       explicit
-
- 
-
- 
 
  
 
@@ -1774,15 +878,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -1790,23 +886,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1814,23 +894,11 @@ function detectCycle(
 
  
 
- 
-
- 
-
     clean(
 
  
 
- 
-
- 
-
       question
-
- 
-
- 
 
  
 
@@ -1838,15 +906,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
       /\b(20\d{2})\b/
-
- 
-
- 
 
  
 
@@ -1854,23 +914,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return (
-
- 
-
- 
 
  
 
@@ -1878,15 +922,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
     String(
-
- 
-
- 
 
  
 
@@ -1894,15 +930,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -1910,23 +938,7 @@ function detectCycle(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -1934,15 +946,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
   question,
-
- 
-
- 
 
  
 
@@ -1950,15 +954,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -1966,15 +962,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -1982,32 +970,11 @@ function detectOffice(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-
   if (explicit) {
-
- 
-
- 
 
  
 
@@ -2015,23 +982,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -2039,15 +990,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -2055,23 +998,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     ).toLowerCase();
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -2079,15 +1006,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2095,15 +1014,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "President",
-
- 
-
- 
 
  
 
@@ -2111,15 +1022,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2127,15 +1030,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "Governor",
-
- 
-
- 
 
  
 
@@ -2143,15 +1038,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2159,15 +1046,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "U.S. Senate",
-
- 
-
- 
 
  
 
@@ -2175,15 +1054,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2191,15 +1062,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "U.S. Senate",
-
- 
-
- 
 
  
 
@@ -2207,15 +1070,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2223,15 +1078,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "U.S. Senate",
-
- 
-
- 
 
  
 
@@ -2239,15 +1086,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2255,15 +1094,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "U.S. House",
-
- 
-
- 
 
  
 
@@ -2271,15 +1102,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2287,15 +1110,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "U.S. House",
-
- 
-
- 
 
  
 
@@ -2303,15 +1118,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2319,15 +1126,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "Attorney General",
-
- 
-
- 
 
  
 
@@ -2335,15 +1134,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -2351,23 +1142,11 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "Secretary of State",
 
  
 
- 
-
- 
-
     ],
-
- 
-
- 
 
  
 
@@ -2375,15 +1154,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
       "mayor",
-
- 
-
- 
 
  
 
@@ -2391,32 +1162,11 @@ function detectOffice(
 
  
 
- 
-
- 
-
     ],
 
  
 
- 
-
- 
-
-
   ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -2424,15 +1174,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     pairs.find(
-
- 
-
- 
 
  
 
@@ -2440,15 +1182,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
         lower.includes(
-
- 
-
- 
 
  
 
@@ -2456,15 +1190,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -2472,15 +1198,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
     ""
-
- 
-
- 
 
  
 
@@ -2488,23 +1206,7 @@ function detectOffice(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -2512,23 +1214,11 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
   return clean(value)
 
  
 
- 
-
- 
-
     .replace(
-
- 
-
- 
 
  
 
@@ -2536,23 +1226,11 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
       ""
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -2560,15 +1238,7 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
       /^(?:for|about|on)\s+/i,
-
- 
-
- 
 
  
 
@@ -2576,15 +1246,7 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -2592,15 +1254,7 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
     .replace(/\s+/g, " ")
-
- 
-
- 
 
  
 
@@ -2608,221 +1262,377 @@ function cleanupDetectedCandidate(value = "") {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
 function detectCandidate(
+
   question,
+
   suppliedCandidate = ""
+
 ) {
+
   const explicit =
+
     cleanupDetectedCandidate(
+
       suppliedCandidate
+
     );
+
+ 
 
   if (explicit) {
+
     return explicit;
+
   }
+
+ 
 
   const text =
+
     clean(question);
 
+ 
+
   if (!text) {
+
     return "";
+
   }
 
+ 
+
   /*
+
    * Quoted candidate:
+
    *   briefing on "Jasmine Crockett"
+
    */
+
   const quoted =
+
     text.match(
+
       /["“]([^"”]{3,80})["”]/
+
     );
+
+ 
 
   if (quoted) {
+
     const candidate =
+
       cleanupDetectedCandidate(
+
         quoted[1]
+
       );
 
+ 
+
     if (candidate) {
+
       return candidate;
+
     }
+
   }
 
+ 
+
   /*
+
    * Finance/FEC-specific forms.
+
    *
+
    * Examples:
+
    *   current FEC report for Jasmine Crockett
+
    *   fundraising for Jasmine Crockett
+
    *   finance report for Jasmine Crockett
+
    */
+
   const financeFor =
+
     text.match(
+
       /(?:fec|finance|financial|report|filing|fundraising)[^\n]{0,50}?\bfor\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
     );
+
+ 
 
   if (financeFor) {
+
     const candidate =
+
       cleanupDetectedCandidate(
+
         financeFor[1]
+
       );
 
+ 
+
     if (candidate) {
+
       return candidate;
+
     }
+
   }
 
+ 
+
   /*
+
    * Executive candidate briefing forms.
+
    *
+
    * Examples:
+
    *   give me a complete briefing on Jasmine Crockett
+
    *   full briefing about Jasmine Crockett
+
    *   candidate briefing for Jasmine Crockett
+
    *   assessment of Jasmine Crockett
+
    */
+
   const briefingFor =
+
     text.match(
-      /(?:complete\s+briefing|full\s+briefing|candidate\s+briefing|briefing|complete\s+assessment|full\s+assessment|assessment|intelligence)\s+(?:on|about|for|of)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
+      /(?:complete\s+(?:detailed\s+)?briefing|detailed\s+briefing|comprehensive\s+briefing|full\s+briefing|candidate\s+briefing|briefing|complete\s+assessment|full\s+assessment|assessment|intelligence)\s+(?:on|about|for|of)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
     );
+
+ 
 
   if (briefingFor) {
+
     const candidate =
+
       cleanupDetectedCandidate(
+
         briefingFor[1]
+
       );
 
+ 
+
     if (
+
       candidate &&
+
       !Object.values(
+
         STATE_NAMES
+
       ).some(
+
         (stateName) =>
+
           clean(
+
             stateName
+
           ).toLowerCase() ===
+
           candidate.toLowerCase()
+
       )
+
     ) {
+
       return candidate;
+
     }
+
   }
 
+ 
+
   /*
+
    * "Brief me on..." form.
+
    */
+
   const briefMe =
+
     text.match(
+
       /\bbrief\s+me\s+(?:on|about)\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
     );
+
+ 
 
   if (briefMe) {
+
     const candidate =
+
       cleanupDetectedCandidate(
+
         briefMe[1]
+
       );
 
+ 
+
     if (candidate) {
+
       return candidate;
+
     }
+
   }
 
+ 
+
   /*
+
    * "Tell me everything about..." form.
+
    */
+
   const everythingAbout =
+
     text.match(
+
       /(?:tell\s+me\s+everything\s+(?:about|on)|everything\s+(?:about|on)|what\s+should\s+i\s+know\s+(?:about|on))\s+([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})(?=\s*(?:\?|$|,|\.|in\s+20\d{2}\b))/i
+
     );
 
+ 
+
   if (everythingAbout) {
+
     const candidate =
+
       cleanupDetectedCandidate(
+
         everythingAbout[1]
+
       );
+
+ 
 
     if (candidate) {
+
       return candidate;
+
     }
+
   }
+
+ 
 
   /*
+
    * General candidate forms.
+
    */
+
   const patterns = [
+
     /(?:about|candidate|profile|statistics|polling|fundraising|finance|fec|news on|news about|tell me about|show me|report for|filing for)\s+(?:for\s+)?([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})/i,
 
+ 
+
     /([A-Za-z][A-Za-z.'-]+(?:\s+[A-Za-z][A-Za-z.'-]+){0,3})\s+(?:campaign|polling|fundraising|finance|fec|candidate|race|statistics|news|report|filing)/i,
+
   ];
 
+ 
+
   for (
+
     const pattern
+
     of patterns
+
   ) {
+
     const match =
+
       text.match(
+
         pattern
+
       );
+
+ 
 
     if (!match) {
+
       continue;
+
     }
+
+ 
 
     const candidate =
+
       cleanupDetectedCandidate(
+
         match[1]
+
       );
 
+ 
+
     if (
+
       candidate &&
+
       !Object.values(
+
         STATE_NAMES
+
       ).some(
+
         (stateName) =>
+
           clean(
+
             stateName
+
           ).toLowerCase() ===
+
           candidate.toLowerCase()
+
       )
 
+ 
+
     ) {
+
       return candidate;
+
     }
+
   }
 
+ 
+
   return "";
+
 }
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -2830,15 +1640,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   question,
-
- 
-
- 
 
  
 
@@ -2846,15 +1648,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -2862,15 +1656,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -2878,31 +1664,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
     ).toLowerCase();
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -2910,15 +1676,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -2926,15 +1684,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -2942,31 +1692,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -2974,15 +1704,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -2990,15 +1712,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3006,53 +1720,27 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
+
   /operations|operational|field|county|parish|task|workspace|readiness|execution|command center/.test(
+
     lower
+
   )
+
 ) {
+
   return "operations";
+
 }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3060,15 +1748,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -3076,15 +1756,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3092,31 +1764,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3124,15 +1776,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -3140,15 +1784,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3156,31 +1792,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3188,15 +1804,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -3204,16 +1812,7 @@ function classifyIntent(
 
  
 
- 
-
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3221,31 +1820,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3253,15 +1832,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
-    /everything|complete briefing|full briefing|candidate briefing|complete assessment|full assessment|all intelligence|all data|what should i know|tell me everything|strategy|strategies|strategic|news|articles/.test(
-
- 
-
- 
+    /everything|complete (?:detailed )?briefing|detailed briefing|comprehensive briefing|full briefing|candidate briefing|complete assessment|full assessment|all intelligence|all data|what should i know|tell me everything|strategy|strategies|strategic|news|articles/.test(
 
  
 
@@ -3269,23 +1840,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3293,31 +1852,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3325,15 +1864,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -3341,15 +1872,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3357,15 +1880,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       ? "candidate_intelligence"
-
- 
-
- 
 
  
 
@@ -3373,31 +1888,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3405,15 +1900,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
       lower
-
- 
-
- 
 
  
 
@@ -3421,15 +1908,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3437,31 +1916,11 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -3469,15 +1928,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -3485,23 +1936,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3509,23 +1944,7 @@ function classifyIntent(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3533,23 +1952,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
   payload = {}
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -3557,15 +1964,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -3573,15 +1972,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       payload.query ||
-
- 
-
- 
 
  
 
@@ -3589,24 +1980,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 
  
 
@@ -3614,31 +1988,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
     question,
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     state:
-
- 
-
- 
 
  
 
@@ -3646,15 +2000,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
         question,
-
- 
-
- 
 
  
 
@@ -3662,31 +2008,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     office:
-
- 
-
- 
 
  
 
@@ -3694,15 +2020,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
         question,
-
- 
-
- 
 
  
 
@@ -3710,23 +2028,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3734,23 +2036,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
       detectCandidate(
 
  
 
- 
-
- 
-
         question,
-
- 
-
- 
 
  
 
@@ -3758,31 +2048,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     cycle:
-
- 
-
- 
 
  
 
@@ -3790,15 +2060,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
         question,
-
- 
-
- 
 
  
 
@@ -3806,23 +2068,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3830,15 +2076,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       clean(
-
- 
-
- 
 
  
 
@@ -3846,23 +2084,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3870,15 +2092,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       clean(
-
- 
-
- 
 
  
 
@@ -3886,31 +2100,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
         payload.fec_candidate_id
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3918,15 +2112,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       clean(
-
- 
-
- 
 
  
 
@@ -3934,23 +2120,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3958,23 +2128,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
       payload.latitude,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -3982,32 +2136,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
       payload.longitude,
 
  
 
- 
-
- 
-
   };
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 
  
 
@@ -4015,23 +2148,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
     STATE_NAMES[
 
  
 
- 
-
- 
-
       context.state
-
- 
-
- 
 
  
 
@@ -4039,23 +2160,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
     null;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4063,23 +2168,11 @@ function resolveContext(
 
  
 
- 
-
- 
-
     classifyIntent(
 
  
 
- 
-
- 
-
       question,
-
- 
-
- 
 
  
 
@@ -4087,23 +2180,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4111,23 +2188,7 @@ function resolveContext(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4135,15 +2196,7 @@ function makeCall(
 
  
 
- 
-
- 
-
   name,
-
- 
-
- 
 
  
 
@@ -4151,15 +2204,7 @@ function makeCall(
 
  
 
- 
-
- 
-
   reason,
-
- 
-
- 
 
  
 
@@ -4167,15 +2212,7 @@ function makeCall(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -4183,15 +2220,7 @@ function makeCall(
 
  
 
- 
-
- 
-
     name,
-
- 
-
- 
 
  
 
@@ -4199,15 +2228,7 @@ function makeCall(
 
  
 
- 
-
- 
-
       args,
-
- 
-
- 
 
  
 
@@ -4215,15 +2236,7 @@ function makeCall(
 
  
 
- 
-
- 
-
     priority,
-
- 
-
- 
 
  
 
@@ -4231,23 +2244,7 @@ function makeCall(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4255,15 +2252,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   question,
-
- 
-
- 
 
  
 
@@ -4271,15 +2260,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   workspaceId,
-
- 
-
- 
 
  
 
@@ -4287,15 +2268,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -4303,23 +2276,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const common = {
-
- 
-
- 
 
  
 
@@ -4327,23 +2284,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4351,23 +2292,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4375,23 +2300,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.office,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4399,24 +2308,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.locality,
-
- 
-
- 
-
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4424,23 +2316,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.cycle,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4448,23 +2324,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     workspace_id:
-
- 
-
- 
 
  
 
@@ -4472,23 +2332,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   };
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4496,15 +2340,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -4512,15 +2348,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -4528,15 +2356,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -4544,15 +2364,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -4560,23 +2372,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.candidate,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4584,23 +2380,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4608,23 +2388,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.office,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4632,23 +2396,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4656,15 +2404,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -4672,15 +2412,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         100
-
- 
-
- 
 
  
 
@@ -4688,23 +2420,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4712,15 +2428,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -4728,15 +2436,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -4744,23 +2444,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4768,23 +2452,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -4792,24 +2460,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 
  
 
@@ -4817,15 +2468,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -4833,15 +2476,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         82
-
- 
-
- 
 
  
 
@@ -4849,15 +2484,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -4865,15 +2492,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -4881,15 +2500,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -4897,15 +2508,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
      * Finance identity resolution is intentionally isolated from
-
- 
-
- 
 
  
 
@@ -4913,15 +2516,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
      * include polling/news providers. A pure FEC question must never
-
- 
-
- 
 
  
 
@@ -4929,15 +2524,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
      */
-
- 
-
- 
 
  
 
@@ -4945,15 +2532,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.candidate ||
-
- 
-
- 
 
  
 
@@ -4961,15 +2540,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       context.state
-
- 
-
- 
 
  
 
@@ -4977,23 +2548,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       calls.push(
 
  
 
- 
-
- 
-
         makeCall(
-
- 
-
- 
 
  
 
@@ -5001,15 +2560,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
           {
-
- 
-
- 
 
  
 
@@ -5017,23 +2568,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.candidate,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5041,23 +2576,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.candidate_id,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5065,23 +2584,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5089,23 +2592,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.office,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5113,23 +2600,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.cycle,
 
  
 
- 
-
- 
-
           },
-
- 
-
- 
 
  
 
@@ -5137,15 +2612,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
           100
-
- 
-
- 
 
  
 
@@ -5153,15 +2620,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -5169,31 +2628,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     calls.push(
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -5201,16 +2640,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
-
 
  
 
@@ -5218,23 +2648,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.candidate,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5242,23 +2656,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.candidate_id,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5266,23 +2664,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.committee_id,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5290,23 +2672,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.cycle,
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -5314,15 +2684,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         98
-
- 
-
- 
 
  
 
@@ -5330,15 +2692,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -5346,15 +2700,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -5362,15 +2708,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -5378,15 +2716,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -5394,15 +2724,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -5410,15 +2732,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -5426,23 +2740,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.candidate,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5450,23 +2748,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.candidate_id,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5474,23 +2756,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5498,23 +2764,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.office,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5522,23 +2772,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5546,23 +2780,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.cycle,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5570,23 +2788,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             workspaceId,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5594,15 +2796,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -5610,16 +2804,7 @@ function buildToolPlan({
 
  
 
- 
-
-
- 
-
         100
-
- 
-
- 
 
  
 
@@ -5627,54 +2812,77 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
     } else if (
+
   context.intent ===
+
   "operations"
+
 ) {
+
   if (
+
     context.state
+
   ) {
+
     calls.push(
+
       makeCall(
+
         "get_state_operations",
+
         {
+
           state:
+
             context.state,
 
+ 
+
           locality:
+
             context.locality,
 
+ 
+
           workspace_id:
+
             workspaceId,
+
         },
+
         "Load state operational intelligence.",
+
         100
+
       )
+
     );
+
   }
 
-  calls.push(
-    makeCall(
-      "get_unified_executive_intelligence",
-      common,
-      "Load executive operational context.",
-      94
-    )
-  );
  
+
+  calls.push(
+
+    makeCall(
+
+      "get_unified_executive_intelligence",
+
+      common,
+
+      "Load executive operational context.",
+
+      94
+
+    )
+
+  );
 
  
 
@@ -5682,15 +2890,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -5698,15 +2898,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -5714,15 +2906,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -5730,15 +2914,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -5746,23 +2922,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5770,23 +2930,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5794,23 +2938,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5818,15 +2946,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -5834,15 +2954,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         100
-
- 
-
- 
 
  
 
@@ -5850,23 +2962,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5874,15 +2970,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -5890,15 +2978,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -5906,23 +2986,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5930,23 +2994,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5954,23 +3002,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -5978,15 +3010,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -5994,15 +3018,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         88
-
- 
-
- 
 
  
 
@@ -6010,16 +3026,7 @@ function buildToolPlan({
 
  
 
- 
-
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -6027,15 +3034,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -6043,15 +3042,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -6059,15 +3050,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -6075,15 +3058,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -6091,15 +3066,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             question,
-
- 
-
- 
 
  
 
@@ -6107,15 +3074,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -6123,15 +3082,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         100
-
- 
-
- 
 
  
 
@@ -6139,23 +3090,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   } else if (
-
- 
-
- 
 
  
 
@@ -6163,15 +3102,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       "weather" &&
-
- 
-
- 
 
  
 
@@ -6179,15 +3110,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     context.longitude != null
-
- 
-
- 
 
  
 
@@ -6195,23 +3118,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     calls.push(
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -6219,15 +3130,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -6235,23 +3138,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.latitude,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6259,23 +3146,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.longitude,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6283,15 +3154,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality ||
-
- 
-
- 
 
  
 
@@ -6299,15 +3162,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -6315,15 +3170,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         100
-
- 
-
- 
 
  
 
@@ -6331,66 +3178,97 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   } else if (
+
   context.intent ===
+
   "candidate_intelligence"
+
 ) {
+
   calls.push(
+
     makeCall(
+
       "get_candidate_intelligence_bundle",
+
       {
+
         candidate:
+
           context.candidate,
 
+ 
+
         candidate_id:
+
           context.candidate_id,
 
+ 
+
         committee_id:
+
           context.committee_id,
 
+ 
+
         state:
+
           context.state,
 
+ 
+
         office:
+
           context.office,
 
+ 
+
         locality:
+
           context.locality,
 
+ 
+
         cycle:
+
           context.cycle,
 
+ 
+
         workspace_id:
+
           workspaceId,
 
+ 
+
         limit,
+
       },
+
       "Build a verified candidate intelligence bundle across profile, official FEC finance, polling, current news, political signals, strategy recommendations, and executive operating context.",
+
       100
+
     )
+
   );
+
+ 
 
 } else {
 
+ 
+
   if (
+
     context.state
+
   ) {
-
- 
-
- 
 
  
 
@@ -6398,15 +3276,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         makeCall(
-
- 
-
- 
 
  
 
@@ -6414,16 +3284,7 @@ function buildToolPlan({
 
  
 
-
- 
-
- 
-
           {
-
- 
-
- 
 
  
 
@@ -6431,23 +3292,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6455,23 +3300,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6479,15 +3308,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
               workspaceId,
-
- 
-
- 
 
  
 
@@ -6495,15 +3316,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
           "Load state intelligence context.",
-
- 
-
- 
 
  
 
@@ -6511,15 +3324,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -6527,23 +3332,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6551,15 +3340,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -6567,15 +3348,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -6583,23 +3356,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6607,23 +3364,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6631,23 +3372,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             context.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6655,15 +3380,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -6671,15 +3388,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         90
-
- 
-
- 
 
  
 
@@ -6687,23 +3396,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6711,15 +3404,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       makeCall(
-
- 
-
- 
 
  
 
@@ -6727,15 +3412,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         common,
-
- 
-
- 
 
  
 
@@ -6743,15 +3420,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         82
-
- 
-
- 
 
  
 
@@ -6759,31 +3428,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -6791,15 +3440,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
     ...new Map(
-
- 
-
- 
 
  
 
@@ -6807,16 +3448,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         (call) => [
-
- 
-
-
- 
 
  
 
@@ -6824,15 +3456,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
             call.arguments
-
- 
-
- 
 
  
 
@@ -6840,15 +3464,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
           call,
-
- 
-
- 
 
  
 
@@ -6856,15 +3472,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -6872,15 +3480,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
   ]
-
- 
-
- 
 
  
 
@@ -6888,15 +3488,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       (a, b) =>
-
- 
-
- 
 
  
 
@@ -6904,23 +3496,11 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         a.priority
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -6928,15 +3508,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       0,
-
- 
-
- 
 
  
 
@@ -6944,15 +3516,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         MAX_TOOLS,
-
- 
-
- 
 
  
 
@@ -6960,15 +3524,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
         1,
-
- 
-
- 
 
  
 
@@ -6976,15 +3532,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -6992,23 +3540,7 @@ function buildToolPlan({
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -7016,15 +3548,7 @@ function countItems(
 
  
 
- 
-
- 
-
   value,
-
- 
-
- 
 
  
 
@@ -7032,23 +3556,11 @@ function countItems(
 
  
 
- 
-
- 
-
 ) {
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -7056,23 +3568,11 @@ function countItems(
 
  
 
- 
-
- 
-
     depth > 5
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -7080,31 +3580,11 @@ function countItems(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -7112,15 +3592,7 @@ function countItems(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -7128,15 +3600,7 @@ function countItems(
 
  
 
- 
-
- 
-
       (
-
- 
-
- 
 
  
 
@@ -7144,15 +3608,7 @@ function countItems(
 
  
 
- 
-
- 
-
         item
-
- 
-
- 
 
  
 
@@ -7160,15 +3616,7 @@ function countItems(
 
  
 
- 
-
- 
-
         sum +
-
- 
-
- 
 
  
 
@@ -7176,15 +3624,7 @@ function countItems(
 
  
 
- 
-
- 
-
           typeof item ===
-
- 
-
- 
 
  
 
@@ -7192,15 +3632,7 @@ function countItems(
 
  
 
- 
-
- 
-
             ? countItems(
-
- 
-
- 
 
  
 
@@ -7208,16 +3640,7 @@ function countItems(
 
  
 
- 
-
- 
-
                 depth + 1
-
- 
-
-
- 
 
  
 
@@ -7225,15 +3648,7 @@ function countItems(
 
  
 
- 
-
- 
-
             : 1
-
- 
-
- 
 
  
 
@@ -7241,15 +3656,7 @@ function countItems(
 
  
 
- 
-
- 
-
       0
-
- 
-
- 
 
  
 
@@ -7257,23 +3664,7 @@ function countItems(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -7281,15 +3672,7 @@ function countItems(
 
  
 
- 
-
- 
-
     typeof value !==
-
- 
-
- 
 
  
 
@@ -7297,15 +3680,7 @@ function countItems(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -7313,15 +3688,7 @@ function countItems(
 
  
 
- 
-
- 
-
       ? 1
-
- 
-
- 
 
  
 
@@ -7329,23 +3696,7 @@ function countItems(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -7353,15 +3704,7 @@ function countItems(
 
  
 
- 
-
- 
-
     value
-
- 
-
- 
 
  
 
@@ -7369,15 +3712,7 @@ function countItems(
 
  
 
- 
-
- 
-
     (
-
- 
-
- 
 
  
 
@@ -7385,15 +3720,7 @@ function countItems(
 
  
 
- 
-
- 
-
       child
-
- 
-
- 
 
  
 
@@ -7401,15 +3728,7 @@ function countItems(
 
  
 
- 
-
- 
-
       sum +
-
- 
-
- 
 
  
 
@@ -7417,15 +3736,7 @@ function countItems(
 
  
 
- 
-
- 
-
         child,
-
- 
-
- 
 
  
 
@@ -7433,15 +3744,7 @@ function countItems(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
 
  
 
@@ -7449,15 +3752,7 @@ function countItems(
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
 
  
 
@@ -7465,23 +3760,7 @@ function countItems(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 function normalizeToolResult(
-
- 
-
- 
 
  
 
@@ -7489,15 +3768,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
   result,
-
- 
-
- 
 
  
 
@@ -7505,15 +3776,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -7521,15 +3784,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
     result &&
-
- 
-
- 
 
  
 
@@ -7537,15 +3792,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       "object"
-
- 
-
- 
 
  
 
@@ -7553,23 +3800,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       : {};
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -7577,15 +3808,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -7593,15 +3816,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -7609,32 +3824,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       : [];
 
  
 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const normalizedData =
-
- 
-
- 
 
  
 
@@ -7746,15 +3940,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
   const meaningful_item_count =
-
- 
-
- 
 
  
 
@@ -7762,31 +3948,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       normalizedData
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -7794,15 +3960,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
     Boolean(
-
- 
-
- 
 
  
 
@@ -7810,15 +3968,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       (
-
- 
-
- 
 
  
 
@@ -7826,15 +3976,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
           0 ||
-
- 
-
- 
 
  
 
@@ -7842,15 +3984,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
           0
-
- 
-
- 
 
  
 
@@ -7858,31 +3992,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -7890,31 +4004,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       call.name,
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     reason:
-
- 
-
- 
 
  
 
@@ -7922,23 +4016,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     arguments:
-
- 
-
- 
 
  
 
@@ -7946,31 +4024,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     ok:
 
  
 
- 
-
- 
-
       Boolean(
-
- 
-
- 
 
  
 
@@ -7978,23 +4036,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8002,24 +4044,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     degraded:
-
- 
-
-
- 
 
  
 
@@ -8027,31 +4052,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
         value.degraded
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8059,15 +4064,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       clean(
-
- 
-
- 
 
  
 
@@ -8075,23 +4072,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8099,15 +4080,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       normalizedData ??
-
- 
-
- 
 
  
 
@@ -8115,31 +4088,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     sources,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8147,15 +4096,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       Array.isArray(
-
- 
-
- 
 
  
 
@@ -8163,15 +4104,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -8179,15 +4112,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
             Boolean
-
- 
-
- 
 
  
 
@@ -8195,23 +4120,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
         : [],
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8219,15 +4128,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       Array.isArray(
-
- 
-
- 
 
  
 
@@ -8235,15 +4136,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -8251,23 +4144,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
         : [],
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8275,15 +4152,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       value.generated_at ||
-
- 
-
- 
 
  
 
@@ -8291,23 +4160,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8315,23 +4168,7 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
       latencyMs,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8339,31 +4176,11 @@ function normalizeToolResult(
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8371,15 +4188,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
   call,
-
- 
-
- 
 
  
 
@@ -8387,15 +4196,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -8403,24 +4204,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
     Date.now();
-
- 
-
- 
-
- 
-
- 
-
- 
-
-
- 
 
  
 
@@ -8428,23 +4212,11 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
     const operation =
 
  
 
- 
-
- 
-
       call.name ===
-
- 
-
- 
 
  
 
@@ -8452,15 +4224,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         ? getCandidateIntelligenceBundle({
-
- 
-
- 
 
  
 
@@ -8468,23 +4232,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.candidate,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8492,23 +4240,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.candidate_id,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8516,23 +4248,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.state,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8540,23 +4256,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.office,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8564,23 +4264,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.cycle,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8588,23 +4272,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.locality,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8612,15 +4280,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               call.arguments?.workspace_id ||
-
- 
-
- 
 
  
 
@@ -8628,23 +4288,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
             limit:
-
- 
-
- 
 
  
 
@@ -8652,23 +4296,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
               12,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8676,15 +4304,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
           })
-
- 
-
- 
 
  
 
@@ -8692,15 +4312,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             {
-
- 
-
- 
 
  
 
@@ -8708,23 +4320,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
                 call.name,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8732,23 +4328,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
                 call.arguments,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8756,31 +4336,11 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             }
 
  
 
- 
-
- 
-
           );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8788,15 +4348,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
       await withTimeout(
-
- 
-
- 
 
  
 
@@ -8804,15 +4356,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         call.name ===
-
- 
-
- 
 
  
 
@@ -8820,16 +4364,7 @@ async function executePlannedTool(
 
  
 
-
- 
-
- 
-
           ? ORCHESTRATOR_TIMEOUT_MS
-
- 
-
- 
 
  
 
@@ -8837,31 +4372,11 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         call.name
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8869,15 +4384,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
       call,
-
- 
-
- 
 
  
 
@@ -8885,15 +4392,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
       Date.now() -
-
- 
-
- 
 
  
 
@@ -8901,15 +4400,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -8917,15 +4408,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -8933,23 +4416,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         call.name,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8957,23 +4424,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         call.reason,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -8981,23 +4432,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         call.arguments,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9005,23 +4440,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         false,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9029,23 +4448,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         false,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9053,23 +4456,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         true,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9077,23 +4464,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         `${call.name} failed.`,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9101,23 +4472,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9125,23 +4480,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         [],
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9149,15 +4488,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         error?.message ||
-
- 
-
- 
 
  
 
@@ -9165,23 +4496,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
       ],
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9189,15 +4504,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -9205,24 +4512,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             call.name,
-
- 
-
- 
-
- 
-
- 
-
- 
-
-
- 
 
  
 
@@ -9230,23 +4520,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             false,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9254,15 +4528,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             error?.message ||
-
- 
-
- 
 
  
 
@@ -9270,23 +4536,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
           latency_ms:
-
- 
-
- 
 
  
 
@@ -9294,23 +4544,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             started,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9318,23 +4552,11 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
             now(),
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -9342,39 +4564,11 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       generated_at:
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9382,15 +4576,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
         Date.now() -
-
- 
-
- 
 
  
 
@@ -9398,23 +4584,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       meaningful_item_count:
-
- 
-
- 
 
  
 
@@ -9422,15 +4592,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
     };
-
- 
-
- 
 
  
 
@@ -9438,23 +4600,7 @@ async function executePlannedTool(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9462,23 +4608,11 @@ function mergeSources(
 
  
 
- 
-
- 
-
   results
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -9486,31 +4620,11 @@ function mergeSources(
 
  
 
- 
-
- 
-
     new Map();
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   for (
-
- 
-
- 
 
  
 
@@ -9518,15 +4632,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
     of results
-
- 
-
- 
 
  
 
@@ -9534,15 +4640,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
     for (
-
- 
-
- 
 
  
 
@@ -9550,23 +4648,11 @@ function mergeSources(
 
  
 
- 
-
- 
-
       of result.sources
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -9574,15 +4660,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
         clean(
-
- 
-
- 
 
  
 
@@ -9590,15 +4668,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
           source?.source_url ||
-
- 
-
- 
 
  
 
@@ -9606,15 +4676,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
           source?.name ||
-
- 
-
- 
 
  
 
@@ -9622,16 +4684,7 @@ function mergeSources(
 
  
 
-
- 
-
- 
-
         ).toLowerCase() ||
-
- 
-
- 
 
  
 
@@ -9639,23 +4692,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -9663,15 +4700,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
       ) {
-
- 
-
- 
 
  
 
@@ -9679,15 +4708,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
           key,
-
- 
-
- 
 
  
 
@@ -9695,15 +4716,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
             ...source,
-
- 
-
- 
 
  
 
@@ -9711,15 +4724,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
               result.tool,
-
- 
-
- 
 
  
 
@@ -9727,15 +4732,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
 
  
 
@@ -9743,15 +4740,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -9759,23 +4748,7 @@ function mergeSources(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return [
-
- 
-
- 
 
  
 
@@ -9783,31 +4756,11 @@ function mergeSources(
 
  
 
- 
-
- 
-
   ];
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9815,15 +4768,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
   results,
-
- 
-
- 
 
  
 
@@ -9831,15 +4776,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -9847,23 +4784,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     results.length;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9871,23 +4792,11 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     results.filter(
 
  
 
- 
-
- 
-
       (item) =>
-
- 
-
- 
 
  
 
@@ -9895,23 +4804,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     ).length;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9919,15 +4812,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     results.filter(
-
- 
-
- 
 
  
 
@@ -9935,31 +4820,11 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         item.usable
 
  
 
- 
-
- 
-
     ).length;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -9967,23 +4832,11 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     results.filter(
 
  
 
- 
-
- 
-
       (item) =>
-
- 
-
- 
 
  
 
@@ -9991,23 +4844,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     ).length;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10015,16 +4852,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
     sources.filter(
-
- 
-
-
- 
 
  
 
@@ -10032,15 +4860,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         source.published_at ||
-
- 
-
- 
 
  
 
@@ -10048,15 +4868,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         source.freshness
-
- 
-
- 
 
  
 
@@ -10064,23 +4876,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const score =
-
- 
-
- 
 
  
 
@@ -10088,15 +4884,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       ? Math.round(
-
- 
-
- 
 
  
 
@@ -10104,15 +4892,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
             useful /
-
- 
-
- 
 
  
 
@@ -10120,15 +4900,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
           ) *
-
- 
-
- 
 
  
 
@@ -10136,15 +4908,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
           Math.min(
-
- 
-
- 
 
  
 
@@ -10152,15 +4916,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
             sources.length *
-
- 
-
- 
 
  
 
@@ -10168,15 +4924,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
           ) +
-
- 
-
- 
 
  
 
@@ -10184,15 +4932,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
             10,
-
- 
-
- 
 
  
 
@@ -10200,15 +4940,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
               2
-
- 
-
- 
 
  
 
@@ -10216,15 +4948,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -10232,23 +4956,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -10256,23 +4964,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       attempted,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10280,23 +4972,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       successful,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10304,23 +4980,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       useful,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10328,23 +4988,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       degraded,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10352,23 +4996,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       sources.length,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10376,23 +5004,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       currentEvidence,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10400,15 +5012,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       Math.min(
-
- 
-
- 
 
  
 
@@ -10416,32 +5020,11 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         score
 
  
 
-
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10449,15 +5032,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
       useful > 0
-
- 
-
- 
 
  
 
@@ -10465,15 +5040,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
           ? "partial"
-
- 
-
- 
 
  
 
@@ -10481,15 +5048,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
         : "unavailable",
-
- 
-
- 
 
  
 
@@ -10497,23 +5056,7 @@ function buildCoverage(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10521,15 +5064,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
   coverage
-
- 
-
- 
 
  
 
@@ -10537,15 +5072,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -10553,15 +5080,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -10569,23 +5088,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10593,15 +5096,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
     100,
-
- 
-
- 
 
  
 
@@ -10609,15 +5104,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
       coverage.coverage_score *
-
- 
-
- 
 
  
 
@@ -10625,15 +5112,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
       Math.min(
-
- 
-
- 
 
  
 
@@ -10641,15 +5120,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
         coverage.source_count *
-
- 
-
- 
 
  
 
@@ -10657,15 +5128,7 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -10673,31 +5136,11 @@ function calculateConfidence(
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10705,15 +5148,7 @@ function findToolResult(
 
  
 
- 
-
- 
-
   results,
-
- 
-
- 
 
  
 
@@ -10721,15 +5156,7 @@ function findToolResult(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -10737,23 +5164,11 @@ function findToolResult(
 
  
 
- 
-
- 
-
     results.find(
 
  
 
- 
-
- 
-
       (item) =>
-
- 
-
- 
 
  
 
@@ -10761,15 +5176,7 @@ function findToolResult(
 
  
 
- 
-
- 
-
     ) ||
-
- 
-
- 
 
  
 
@@ -10777,31 +5184,11 @@ function findToolResult(
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10809,15 +5196,7 @@ function firstObject(
 
  
 
- 
-
- 
-
   values = []
-
- 
-
- 
 
  
 
@@ -10825,16 +5204,7 @@ function firstObject(
 
  
 
-
- 
-
- 
-
   for (
-
- 
-
- 
 
  
 
@@ -10842,15 +5212,7 @@ function firstObject(
 
  
 
- 
-
- 
-
     of values
-
- 
-
- 
 
  
 
@@ -10858,15 +5220,7 @@ function firstObject(
 
  
 
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -10874,15 +5228,7 @@ function firstObject(
 
  
 
- 
-
- 
-
       typeof value ===
-
- 
-
- 
 
  
 
@@ -10890,15 +5236,7 @@ function firstObject(
 
  
 
- 
-
- 
-
       !Array.isArray(
-
- 
-
- 
 
  
 
@@ -10906,15 +5244,7 @@ function firstObject(
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -10922,15 +5252,7 @@ function firstObject(
 
  
 
- 
-
- 
-
       return value;
-
- 
-
- 
 
  
 
@@ -10938,23 +5260,7 @@ function firstObject(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10962,23 +5268,7 @@ function firstObject(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -10986,15 +5276,7 @@ function firstArray(
 
  
 
- 
-
- 
-
   values = []
-
- 
-
- 
 
  
 
@@ -11002,15 +5284,7 @@ function firstArray(
 
  
 
- 
-
- 
-
   for (
-
- 
-
- 
 
  
 
@@ -11018,15 +5292,7 @@ function firstArray(
 
  
 
- 
-
- 
-
     of values
-
- 
-
- 
 
  
 
@@ -11034,15 +5300,7 @@ function firstArray(
 
  
 
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -11050,23 +5308,11 @@ function firstArray(
 
  
 
- 
-
- 
-
       value.length
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -11074,15 +5320,7 @@ function firstArray(
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -11090,39 +5328,11 @@ function firstArray(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return [];
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11130,15 +5340,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
   result
-
- 
-
- 
 
  
 
@@ -11146,15 +5348,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
   const data =
-
- 
-
- 
 
  
 
@@ -11162,23 +5356,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (!data) {
-
- 
-
- 
 
  
 
@@ -11186,23 +5364,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11210,15 +5372,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
     data.records,
-
- 
-
- 
 
  
 
@@ -11226,16 +5380,7 @@ function extractCandidateRecord(
 
  
 
-
- 
-
- 
-
     data.results,
-
- 
-
- 
 
  
 
@@ -11243,31 +5388,11 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
     data.matches,
 
  
 
- 
-
- 
-
   ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11275,31 +5400,11 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
     firstArray(arrays);
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -11307,15 +5412,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -11323,23 +5420,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11347,15 +5428,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
     data.candidate,
-
- 
-
- 
 
  
 
@@ -11363,15 +5436,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
     data.record,
-
- 
-
- 
 
  
 
@@ -11379,23 +5444,7 @@ function extractCandidateRecord(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11403,15 +5452,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
   value
-
- 
-
- 
 
  
 
@@ -11419,15 +5460,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -11435,15 +5468,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
     typeof value !==
-
- 
-
- 
 
  
 
@@ -11451,15 +5476,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -11467,31 +5484,11 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return clean(
-
- 
-
- 
 
  
 
@@ -11499,15 +5496,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
     value.candidate_id ||
-
- 
-
- 
 
  
 
@@ -11515,15 +5504,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
     value.external_id
-
- 
-
- 
 
  
 
@@ -11531,23 +5512,7 @@ function candidateIdFromObject(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11555,15 +5520,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
   value
-
- 
-
- 
 
  
 
@@ -11571,15 +5528,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -11587,15 +5536,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
     typeof value !==
-
- 
-
- 
 
  
 
@@ -11603,15 +5544,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -11619,32 +5552,11 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
   }
 
  
 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return clean(
-
- 
-
- 
 
  
 
@@ -11652,15 +5564,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
     value.committee_id ||
-
- 
-
- 
 
  
 
@@ -11668,15 +5572,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
     value.committeeId
-
- 
-
- 
 
  
 
@@ -11684,23 +5580,7 @@ function committeeIdFromObject(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11708,15 +5588,7 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
   value
-
- 
-
- 
 
  
 
@@ -11724,15 +5596,7 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -11740,15 +5604,7 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
     typeof value !==
-
- 
-
- 
 
  
 
@@ -11756,15 +5612,7 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -11772,31 +5620,11 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return clean(
-
- 
-
- 
 
  
 
@@ -11804,15 +5632,7 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
     value.name ||
-
- 
-
- 
 
  
 
@@ -11820,31 +5640,11 @@ function candidateNameFromObject(
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11852,15 +5652,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   value,
-
- 
-
- 
 
  
 
@@ -11868,23 +5660,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
 ) {
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -11892,23 +5672,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     depth > 6
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -11916,23 +5684,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
       candidate_id:
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -11940,15 +5696,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -11956,15 +5704,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -11972,23 +5712,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -11996,15 +5720,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     Array.isArray(value)
-
- 
-
- 
 
  
 
@@ -12012,15 +5728,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     for (
-
- 
-
- 
 
  
 
@@ -12028,24 +5736,11 @@ function recursivelyFindIdentity(
 
  
 
-
- 
-
- 
-
       of value
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -12053,15 +5748,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         recursivelyFindIdentity(
-
- 
-
- 
 
  
 
@@ -12069,15 +5756,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
           depth + 1
-
- 
-
- 
 
  
 
@@ -12085,23 +5764,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -12109,23 +5772,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         found.committee_id
 
  
 
- 
-
- 
-
       ) {
-
- 
-
- 
 
  
 
@@ -12133,15 +5784,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
       }
-
- 
-
- 
 
  
 
@@ -12149,23 +5792,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -12173,15 +5800,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12189,15 +5808,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12205,15 +5816,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12221,31 +5824,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -12253,15 +5836,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     "object"
-
- 
-
- 
 
  
 
@@ -12269,15 +5844,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -12285,15 +5852,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12301,15 +5860,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12317,15 +5868,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         "",
-
- 
-
- 
 
  
 
@@ -12333,23 +5876,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12357,15 +5884,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     candidate_id:
-
- 
-
- 
 
  
 
@@ -12373,15 +5892,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         value
-
- 
-
- 
 
  
 
@@ -12389,23 +5900,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     committee_id:
-
- 
-
- 
 
  
 
@@ -12413,15 +5908,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         value
-
- 
-
- 
 
  
 
@@ -12429,24 +5916,7 @@ function recursivelyFindIdentity(
 
  
 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     candidate:
-
- 
-
- 
 
  
 
@@ -12454,15 +5924,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         value
-
- 
-
- 
 
  
 
@@ -12470,31 +5932,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -12502,23 +5944,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     direct.committee_id
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -12526,23 +5956,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12550,15 +5964,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     const child
-
- 
-
- 
 
  
 
@@ -12566,15 +5972,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
       value
-
- 
-
- 
 
  
 
@@ -12582,15 +5980,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -12598,15 +5988,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
       recursivelyFindIdentity(
-
- 
-
- 
 
  
 
@@ -12614,15 +5996,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         depth + 1
-
- 
-
- 
 
  
 
@@ -12630,23 +6004,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -12654,23 +6012,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
       found.committee_id
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -12678,15 +6024,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
         candidate_id:
-
- 
-
- 
 
  
 
@@ -12694,23 +6032,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         committee_id:
-
- 
-
- 
 
  
 
@@ -12718,23 +6040,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         candidate:
-
- 
-
- 
 
  
 
@@ -12742,15 +6048,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
           direct.candidate,
-
- 
-
- 
 
  
 
@@ -12758,31 +6056,11 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
     }
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12790,23 +6068,7 @@ function recursivelyFindIdentity(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12814,24 +6076,11 @@ function normalizePersonTokens(value = "") {
 
  
 
- 
-
- 
-
   return clean(value)
 
  
 
- 
-
- 
-
     .toLowerCase()
-
- 
-
-
- 
 
  
 
@@ -12839,15 +6088,7 @@ function normalizePersonTokens(value = "") {
 
  
 
- 
-
- 
-
     .replace(/[^a-z0-9]+/g, " ")
-
- 
-
- 
 
  
 
@@ -12855,15 +6096,7 @@ function normalizePersonTokens(value = "") {
 
  
 
- 
-
- 
-
     .map((token) => token.trim())
-
- 
-
- 
 
  
 
@@ -12871,23 +6104,7 @@ function normalizePersonTokens(value = "") {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12895,15 +6112,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
   requestedName,
-
- 
-
- 
 
  
 
@@ -12911,15 +6120,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -12927,31 +6128,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     requestedName
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -12959,15 +6140,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     candidateName
-
- 
-
- 
 
  
 
@@ -12975,23 +6148,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -12999,23 +6156,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     !candidate.length
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -13023,31 +6168,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -13055,23 +6180,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
    * request and must match a complete token in the stored candidate name.
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -13079,15 +6192,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     return candidate.includes(
-
- 
-
- 
 
  
 
@@ -13095,15 +6200,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -13111,23 +6208,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -13135,15 +6216,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
    * candidate record. This handles both "Jasmine Crockett" and
-
- 
-
- 
 
  
 
@@ -13151,23 +6224,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
    * unrelated candidate merely because an ID was present in the result.
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -13175,15 +6236,7 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
     (token) =>
-
- 
-
- 
 
  
 
@@ -13191,31 +6244,11 @@ function candidateNamesMatch(
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13223,16 +6256,7 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
   const lower = clean(value)
-
- 
-
-
- 
 
  
 
@@ -13240,15 +6264,7 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
     .replace(/[^a-z0-9]+/g, " ")
-
- 
-
- 
 
  
 
@@ -13256,23 +6272,7 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (/\bhouse\b|congress/.test(lower)) {
-
- 
-
- 
 
  
 
@@ -13280,23 +6280,7 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13304,31 +6288,11 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
     return "senate";
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13336,31 +6300,11 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
     return "president";
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13368,31 +6312,11 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
     return "governor";
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13400,23 +6324,7 @@ function normalizeOffice(value = "") {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13424,15 +6332,7 @@ function candidateRecordState(record = {}) {
 
  
 
- 
-
- 
-
   return clean(
-
- 
-
- 
 
  
 
@@ -13440,15 +6340,7 @@ function candidateRecordState(record = {}) {
 
  
 
- 
-
- 
-
     record.state
-
- 
-
- 
 
  
 
@@ -13456,23 +6348,7 @@ function candidateRecordState(record = {}) {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13480,15 +6356,7 @@ function candidateRecordOffice(record = {}) {
 
  
 
- 
-
- 
-
   return normalizeOffice(
-
- 
-
- 
 
  
 
@@ -13496,15 +6364,7 @@ function candidateRecordOffice(record = {}) {
 
  
 
- 
-
- 
-
     record.office_full ||
-
- 
-
- 
 
  
 
@@ -13512,31 +6372,11 @@ function candidateRecordOffice(record = {}) {
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13544,23 +6384,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
   const data = result?.data;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13568,31 +6392,11 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     return [];
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13600,15 +6404,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     data.records,
-
- 
-
- 
 
  
 
@@ -13616,15 +6412,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     data.results,
-
- 
-
- 
 
  
 
@@ -13632,32 +6420,11 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
-
- 
-
- 
-
     data.matches,
 
  
 
- 
-
- 
-
   ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13665,31 +6432,11 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     (bucket) => Array.isArray(bucket)
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13697,15 +6444,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     return rows.filter(
-
- 
-
- 
 
  
 
@@ -13713,15 +6452,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
         row &&
-
- 
-
- 
 
  
 
@@ -13729,31 +6460,11 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13761,15 +6472,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     data.candidate,
-
- 
-
- 
 
  
 
@@ -13777,15 +6480,7 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
     data.record,
-
- 
-
- 
 
  
 
@@ -13793,39 +6488,11 @@ function collectCandidateRecordsFromResult(result) {
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return direct ? [direct] : [];
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13833,15 +6500,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
   results,
-
- 
-
- 
 
  
 
@@ -13849,15 +6508,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -13865,31 +6516,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     context.candidate
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13897,31 +6528,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     context.candidate_id
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -13929,15 +6540,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     context.committee_id
-
- 
-
- 
 
  
 
@@ -13945,23 +6548,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -13969,15 +6556,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -13985,15 +6564,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     const identity = {
-
- 
-
- 
 
  
 
@@ -14001,15 +6572,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         requestedName || null,
-
- 
-
- 
 
  
 
@@ -14017,15 +6580,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         explicitCandidateId,
-
- 
-
- 
 
  
 
@@ -14033,24 +6588,11 @@ function strictResolveCandidateIdentity(
 
  
 
-
- 
-
- 
-
         explicitCommitteeId || null,
 
  
 
- 
-
- 
-
       state:
-
- 
-
- 
 
  
 
@@ -14058,15 +6600,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       office:
-
- 
-
- 
 
  
 
@@ -14074,23 +6608,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       district:
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
 
  
 
@@ -14098,15 +6620,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
 
  
 
@@ -14114,23 +6628,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -14138,23 +6636,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       ambiguous: false,
 
  
 
- 
-
- 
-
       candidate:
-
- 
-
- 
 
  
 
@@ -14162,15 +6648,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       candidate_id:
-
- 
-
- 
 
  
 
@@ -14178,15 +6656,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       committee_id:
-
- 
-
- 
 
  
 
@@ -14194,15 +6664,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       record: null,
-
- 
-
- 
 
  
 
@@ -14210,15 +6672,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       identities: [identity],
-
- 
-
- 
 
  
 
@@ -14226,31 +6680,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     };
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14258,15 +6692,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -14274,15 +6700,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       ambiguous: false,
-
- 
-
- 
 
  
 
@@ -14290,15 +6708,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       candidate_id: "",
-
- 
-
- 
 
  
 
@@ -14306,15 +6716,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         explicitCommitteeId,
-
- 
-
- 
 
  
 
@@ -14322,23 +6724,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       matches: [],
 
  
 
- 
-
- 
-
       identities: [],
-
- 
-
- 
 
  
 
@@ -14346,31 +6736,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     };
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14378,15 +6748,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     (result) =>
-
- 
-
- 
 
  
 
@@ -14394,31 +6756,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       "get_candidate_statistics"
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14426,32 +6768,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     statisticsResult
 
  
 
-
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14459,15 +6780,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     context.state
-
- 
-
- 
 
  
 
@@ -14475,23 +6788,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const requestedOffice = normalizeOffice(
-
- 
-
- 
 
  
 
@@ -14499,23 +6796,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14523,15 +6804,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     (record) => {
-
- 
-
- 
 
  
 
@@ -14539,15 +6812,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         record
-
- 
-
- 
 
  
 
@@ -14555,23 +6820,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -14579,15 +6828,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           requestedName,
-
- 
-
- 
 
  
 
@@ -14595,23 +6836,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         )
 
  
 
- 
-
- 
-
       ) {
-
- 
-
- 
 
  
 
@@ -14619,23 +6848,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14643,15 +6856,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         const state = candidateRecordState(
-
- 
-
- 
 
  
 
@@ -14659,31 +6864,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         if (
-
- 
-
- 
 
  
 
@@ -14691,15 +6876,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           state !== requestedState
-
- 
-
- 
 
  
 
@@ -14707,15 +6884,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           return false;
-
- 
-
- 
 
  
 
@@ -14723,23 +6892,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14747,15 +6900,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         const office = candidateRecordOffice(
-
- 
-
- 
 
  
 
@@ -14763,23 +6908,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14787,15 +6916,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           office &&
-
- 
-
- 
 
  
 
@@ -14803,15 +6924,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         ) {
-
- 
-
- 
 
  
 
@@ -14819,32 +6932,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         }
 
  
 
- 
-
- 
-
       }
-
- 
-
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14852,15 +6944,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         candidateIdFromObject(record) ||
-
- 
-
- 
 
  
 
@@ -14868,15 +6952,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -14884,23 +6960,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -14908,15 +6968,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     return {
-
- 
-
- 
 
  
 
@@ -14924,15 +6976,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       ambiguous: false,
-
- 
-
- 
 
  
 
@@ -14940,15 +6984,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         requestedName,
-
- 
-
- 
 
  
 
@@ -14956,15 +6992,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       committee_id:
-
- 
-
- 
 
  
 
@@ -14972,15 +7000,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       record: null,
-
- 
-
- 
 
  
 
@@ -14988,15 +7008,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       identities: [],
-
- 
-
- 
 
  
 
@@ -15004,15 +7016,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     };
-
- 
-
- 
 
  
 
@@ -15020,23 +7024,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -15044,15 +7032,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -15060,15 +7040,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     ...new Map(
-
- 
-
- 
 
  
 
@@ -15076,15 +7048,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         const candidateId = candidateIdFromObject(
-
- 
-
- 
 
  
 
@@ -15092,23 +7056,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -15116,31 +7064,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           record
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -15148,15 +7076,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           `${candidateId}:${committeeId}`,
-
- 
-
- 
 
  
 
@@ -15164,15 +7084,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         ];
-
- 
-
- 
 
  
 
@@ -15180,31 +7092,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     ).values(),
 
  
 
- 
-
- 
-
   ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -15212,23 +7104,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     (record) => ({
 
  
 
- 
-
- 
-
       candidate:
-
- 
-
- 
 
  
 
@@ -15236,16 +7116,7 @@ function strictResolveCandidateIdentity(
 
  
 
-
- 
-
- 
-
         requestedName,
-
- 
-
- 
 
  
 
@@ -15253,23 +7124,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         candidateIdFromObject(record),
 
  
 
- 
-
- 
-
       committee_id:
-
- 
-
- 
 
  
 
@@ -15277,23 +7136,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         committeeIdFromObject(record) ||
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
 
  
 
@@ -15301,23 +7148,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         candidateRecordState(record) ||
 
  
 
- 
-
- 
-
         null,
-
- 
-
- 
 
  
 
@@ -15325,15 +7160,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         record.office ||
-
- 
-
- 
 
  
 
@@ -15341,15 +7168,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         record.office_name ||
-
- 
-
- 
 
  
 
@@ -15357,15 +7176,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       district:
-
- 
-
- 
 
  
 
@@ -15373,15 +7184,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       record,
-
- 
-
- 
 
  
 
@@ -15389,23 +7192,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -15413,15 +7200,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     /*
-
- 
-
- 
 
  
 
@@ -15429,15 +7208,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
      * question does not specify an office. They are all valid records
-
- 
-
- 
 
  
 
@@ -15445,15 +7216,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
      */
-
- 
-
- 
 
  
 
@@ -15461,15 +7224,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       ok: true,
-
- 
-
- 
 
  
 
@@ -15477,15 +7232,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       candidate:
-
- 
-
- 
 
  
 
@@ -15493,15 +7240,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       candidate_id: "",
-
- 
-
- 
 
  
 
@@ -15509,15 +7248,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
         explicitCommitteeId || null,
-
- 
-
- 
 
  
 
@@ -15525,15 +7256,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
       matches:
-
- 
-
- 
 
  
 
@@ -15541,15 +7264,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           candidate:
-
- 
-
- 
 
  
 
@@ -15557,15 +7272,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           candidate_id:
-
- 
-
- 
 
  
 
@@ -15573,15 +7280,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           committee_id:
-
- 
-
- 
 
  
 
@@ -15589,15 +7288,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           state:
-
- 
-
- 
 
  
 
@@ -15605,15 +7296,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           office:
-
- 
-
- 
 
  
 
@@ -15621,15 +7304,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
           district:
-
- 
-
- 
 
  
 
@@ -15637,24 +7312,11 @@ function strictResolveCandidateIdentity(
 
  
 
-
- 
-
- 
-
         })),
 
  
 
- 
-
- 
-
       identities,
-
- 
-
- 
 
  
 
@@ -15662,31 +7324,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     };
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -15694,23 +7336,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -15718,23 +7344,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     ambiguous: false,
 
  
 
- 
-
- 
-
     candidate:
-
- 
-
- 
 
  
 
@@ -15742,15 +7356,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     candidate_id:
-
- 
-
- 
 
  
 
@@ -15758,15 +7364,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     committee_id:
-
- 
-
- 
 
  
 
@@ -15774,15 +7372,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     record:
-
- 
-
- 
 
  
 
@@ -15790,15 +7380,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     matches:
-
- 
-
- 
 
  
 
@@ -15806,15 +7388,7 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
     identities,
-
- 
-
- 
 
  
 
@@ -15822,23 +7396,11 @@ function strictResolveCandidateIdentity(
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
 
  
 
@@ -15846,15 +7408,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
   fecTemplate,
-
- 
-
- 
 
  
 
@@ -15862,23 +7416,11 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
   context
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -15886,15 +7428,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     ? `Multiple FEC candidate identities matched ${context.candidate}. Specify the office or candidate ID before finance data is retrieved.`
-
- 
-
- 
 
  
 
@@ -15902,23 +7436,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -15926,15 +7444,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     reason:
-
- 
-
- 
 
  
 
@@ -15942,15 +7452,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
       "Retrieve official FEC finance evidence.",
-
- 
-
- 
 
  
 
@@ -15958,15 +7460,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
       fecTemplate?.arguments ||
-
- 
-
- 
 
  
 
@@ -15974,15 +7468,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     ok: false,
-
- 
-
- 
 
  
 
@@ -15990,15 +7476,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     degraded: true,
-
- 
-
- 
 
  
 
@@ -16006,15 +7484,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     data: {
-
- 
-
- 
 
  
 
@@ -16022,15 +7492,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
         requested_candidate:
-
- 
-
- 
 
  
 
@@ -16038,16 +7500,7 @@ function createIdentityFailureResult(
 
  
 
-
- 
-
- 
-
         requested_state:
-
- 
-
- 
 
  
 
@@ -16055,15 +7508,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
         requested_office:
-
- 
-
- 
 
  
 
@@ -16071,15 +7516,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
         reason:
-
- 
-
- 
 
  
 
@@ -16087,15 +7524,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
         matches:
-
- 
-
- 
 
  
 
@@ -16103,15 +7532,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
       },
-
- 
-
- 
 
  
 
@@ -16119,15 +7540,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     },
-
- 
-
- 
 
  
 
@@ -16135,15 +7548,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     warnings: [issue],
-
- 
-
- 
 
  
 
@@ -16151,15 +7556,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
       {
-
- 
-
- 
 
  
 
@@ -16167,15 +7564,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
           "strict_candidate_identity",
-
- 
-
- 
 
  
 
@@ -16183,15 +7572,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
         error: issue,
-
- 
-
- 
 
  
 
@@ -16199,15 +7580,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
       },
-
- 
-
- 
 
  
 
@@ -16215,15 +7588,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     generated_at: now(),
-
- 
-
- 
 
  
 
@@ -16231,15 +7596,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
     meaningful_item_count: 0,
-
- 
-
- 
 
  
 
@@ -16247,23 +7604,7 @@ function createIdentityFailureResult(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16271,15 +7612,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
   plan,
-
- 
-
- 
 
  
 
@@ -16287,15 +7620,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -16303,23 +7628,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const statisticsCall = plan.tool_plan.find(
-
- 
-
- 
 
  
 
@@ -16327,15 +7636,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
       call.name ===
-
- 
-
- 
 
  
 
@@ -16343,23 +7644,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16367,15 +7652,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     (call) =>
-
- 
-
- 
 
  
 
@@ -16383,15 +7660,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
       "get_fec_finance"
-
- 
-
- 
 
  
 
@@ -16399,23 +7668,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -16423,15 +7676,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
    * get_candidate_live_intelligence. Candidate identity comes only from
-
- 
-
- 
 
  
 
@@ -16439,24 +7684,11 @@ async function executeFinancePlan({
 
  
 
-
- 
-
- 
-
    * cannot contaminate an FEC-only request.
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -16464,23 +7696,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     results.push(
 
  
 
- 
-
- 
-
       await executePlannedTool(
-
- 
-
- 
 
  
 
@@ -16488,15 +7708,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         user
-
- 
-
- 
 
  
 
@@ -16504,31 +7716,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16536,15 +7728,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     results,
-
- 
-
- 
 
  
 
@@ -16552,23 +7736,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16576,31 +7744,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     return results;
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16608,15 +7756,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     results.push(
-
- 
-
- 
 
  
 
@@ -16624,15 +7764,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         fecTemplate,
-
- 
-
- 
 
  
 
@@ -16640,15 +7772,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         plan.context
-
- 
-
- 
 
  
 
@@ -16656,23 +7780,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16680,23 +7788,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16704,15 +7796,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     identity.identities
-
- 
-
- 
 
  
 
@@ -16720,15 +7804,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     ? identity.identities
-
- 
-
- 
 
  
 
@@ -16736,15 +7812,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -16752,23 +7820,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
             identity.candidate,
 
  
 
- 
-
- 
-
           candidate_id:
-
- 
-
- 
 
  
 
@@ -16776,15 +7832,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           committee_id:
-
- 
-
- 
 
  
 
@@ -16792,15 +7840,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           state:
-
- 
-
- 
 
  
 
@@ -16808,15 +7848,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           office:
-
- 
-
- 
 
  
 
@@ -16824,15 +7856,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           district:
-
- 
-
- 
 
  
 
@@ -16840,16 +7864,7 @@ async function executeFinancePlan({
 
  
 
-
- 
-
- 
-
           record:
-
- 
-
- 
 
  
 
@@ -16857,15 +7872,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         },
-
- 
-
- 
 
  
 
@@ -16873,23 +7880,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -16897,15 +7888,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
    * unnecessary OpenFEC bursts/rate-limit pressure and to keep diagnostics
-
- 
-
- 
 
  
 
@@ -16913,15 +7896,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
    */
-
- 
-
- 
 
  
 
@@ -16929,15 +7904,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -16945,23 +7912,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
       !clean(resolved.committee_id)
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -16969,23 +7924,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -16993,15 +7932,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
       ...fecTemplate,
-
- 
-
- 
 
  
 
@@ -17009,15 +7940,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         ...fecTemplate.arguments,
-
- 
-
- 
 
  
 
@@ -17025,15 +7948,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           resolved.candidate ||
-
- 
-
- 
 
  
 
@@ -17041,15 +7956,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         candidate_id:
-
- 
-
- 
 
  
 
@@ -17057,15 +7964,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         committee_id:
-
- 
-
- 
 
  
 
@@ -17073,23 +7972,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           plan.context.committee_id ||
 
  
 
- 
-
- 
-
           "",
-
- 
-
- 
 
  
 
@@ -17097,15 +7984,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           plan.context.cycle,
-
- 
-
- 
 
  
 
@@ -17113,15 +7992,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           resolved.state ||
-
- 
-
- 
 
  
 
@@ -17129,15 +8000,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           null,
-
- 
-
- 
 
  
 
@@ -17145,15 +8008,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           resolved.office ||
-
- 
-
- 
 
  
 
@@ -17161,15 +8016,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           null,
-
- 
-
- 
 
  
 
@@ -17177,15 +8024,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
           resolved.district || null,
-
- 
-
- 
 
  
 
@@ -17193,23 +8032,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     };
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17217,15 +8040,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
       await executePlannedTool(
-
- 
-
- 
 
  
 
@@ -17233,16 +8048,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
         user
-
- 
-
-
- 
 
  
 
@@ -17250,31 +8056,11 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17282,15 +8068,7 @@ async function executeFinancePlan({
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
 
  
 
@@ -17298,15 +8076,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
   plan,
-
- 
-
- 
 
  
 
@@ -17314,23 +8084,11 @@ async function executePlan({
 
  
 
- 
-
- 
-
 }) {
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -17338,23 +8096,11 @@ async function executePlan({
 
  
 
- 
-
- 
-
     "finance"
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -17362,15 +8108,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
       plan,
-
- 
-
- 
 
  
 
@@ -17378,31 +8116,11 @@ async function executePlan({
 
  
 
- 
-
- 
-
     });
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17410,15 +8128,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
     plan.tool_plan.map(
-
- 
-
- 
 
  
 
@@ -17426,15 +8136,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
         executePlannedTool(
-
- 
-
- 
 
  
 
@@ -17442,15 +8144,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
           user
-
- 
-
- 
 
  
 
@@ -17458,15 +8152,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -17474,23 +8160,7 @@ async function executePlan({
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17498,23 +8168,11 @@ function getFecToolResults(
 
  
 
- 
-
- 
-
   results
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -17522,15 +8180,7 @@ function getFecToolResults(
 
  
 
- 
-
- 
-
     (result) =>
-
- 
-
- 
 
  
 
@@ -17538,15 +8188,7 @@ function getFecToolResults(
 
  
 
- 
-
- 
-
       "get_fec_finance"
-
- 
-
- 
 
  
 
@@ -17554,23 +8196,7 @@ function getFecToolResults(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17578,23 +8204,11 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
   result
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -17602,23 +8216,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     result?.data;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17626,15 +8224,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     return [];
-
- 
-
- 
 
  
 
@@ -17642,32 +8232,11 @@ function recordsFromFecResult(
 
  
 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -17675,23 +8244,11 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -17699,23 +8256,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17723,15 +8264,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -17739,23 +8272,11 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -17763,23 +8284,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17787,15 +8292,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -17803,23 +8300,11 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -17827,23 +8312,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17851,23 +8320,7 @@ function recordsFromFecResult(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -17875,23 +8328,11 @@ function getFecRecords(
 
  
 
- 
-
- 
-
   results
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -17899,15 +8340,7 @@ function getFecRecords(
 
  
 
- 
-
- 
-
     results
-
- 
-
- 
 
  
 
@@ -17915,15 +8348,7 @@ function getFecRecords(
 
  
 
- 
-
- 
-
     (result) =>
-
- 
-
- 
 
  
 
@@ -17931,15 +8356,7 @@ function getFecRecords(
 
  
 
- 
-
- 
-
         result
-
- 
-
- 
 
  
 
@@ -17947,23 +8364,11 @@ function getFecRecords(
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
 
  
 
@@ -17971,15 +8376,7 @@ function finiteNumber(
 
  
 
- 
-
- 
-
   value
-
- 
-
- 
 
  
 
@@ -17987,15 +8384,7 @@ function finiteNumber(
 
  
 
- 
-
- 
-
   const number =
-
- 
-
- 
 
  
 
@@ -18003,23 +8392,7 @@ function finiteNumber(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return Number.isFinite(
-
- 
-
- 
 
  
 
@@ -18027,15 +8400,7 @@ function finiteNumber(
 
  
 
- 
-
- 
-
   )
-
- 
-
- 
 
  
 
@@ -18043,32 +8408,11 @@ function finiteNumber(
 
  
 
-
- 
-
- 
-
     : null;
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18076,15 +8420,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
   value
-
- 
-
- 
 
  
 
@@ -18092,15 +8428,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
   const number =
-
- 
-
- 
 
  
 
@@ -18108,23 +8436,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -18132,15 +8444,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -18148,23 +8452,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18172,23 +8460,11 @@ function formatCurrency(
 
  
 
- 
-
- 
-
     "en-US",
 
  
 
- 
-
- 
-
     {
-
- 
-
- 
 
  
 
@@ -18196,23 +8472,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
         "currency",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18220,23 +8480,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
         "USD",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18244,23 +8488,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
         2,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18268,23 +8496,11 @@ function formatCurrency(
 
  
 
- 
-
- 
-
         2,
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -18292,23 +8508,7 @@ function formatCurrency(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18316,23 +8516,11 @@ function formatDate(
 
  
 
- 
-
- 
-
   value
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -18340,31 +8528,11 @@ function formatDate(
 
  
 
- 
-
- 
-
     return "";
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18372,31 +8540,11 @@ function formatDate(
 
  
 
- 
-
- 
-
     new Date(value);
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -18404,15 +8552,7 @@ function formatDate(
 
  
 
- 
-
- 
-
       date.getTime()
-
- 
-
- 
 
  
 
@@ -18420,15 +8560,7 @@ function formatDate(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -18436,24 +8568,7 @@ function formatDate(
 
  
 
- 
-
- 
-
   }
-
- 
-
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18461,15 +8576,7 @@ function formatDate(
 
  
 
- 
-
- 
-
     "en-US",
-
- 
-
- 
 
  
 
@@ -18477,31 +8584,11 @@ function formatDate(
 
  
 
- 
-
- 
-
       year:
 
  
 
- 
-
- 
-
         "numeric",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18509,23 +8596,7 @@ function formatDate(
 
  
 
- 
-
- 
-
         "long",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18533,23 +8604,7 @@ function formatDate(
 
  
 
- 
-
- 
-
         "numeric",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18557,23 +8612,11 @@ function formatDate(
 
  
 
- 
-
- 
-
         "UTC",
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -18581,23 +8624,7 @@ function formatDate(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18605,15 +8632,7 @@ function metric(
 
  
 
- 
-
- 
-
   key,
-
- 
-
- 
 
  
 
@@ -18621,15 +8640,7 @@ function metric(
 
  
 
- 
-
- 
-
   value,
-
- 
-
- 
 
  
 
@@ -18637,15 +8648,7 @@ function metric(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -18653,31 +8656,11 @@ function metric(
 
  
 
- 
-
- 
-
     finiteNumber(value);
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -18685,15 +8668,7 @@ function metric(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -18701,31 +8676,11 @@ function metric(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -18733,15 +8688,7 @@ function metric(
 
  
 
- 
-
- 
-
     label,
-
- 
-
- 
 
  
 
@@ -18749,15 +8696,7 @@ function metric(
 
  
 
- 
-
- 
-
       number,
-
- 
-
- 
 
  
 
@@ -18765,23 +8704,7 @@ function metric(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     display_value:
-
- 
-
- 
 
  
 
@@ -18789,15 +8712,7 @@ function metric(
 
  
 
- 
-
- 
-
       "currency"
-
- 
-
- 
 
  
 
@@ -18805,23 +8720,11 @@ function metric(
 
  
 
- 
-
- 
-
             number
 
  
 
- 
-
- 
-
           )
-
- 
-
- 
 
  
 
@@ -18829,15 +8732,7 @@ function metric(
 
  
 
- 
-
- 
-
             number
-
- 
-
- 
 
  
 
@@ -18845,32 +8740,11 @@ function metric(
 
  
 
-
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18878,15 +8752,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
   records = []
-
- 
-
- 
 
  
 
@@ -18894,15 +8760,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -18910,15 +8768,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -18926,23 +8776,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -18950,15 +8784,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
     (record) =>
-
- 
-
- 
 
  
 
@@ -18966,15 +8792,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
         record?.coverage_end_date ||
-
- 
-
- 
 
  
 
@@ -18982,15 +8800,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
         record?.coverage_through_date ||
-
- 
-
- 
 
  
 
@@ -18998,15 +8808,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
         0
-
- 
-
- 
 
  
 
@@ -19014,23 +8816,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
       0;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19038,15 +8824,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
     ...records,
-
- 
-
- 
 
  
 
@@ -19054,15 +8832,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
     (a, b) =>
-
- 
-
- 
 
  
 
@@ -19070,15 +8840,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
       dateValue(a)
-
- 
-
- 
 
  
 
@@ -19086,23 +8848,7 @@ function selectLatestFecRecord(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19110,15 +8856,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   record
-
- 
-
- 
 
  
 
@@ -19126,15 +8864,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   if (!record) {
-
- 
-
- 
 
  
 
@@ -19142,23 +8872,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19166,15 +8880,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     finiteNumber(
-
- 
-
- 
 
  
 
@@ -19182,23 +8888,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19206,15 +8896,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     finiteNumber(
-
- 
-
- 
 
  
 
@@ -19222,23 +8904,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19246,24 +8912,11 @@ function buildFinanceInterpretation(
 
  
 
-
- 
-
- 
-
     finiteNumber(
 
  
 
- 
-
- 
-
       record.last_cash_on_hand_end_period ??
-
- 
-
- 
 
  
 
@@ -19271,31 +8924,11 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       record.cash_on_hand
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19303,15 +8936,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     finiteNumber(
-
- 
-
- 
 
  
 
@@ -19319,23 +8944,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19343,23 +8952,11 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     finiteNumber(
 
  
 
- 
-
- 
-
       record.last_debts_owed_by_committee ??
-
- 
-
- 
 
  
 
@@ -19367,23 +8964,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19391,31 +8972,11 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
 
  
 
- 
-
- 
-
     receipts != null &&
-
- 
-
- 
 
  
 
@@ -19423,23 +8984,11 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   ) {
 
  
 
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -19447,15 +8996,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       receipts
-
- 
-
- 
 
  
 
@@ -19463,15 +9004,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       notes.push(
-
- 
-
- 
 
  
 
@@ -19479,15 +9012,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
           disbursements
-
- 
-
- 
 
  
 
@@ -19495,15 +9020,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
           receipts
-
- 
-
- 
 
  
 
@@ -19511,15 +9028,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -19527,15 +9036,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       notes.push(
-
- 
-
- 
 
  
 
@@ -19543,15 +9044,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
           receipts
-
- 
-
- 
 
  
 
@@ -19559,15 +9052,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
           disbursements
-
- 
-
- 
 
  
 
@@ -19575,15 +9060,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -19591,31 +9068,11 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -19623,15 +9080,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     receipts != null &&
-
- 
-
- 
 
  
 
@@ -19639,16 +9088,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
-
- 
 
  
 
@@ -19656,15 +9096,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       cash /
-
- 
-
- 
 
  
 
@@ -19672,23 +9104,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -19696,15 +9112,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -19712,15 +9120,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
         `Period-end cash on hand is ${formatCurrency(
-
- 
-
- 
 
  
 
@@ -19728,15 +9128,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
         )}, a relatively small share of the ${formatCurrency(
-
- 
-
- 
 
  
 
@@ -19744,15 +9136,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
         )} in reported receipts.`
-
- 
-
- 
 
  
 
@@ -19760,15 +9144,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -19776,23 +9152,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -19800,15 +9160,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     transfersOut > 0
-
- 
-
- 
 
  
 
@@ -19816,15 +9168,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     notes.push(
-
- 
-
- 
 
  
 
@@ -19832,15 +9176,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
         transfersOut
-
- 
-
- 
 
  
 
@@ -19848,15 +9184,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -19864,23 +9192,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -19888,15 +9200,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -19904,15 +9208,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
       "The returned filing reports no debts owed by the committee."
-
- 
-
- 
 
  
 
@@ -19920,23 +9216,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19944,23 +9224,7 @@ function buildFinanceInterpretation(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -19968,15 +9232,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
   context,
-
- 
-
- 
 
  
 
@@ -19984,15 +9240,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -20000,31 +9248,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     result
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20032,32 +9260,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     records
 
  
 
- 
-
- 
-
   );
-
- 
-
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20065,31 +9272,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     return null;
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20097,15 +9284,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.candidate_id ||
-
- 
-
- 
 
  
 
@@ -20113,31 +9292,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     context.candidate_id
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20145,15 +9304,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.last_report_type_full ||
-
- 
-
- 
 
  
 
@@ -20161,31 +9312,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.report_type
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20193,15 +9324,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.coverage_end_date ||
-
- 
-
- 
 
  
 
@@ -20209,31 +9332,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.coverage_through_date ||
 
  
 
- 
-
- 
-
     null;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20241,31 +9344,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record.coverage_start_date ||
 
  
 
- 
-
- 
-
     null;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -20273,15 +9356,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20289,15 +9364,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Total receipts",
-
- 
-
- 
 
  
 
@@ -20305,23 +9372,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20329,15 +9384,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Total disbursements",
-
- 
-
- 
 
  
 
@@ -20345,23 +9392,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20369,15 +9404,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Cash on hand",
-
- 
-
- 
 
  
 
@@ -20385,15 +9412,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
         record.cash_on_hand_end_period ??
-
- 
-
- 
 
  
 
@@ -20401,23 +9420,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20425,15 +9432,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Total contributions",
-
- 
-
- 
 
  
 
@@ -20441,24 +9440,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
-
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20466,15 +9452,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Individual contributions",
-
- 
-
- 
 
  
 
@@ -20482,23 +9460,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20506,15 +9472,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Itemized individual contributions",
-
- 
-
- 
 
  
 
@@ -20522,23 +9480,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20546,15 +9492,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Unitemized individual contributions",
-
- 
-
- 
 
  
 
@@ -20562,23 +9500,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20586,15 +9512,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Operating expenditures",
-
- 
-
- 
 
  
 
@@ -20602,23 +9520,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20626,15 +9532,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Transfers to other authorized committees",
-
- 
-
- 
 
  
 
@@ -20642,23 +9540,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20666,15 +9552,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Transfers from other authorized committees",
-
- 
-
- 
 
  
 
@@ -20682,23 +9560,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
 
  
 
- 
-
- 
-
     metric(
-
- 
-
- 
 
  
 
@@ -20706,15 +9572,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "Contribution refunds",
-
- 
-
- 
 
  
 
@@ -20722,15 +9580,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
-
- 
-
- 
 
  
 
@@ -20738,15 +9588,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       "debts_owed_by_committee",
-
- 
-
- 
 
  
 
@@ -20754,15 +9596,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       record.last_debts_owed_by_committee ??
-
- 
-
- 
 
  
 
@@ -20770,15 +9604,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     ),
-
- 
-
- 
 
  
 
@@ -20786,23 +9612,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const source =
-
- 
-
- 
 
  
 
@@ -20810,23 +9620,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       (item) =>
 
  
 
- 
-
- 
-
         clean(
-
- 
-
- 
 
  
 
@@ -20834,15 +9632,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
         ).toLowerCase() ===
-
- 
-
- 
 
  
 
@@ -20850,16 +9640,7 @@ function buildFinanceReport({
 
  
 
-
- 
-
- 
-
         /fec/i.test(
-
- 
-
- 
 
  
 
@@ -20867,15 +9648,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
             item.name ||
-
- 
-
- 
 
  
 
@@ -20883,23 +9656,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
           )
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -20907,15 +9668,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     result?.sources?.[0] ||
-
- 
-
- 
 
  
 
@@ -20923,23 +9676,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const office = clean(
-
- 
-
- 
 
  
 
@@ -20947,15 +9684,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     context.office
-
- 
-
- 
 
  
 
@@ -20963,23 +9692,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const district = clean(
-
- 
-
- 
 
  
 
@@ -20987,23 +9700,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21011,15 +9708,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     result?.arguments?.resolved_state ||
-
- 
-
- 
 
  
 
@@ -21027,23 +9716,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21051,15 +9724,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record
-
- 
-
- 
 
  
 
@@ -21067,31 +9732,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
 
  
 
- 
-
- 
-
     candidate:
-
- 
-
- 
 
  
 
@@ -21099,15 +9744,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       result?.arguments?.candidate ||
-
- 
-
- 
 
  
 
@@ -21115,15 +9752,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     candidate_id:
-
- 
-
- 
 
  
 
@@ -21131,15 +9760,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     committee_id:
-
- 
-
- 
 
  
 
@@ -21147,15 +9768,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
         record.committee_id ||
-
- 
-
- 
 
  
 
@@ -21163,15 +9776,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
         context.committee_id
-
- 
-
- 
 
  
 
@@ -21179,15 +9784,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     state:
-
- 
-
- 
 
  
 
@@ -21195,15 +9792,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     office:
-
- 
-
- 
 
  
 
@@ -21211,15 +9800,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     district:
-
- 
-
- 
 
  
 
@@ -21227,15 +9808,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     cycle:
-
- 
-
- 
 
  
 
@@ -21243,16 +9816,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       context.cycle ||
-
- 
-
-
- 
 
  
 
@@ -21260,15 +9824,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     report_type:
-
- 
-
- 
 
  
 
@@ -21276,15 +9832,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     coverage_start:
-
- 
-
- 
 
  
 
@@ -21292,15 +9840,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     coverage_end:
-
- 
-
- 
 
  
 
@@ -21308,15 +9848,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     reporting_period:
-
- 
-
- 
 
  
 
@@ -21324,15 +9856,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
       coverageEnd ||
-
- 
-
- 
 
  
 
@@ -21340,15 +9864,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     metrics,
-
- 
-
- 
 
  
 
@@ -21356,15 +9872,7 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
     record,
-
- 
-
- 
 
  
 
@@ -21372,31 +9880,11 @@ function buildFinanceReport({
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21404,23 +9892,11 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
   report
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -21428,31 +9904,11 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
     report?.office
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21460,31 +9916,11 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
     report?.district
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21492,31 +9928,11 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
     return `${office} - ${district}`;
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21524,15 +9940,7 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
     office ||
-
- 
-
- 
 
  
 
@@ -21540,15 +9948,7 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
     "FEC filing"
-
- 
-
- 
 
  
 
@@ -21556,23 +9956,7 @@ function financeReportLabel(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21580,15 +9964,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   lines,
-
- 
-
- 
 
  
 
@@ -21596,23 +9972,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   includeHeading = true
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -21620,15 +9984,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21636,15 +9992,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
         report
-
- 
-
- 
 
  
 
@@ -21652,16 +10000,7 @@ function appendFinanceReportLines(
 
  
 
-
- 
-
- 
-
       ""
-
- 
-
- 
 
  
 
@@ -21669,23 +10008,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21693,15 +10016,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21709,31 +10024,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21741,15 +10036,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21757,31 +10044,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21789,15 +10056,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21805,31 +10064,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21837,15 +10076,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21853,15 +10084,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
         report.coverage_start
-
- 
-
- 
 
  
 
@@ -21869,31 +10092,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21901,15 +10104,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21917,15 +10112,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
         report.coverage_end
-
- 
-
- 
 
  
 
@@ -21933,31 +10120,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -21965,31 +10132,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   for (const item of report.metrics) {
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -21997,15 +10144,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -22013,23 +10152,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -22037,15 +10160,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -22053,16 +10168,7 @@ function appendFinanceReportLines(
 
  
 
-
- 
-
- 
-
       "",
-
- 
-
- 
 
  
 
@@ -22070,31 +10176,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     for (
-
- 
-
- 
 
  
 
@@ -22102,15 +10188,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       of report.interpretation
-
- 
-
- 
 
  
 
@@ -22118,15 +10196,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       lines.push(
-
- 
-
- 
 
  
 
@@ -22134,15 +10204,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -22150,23 +10212,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22174,23 +10220,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     lines.push(
 
  
 
- 
-
- 
-
       "",
-
- 
-
- 
 
  
 
@@ -22198,15 +10232,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
         clean(
-
- 
-
- 
 
  
 
@@ -22214,15 +10240,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
           report.source.source
-
- 
-
- 
 
  
 
@@ -22230,15 +10248,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
         "Federal Election Commission OpenFEC API"
-
- 
-
- 
 
  
 
@@ -22246,31 +10256,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     if (
-
- 
-
- 
 
  
 
@@ -22278,23 +10268,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
     ) {
 
  
 
- 
-
- 
-
       lines.push(
-
- 
-
- 
 
  
 
@@ -22302,15 +10280,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
           report.source.reporting_period
-
- 
-
- 
 
  
 
@@ -22318,31 +10288,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       );
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22350,15 +10300,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       report.source.confidence != null
-
- 
-
- 
 
  
 
@@ -22366,15 +10308,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       lines.push(
-
- 
-
- 
 
  
 
@@ -22382,15 +10316,7 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -22398,31 +10324,11 @@ function appendFinanceReportLines(
 
  
 
- 
-
- 
-
   }
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22430,15 +10336,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   context,
-
- 
-
- 
 
  
 
@@ -22446,24 +10344,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   sources,
 
  
 
-
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -22471,23 +10356,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     results
 
  
 
- 
-
- 
-
   )
-
- 
-
- 
 
  
 
@@ -22495,15 +10368,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       (result) =>
-
- 
-
- 
 
  
 
@@ -22511,15 +10376,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -22527,15 +10384,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       (result) =>
-
- 
-
- 
 
  
 
@@ -22543,15 +10392,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
           context,
-
- 
-
- 
 
  
 
@@ -22559,23 +10400,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         })
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -22583,23 +10412,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (!reports.length) {
-
- 
-
- 
 
  
 
@@ -22607,23 +10420,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22631,31 +10428,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     context.candidate ||
 
  
 
- 
-
- 
-
     "Candidate";
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22663,23 +10440,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     reports.length > 1;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22687,15 +10448,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     ? `Current FEC Reports - ${candidateLabel}`
-
- 
-
- 
 
  
 
@@ -22703,23 +10456,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const lines = [
-
- 
-
- 
 
  
 
@@ -22727,31 +10464,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     "",
 
  
 
- 
-
- 
-
   ];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22759,15 +10476,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -22775,15 +10484,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       ""
-
- 
-
- 
 
  
 
@@ -22791,23 +10492,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22815,15 +10500,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     (report, index) => {
-
- 
-
- 
 
  
 
@@ -22831,15 +10508,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         lines,
-
- 
-
- 
 
  
 
@@ -22847,16 +10516,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         multiple
-
- 
-
-
- 
 
  
 
@@ -22864,23 +10524,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -22888,15 +10532,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         reports.length - 1
-
- 
-
- 
 
  
 
@@ -22904,15 +10540,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         lines.push(
-
- 
-
- 
 
  
 
@@ -22920,15 +10548,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
           "---",
-
- 
-
- 
 
  
 
@@ -22936,15 +10556,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
 
  
 
@@ -22952,31 +10564,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     }
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -22984,15 +10576,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     (report) =>
-
- 
-
- 
 
  
 
@@ -23000,15 +10584,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         (item) => ({
-
- 
-
- 
 
  
 
@@ -23016,15 +10592,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
           candidate_id:
-
- 
-
- 
 
  
 
@@ -23032,15 +10600,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
           office:
-
- 
-
- 
 
  
 
@@ -23048,15 +10608,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
           district:
-
- 
-
- 
 
  
 
@@ -23064,15 +10616,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         })
-
- 
-
- 
 
  
 
@@ -23080,23 +10624,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23104,23 +10632,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     type:
 
  
 
- 
-
- 
-
       multiple
-
- 
-
- 
 
  
 
@@ -23128,15 +10644,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         : "fec_finance",
-
- 
-
- 
 
  
 
@@ -23144,15 +10652,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     candidate:
-
- 
-
- 
 
  
 
@@ -23160,15 +10660,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     candidate_id:
-
- 
-
- 
 
  
 
@@ -23176,15 +10668,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23192,15 +10676,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     committee_id:
-
- 
-
- 
 
  
 
@@ -23208,15 +10684,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23224,15 +10692,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     cycle:
-
- 
-
- 
 
  
 
@@ -23240,24 +10700,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       reports[0].cycle ||
 
  
 
- 
-
- 
-
       null,
-
- 
-
-
- 
 
  
 
@@ -23265,23 +10712,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       multiple
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23289,15 +10724,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     coverage_start:
-
- 
-
- 
 
  
 
@@ -23305,15 +10732,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23321,15 +10740,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     coverage_end:
-
- 
-
- 
 
  
 
@@ -23337,15 +10748,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23353,15 +10756,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     reporting_period:
-
- 
-
- 
 
  
 
@@ -23369,15 +10764,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23385,15 +10772,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     metrics,
-
- 
-
- 
 
  
 
@@ -23401,15 +10780,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     interpretation:
-
- 
-
- 
 
  
 
@@ -23417,15 +10788,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         (report) =>
-
- 
-
- 
 
  
 
@@ -23433,15 +10796,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
 
  
 
@@ -23449,23 +10804,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
       multiple
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23473,15 +10816,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     source:
-
- 
-
- 
 
  
 
@@ -23489,15 +10824,7 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
         ? null
-
- 
-
- 
 
  
 
@@ -23505,23 +10832,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
     sources,
 
  
 
- 
-
- 
-
     answer:
-
- 
-
- 
 
  
 
@@ -23529,23 +10844,11 @@ function buildFinanceDataAnswer({
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
 
  
 
@@ -23553,15 +10856,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   bundle,
-
- 
-
- 
 
  
 
@@ -23569,15 +10864,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
 ) {
-
- 
-
- 
 
  
 
@@ -23585,31 +10872,11 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     bundle?.[key];
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -23617,15 +10884,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -23633,23 +10892,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23657,16 +10900,7 @@ function candidateBundleRecords(
 
  
 
-
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -23674,23 +10908,11 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -23698,23 +10920,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23722,15 +10928,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -23738,23 +10936,11 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -23762,23 +10948,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23786,15 +10956,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -23802,23 +10964,11 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
     )
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -23826,23 +10976,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23850,23 +10984,7 @@ function candidateBundleRecords(
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23874,15 +10992,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
   context,
-
- 
-
- 
 
  
 
@@ -23890,23 +11000,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
   sources,
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -23914,15 +11012,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     results.find(
-
- 
-
- 
 
  
 
@@ -23930,15 +11020,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
         item.tool ===
-
- 
-
- 
 
  
 
@@ -23946,31 +11028,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
         item.usable
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -23978,31 +11040,11 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     bundleResult?.data;
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -24010,15 +11052,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     typeof bundle !==
-
- 
-
- 
 
  
 
@@ -24026,15 +11060,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -24042,24 +11068,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
-
- 
 
  
 
@@ -24067,15 +11076,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -24083,15 +11084,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -24099,23 +11092,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
       : [];
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -24123,15 +11100,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     Array.isArray(
-
- 
-
- 
 
  
 
@@ -24139,15 +11108,7 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
     )
-
- 
-
- 
 
  
 
@@ -24155,154 +11116,285 @@ function buildCandidateIntelligenceDataAnswer({
 
  
 
- 
-
- 
-
       : [];
 
  
 
- 
+  const verifiedFinanceReports = financeReports
+
+    .map((entry) => {
+
+      const identity =
+
+        entry?.identity && typeof entry.identity === "object"
+
+          ? entry.identity
+
+          : {};
 
  
 
- 
+      return buildFinanceReport({
 
- 
+        context: {
 
- 
+          ...context,
+
+          candidate:
+
+            identity.candidate || context.candidate,
+
+          candidate_id:
+
+            identity.candidate_id || context.candidate_id,
+
+          committee_id:
+
+            identity.committee_id || context.committee_id,
+
+          state: identity.state || context.state,
+
+          office: identity.office || context.office,
+
+        },
+
+        result: entry?.result || entry,
+
+      });
+
+    })
+
+    .filter(Boolean);
 
  
 
   const polls =
+
   Array.isArray(
+
     bundle.polling?.records
+
   )
+
     ? bundle.polling.records
+
     : [];
+
+ 
 
 const directPollingRecords =
+
   Array.isArray(
+
     bundle.polling?.direct_records
+
   )
+
     ? bundle.polling.direct_records
+
     : [];
+
+ 
 
 const candidateContextPollingRecords =
+
   Array.isArray(
+
     bundle.polling?.candidate_context_records
+
   )
+
     ? bundle.polling.candidate_context_records
+
     : [];
+
+ 
 
 const stateContextPollingRecords =
+
   Array.isArray(
+
     bundle.polling?.state_context_records
+
   )
+
     ? bundle.polling.state_context_records
+
     : [];
+
+ 
 
 const directPollingCount =
+
   Number(
+
     bundle.polling?.direct_count ??
+
     directPollingRecords.length ??
+
     0
+
   ) || 0;
+
+ 
 
 const candidateContextPollingCount =
+
   Number(
+
     bundle.polling?.candidate_context_count ??
+
     candidateContextPollingRecords.length ??
+
     0
+
   ) || 0;
+
+ 
 
 const stateContextPollingCount =
+
   Number(
+
     bundle.polling?.state_context_count ??
+
     stateContextPollingRecords.length ??
+
     0
+
   ) || 0;
 
+ 
+
 const pollingStatus =
+
   String(
+
     bundle.polling?.status ||
+
     ""
+
   ).trim();
+
+ 
 
 const pollingQueryType =
+
   String(
+
     bundle.polling?.query_type ||
+
     ""
+
   ).trim();
+
+ 
 
 const requestedPollingRace =
+
   bundle.polling?.requested_race &&
+
   typeof bundle.polling.requested_race === "object"
+
     ? bundle.polling.requested_race
+
     : {};
 
+ 
+
 const requestedPollingOffice =
+
   String(
+
     requestedPollingRace.office ||
+
     context.office ||
+
     ""
+
   ).trim();
+
+ 
 
 const requestedPollingState =
+
   String(
+
     requestedPollingRace.state ||
+
     context.state ||
+
     ""
+
   ).trim();
 
+ 
+
 const articles =
+
   candidateBundleRecords(
+
     bundle,
+
     "news"
+
   );
 
+ 
+
 const signals =
+
   Array.isArray(
+
     bundle.signals
+
   )
+
     ? bundle.signals
+
     : [];
+
+ 
 
 const strategies =
+
   Array.isArray(
+
     bundle.strategy?.recommendations
+
   )
+
     ? bundle.strategy.recommendations
+
     : [];
- 
 
  
+
   const candidateLabel =
+
+ 
 
     identities[0]?.name ||
 
+ 
+
     identities[0]?.candidate ||
+
+ 
 
     identities[0]?.record?.name ||
 
+ 
+
     identities[0]?.record?.full_name ||
+
+ 
 
     context.candidate ||
 
+ 
+
     "Candidate";
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -24310,23 +11402,7 @@ const strategies =
 
  
 
- 
-
- 
-
     `Unified Candidate Intelligence - ${candidateLabel}`;
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -24334,23 +11410,11 @@ const strategies =
 
  
 
- 
-
- 
-
     title,
 
  
 
- 
-
- 
-
     "",
-
- 
-
- 
 
  
 
@@ -24358,23 +11422,7 @@ const strategies =
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -24382,23 +11430,11 @@ const strategies =
 
  
 
- 
-
- 
-
   ) {
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -24406,31 +11442,11 @@ const strategies =
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     for (
-
- 
-
- 
 
  
 
@@ -24438,15 +11454,7 @@ const strategies =
 
  
 
- 
-
- 
-
         identities.slice(
-
- 
-
- 
 
  
 
@@ -24454,16 +11462,7 @@ const strategies =
 
  
 
- 
-
- 
-
-
           6
-
- 
-
- 
 
  
 
@@ -24471,15 +11470,7 @@ const strategies =
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -24487,15 +11478,7 @@ const strategies =
 
  
 
- 
-
- 
-
         `- ${
-
- 
-
- 
 
  
 
@@ -24503,15 +11486,7 @@ const strategies =
 
  
 
- 
-
- 
-
           "Office"
-
- 
-
- 
 
  
 
@@ -24519,15 +11494,7 @@ const strategies =
 
  
 
- 
-
- 
-
           identity.district
-
- 
-
- 
 
  
 
@@ -24535,15 +11502,7 @@ const strategies =
 
  
 
- 
-
- 
-
             : ""
-
- 
-
- 
 
  
 
@@ -24551,25 +11510,27 @@ const strategies =
 
  
 
- 
-
- 
-
           identity.fec_candidate_id ||
+
+ 
 
           identity.candidate_id ||
 
+ 
+
           identity.record?.fec_candidate_id ||
+
+ 
 
           identity.committee_id ||
 
+ 
+
           identity.record?.campaign_committee_id ||
 
+ 
+
           "No FEC identifier"
-
- 
-
- 
 
  
 
@@ -24577,15 +11538,7 @@ const strategies =
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
 
  
 
@@ -24593,23 +11546,11 @@ const strategies =
 
  
 
- 
-
- 
-
   } else {
 
  
 
- 
-
- 
-
     lines.push(
-
- 
-
- 
 
  
 
@@ -24617,15 +11558,7 @@ const strategies =
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
 
  
 
@@ -24633,232 +11566,399 @@ const strategies =
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   lines.push(
+
   "",
-  `Official FEC reports: ${
-  financeReports.filter(
-    (report) =>
-      report?.ok === true ||
-      report?.result?.ok === true
-  ).length
-}`
+
+  `Official FEC reports: ${verifiedFinanceReports.length}`
+
 );
+
+ 
 
 /*
+
  * Polling is intentionally separated by intelligence context.
+
  *
+
  * Candidate-context or state-context polling must never be described
+
  * as direct polling for the requested race.
+
  */
+
 if (
+
   pollingStatus ===
+
     "direct_race_available" ||
+
   directPollingCount > 0
+
 ) {
+
   lines.push(
+
     `Direct${
+
       requestedPollingOffice
+
         ? ` ${requestedPollingOffice}`
+
         : ""
+
     } polling: ${directPollingCount}`
+
   );
 
+ 
+
   if (
+
     candidateContextPollingCount > 0
+
   ) {
+
     lines.push(
+
       `Candidate-context polling: ${candidateContextPollingCount}`
+
     );
+
   }
 
+ 
+
   if (
+
     stateContextPollingCount > 0
+
   ) {
+
     lines.push(
+
       `State polling context: ${stateContextPollingCount}`
+
     );
+
   }
+
 } else if (
+
   pollingStatus ===
+
     "candidate_context_available" ||
+
   pollingQueryType ===
+
     "candidate_context" ||
+
   candidateContextPollingCount > 0
+
 ) {
-  lines.push(
-    `Direct${
-      requestedPollingOffice
-        ? ` ${requestedPollingOffice}`
-        : ""
-    } polling: 0`
-  );
 
   lines.push(
+
+    `Direct${
+
+      requestedPollingOffice
+
+        ? ` ${requestedPollingOffice}`
+
+        : ""
+
+    } polling: 0`
+
+  );
+
+ 
+
+  lines.push(
+
     `Candidate-context polling: ${candidateContextPollingCount}`
+
   );
 
+ 
+
   if (
+
     stateContextPollingCount > 0
+
   ) {
+
     lines.push(
+
       `State polling context: ${stateContextPollingCount}`
+
     );
+
   }
+
 } else if (
+
   pollingStatus ===
+
     "state_context_available" ||
+
   pollingQueryType ===
+
     "state_context" ||
+
   stateContextPollingCount > 0
+
 ) {
+
   lines.push(
+
     `Direct${
+
       requestedPollingOffice
+
         ? ` ${requestedPollingOffice}`
+
         : ""
+
     } polling: 0`
+
   );
 
+ 
+
   lines.push(
+
     "Candidate-context polling: 0"
+
   );
 
+ 
+
   lines.push(
+
     `State polling context: ${stateContextPollingCount}`
-  );
-} else if (
-  bundle.polling?.source_result?.ok
-) {
-  /*
-   * Polling subsystem succeeded, but there were no applicable records.
-   * This is not a provider failure.
-   */
-  lines.push(
-    `Direct${
-      requestedPollingOffice
-        ? ` ${requestedPollingOffice}`
-        : ""
-    } polling: 0`
+
   );
 
+} else if (
+
+  bundle.polling?.source_result?.ok
+
+) {
+
+  /*
+
+   * Polling subsystem succeeded, but there were no applicable records.
+
+   * This is not a provider failure.
+
+   */
+
   lines.push(
-    "Candidate-context polling: 0"
+
+    `Direct${
+
+      requestedPollingOffice
+
+        ? ` ${requestedPollingOffice}`
+
+        : ""
+
+    } polling: 0`
+
   );
+
+ 
+
+  lines.push(
+
+    "Candidate-context polling: 0"
+
+  );
+
+ 
 
   if (
+
     requestedPollingState
+
   ) {
+
     lines.push(
+
       `No applicable polling records were found for the requested ${requestedPollingState} context.`
+
     );
+
   } else {
+
     lines.push(
+
       "No applicable polling records were found."
+
     );
+
   }
+
 } else {
+
   /*
+
    * Preserve the distinction between unavailable polling and a valid
+
    * zero-match result.
+
    */
+
   lines.push(
+
     "Polling intelligence: unavailable or degraded"
+
   );
+
 }
 
+ 
+
 lines.push(
+
   `News articles: ${articles.length}`,
+
   `Political signals: ${signals.length}`,
+
   `Strategy recommendations: ${strategies.length}`
+
 );
 
  
 
- 
+  if (verifiedFinanceReports.length) {
+
+    lines.push("", "Verified campaign finance:");
 
  
 
- 
+    verifiedFinanceReports.slice(0, 4).forEach((report, index) => {
+
+      if (index > 0) {
+
+        lines.push("");
+
+      }
 
  
 
- 
+      appendFinanceReportLines(
 
- 
+        lines,
 
-  if (
-  polls.length
-) {
-  let pollingSectionTitle =
-    "Latest polling:";
+        report,
 
-  if (
-    pollingStatus ===
-      "candidate_context_available" ||
-    pollingQueryType ===
-      "candidate_context"
-  ) {
-    pollingSectionTitle =
-      "Latest candidate-context polling:";
-  } else if (
-    pollingStatus ===
-      "state_context_available" ||
-    pollingQueryType ===
-      "state_context"
-  ) {
-    pollingSectionTitle =
-      "Latest state polling context:";
-  } else if (
-    pollingStatus ===
-      "direct_race_available" ||
-    pollingQueryType ===
-      "direct_race"
-  ) {
-    pollingSectionTitle =
-      `Latest${
-        requestedPollingOffice
-          ? ` ${requestedPollingOffice}`
-          : ""
-      } polling:`;
+        verifiedFinanceReports.length > 1
+
+      );
+
+    });
+
+  } else {
+
+    lines.push(
+
+      "",
+
+      "Verified campaign finance:",
+
+      "- No usable official FEC filing was returned for the verified identity."
+
+    );
+
   }
 
+ 
+
+  if (
+
+  polls.length
+
+) {
+
+  let pollingSectionTitle =
+
+    "Latest polling:";
+
+ 
+
+  if (
+
+    pollingStatus ===
+
+      "candidate_context_available" ||
+
+    pollingQueryType ===
+
+      "candidate_context"
+
+  ) {
+
+    pollingSectionTitle =
+
+      "Latest candidate-context polling:";
+
+  } else if (
+
+    pollingStatus ===
+
+      "state_context_available" ||
+
+    pollingQueryType ===
+
+      "state_context"
+
+  ) {
+
+    pollingSectionTitle =
+
+      "Latest state polling context:";
+
+  } else if (
+
+    pollingStatus ===
+
+      "direct_race_available" ||
+
+    pollingQueryType ===
+
+      "direct_race"
+
+  ) {
+
+    pollingSectionTitle =
+
+      `Latest${
+
+        requestedPollingOffice
+
+          ? ` ${requestedPollingOffice}`
+
+          : ""
+
+      } polling:`;
+
+  }
+
+ 
+
   lines.push(
+
     "",
+
     pollingSectionTitle
+
   );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
     for (
-
- 
-
- 
-
 
  
 
@@ -24866,15 +11966,7 @@ lines.push(
 
  
 
- 
-
- 
-
         polls.slice(
-
- 
-
- 
 
  
 
@@ -24882,15 +11974,7 @@ lines.push(
 
  
 
- 
-
- 
-
           5
-
- 
-
- 
 
  
 
@@ -24898,15 +11982,7 @@ lines.push(
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -24914,15 +11990,7 @@ lines.push(
 
  
 
- 
-
- 
-
         [
-
- 
-
- 
 
  
 
@@ -24930,15 +11998,7 @@ lines.push(
 
  
 
- 
-
- 
-
           poll.source,
-
- 
-
- 
 
  
 
@@ -24946,15 +12006,7 @@ lines.push(
 
  
 
- 
-
- 
-
           poll.answer ||
-
- 
-
- 
 
  
 
@@ -24962,15 +12014,7 @@ lines.push(
 
  
 
- 
-
- 
-
           poll.pct != null
-
- 
-
- 
 
  
 
@@ -24978,15 +12022,7 @@ lines.push(
 
  
 
- 
-
- 
-
             : null,
-
- 
-
- 
 
  
 
@@ -24994,15 +12030,7 @@ lines.push(
 
  
 
- 
-
- 
-
           poll.published_at ||
-
- 
-
- 
 
  
 
@@ -25010,15 +12038,7 @@ lines.push(
 
  
 
- 
-
- 
-
         ]
-
- 
-
- 
 
  
 
@@ -25026,15 +12046,7 @@ lines.push(
 
  
 
- 
-
- 
-
             Boolean
-
- 
-
- 
 
  
 
@@ -25042,15 +12054,7 @@ lines.push(
 
  
 
- 
-
- 
-
           .join(
-
- 
-
- 
 
  
 
@@ -25058,31 +12062,11 @@ lines.push(
 
  
 
- 
-
- 
-
           );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -25090,23 +12074,11 @@ lines.push(
 
  
 
- 
-
- 
-
       ) {
 
  
 
- 
-
- 
-
         lines.push(
-
- 
-
- 
 
  
 
@@ -25114,15 +12086,7 @@ lines.push(
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
 
  
 
@@ -25130,15 +12094,7 @@ lines.push(
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -25146,23 +12102,7 @@ lines.push(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   if (
-
- 
-
- 
 
  
 
@@ -25170,15 +12110,7 @@ lines.push(
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -25186,15 +12118,7 @@ lines.push(
 
  
 
- 
-
- 
-
       "",
-
- 
-
- 
 
  
 
@@ -25202,31 +12126,11 @@ lines.push(
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     for (
-
- 
-
- 
 
  
 
@@ -25234,15 +12138,7 @@ lines.push(
 
  
 
- 
-
- 
-
         articles.slice(
-
- 
-
- 
 
  
 
@@ -25250,16 +12146,7 @@ lines.push(
 
  
 
- 
-
- 
-
           5
-
- 
-
- 
-
 
  
 
@@ -25267,15 +12154,7 @@ lines.push(
 
  
 
- 
-
- 
-
     ) {
-
- 
-
- 
 
  
 
@@ -25283,15 +12162,7 @@ lines.push(
 
  
 
- 
-
- 
-
         [
-
- 
-
- 
 
  
 
@@ -25299,15 +12170,7 @@ lines.push(
 
  
 
- 
-
- 
-
           article.headline,
-
- 
-
- 
 
  
 
@@ -25315,15 +12178,7 @@ lines.push(
 
  
 
- 
-
- 
-
           article.source,
-
- 
-
- 
 
  
 
@@ -25331,15 +12186,7 @@ lines.push(
 
  
 
- 
-
- 
-
           article.date,
-
- 
-
- 
 
  
 
@@ -25347,15 +12194,7 @@ lines.push(
 
  
 
- 
-
- 
-
           .filter(
-
- 
-
- 
 
  
 
@@ -25363,15 +12202,7 @@ lines.push(
 
  
 
- 
-
- 
-
           )
-
- 
-
- 
 
  
 
@@ -25379,15 +12210,7 @@ lines.push(
 
  
 
- 
-
- 
-
             " - "
-
- 
-
- 
 
  
 
@@ -25395,23 +12218,7 @@ lines.push(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -25419,23 +12226,11 @@ lines.push(
 
  
 
- 
-
- 
-
       ) {
 
  
 
- 
-
- 
-
         lines.push(
-
- 
-
- 
 
  
 
@@ -25443,15 +12238,53 @@ lines.push(
 
  
 
- 
+        );
 
  
+
+        const articleSummary = clean(
+
+          article.summary ||
+
+          article.description ||
+
+          article.snippet ||
+
+          article.excerpt
 
         );
 
  
 
+        if (articleSummary) {
+
+          lines.push(
+
+            `  ${truncate(articleSummary, 360)}`
+
+          );
+
+        }
+
  
+
+        const articleUrl = clean(
+
+          article.url ||
+
+          article.link ||
+
+          article.source_url
+
+        );
+
+ 
+
+        if (articleUrl) {
+
+          lines.push(`  Source: ${articleUrl}`);
+
+        }
 
  
 
@@ -25459,15 +12292,7 @@ lines.push(
 
  
 
- 
-
- 
-
     }
-
- 
-
- 
 
  
 
@@ -25475,39 +12300,109 @@ lines.push(
 
  
 
- 
+  if (signals.length) {
+
+    lines.push("", "Political signals:");
 
  
 
- 
+    for (const signal of signals.slice(0, 8)) {
+
+      if (typeof signal === "string") {
+
+        lines.push(`- ${signal}`);
+
+        continue;
+
+      }
 
  
 
- 
+      const signalTitle = clean(
+
+        signal.title ||
+
+        signal.name ||
+
+        signal.signal ||
+
+        signal.headline ||
+
+        signal.type ||
+
+        signal.category
+
+      );
+
+      const severity = clean(
+
+        signal.severity ||
+
+        signal.priority ||
+
+        signal.risk_level
+
+      );
+
+      const signalDate = clean(
+
+        signal.observed_at ||
+
+        signal.detected_at ||
+
+        signal.published_at ||
+
+        signal.created_at ||
+
+        signal.date
+
+      );
+
+      const signalDetail = clean(
+
+        signal.summary ||
+
+        signal.description ||
+
+        signal.detail ||
+
+        signal.rationale ||
+
+        signal.evidence
+
+      );
 
  
 
-  if (
+      const heading = [signalTitle, severity, signalDate]
+
+        .filter(Boolean)
+
+        .join(" - ");
 
  
 
- 
+      if (heading) {
+
+        lines.push(`- ${heading}`);
+
+      }
 
  
 
-    strategies.length
+      if (signalDetail && signalDetail !== signalTitle) {
+
+        lines.push(`  ${truncate(signalDetail, 360)}`);
+
+      }
+
+    }
+
+  }
 
  
 
- 
-
- 
-
-  ) {
-
- 
-
- 
+  if (strategies.length) {
 
  
 
@@ -25515,15 +12410,7 @@ lines.push(
 
  
 
- 
-
- 
-
       "",
-
- 
-
- 
 
  
 
@@ -25531,23 +12418,7 @@ lines.push(
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -25555,15 +12426,7 @@ lines.push(
 
  
 
- 
-
- 
-
       const strategy of
-
- 
-
- 
 
  
 
@@ -25571,15 +12434,7 @@ lines.push(
 
  
 
- 
-
- 
-
           0,
-
- 
-
- 
 
  
 
@@ -25587,15 +12442,7 @@ lines.push(
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -25603,15 +12450,7 @@ lines.push(
 
  
 
- 
-
- 
-
       const text =
-
- 
-
- 
 
  
 
@@ -25619,15 +12458,7 @@ lines.push(
 
  
 
- 
-
- 
-
           "string"
-
- 
-
- 
 
  
 
@@ -25635,15 +12466,7 @@ lines.push(
 
  
 
- 
-
- 
-
           : clean(
-
- 
-
- 
 
  
 
@@ -25651,16 +12474,7 @@ lines.push(
 
  
 
- 
-
- 
-
               strategy.recommended_action ||
-
- 
-
- 
-
 
  
 
@@ -25668,15 +12482,7 @@ lines.push(
 
  
 
- 
-
- 
-
               strategy.rationale
-
- 
-
- 
 
  
 
@@ -25684,23 +12490,7 @@ lines.push(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       if (
-
- 
-
- 
 
  
 
@@ -25708,15 +12498,7 @@ lines.push(
 
  
 
- 
-
- 
-
       ) {
-
- 
-
- 
 
  
 
@@ -25724,15 +12506,7 @@ lines.push(
 
  
 
- 
-
- 
-
           `- ${text}`
-
- 
-
- 
 
  
 
@@ -25740,7 +12514,75 @@ lines.push(
 
  
 
+        if (typeof strategy === "object" && strategy) {
+
+          const strategyDetail = clean(
+
+            strategy.rationale ||
+
+            strategy.description ||
+
+            strategy.detail ||
+
+            strategy.why
+
+          );
+
  
+
+          if (strategyDetail && strategyDetail !== text) {
+
+            lines.push(`  Rationale: ${truncate(strategyDetail, 360)}`);
+
+          }
+
+ 
+
+          const strategyOwner = clean(
+
+            strategy.owner ||
+
+            strategy.assigned_to ||
+
+            strategy.team
+
+          );
+
+          const strategyPriority = clean(
+
+            strategy.priority ||
+
+            strategy.urgency
+
+          );
+
+ 
+
+          if (strategyOwner || strategyPriority) {
+
+            lines.push(
+
+              `  ${[
+
+                strategyPriority
+
+                  ? `Priority: ${strategyPriority}`
+
+                  : null,
+
+                strategyOwner
+
+                  ? `Owner: ${strategyOwner}`
+
+                  : null,
+
+              ].filter(Boolean).join(" | ")}`
+
+            );
+
+          }
+
+        }
 
  
 
@@ -25748,31 +12590,11 @@ lines.push(
 
  
 
- 
-
- 
-
     }
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -25780,15 +12602,7 @@ lines.push(
 
  
 
- 
-
- 
-
     type:
-
- 
-
- 
 
  
 
@@ -25796,15 +12610,7 @@ lines.push(
 
  
 
- 
-
- 
-
     title,
-
- 
-
- 
 
  
 
@@ -25812,15 +12618,7 @@ lines.push(
 
  
 
- 
-
- 
-
       candidateLabel,
-
- 
-
- 
 
  
 
@@ -25828,15 +12626,7 @@ lines.push(
 
  
 
- 
-
- 
-
     profile:
-
- 
-
- 
 
  
 
@@ -25844,15 +12634,7 @@ lines.push(
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25860,23 +12642,11 @@ lines.push(
 
  
 
- 
-
- 
-
       bundle.finance ||
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25884,23 +12654,11 @@ lines.push(
 
  
 
- 
-
- 
-
       bundle.polling ||
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25908,23 +12666,11 @@ lines.push(
 
  
 
- 
-
- 
-
       bundle.news ||
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25932,15 +12678,7 @@ lines.push(
 
  
 
- 
-
- 
-
     strategy:
-
- 
-
- 
 
  
 
@@ -25948,15 +12686,7 @@ lines.push(
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25964,23 +12694,11 @@ lines.push(
 
  
 
- 
-
- 
-
       bundle.operations ||
 
  
 
- 
-
- 
-
       null,
-
- 
-
- 
 
  
 
@@ -25988,15 +12706,7 @@ lines.push(
 
  
 
- 
-
- 
-
       bundle.coverage ||
-
- 
-
- 
 
  
 
@@ -26004,15 +12714,7 @@ lines.push(
 
  
 
- 
-
- 
-
     sources:
-
- 
-
- 
 
  
 
@@ -26020,15 +12722,7 @@ lines.push(
 
  
 
- 
-
- 
-
       sources,
-
- 
-
- 
 
  
 
@@ -26036,15 +12730,7 @@ lines.push(
 
  
 
- 
-
- 
-
     answer:
-
- 
-
- 
 
  
 
@@ -26052,16 +12738,7 @@ lines.push(
 
  
 
- 
-
- 
-
         "\n"
-
- 
-
- 
-
 
  
 
@@ -26069,15 +12746,7 @@ lines.push(
 
  
 
- 
-
- 
-
   };
-
- 
-
- 
 
  
 
@@ -26085,23 +12754,7 @@ lines.push(
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 function buildDataAnswer({
-
- 
-
- 
 
  
 
@@ -26109,15 +12762,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
   results,
-
- 
-
- 
 
  
 
@@ -26125,15 +12770,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -26141,15 +12778,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
     context.intent ===
-
- 
-
- 
 
  
 
@@ -26157,15 +12786,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
   ) {
-
- 
-
- 
 
  
 
@@ -26173,15 +12794,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
       context,
-
- 
-
- 
 
  
 
@@ -26189,15 +12802,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
       sources,
-
- 
-
- 
 
  
 
@@ -26205,15 +12810,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
 
  
 
@@ -26257,15 +12854,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
   return null;
-
- 
-
- 
 
  
 
@@ -26273,23 +12862,7 @@ function buildDataAnswer({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
 function deterministicBrief({
-
- 
-
- 
 
  
 
@@ -26297,15 +12870,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
   context,
-
- 
-
- 
 
  
 
@@ -26313,15 +12878,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
   coverage,
-
- 
-
- 
 
  
 
@@ -26329,15 +12886,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
   sources,
-
- 
-
- 
 
  
 
@@ -26345,15 +12894,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -26361,15 +12902,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     dataAnswer?.answer
-
- 
-
- 
 
  
 
@@ -26377,15 +12910,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     const gaps =
-
- 
-
- 
 
  
 
@@ -26393,15 +12918,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         .filter(
-
- 
-
- 
 
  
 
@@ -26409,23 +12926,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             !item.usable
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -26433,15 +12938,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           (item) => ({
-
- 
-
- 
 
  
 
@@ -26449,24 +12946,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               item.tool,
-
- 
-
- 
-
- 
-
- 
-
-
- 
-
- 
 
  
 
@@ -26474,15 +12954,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               item.warnings[0] ||
-
- 
-
- 
 
  
 
@@ -26490,15 +12962,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               "No usable evidence returned.",
-
- 
-
- 
 
  
 
@@ -26506,23 +12970,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -26530,15 +12978,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       headline:
-
- 
-
- 
 
  
 
@@ -26546,23 +12986,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       executive_summary:
-
- 
-
- 
 
  
 
@@ -26570,23 +12994,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       key_findings:
-
- 
-
- 
 
  
 
@@ -26594,15 +13002,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           dataAnswer.metrics
-
- 
-
- 
 
  
 
@@ -26610,15 +13010,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           ? dataAnswer.metrics.map(
-
- 
-
- 
 
  
 
@@ -26626,15 +13018,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                 item,
-
- 
-
- 
 
  
 
@@ -26642,23 +13026,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               ) => ({
 
  
 
- 
-
- 
-
                 rank:
-
- 
-
- 
 
  
 
@@ -26666,23 +13038,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
                 finding:
-
- 
-
- 
 
  
 
@@ -26690,23 +13046,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
                 support:
-
- 
-
- 
 
  
 
@@ -26714,15 +13054,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               })
-
- 
-
- 
 
  
 
@@ -26730,15 +13062,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           : [
-
- 
-
- 
 
  
 
@@ -26746,15 +13070,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                 rank:
-
- 
-
- 
 
  
 
@@ -26762,23 +13078,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
                 finding:
-
- 
-
- 
 
  
 
@@ -26786,23 +13086,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
                 support:
-
- 
-
- 
 
  
 
@@ -26810,15 +13094,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
               },
-
- 
-
- 
 
  
 
@@ -26826,23 +13102,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       risks_and_gaps:
-
- 
-
- 
 
  
 
@@ -26850,24 +13110,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       recommended_actions:
-
-
- 
-
- 
 
  
 
@@ -26939,23 +13182,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       answer:
-
- 
-
- 
 
  
 
@@ -26963,31 +13190,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       confidence,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -26995,23 +13198,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         sources.length,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27019,15 +13206,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         dataAnswer,
-
- 
-
- 
 
  
 
@@ -27035,23 +13214,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27059,23 +13222,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     results.filter(
 
  
 
- 
-
- 
-
       (item) =>
-
- 
-
- 
 
  
 
@@ -27083,23 +13234,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27107,15 +13242,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     usable
-
- 
-
- 
 
  
 
@@ -27123,15 +13250,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         0,
-
- 
-
- 
 
  
 
@@ -27139,23 +13258,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       )
 
  
 
- 
-
- 
-
       .map(
-
- 
-
- 
 
  
 
@@ -27163,15 +13270,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           item,
-
- 
-
- 
 
  
 
@@ -27179,15 +13278,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         ) => ({
-
- 
-
- 
 
  
 
@@ -27195,23 +13286,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             index + 1,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27219,15 +13294,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             item.summary ||
-
- 
-
- 
 
  
 
@@ -27235,23 +13302,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
           support:
-
- 
-
- 
 
  
 
@@ -27259,32 +13310,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         })
-
-
- 
-
- 
 
  
 
       );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27292,15 +13322,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     results
-
- 
-
- 
 
  
 
@@ -27308,15 +13330,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         (item) =>
-
- 
-
- 
 
  
 
@@ -27324,15 +13338,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -27340,15 +13346,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         (item) => ({
-
- 
-
- 
 
  
 
@@ -27356,23 +13354,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             item.tool,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27380,15 +13362,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             item.warnings[0] ||
-
- 
-
- 
 
  
 
@@ -27396,15 +13370,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             "No usable evidence returned.",
-
- 
-
- 
 
  
 
@@ -27412,23 +13378,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27436,15 +13386,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     [
-
- 
-
- 
 
  
 
@@ -27452,15 +13394,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       context.office,
-
- 
-
- 
 
  
 
@@ -27468,15 +13402,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       context.locality,
-
- 
-
- 
 
  
 
@@ -27484,23 +13410,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     ]
 
  
 
- 
-
- 
-
       .filter(
-
- 
-
- 
 
  
 
@@ -27508,15 +13422,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -27524,31 +13430,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         " - "
 
  
 
- 
-
- 
-
       );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27556,15 +13442,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
     findings[0]?.finding ||
-
- 
-
- 
 
  
 
@@ -27572,15 +13450,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       scope
-
- 
-
- 
 
  
 
@@ -27588,15 +13458,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         : ""
-
- 
-
- 
 
  
 
@@ -27604,23 +13466,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const answer =
-
- 
-
- 
 
  
 
@@ -27628,15 +13474,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       ? [
-
- 
-
- 
 
  
 
@@ -27644,15 +13482,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           "",
-
- 
-
- 
 
  
 
@@ -27660,16 +13490,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             (item) =>
-
-
- 
-
- 
 
  
 
@@ -27677,15 +13498,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           ),
-
- 
-
- 
 
  
 
@@ -27693,15 +13506,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           `Evidence status: ${coverage.evidence_status}. Confidence: ${confidence}%. Tools with usable evidence: ${coverage.useful_tools}/${coverage.attempted_tools}. Sources: ${sources.length}.`,
-
- 
-
- 
 
  
 
@@ -27709,15 +13514,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             ? `Data gaps: ${gaps
-
- 
-
- 
 
  
 
@@ -27725,15 +13522,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                   0,
-
- 
-
- 
 
  
 
@@ -27741,15 +13530,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                 )
-
- 
-
- 
 
  
 
@@ -27757,15 +13538,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                   (item) =>
-
- 
-
- 
 
  
 
@@ -27773,15 +13546,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                 )
-
- 
-
- 
 
  
 
@@ -27789,15 +13554,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
                   "; "
-
- 
-
- 
 
  
 
@@ -27805,15 +13562,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             : "No major provider gaps were reported.",
-
- 
-
- 
 
  
 
@@ -27821,23 +13570,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           "\n"
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -27845,23 +13582,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -27869,23 +13590,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     executive_summary:
-
- 
-
- 
 
  
 
@@ -27893,15 +13598,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         .map(
-
- 
-
- 
 
  
 
@@ -27909,23 +13606,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             item.finding
 
  
 
- 
-
- 
-
         )
-
- 
-
- 
 
  
 
@@ -27933,15 +13618,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
           " "
-
- 
-
- 
 
  
 
@@ -27949,23 +13626,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       answer,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27973,23 +13634,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       findings,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -27997,23 +13642,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       gaps,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28021,15 +13650,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
       gaps.length
-
- 
-
- 
 
  
 
@@ -28037,15 +13658,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
             "Review provider diagnostics and environment variables, then rerun the briefing.",
-
- 
-
- 
 
  
 
@@ -28053,24 +13666,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
         : [
 
  
 
- 
-
- 
-
             "Continue monitoring for new verified filings, polls, and reporting.",
-
-
- 
-
- 
 
  
 
@@ -28078,31 +13678,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     answer,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28110,23 +13686,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     source_count:
-
- 
-
- 
 
  
 
@@ -28134,23 +13694,7 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     data_answer:
-
- 
-
- 
 
  
 
@@ -28158,31 +13702,11 @@ function deterministicBrief({
 
  
 
- 
-
- 
-
   };
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28190,15 +13714,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
   question,
-
- 
-
- 
 
  
 
@@ -28206,15 +13722,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
   results,
-
- 
-
- 
 
  
 
@@ -28222,15 +13730,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
   confidence,
-
- 
-
- 
 
  
 
@@ -28238,15 +13738,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
   deterministic,
-
- 
-
- 
 
  
 
@@ -28254,15 +13746,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
 }) {
-
- 
-
- 
 
  
 
@@ -28270,15 +13754,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
     !openai ||
-
- 
-
- 
 
  
 
@@ -28286,15 +13762,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
       0
-
- 
-
- 
 
  
 
@@ -28302,31 +13770,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
     return null;
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28334,15 +13782,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
     results
-
- 
-
- 
 
  
 
@@ -28350,15 +13790,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
         (item) =>
-
- 
-
- 
 
  
 
@@ -28366,15 +13798,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -28382,15 +13806,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
         (item) => ({
-
- 
-
- 
 
  
 
@@ -28398,23 +13814,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             item.tool,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28422,23 +13822,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             item.summary,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28446,32 +13830,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             item.data,
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
           sources:
-
-
- 
-
- 
 
  
 
@@ -28479,23 +13842,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
           warnings:
-
- 
-
- 
 
  
 
@@ -28503,15 +13850,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
         })
-
- 
-
- 
 
  
 
@@ -28519,31 +13858,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   const response =
 
  
 
- 
-
- 
-
     await withTimeout(
-
- 
-
- 
 
  
 
@@ -28551,15 +13870,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
         {
-
- 
-
- 
 
  
 
@@ -28567,23 +13878,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             MODEL,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -28591,15 +13886,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "You are the VoterSpheres Executive Intelligence Orchestrator.",
-
- 
-
- 
 
  
 
@@ -28607,15 +13894,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "The structured data_answer is authoritative when present. Preserve its exact numeric values, candidate IDs, dates, report types, and source information.",
-
- 
-
- 
 
  
 
@@ -28623,15 +13902,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "For candidate intelligence questions, synthesize the verified profile, official FEC finance, polling, current news, political signals, and VoterSpheres strategy recommendations from the supplied candidate bundle.",
-
- 
-
- 
 
  
 
@@ -28639,15 +13910,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "Finance values, poll percentages, article dates/headlines, candidate IDs, and source names must be copied exactly from retrieved evidence. Strategy recommendations must be labeled as VoterSpheres analysis rather than external fact.",
-
- 
-
- 
 
  
 
@@ -28655,15 +13918,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "Do not confuse polling records with FEC finance records.",
-
- 
-
- 
 
  
 
@@ -28671,15 +13926,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "If evidence is partial, say so. Never invent candidates, polling values, finance totals, offices, race status, or state developments.",
-
- 
-
- 
 
  
 
@@ -28687,15 +13934,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             "Return only valid JSON with: headline, executive_summary, key_findings, risks_and_gaps, recommended_actions, answer.",
-
- 
-
- 
 
  
 
@@ -28703,15 +13942,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             `Context: ${JSON.stringify(
-
- 
-
- 
 
  
 
@@ -28719,15 +13950,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             )}`,
-
- 
-
- 
 
  
 
@@ -28735,23 +13958,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               coverage
 
  
 
- 
-
- 
-
             )}`,
-
- 
-
- 
 
  
 
@@ -28759,15 +13970,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             `Sources: ${JSON.stringify(
-
- 
-
- 
 
  
 
@@ -28775,15 +13978,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
                 0,
-
- 
-
- 
 
  
 
@@ -28791,23 +13986,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               )
 
  
 
- 
-
- 
-
             )}`,
-
- 
-
- 
 
  
 
@@ -28815,15 +13998,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               dataAnswer
-
- 
-
- 
 
  
 
@@ -28831,15 +14006,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               0,
-
- 
-
- 
 
  
 
@@ -28847,15 +14014,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             )}`,
-
- 
-
- 
 
  
 
@@ -28863,16 +14022,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               evidence
-
-
- 
-
- 
 
  
 
@@ -28880,15 +14030,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               0,
-
- 
-
- 
 
  
 
@@ -28896,15 +14038,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
             )}`,
-
- 
-
- 
 
  
 
@@ -28912,15 +14046,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
               deterministic
-
- 
-
- 
 
  
 
@@ -28928,15 +14054,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
           ].join(
-
- 
-
- 
 
  
 
@@ -28944,15 +14062,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
           ),
-
- 
-
- 
 
  
 
@@ -28960,23 +14070,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
       ),
 
  
 
- 
-
- 
-
       SYNTHESIS_TIMEOUT_MS,
-
- 
-
- 
 
  
 
@@ -28984,23 +14082,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29008,15 +14090,7 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
     response?.output_text ||
-
- 
-
- 
 
  
 
@@ -29024,31 +14098,11 @@ async function synthesizeWithOpenAI({
 
  
 
- 
-
- 
-
   );
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29056,15 +14110,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -29072,23 +14118,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       true,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29096,23 +14126,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       BUILD,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29120,23 +14134,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       MODEL,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29144,15 +14142,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       Boolean(
-
- 
-
- 
 
  
 
@@ -29160,23 +14150,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29184,23 +14158,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       "retrieved-evidence-required",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29208,23 +14166,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       true,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29232,23 +14174,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       "strict-candidate-statistics-multi-identity",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29256,24 +14182,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       ORCHESTRATOR_TIMEOUT_MS,
-
- 
-
- 
-
- 
-
- 
-
-
- 
-
- 
 
  
 
@@ -29281,23 +14190,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       TOOL_TIMEOUT_MS,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29305,23 +14198,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       SYNTHESIS_TIMEOUT_MS,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29329,23 +14206,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       MAX_TOOLS,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29353,15 +14214,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
       now(),
-
- 
-
- 
 
  
 
@@ -29369,23 +14222,7 @@ export function getExecutiveOrchestratorConfiguration() {
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29393,23 +14230,11 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
   payload = {},
 
  
 
- 
-
- 
-
 } = {}) {
-
- 
-
- 
 
  
 
@@ -29417,15 +14242,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     clean(
-
- 
-
- 
 
  
 
@@ -29433,15 +14250,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       payload.query ||
-
- 
-
- 
 
  
 
@@ -29449,23 +14258,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29473,15 +14266,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     throw Object.assign(
-
- 
-
- 
 
  
 
@@ -29489,15 +14274,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
         "A question, query, or prompt is required."
-
- 
-
- 
 
  
 
@@ -29505,15 +14282,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       {
-
- 
-
- 
 
  
 
@@ -29521,15 +14290,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
           400,
-
- 
-
- 
 
  
 
@@ -29537,31 +14298,11 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     );
 
  
 
- 
-
- 
-
   }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29569,15 +14310,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     resolveContext(
-
- 
-
- 
 
  
 
@@ -29585,23 +14318,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29609,15 +14326,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     Number(
-
- 
-
- 
 
  
 
@@ -29625,15 +14334,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       payload.workspaceId ||
-
- 
-
- 
 
  
 
@@ -29641,23 +14342,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29665,16 +14350,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     clamp(
-
-
- 
-
- 
 
  
 
@@ -29682,15 +14358,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       12,
-
- 
-
- 
 
  
 
@@ -29698,31 +14366,11 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       20
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29730,15 +14378,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
     ok:
-
- 
-
- 
 
  
 
@@ -29746,23 +14386,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     build:
-
- 
-
- 
 
  
 
@@ -29770,31 +14394,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29802,23 +14402,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     workspace_id:
-
- 
-
- 
 
  
 
@@ -29826,31 +14410,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     limit,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29858,15 +14418,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       buildToolPlan({
-
- 
-
- 
 
  
 
@@ -29874,15 +14426,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
         context,
-
- 
-
- 
 
  
 
@@ -29890,31 +14434,11 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
         limit,
 
  
 
- 
-
- 
-
       }),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29922,15 +14446,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
       now(),
-
- 
-
- 
 
  
 
@@ -29938,23 +14454,7 @@ export function createExecutiveIntelligencePlan({
 
  
 
- 
-
- 
-
 }
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -29962,15 +14462,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
   user = {},
-
- 
-
- 
 
  
 
@@ -29978,15 +14470,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
 } = {}) {
-
- 
-
- 
 
  
 
@@ -29994,23 +14478,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     Date.now();
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30018,15 +14486,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     createExecutiveIntelligencePlan({
-
- 
-
- 
 
  
 
@@ -30034,23 +14494,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     });
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30058,24 +14502,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     await withTimeout(
 
  
 
- 
-
- 
-
       executePlan({
-
-
- 
-
- 
 
  
 
@@ -30083,15 +14514,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         user,
-
- 
-
- 
 
  
 
@@ -30099,15 +14522,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       ORCHESTRATOR_TIMEOUT_MS,
-
- 
-
- 
 
  
 
@@ -30115,23 +14530,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30139,15 +14538,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     mergeSources(
-
- 
-
- 
 
  
 
@@ -30155,23 +14546,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30179,23 +14554,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     buildCoverage(
 
  
 
- 
-
- 
-
       results,
-
- 
-
- 
 
  
 
@@ -30203,23 +14566,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30227,15 +14574,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     calculateConfidence(
-
- 
-
- 
 
  
 
@@ -30243,23 +14582,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30267,15 +14590,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     unique(
-
- 
-
- 
 
  
 
@@ -30283,15 +14598,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         (item) =>
-
- 
-
- 
 
  
 
@@ -30299,15 +14606,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
             (warning) =>
-
- 
-
- 
 
  
 
@@ -30315,15 +14614,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
           )
-
- 
-
- 
 
  
 
@@ -30331,23 +14622,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30355,15 +14630,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     results.flatMap(
-
- 
-
- 
 
  
 
@@ -30371,15 +14638,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         item.diagnostics.map(
-
- 
-
- 
 
  
 
@@ -30387,15 +14646,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
             ...diagnostic,
-
- 
-
- 
 
  
 
@@ -30403,15 +14654,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
               item.tool,
-
- 
-
- 
 
  
 
@@ -30419,31 +14662,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         )
 
  
 
- 
-
- 
-
     );
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30451,15 +14674,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     buildDataAnswer({
-
- 
-
- 
 
  
 
@@ -30467,24 +14682,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         plan.context,
-
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30492,39 +14690,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       sources,
 
  
 
- 
-
- 
-
     });
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30532,15 +14702,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     deterministicBrief({
-
- 
-
- 
 
  
 
@@ -30548,23 +14710,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         plan.question,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30572,23 +14718,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         plan.context,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30596,31 +14726,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       coverage,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30628,31 +14734,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       sources,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30660,23 +14742,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     });
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30684,23 +14750,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     "deterministic";
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30708,15 +14758,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     const ai =
-
- 
-
- 
 
  
 
@@ -30724,15 +14766,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         question:
-
- 
-
- 
 
  
 
@@ -30740,23 +14774,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         context:
-
- 
-
- 
 
  
 
@@ -30764,31 +14782,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         results,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30796,31 +14790,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         confidence,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30828,23 +14798,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         deterministic:
-
- 
-
- 
 
  
 
@@ -30852,40 +14806,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         dataAnswer,
 
  
 
- 
-
- 
-
       });
-
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -30893,15 +14818,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       ai &&
-
- 
-
- 
 
  
 
@@ -30909,15 +14826,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         ai.answer ||
-
- 
-
- 
 
  
 
@@ -30925,15 +14834,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       )
-
- 
-
- 
 
  
 
@@ -30941,15 +14842,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       /*
-
- 
-
- 
 
  
 
@@ -30957,15 +14850,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
        * provides the prose synthesis.
-
- 
-
- 
 
  
 
@@ -30973,15 +14858,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       briefing = {
-
- 
-
- 
 
  
 
@@ -30989,23 +14866,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         ...ai,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31013,23 +14874,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         source_count:
-
- 
-
- 
 
  
 
@@ -31037,23 +14882,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
         data_answer:
-
- 
-
- 
 
  
 
@@ -31061,23 +14890,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       };
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31085,15 +14898,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         "openai-grounded";
-
- 
-
- 
 
  
 
@@ -31101,15 +14906,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
   } catch (error) {
-
- 
-
- 
 
  
 
@@ -31117,23 +14914,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       `briefing_synthesis: ${
 
  
 
- 
-
- 
-
         error?.message ||
-
- 
-
- 
 
  
 
@@ -31141,15 +14926,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       }`
-
- 
-
- 
 
  
 
@@ -31157,23 +14934,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     diagnostics.push({
-
- 
-
- 
 
  
 
@@ -31181,23 +14942,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         "openai",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31205,23 +14950,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         "briefing_synthesis",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31229,23 +14958,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         false,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31253,15 +14966,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         error?.message ||
-
- 
-
- 
 
  
 
@@ -31269,24 +14974,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
-
- 
-
- 
-
- 
-
       checked_at:
-
- 
-
- 
 
  
 
@@ -31294,15 +14982,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
     });
-
- 
-
- 
 
  
 
@@ -31310,23 +14990,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   /*
-
- 
-
- 
 
  
 
@@ -31334,15 +14998,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
    * The AI can add interpretation, but it cannot hide the actual filing data.
-
- 
-
- 
 
  
 
@@ -31350,15 +15006,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
   const finalAnswer =
-
- 
-
- 
 
  
 
@@ -31388,17 +15036,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
         ? (
 
- 
+            dataAnswer?.answer ||
 
             briefing.answer ||
 
- 
-
             briefing.executive_summary ||
-
- 
-
-            dataAnswer?.answer ||
 
  
 
@@ -31434,23 +15076,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
   return {
-
- 
-
- 
 
  
 
@@ -31458,31 +15084,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       coverage.useful_tools >
 
  
 
- 
-
- 
-
       0,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31490,23 +15096,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       BUILD,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31514,23 +15104,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       "executive_intelligence_orchestrator",
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31538,15 +15112,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       coverage.evidence_status !==
-
- 
-
- 
 
  
 
@@ -31554,23 +15120,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     live_data_available:
-
- 
-
- 
 
  
 
@@ -31578,23 +15128,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       0,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31602,15 +15136,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       coverage.useful_tools >
-
- 
-
- 
 
  
 
@@ -31618,23 +15144,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     evidence_status:
-
- 
-
- 
 
  
 
@@ -31642,23 +15152,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     question:
-
- 
-
- 
 
  
 
@@ -31666,24 +15160,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
-
- 
-
     context:
-
- 
-
- 
 
  
 
@@ -31691,23 +15168,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     workspace_id:
-
- 
-
- 
 
  
 
@@ -31715,23 +15176,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     plan: {
-
- 
-
- 
 
  
 
@@ -31739,23 +15184,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         plan.tool_plan.length,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31763,31 +15192,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         plan.tool_plan,
 
  
 
- 
-
- 
-
     },
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31795,15 +15204,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       started_at:
-
- 
-
- 
 
  
 
@@ -31811,15 +15212,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
           startedAt
-
- 
-
- 
 
  
 
@@ -31827,23 +15220,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       completed_at:
-
- 
-
- 
 
  
 
@@ -31851,23 +15228,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       latency_ms:
-
- 
-
- 
 
  
 
@@ -31875,23 +15236,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         startedAt,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31899,31 +15244,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
       confidence,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31931,23 +15252,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         synthesisProvider,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -31955,15 +15260,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         Boolean(
-
- 
-
- 
 
  
 
@@ -31971,15 +15268,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         ),
-
- 
-
- 
 
  
 
@@ -31987,23 +15276,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     data_answer:
-
- 
-
- 
 
  
 
@@ -32011,31 +15284,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     briefing,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -32043,23 +15292,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       finalAnswer,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -32067,24 +15300,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       results,
-
- 
-
- 
-
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -32092,15 +15308,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
       results.filter(
-
- 
-
- 
 
  
 
@@ -32108,31 +15316,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
           item.usable
 
  
 
- 
-
- 
-
       ),
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -32140,23 +15328,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     warnings:
-
- 
-
- 
 
  
 
@@ -32164,15 +15336,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
         warnings
-
- 
-
- 
 
  
 
@@ -32180,31 +15344,7 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
     diagnostics,
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
 
  
 
@@ -32212,23 +15352,11 @@ export async function runExecutiveIntelligenceOrchestrator({
 
  
 
- 
       now()
- 
-
-      
-
- 
-
- 
 
  
 
   };
-
- 
-
- 
 
  
 
