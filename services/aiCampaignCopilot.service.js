@@ -1248,165 +1248,188 @@ export async function askAiCampaignCopilot({
 
  
 
-  let orchestratorPlan = null;
-
+    let orchestratorPlan = null;
   let orchestratorResult = null;
-
   let candidateOrchestration = false;
 
- 
-
   try {
-
     const {
-
-      planExecutiveIntelligence,
-
-      runExecutiveIntelligenceBrief,
-
+      createExecutiveIntelligencePlan,
+      runExecutiveIntelligenceOrchestrator,
     } = await import(
-
       "./executiveIntelligenceOrchestrator.service.js"
-
     );
 
- 
+    const orchestratorPayload = {
+      question: prompt,
 
-    orchestratorPlan =
+      workspace_id:
+        workspaceId ||
+        payload.workspace_id ||
+        1,
 
-      await planExecutiveIntelligence({
-
-        question: prompt,
-
-        workspace_id: workspaceId || 1,
-
-        candidate: clean(payload.candidate),
-
-        candidate_id: clean(
-
-          payload.candidate_id ||
-
-            payload.fec_candidate_id
-
+      candidate:
+        clean(
+          payload.candidate
         ),
 
-        committee_id: clean(payload.committee_id),
+      candidate_id:
+        clean(
+          payload.candidate_id ||
+          payload.fec_candidate_id
+        ),
 
-        state: clean(payload.state),
+      committee_id:
+        clean(
+          payload.committee_id
+        ),
 
-        office: clean(payload.office),
+      state:
+        clean(
+          payload.state
+        ),
 
-        locality: clean(payload.locality),
+      office:
+        clean(
+          payload.office
+        ),
 
-        cycle: clean(payload.cycle),
+      locality:
+        clean(
+          payload.locality
+        ),
 
-        limit: Number(payload.limit || 12),
+      cycle:
+        clean(
+          payload.cycle ||
+          "2026"
+        ),
 
+      limit:
+        Number(
+          payload.limit ||
+          12
+        ),
+    };
+
+    /*
+     * Build 4.4 planner accepts:
+     *   createExecutiveIntelligencePlan({ payload })
+     */
+    orchestratorPlan =
+      createExecutiveIntelligencePlan({
+        payload:
+          orchestratorPayload,
       });
 
- 
+    candidateOrchestration =
+      orchestratorPlan
+        ?.context
+        ?.intent ===
+        "candidate_intelligence" ||
+      orchestratorPlan
+        ?.tool_plan
+        ?.some(
+          (tool) =>
+            tool?.name ===
+            "get_candidate_intelligence_bundle"
+        ) === true;
 
     if (
-
-      orchestratorPlan?.context?.intent ===
-
-      "candidate_intelligence"
-
+      candidateOrchestration
     ) {
-
-      candidateOrchestration = true;
-
- 
-
+      /*
+       * Build 4.4 runner accepts:
+       *   runExecutiveIntelligenceOrchestrator({ user, payload })
+       */
       orchestratorResult =
+        await runExecutiveIntelligenceOrchestrator({
+          user,
 
-        await runExecutiveIntelligenceBrief({
+          payload: {
+            ...orchestratorPayload,
 
-          question: prompt,
+            candidate:
+              clean(
+                payload.candidate ||
+                orchestratorPlan
+                  ?.context
+                  ?.candidate
+              ),
 
-          workspace_id: workspaceId || 1,
+            candidate_id:
+              clean(
+                payload.candidate_id ||
+                payload.fec_candidate_id ||
+                orchestratorPlan
+                  ?.context
+                  ?.candidate_id
+              ),
 
-          candidate: clean(
+            committee_id:
+              clean(
+                payload.committee_id ||
+                orchestratorPlan
+                  ?.context
+                  ?.committee_id
+              ),
 
-            payload.candidate ||
+            state:
+              clean(
+                payload.state ||
+                orchestratorPlan
+                  ?.context
+                  ?.state
+              ),
 
-              orchestratorPlan?.context?.candidate
+            office:
+              clean(
+                payload.office ||
+                orchestratorPlan
+                  ?.context
+                  ?.office
+              ),
 
-          ),
+            locality:
+              clean(
+                payload.locality ||
+                orchestratorPlan
+                  ?.context
+                  ?.locality
+              ),
 
-          candidate_id: clean(
+            cycle:
+              clean(
+                payload.cycle ||
+                orchestratorPlan
+                  ?.context
+                  ?.cycle ||
+                "2026"
+              ),
 
-            payload.candidate_id ||
-
-              payload.fec_candidate_id ||
-
-              orchestratorPlan?.context?.candidate_id
-
-          ),
-
-          committee_id: clean(
-
-            payload.committee_id ||
-
-              orchestratorPlan?.context?.committee_id
-
-          ),
-
-          state: clean(
-
-            payload.state ||
-
-              orchestratorPlan?.context?.state
-
-          ),
-
-          office: clean(
-
-            payload.office ||
-
-              orchestratorPlan?.context?.office
-
-          ),
-
-          locality: clean(
-
-            payload.locality ||
-
-              orchestratorPlan?.context?.locality
-
-          ),
-
-          cycle: clean(
-
-            payload.cycle ||
-
-              orchestratorPlan?.context?.cycle
-
-          ),
-
-          limit: Number(payload.limit || 12),
-
+            limit:
+              Number(
+                payload.limit ||
+                12
+              ),
+          },
         });
-
     }
-
-  } catch (error) {
-
+  }
+  catch (error) {
     console.warn(
-
       "[ai-campaign-copilot] Executive intelligence delegation failed:",
-
-      error?.message || error
-
+      error?.message ||
+      error
     );
 
- 
+    candidateOrchestration =
+      false;
 
-    candidateOrchestration = false;
-
-    orchestratorResult = null;
-
+    orchestratorResult =
+      null;
   }
+
 
  
 
