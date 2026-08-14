@@ -330,6 +330,28 @@ const clean = (value = "") =>
 
  
 
+const truncate = (value = "", max = 360) => {
+
+  const text = clean(value);
+
+  const limit = Number.isFinite(Number(max))
+
+    ? Math.max(4, Number(max))
+
+    : 360;
+
+ 
+
+  return text.length > limit
+
+    ? `${text.slice(0, limit - 3).trimEnd()}...`
+
+    : text;
+
+};
+
+ 
+
 const unique = (values = []) =>
 
  
@@ -15361,4 +15383,5 @@ export async function runExecutiveIntelligenceOrchestrator({
  
 
 }
+
 
