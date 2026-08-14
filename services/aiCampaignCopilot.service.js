@@ -398,6 +398,7 @@ async function getPlatformContext({ user, firmId, workspaceId }) {
     `
       SELECT id, title, report_type, state, status, executive_summary, created_at
       FROM intelligence_reports
+
       WHERE firm_id = $1
       ORDER BY created_at DESC
       LIMIT 10
@@ -798,6 +799,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
         : ["1. No vendor gaps detected."])
     );
     lines.push("");
+
     lines.push("Recommended move:");
     lines.push(
       "1. Confirm backup vendor coverage before launching mail, field, or digital actions."
@@ -1198,6 +1200,7 @@ export async function askAiCampaignCopilot({
 
       );
 
+
  
 
     threadId =
@@ -1551,11 +1554,19 @@ export async function askAiCampaignCopilot({
 
           null,
 
-        data_answer:
+        /*
+         * Do not duplicate the full orchestrator data payload in the
+         * persisted Co-Pilot message snapshot. It may contain thousands of
+         * raw provider records. The answer, sources, context, tool plan,
+         * citations, and coverage remain available.
+         */
+        data_answer_available:
 
-          orchestratorResult?.data_answer ||
+          Boolean(
 
-          null,
+            orchestratorResult?.data_answer
+
+          ),
 
       },
 
@@ -1590,6 +1601,7 @@ export async function askAiCampaignCopilot({
       await getPlatformContext({
 
         user,
+
 
         firmId,
 
@@ -1991,6 +2003,7 @@ export async function listAiCampaignCopilotThreads({
 
   const result = await pool.query(
 
+
     `
 
       SELECT *
@@ -2122,3 +2135,4 @@ export async function getAiCampaignCopilotThread({
   };
 
 }
+
