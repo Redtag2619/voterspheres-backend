@@ -10,7 +10,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
-const BUILD = "4.5.0-grounded-candidate-briefings";
+const BUILD = "4.5.1-production-formatter";
 
  
 
@@ -349,6 +349,194 @@ const truncate = (value = "", max = 360) => {
     : text;
 
 };
+
+ 
+
+const HTML_ENTITIES = Object.freeze({
+
+  amp: "&",
+
+  apos: "'",
+
+  gt: ">",
+
+  lt: "<",
+
+  nbsp: " ",
+
+  quot: '"',
+
+});
+
+ 
+
+function decodeHtmlEntities(value = "") {
+
+  return String(value ?? "")
+
+    .replace(/&#(\d+);/g, (_match, decimal) =>
+
+      String.fromCodePoint(Number(decimal))
+
+    )
+
+    .replace(/&#x([\da-f]+);/gi, (_match, hexadecimal) =>
+
+      String.fromCodePoint(parseInt(hexadecimal, 16))
+
+    )
+
+    .replace(/&([a-z]+);/gi, (match, name) =>
+
+      Object.prototype.hasOwnProperty.call(
+
+        HTML_ENTITIES,
+
+        name.toLowerCase()
+
+      )
+
+        ? HTML_ENTITIES[name.toLowerCase()]
+
+        : match
+
+    );
+
+}
+
+ 
+
+function sanitizeNarrativeText(value = "") {
+
+  return decodeHtmlEntities(value)
+
+    .replace(/\\(?=<\/?[a-z][^>]*>)/gi, "")
+
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+
+    .replace(/\[([^\]]+)]\(https?:\/\/[^\s)]+\)/gi, "$1")
+
+    .replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1")
+
+    .replace(/<[^>]+>/g, " ")
+
+    .replace(/https?:\/\/[^\s<>]+/gi, "")
+
+    .replace(/\s+/g, " ")
+
+    .trim();
+
+}
+
+ 
+
+function cleanPublisherFromTitle(title = "", publisher = "") {
+
+  const cleanTitle = sanitizeNarrativeText(title);
+
+  const cleanPublisher = sanitizeNarrativeText(publisher);
+
+ 
+
+  if (!cleanTitle || !cleanPublisher) {
+
+    return cleanTitle;
+
+  }
+
+ 
+
+  const escapedPublisher = cleanPublisher.replace(
+
+    /[.*+?^${}()|[\]\\]/g,
+
+    "\\$&"
+
+  );
+
+ 
+
+  return cleanTitle
+
+    .replace(
+
+      new RegExp(`\\s*(?:-|–|—|\\|)\\s*${escapedPublisher}\\s*$`, "i"),
+
+      ""
+
+    )
+
+    .trim();
+
+}
+
+ 
+
+function candidateSignalTokens(value = "") {
+
+  const ignored = new Set([
+
+    "dr",
+
+    "ii",
+
+    "iii",
+
+    "iv",
+
+    "jr",
+
+    "mr",
+
+    "mrs",
+
+    "ms",
+
+    "sr",
+
+  ]);
+
+ 
+
+  return sanitizeNarrativeText(value)
+
+    .toLowerCase()
+
+    .replace(/[^a-z0-9\s]/g, " ")
+
+    .split(/\s+/)
+
+    .filter((token) => token.length > 1 && !ignored.has(token));
+
+}
+
+ 
+
+function isCandidateSpecificSignal(signal, candidateName = "") {
+
+  const tokens = candidateSignalTokens(candidateName);
+
+ 
+
+  if (!tokens.length) {
+
+    return false;
+
+  }
+
+ 
+
+  const haystack = sanitizeNarrativeText(
+
+    typeof signal === "string" ? signal : JSON.stringify(signal || {})
+
+  ).toLowerCase();
+
+ 
+
+  return tokens.every((token) => haystack.includes(token));
+
+}
 
  
 
@@ -12180,63 +12368,31 @@ lines.push(
 
  
 
-      const articleLine =
+      const publisher = sanitizeNarrativeText(
 
- 
+        article.publisher || article.source
 
-        [
+      );
 
- 
+      const articleTitle = cleanPublisherFromTitle(
 
-          article.title ||
+        article.title || article.headline,
 
- 
+        publisher
 
-          article.headline,
+      );
 
- 
+      const publishedAt = formatDate(
 
-          article.publisher ||
+        article.published_at || article.date
 
- 
+      );
 
-          article.source,
+      const articleLine = [articleTitle, publisher, publishedAt]
 
- 
+        .filter(Boolean)
 
-          article.published_at ||
-
- 
-
-          article.date,
-
- 
-
-        ]
-
- 
-
-          .filter(
-
- 
-
-            Boolean
-
- 
-
-          )
-
- 
-
-          .join(
-
- 
-
-            " - "
-
- 
-
-          );
+        .join(" - ");
 
  
 
@@ -12264,7 +12420,7 @@ lines.push(
 
  
 
-        const articleSummary = clean(
+        const articleSummary = sanitizeNarrativeText(
 
           article.summary ||
 
@@ -12290,26 +12446,6 @@ lines.push(
 
  
 
-        const articleUrl = clean(
-
-          article.url ||
-
-          article.link ||
-
-          article.source_url
-
-        );
-
- 
-
-        if (articleUrl) {
-
-          lines.push(`  Source: ${articleUrl}`);
-
-        }
-
- 
-
       }
 
  
@@ -12324,15 +12460,49 @@ lines.push(
 
   if (signals.length) {
 
-    lines.push("", "Political signals:");
+    const candidateSignals = signals.filter((signal) =>
+
+      isCandidateSpecificSignal(signal, candidateLabel)
+
+    );
+
+    const contextualSignals = signals.filter(
+
+      (signal) => !isCandidateSpecificSignal(signal, candidateLabel)
+
+    );
+
+    const stateCode = clean(context.state || identities[0]?.state).toUpperCase();
+
+    const stateLabel = STATE_NAMES[stateCode] || stateCode || "Regional";
 
  
 
-    for (const signal of signals.slice(0, 8)) {
+    const appendSignals = (headingLabel, entries, limit) => {
+
+      if (!entries.length) {
+
+        return;
+
+      }
+
+ 
+
+      lines.push("", headingLabel);
+
+ 
+
+      for (const signal of entries.slice(0, limit)) {
 
       if (typeof signal === "string") {
 
-        lines.push(`- ${signal}`);
+        const signalText = sanitizeNarrativeText(signal);
+
+        if (signalText) {
+
+          lines.push(`- ${signalText}`);
+
+        }
 
         continue;
 
@@ -12340,7 +12510,7 @@ lines.push(
 
  
 
-      const signalTitle = clean(
+      const signalTitle = sanitizeNarrativeText(
 
         signal.title ||
 
@@ -12356,7 +12526,7 @@ lines.push(
 
       );
 
-      const severity = clean(
+      const severity = sanitizeNarrativeText(
 
         signal.severity ||
 
@@ -12366,7 +12536,7 @@ lines.push(
 
       );
 
-      const signalDate = clean(
+      const signalDate = formatDate(
 
         signal.observed_at ||
 
@@ -12380,7 +12550,7 @@ lines.push(
 
       );
 
-      const signalDetail = clean(
+      const signalDetail = sanitizeNarrativeText(
 
         signal.summary ||
 
@@ -12418,7 +12588,31 @@ lines.push(
 
       }
 
-    }
+      }
+
+    };
+
+ 
+
+    appendSignals(
+
+      "Candidate-specific political signals:",
+
+      candidateSignals,
+
+      5
+
+    );
+
+    appendSignals(
+
+      `${stateLabel} political context:`,
+
+      contextualSignals,
+
+      candidateSignals.length ? 5 : 8
+
+    );
 
   }
 
