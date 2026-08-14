@@ -22,6 +22,22 @@ const OPENAI_REALTIME_CLIENT_SECRETS_URL =
 
  
 
+const OPENAI_SPEECH_URL =
+
+ 
+
+  process.env.OPENAI_SPEECH_URL || "https://api.openai.com/v1/audio/speech";
+
+ 
+
+const DEFAULT_SPEECH_MODEL =
+
+ 
+
+  process.env.OPENAI_SPEECH_MODEL || "gpt-4o-mini-tts";
+
+ 
+
  
 
  
@@ -1214,6 +1230,46 @@ function normalizeSessionMode(value) {
 
  
 
+function normalizeSpeechInput(value) {
+
+ 
+
+  return String(value ?? "")
+
+ 
+
+    .replace(/```[a-z]*\n?/gi, "")
+
+ 
+
+    .replace(/```/g, "")
+
+ 
+
+    .replace(/[*_#`]+/g, "")
+
+ 
+
+    .replace(/\r\n/g, "\n")
+
+ 
+
+    .replace(/\n{3,}/g, "\n\n")
+
+ 
+
+    .trim()
+
+ 
+
+    .slice(0, 7000);
+
+ 
+
+}
+
+ 
+
 function realtimeSessionConfiguration({ model, voice, instructions, mode }) {
 
   const commandMode = mode === "command";
@@ -1514,7 +1570,7 @@ export async function createExecutiveVoiceSession({ user = {}, payload = {} } = 
 
  
 
-    build: "5.9.0-command-pipeline",
+    build: "5.10.0-hybrid-live-conversation",
 
  
 
@@ -1638,6 +1694,242 @@ export async function createExecutiveVoiceSession({ user = {}, payload = {} } = 
 
  
 
+export async function createExecutiveVoiceSpeech({ user = {}, payload = {} } = {}) {
+
+ 
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+ 
+
+  if (!apiKey) {
+
+ 
+
+    const error = new Error("OPENAI_API_KEY is not configured.");
+
+ 
+
+    error.status = 503;
+
+ 
+
+    throw error;
+
+ 
+
+  }
+
+ 
+
+  const safePayload = asObject(payload);
+
+ 
+
+  const input = normalizeSpeechInput(
+
+ 
+
+    safePayload.text || safePayload.input || safePayload.answer
+
+ 
+
+  );
+
+ 
+
+  if (!input) {
+
+ 
+
+    const error = new Error("Speech text is required.");
+
+ 
+
+    error.status = 400;
+
+ 
+
+    throw error;
+
+ 
+
+  }
+
+ 
+
+  const voice = normalizeVoice(safePayload.voice);
+
+ 
+
+  const model = cleanText(safePayload.model || DEFAULT_SPEECH_MODEL, 80);
+
+ 
+
+  const instructions = cleanText(
+
+ 
+
+    safePayload.instructions ||
+
+ 
+
+      "Speak naturally as a calm, confident executive intelligence advisor. Preserve names, numbers, percentages, dates, and source attributions. Use measured pacing and brief pauses between sections.",
+
+ 
+
+    500
+
+ 
+
+  );
+
+ 
+
+  const response = await fetch(OPENAI_SPEECH_URL, {
+
+ 
+
+    method: "POST",
+
+ 
+
+    headers: {
+
+ 
+
+      Authorization: `Bearer ${apiKey}`,
+
+ 
+
+      "Content-Type": "application/json",
+
+ 
+
+      "OpenAI-Safety-Identifier": createSafetyIdentifier(user),
+
+ 
+
+    },
+
+ 
+
+    body: JSON.stringify({
+
+ 
+
+      model,
+
+ 
+
+      voice,
+
+ 
+
+      input,
+
+ 
+
+      instructions,
+
+ 
+
+      response_format: "mp3",
+
+ 
+
+    }),
+
+ 
+
+  });
+
+ 
+
+  if (!response.ok) {
+
+ 
+
+    let detail = "OpenAI speech generation failed.";
+
+ 
+
+    try {
+
+ 
+
+      const errorPayload = await response.json();
+
+ 
+
+      detail = errorPayload?.error?.message || errorPayload?.message || detail;
+
+ 
+
+    } catch {
+
+ 
+
+      // Keep the safe fallback detail.
+
+ 
+
+    }
+
+ 
+
+    const error = new Error(detail);
+
+ 
+
+    error.status =
+
+ 
+
+      response.status >= 400 && response.status <= 599 ? response.status : 502;
+
+ 
+
+    throw error;
+
+ 
+
+  }
+
+ 
+
+  return {
+
+ 
+
+    audio: Buffer.from(await response.arrayBuffer()),
+
+ 
+
+    content_type: response.headers.get("content-type") || "audio/mpeg",
+
+ 
+
+    model,
+
+ 
+
+    voice,
+
+ 
+
+    character_count: input.length,
+
+ 
+
+  };
+
+ 
+
+}
+
+ 
+
 export function getExecutiveVoiceConfiguration() {
 
  
@@ -1650,7 +1942,7 @@ export function getExecutiveVoiceConfiguration() {
 
  
 
-    build: "5.9.0-command-pipeline",
+    build: "5.10.0-hybrid-live-conversation",
 
  
 
@@ -1675,6 +1967,18 @@ export function getExecutiveVoiceConfiguration() {
  
 
     default_mode: "command",
+
+ 
+
+    speech_playback_enabled: Boolean(process.env.OPENAI_API_KEY),
+
+ 
+
+    speech_model: DEFAULT_SPEECH_MODEL,
+
+ 
+
+    speech_endpoint: "/api/executive-voice/speak",
 
  
 
