@@ -89,61 +89,284 @@ function identitiesFromStatistics(statistics, requested) {
   }));
 }
 
-function pollingGroups(result) {
-  const data = object(result?.data);
-  const allRecords = recordsFrom(result);
+function normalizePollingText(value = "") {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  let directRecords = array(data.direct_records).length
-    ? array(data.direct_records)
-    : array(data.direct_race_records).length
-      ? array(data.direct_race_records)
-      : array(result?.direct_records).length
-        ? array(result.direct_records)
-        : array(result?.direct_race_records);
+function normalizedDistrict(value = "") {
+  const normalized = normalizePollingText(value);
 
-  let candidateContextRecords =
-    array(data.candidate_context_records).length
-      ? array(data.candidate_context_records)
-      : array(result?.candidate_context_records);
-
-  let stateContextRecords =
-    array(data.state_context_records).length
-      ? array(data.state_context_records)
-      : array(result?.state_context_records);
-
-  const providerStatus = clean(
-    result?.status ||
-    data.status
-  );
-
-  const providerQueryType = clean(
-    result?.query_type ||
-    data.query_type
-  );
+  if (!normalized) return "";
 
   if (
-    !directRecords.length &&
-    !candidateContextRecords.length &&
-    !stateContextRecords.length &&
-    allRecords.length
+    normalized === "statewide" ||
+    normalized === "at large" ||
+    normalized === "atlarge"
   ) {
-    if (
-      providerQueryType === "direct_race" ||
-      providerStatus === "direct_race_available"
-    ) {
-      directRecords = allRecords;
-    } else if (
-      providerQueryType === "candidate_context" ||
-      providerStatus === "candidate_context_available"
-    ) {
-      candidateContextRecords = allRecords;
-    } else if (
-      providerQueryType === "state_context" ||
-      providerStatus === "state_context_available"
-    ) {
-      stateContextRecords = allRecords;
+    return "statewide";
+  }
+
+  const numeric = normalized.match(/\d+/)?.[0];
+
+  return numeric
+    ? String(Number(numeric))
+    : normalized;
+}
+
+function pollingRecordText(record = {}) {
+  return normalizePollingText(
+    [
+      record.candidate_name,
+      record.candidate,
+      record.name,
+      record.answer,
+      record.subject,
+      record.race_name,
+      record.question,
+      record.poll_question,
+      record.ballot_question,
+      record.office,
+      record.state,
+      record.district,
+      JSON.stringify(record.candidates || []),
+      JSON.stringify(record.choices || []),
+      JSON.stringify(record.answers || []),
+      JSON.stringify(record.source_payload || {}),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function pollingRecordCandidateIds(record = {}) {
+  return [
+    record.candidate_id,
+    record.fec_candidate_id,
+    record.answer_candidate_id,
+    record.subject_candidate_id,
+    record.candidate_fec_id,
+  ]
+    .map((value) => clean(value).toUpperCase())
+    .filter(Boolean);
+}
+
+function candidateMatchesPollingRecord(
+  record = {},
+  candidateName = "",
+  candidateIds = []
+) {
+  const requestedIds = candidateIds
+    .map((value) => clean(value).toUpperCase())
+    .filter(Boolean);
+
+  const recordIds = pollingRecordCandidateIds(record);
+
+  if (
+    requestedIds.length &&
+    recordIds.some((candidateId) =>
+      requestedIds.includes(candidateId)
+    )
+  ) {
+    return true;
+  }
+
+  const candidateTokens = normalizePollingText(candidateName)
+    .split(" ")
+    .filter((token) => token.length > 1);
+
+  if (!candidateTokens.length) {
+    return false;
+  }
+
+  const recordText = pollingRecordText(record);
+
+  return candidateTokens.every((token) =>
+    recordText.split(" ").includes(token)
+  );
+}
+
+function pollingRaceMatches(record = {}, context = {}) {
+  const requestedState = clean(context.state).toUpperCase();
+  const requestedOffice = normalizePollingText(context.office);
+  const requestedDistrict = normalizedDistrict(context.district);
+
+  const recordState = clean(
+    record.state ||
+    record.state_code ||
+    record.jurisdiction
+  ).toUpperCase();
+
+  const recordOffice = normalizePollingText(
+    record.office ||
+    record.office_name ||
+    record.race_office
+  );
+
+  const recordDistrict = normalizedDistrict(
+    record.district ||
+    record.district_number ||
+    record.congressional_district
+  );
+
+  /*
+   * A record cannot be classified as direct-race evidence
+   * when the requested geographic fields are absent from it.
+   */
+  if (requestedState) {
+    if (!recordState || recordState !== requestedState) {
+      return false;
     }
   }
+
+  if (requestedOffice) {
+    if (
+      !recordOffice ||
+      !(
+        recordOffice === requestedOffice ||
+        recordOffice.includes(requestedOffice) ||
+        requestedOffice.includes(recordOffice)
+      )
+    ) {
+      return false;
+    }
+  }
+
+  if (requestedDistrict) {
+    if (
+      !recordDistrict ||
+      recordDistrict !== requestedDistrict
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function uniquePollingRecords(records = []) {
+  const seen = new Set();
+
+  return records.filter((record) => {
+    const key = clean(
+      record.dedupe_key ||
+      record.poll_id ||
+      [
+        record.pollster,
+        record.candidate_name,
+        record.answer,
+        record.pct,
+        record.field_end,
+        record.published_at,
+        record.state,
+        record.office,
+        record.district,
+      ].join("|")
+    ).toLowerCase();
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function pollingGroups(
+  result,
+  context = {},
+  identities = [],
+  limit = 12
+) {
+  const data = object(result?.data);
+  const maximumRecords = Math.max(
+    1,
+    Math.min(Number(limit) || 12, 50)
+  );
+
+  const requestedCandidate = clean(
+    context.candidate ||
+    context.candidate_name ||
+    identities[0]?.name ||
+    identities[0]?.canonical_name
+  );
+
+  const requestedCandidateIds = [
+    context.candidate_id,
+    context.fec_candidate_id,
+    ...identities.map((identity) =>
+      identity.candidate_id ||
+      identity.fec_candidate_id ||
+      identity.identifier_value
+    ),
+  ].filter(Boolean);
+
+  const suppliedRecords = uniquePollingRecords([
+    ...array(data.direct_records),
+    ...array(data.direct_race_records),
+    ...array(result?.direct_records),
+    ...array(result?.direct_race_records),
+    ...array(data.candidate_context_records),
+    ...array(result?.candidate_context_records),
+    ...array(data.state_context_records),
+    ...array(result?.state_context_records),
+    ...recordsFrom(result),
+  ]);
+
+  const directMatches = [];
+  const candidateContextMatches = [];
+  const stateContextMatches = [];
+
+  const requestedState = clean(context.state).toUpperCase();
+
+  for (const record of suppliedRecords) {
+    const candidateMatch = candidateMatchesPollingRecord(
+      record,
+      requestedCandidate,
+      requestedCandidateIds
+    );
+
+    if (
+      candidateMatch &&
+      pollingRaceMatches(record, context)
+    ) {
+      directMatches.push(record);
+      continue;
+    }
+
+    if (candidateMatch) {
+      candidateContextMatches.push(record);
+      continue;
+    }
+
+    const recordState = clean(
+      record.state ||
+      record.state_code ||
+      record.jurisdiction
+    ).toUpperCase();
+
+    if (
+      requestedState &&
+      recordState === requestedState
+    ) {
+      stateContextMatches.push(record);
+    }
+  }
+
+  const directRecords =
+    directMatches.slice(0, maximumRecords);
+
+  const candidateContextRecords =
+    candidateContextMatches.slice(0, maximumRecords);
+
+  const stateContextRecords =
+    stateContextMatches.slice(0, maximumRecords);
 
   const status = directRecords.length
     ? "direct_race_available"
@@ -155,21 +378,23 @@ function pollingGroups(result) {
           ? "no_polling_available"
           : "provider_error";
 
-  const queryType = status === "direct_race_available"
-    ? "direct_race"
-    : status === "candidate_context_available"
-      ? "candidate_context"
-      : status === "state_context_available"
-        ? "state_context"
-        : null;
+  const queryType =
+    status === "direct_race_available"
+      ? "direct_race"
+      : status === "candidate_context_available"
+        ? "candidate_context"
+        : status === "state_context_available"
+          ? "state_context"
+          : null;
 
-  const selectedRecords = queryType === "direct_race"
-    ? directRecords
-    : queryType === "candidate_context"
-      ? candidateContextRecords
-      : queryType === "state_context"
-        ? stateContextRecords
-        : [];
+  const selectedRecords =
+    queryType === "direct_race"
+      ? directRecords
+      : queryType === "candidate_context"
+        ? candidateContextRecords
+        : queryType === "state_context"
+          ? stateContextRecords
+          : [];
 
   return {
     status,
@@ -177,15 +402,31 @@ function pollingGroups(result) {
     records: selectedRecords,
     direct_records: directRecords,
     direct_race_records: directRecords,
-    candidate_context_records: candidateContextRecords,
+    candidate_context_records:
+      candidateContextRecords,
     state_context_records: stateContextRecords,
     direct_count: directRecords.length,
-    candidate_context_count: candidateContextRecords.length,
-    state_context_count: stateContextRecords.length,
+    candidate_context_count:
+      candidateContextRecords.length,
+    state_context_count:
+      stateContextRecords.length,
+    requested_race: {
+      candidate: requestedCandidate,
+      candidate_ids: requestedCandidateIds,
+      state: clean(context.state),
+      office: clean(context.office),
+      district: clean(context.district),
+      cycle: context.cycle || null,
+    },
+    raw_record_count: suppliedRecords.length,
     source_result: result,
-    degraded: Boolean(result?.degraded || !result?.ok),
+    degraded: Boolean(
+      result?.degraded ||
+      !result?.ok
+    ),
   };
 }
+
 function uniqueIdentities(...groups) {
   const seen = new Set();
   return groups.flat().filter((row) => {
@@ -291,7 +532,12 @@ export async function getCandidateIntelligenceBundle({
     safeTool("get_unified_executive_intelligence", context, user),
   ]);
 
-  const polling = pollingGroups(pollingResult);
+  const polling = pollingGroups(
+  pollingResult,
+  context,
+  identities,
+  normalizedLimit
+);
   const news = recordsFrom(newsResult).slice(0, normalizedLimit);
   const unifiedData = object(unifiedResult?.data);
   const unifiedBriefing = object(unifiedData.briefing);
@@ -395,4 +641,3 @@ export async function getCandidateIntelligenceBundle({
 }
 
 export default { getCandidateIntelligenceBundle };
-
