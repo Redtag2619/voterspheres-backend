@@ -10,7 +10,7 @@ import { getCandidateIntelligenceBundle } from "./candidateIntelligenceBundle.se
 
  
 
-const BUILD = "4.5.3-candidate-intent-precedence";
+const BUILD = "6.0.0-universal-candidate-intelligence";
 
  
 
@@ -9258,109 +9258,38 @@ function buildFinanceInterpretation(
 
   const notes = [];
 
- 
-
   if (
-
- 
-
     receipts != null &&
-
- 
-
     disbursements != null
-
- 
-
   ) {
+    const receiptsCents = Math.round(receipts * 100);
+    const disbursementsCents = Math.round(disbursements * 100);
 
- 
-
-    if (
-
- 
-
-      disbursements >
-
- 
-
-      receipts
-
- 
-
-    ) {
-
- 
-
+    if (disbursementsCents > receiptsCents) {
       notes.push(
-
- 
-
         `Reported disbursements (${formatCurrency(
-
- 
-
           disbursements
-
- 
-
         )}) exceed reported receipts (${formatCurrency(
-
- 
-
           receipts
-
- 
-
         )}) for the cycle-to-date totals returned by the FEC.`
-
- 
-
       );
-
- 
-
-    } else {
-
- 
-
+    } else if (receiptsCents > disbursementsCents) {
       notes.push(
-
- 
-
         `Reported receipts (${formatCurrency(
-
- 
-
           receipts
-
- 
-
         )}) exceed reported disbursements (${formatCurrency(
-
- 
-
           disbursements
-
- 
-
         )}) in the returned FEC totals.`
-
- 
-
       );
-
- 
-
+    } else {
+      notes.push(
+        `Reported receipts and disbursements are equal at ${formatCurrency(
+          receipts
+        )} in the returned FEC totals.`
+      );
     }
-
- 
-
   }
-
- 
-
-  if (
+if (
 
  
 
