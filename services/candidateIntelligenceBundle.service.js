@@ -441,6 +441,69 @@ function useful(result) {
   return Boolean(result?.ok && (recordsFrom(result).length || result?.data || result?.summary));
 }
 
+const STATE_CODES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA",
+  "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY",
+  "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX",
+  "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]);
+
+function recordText(record = {}) {
+  return clean([
+    record.title,
+    record.headline,
+    record.name,
+    record.label,
+    record.subject,
+    record.candidate,
+    record.candidate_name,
+    record.summary,
+    record.detail,
+    record.description,
+    record.rationale,
+  ].filter(Boolean).join(" "));
+}
+
+function filterContextualRecords(records, context = {}) {
+  const requestedState = clean(context.state).toUpperCase();
+  if (!requestedState) return array(records);
+
+  const candidateTokens = clean(context.candidate)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
+
+  return array(records).filter((record) => {
+    const explicitState = clean(
+      record.state || record.state_code || record.jurisdiction
+    ).toUpperCase();
+
+    if (explicitState && STATE_CODES.has(explicitState)) {
+      return explicitState === requestedState;
+    }
+
+    const text = recordText(record);
+    const upperText = text.toUpperCase();
+    const mentionedStates = [...upperText.matchAll(/\b[A-Z]{2}\b/g)]
+      .map((match) => match[0])
+      .filter((code) => STATE_CODES.has(code));
+
+    if (mentionedStates.length) {
+      return mentionedStates.includes(requestedState);
+    }
+
+    const lowerText = text.toLowerCase();
+    const candidateSpecific = candidateTokens.some((token) =>
+      lowerText.includes(token)
+    );
+
+    // Preserve candidate-specific and state-neutral records. Explicitly
+    // out-of-state records are rejected above.
+    return candidateSpecific || !mentionedStates.length;
+  });
+}
+
 async function persistNews(resolution, newsRecords) {
   const selected = resolution.selected;
   if (!selected?.id) return;
@@ -503,7 +566,59 @@ export async function getCandidateIntelligenceBundle({
     warnings.push(`Universal registry lookup was unavailable: ${error.message}`);
   }
 
-  const statistics = await safeTool("get_candidate_statistics", context, user);
+  /*
+   * The request may contain only a natural-language candidate name. Once the
+   * registry resolves that name, propagate the verified race geography and
+   * identifier to every downstream provider. Without this step, polling can
+   * fall back to broad context and signals/strategy can become firm-wide.
+   */
+  const selectedIdentity = object(resolution?.selected);
+  const resolvedOffice = clean(
+    context.office || selectedIdentity.office_name || selectedIdentity.office
+  );
+  const resolvedLocality = clean(
+    context.locality || selectedIdentity.locality
+  );
+  const resolvedCounty = clean(
+    context.county || selectedIdentity.county
+  );
+  const resolvedContext = {
+    ...context,
+    candidate: clean(
+      requestedCandidate ||
+      selectedIdentity.canonical_name ||
+      selectedIdentity.name
+    ),
+    candidate_id: clean(
+      requestedCandidateId ||
+      selectedIdentity.identifier_value ||
+      selectedIdentity.fec_candidate_id ||
+      selectedIdentity.candidate_id
+    ),
+    state: clean(
+      context.state || selectedIdentity.state || selectedIdentity.home_state
+    ).toUpperCase(),
+    office: resolvedOffice,
+    office_level: normalizeOfficeLevel({
+      office: resolvedOffice,
+      locality: resolvedLocality,
+      county: resolvedCounty,
+    }),
+    cycle: Number(context.cycle || selectedIdentity.cycle) ||
+      new Date().getFullYear(),
+    locality: resolvedLocality,
+    county: resolvedCounty,
+    district: clean(context.district || selectedIdentity.district),
+  };
+
+  diagnostics.context = resolvedContext;
+  diagnostics.requested_context = context;
+
+  const statistics = await safeTool(
+    "get_candidate_statistics",
+    resolvedContext,
+    user
+  );
   const registryIdentities = identityFromRegistry(resolution, requestedCandidate);
   const statisticsIdentities = identitiesFromStatistics(statistics, requestedCandidate);
   const identities = uniqueIdentities(
@@ -518,7 +633,7 @@ export async function getCandidateIntelligenceBundle({
   const federalIdentities = identities.filter((row) => /^[PHS][A-Z0-9]{8}$/i.test(clean(row.candidate_id)));
   for (const identity of federalIdentities.slice(0, 4)) {
     const result = await safeTool("get_fec_finance", {
-      ...context,
+      ...resolvedContext,
       candidate: identity.name || requestedCandidate,
       candidate_id: identity.candidate_id,
       committee_id: identity.committee_id || "",
@@ -527,14 +642,18 @@ export async function getCandidateIntelligenceBundle({
   }
 
   const [pollingResult, newsResult, unifiedResult] = await Promise.all([
-    safeTool("get_latest_polling", context, user),
-    safeTool("search_live_news", { ...context, query: requestedCandidate, candidate: requestedCandidate }, user),
-    safeTool("get_unified_executive_intelligence", context, user),
+    safeTool("get_latest_polling", resolvedContext, user),
+    safeTool("search_live_news", {
+      ...resolvedContext,
+      query: resolvedContext.candidate,
+      candidate: resolvedContext.candidate,
+    }, user),
+    safeTool("get_unified_executive_intelligence", resolvedContext, user),
   ]);
 
   const polling = pollingGroups(
   pollingResult,
-  context,
+  resolvedContext,
   identities,
   normalizedLimit
 );
@@ -543,7 +662,7 @@ export async function getCandidateIntelligenceBundle({
   const unifiedBriefing = object(unifiedData.briefing);
   const unifiedIntelligence = object(unifiedData.intelligence);
 
-  const signals = (
+  const signals = filterContextualRecords((
     array(unifiedData.political_signals).length
       ? array(unifiedData.political_signals)
       : array(unifiedData.signals).length
@@ -551,9 +670,9 @@ export async function getCandidateIntelligenceBundle({
         : array(unifiedIntelligence.signals).length
           ? array(unifiedIntelligence.signals)
           : array(unifiedBriefing.signals)
-  ).slice(0, 20);
+  ), resolvedContext).slice(0, 20);
 
-  const strategy = (
+  const strategy = filterContextualRecords((
     array(unifiedData.strategy_recommendations).length
       ? array(unifiedData.strategy_recommendations)
       : array(unifiedData.recommendations).length
@@ -565,7 +684,7 @@ export async function getCandidateIntelligenceBundle({
             : array(unifiedBriefing.recommendations).length
               ? array(unifiedBriefing.recommendations)
               : array(unifiedBriefing.recommended_actions)
-  ).slice(0, 20);
+  ), resolvedContext).slice(0, 20);
 
   const operations = object(
     unifiedData.operations ||
@@ -586,12 +705,14 @@ export async function getCandidateIntelligenceBundle({
     diagnostics.providers.push({ name, ok: Boolean(result?.ok), degraded: Boolean(result?.degraded), error: result?.error || null, record_count: recordsFrom(result).length });
     if (!result?.ok && result?.error) warnings.push(`${name}: ${result.error}`);
   }
-  if (!finance.length && context.office_level === "federal") warnings.push("No verified FEC candidate identifier was resolved; federal finance was not requested.");
+  if (!finance.length && resolvedContext.office_level === "federal") warnings.push("No verified FEC candidate identifier was resolved; federal finance was not requested.");
   if (!polling.records.length) warnings.push("No candidate-specific polling was available. This is a data gap, not a zero result.");
 
   const bundleData = {
     candidate: requestedCandidate || identities[0]?.name || requestedCandidateId,
-    requested_context: context,
+    requested_context: resolvedContext,
+    input_context: context,
+    resolved_context: resolvedContext,
     resolution,
     identities,
     profile: object(statistics?.data?.profile || unifiedData.profile),
@@ -614,7 +735,7 @@ export async function getCandidateIntelligenceBundle({
       attempted_tools: 4 + finance.length,
       source_count: sources.length,
       identity_status: resolution.status,
-      office_level: context.office_level,
+      office_level: resolvedContext.office_level,
       limitations: warnings,
     },
     generated_at: now(),
@@ -641,3 +762,4 @@ export async function getCandidateIntelligenceBundle({
 }
 
 export default { getCandidateIntelligenceBundle };
+
