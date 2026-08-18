@@ -29,38 +29,12 @@ export function normalizeOfficeLevel({ office = "", locality = "", county = "" }
 function identityScore(row, context) {
   const requested = normalizeCandidateName(context.candidate);
   const candidate = normalizeCandidateName(row.canonical_name);
-
-  const requestedTokens = requested
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
-    .join(" ");
-
-  const candidateTokens = candidate
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
-    .join(" ");
-
-  const samePersonTokens =
-    requestedTokens &&
-    candidateTokens &&
-    requestedTokens === candidateTokens;
-
-  let score =
-    requested && candidate === requested
-      ? 70
-      : samePersonTokens
-        ? 68
-        : 0;
-
-  if (requested && candidate.includes(requested)) {
-    score = Math.max(score, 55);
-  }
-
-  if (requested && requested.includes(candidate)) {
-    score = Math.max(score, 50);
-  }
+  const requestedTokens = requested.split(/\s+/).filter(Boolean).sort().join(" ");
+  const candidateTokens = candidate.split(/\s+/).filter(Boolean).sort().join(" ");
+  const samePersonTokens = requestedTokens && candidateTokens && requestedTokens === candidateTokens;
+  let score = requested && candidate === requested ? 70 : samePersonTokens ? 68 : 0;
+  if (requested && candidate.includes(requested)) score = Math.max(score, 55);
+  if (requested && requested.includes(candidate)) score = Math.max(score, 50);
   if (context.state && upper(row.home_state) === upper(context.state)) score += 12;
   if (context.office && clean(row.office_name).toLowerCase().includes(clean(context.office).toLowerCase())) score += 10;
   if (context.district && clean(row.district).toLowerCase() === clean(context.district).toLowerCase()) score += 5;
@@ -124,12 +98,7 @@ export async function resolveUniversalCandidate(context = {}) {
         upper(row.home_state) !== upper(selected?.home_state)
       )
   ) || null;
-
-  const ambiguous = Boolean(
-    selected &&
-    second &&
-    selected.match_score - second.match_score < 8
-  );
+  const ambiguous = Boolean(selected && second && selected.match_score - second.match_score < 8);
 
   return {
     status: !selected ? "unresolved" : ambiguous ? "ambiguous" : "resolved",
@@ -197,6 +166,134 @@ export async function listCandidateEvidence({ candidateEntityId, evidenceType = 
   return result.rows;
 }
 
+export async function listUniversalCandidates({
+  q = "",
+  state = "",
+  office = "",
+  cycle = "",
+  party = "",
+  ballotStatus = "active",
+  page = 1,
+  limit = 25,
+} = {}) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 25, 100));
+  const offset = (safePage - 1) * safeLimit;
+  const params = [];
+  const conditions = ["c.id IS NOT NULL"];
+  const push = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  const search = clean(q);
+  if (search) {
+    const normalizedSearch = normalizeCandidateName(search);
+    const rawParam = push(`%${search}%`);
+    const normalizedParam = push(`%${normalizedSearch}%`);
+    conditions.push(`(
+      u.canonical_name ILIKE ${rawParam}
+      OR u.normalized_name ILIKE ${normalizedParam}
+      OR EXISTS (
+        SELECT 1
+        FROM universal_candidate_aliases alias
+        WHERE alias.candidate_entity_id = u.id
+          AND (
+            alias.alias ILIKE ${rawParam}
+            OR alias.normalized_alias ILIKE ${normalizedParam}
+          )
+      )
+    )`);
+  }
+
+  if (clean(state)) {
+    conditions.push(`UPPER(COALESCE(c.state, u.home_state, '')) = ${push(upper(state).slice(0, 2))}`);
+  }
+  if (clean(office)) {
+    conditions.push(`COALESCE(c.office_name, '') ILIKE ${push(`%${clean(office)}%`)}`);
+  }
+  if (Number(cycle)) {
+    conditions.push(`c.cycle = ${push(Number(cycle))}`);
+  }
+  if (clean(party)) {
+    conditions.push(`COALESCE(u.party, '') ILIKE ${push(`%${clean(party)}%`)}`);
+  }
+  if (clean(ballotStatus) && clean(ballotStatus).toLowerCase() !== "all") {
+    conditions.push(`LOWER(COALESCE(c.ballot_status, 'active')) = ${push(clean(ballotStatus).toLowerCase())}`);
+  }
+
+  const rowsResult = await pool.query(
+    `SELECT
+       u.id AS candidate_entity_id,
+       c.id AS candidacy_id,
+       u.canonical_name,
+       u.normalized_name,
+       u.first_name,
+       u.middle_name,
+       u.last_name,
+       u.suffix,
+       u.party,
+       u.home_state,
+       u.website,
+       u.photo_url,
+       u.verification_status,
+       u.confidence_score,
+       c.office_level,
+       c.office_name,
+       COALESCE(c.state, u.home_state) AS state,
+       c.county,
+       c.locality,
+       c.district,
+       c.cycle,
+       c.ballot_status,
+       identifier.provider,
+       identifier.identifier_type,
+       identifier.identifier_value AS candidate_id,
+       COUNT(*) OVER()::integer AS total_count
+     FROM universal_candidate_entities u
+     JOIN universal_candidacies c ON c.candidate_entity_id = u.id
+     LEFT JOIN LATERAL (
+       SELECT i.provider, i.identifier_type, i.identifier_value
+       FROM universal_candidate_identifiers i
+       WHERE i.candidate_entity_id = u.id
+         AND (
+           NULLIF(c.metadata->>'fec_candidate_id', '') IS NULL
+           OR i.identifier_value = c.metadata->>'fec_candidate_id'
+         )
+       ORDER BY
+         (i.identifier_value = c.metadata->>'fec_candidate_id') DESC,
+         (i.identifier_type = 'fec_candidate_id') DESC,
+         i.id DESC
+       LIMIT 1
+     ) identifier ON TRUE
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY
+       CASE WHEN LOWER(COALESCE(c.ballot_status, '')) = 'active' THEN 0 ELSE 1 END,
+       u.canonical_name ASC,
+       c.cycle DESC NULLS LAST,
+       c.office_name ASC
+     LIMIT ${safeLimit} OFFSET ${offset}`,
+    params
+  );
+
+  const total = Number(rowsResult.rows[0]?.total_count || 0);
+  const candidates = rowsResult.rows.map(({ total_count: _totalCount, ...row }) => ({
+    ...row,
+    name: row.canonical_name,
+  }));
+
+  return {
+    ok: true,
+    build: UNIVERSAL_CANDIDATE_BUILD,
+    total,
+    page: safePage,
+    limit: safeLimit,
+    pages: Math.max(1, Math.ceil(total / safeLimit)),
+    candidates,
+    generated_at: new Date().toISOString(),
+  };
+}
+
 export async function getUniversalProviderHealth() {
   const result = await pool.query(
     `SELECT provider_key, provider_name, provider_type, jurisdiction_level, state,
@@ -215,8 +312,8 @@ export async function getUniversalProviderHealth() {
 
 export default {
   resolveUniversalCandidate,
+  listUniversalCandidates,
   storeCandidateEvidence,
   listCandidateEvidence,
   getUniversalProviderHealth,
 };
-
