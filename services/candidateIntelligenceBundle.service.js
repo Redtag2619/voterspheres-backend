@@ -449,7 +449,25 @@ const STATE_CODES = new Set([
   "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ]);
 
+const STATE_NAMES = {
+  AL: "ALABAMA", AK: "ALASKA", AZ: "ARIZONA", AR: "ARKANSAS",
+  CA: "CALIFORNIA", CO: "COLORADO", CT: "CONNECTICUT", DE: "DELAWARE",
+  DC: "DISTRICT OF COLUMBIA", FL: "FLORIDA", GA: "GEORGIA", HI: "HAWAII",
+  ID: "IDAHO", IL: "ILLINOIS", IN: "INDIANA", IA: "IOWA", KS: "KANSAS",
+  KY: "KENTUCKY", LA: "LOUISIANA", ME: "MAINE", MD: "MARYLAND",
+  MA: "MASSACHUSETTS", MI: "MICHIGAN", MN: "MINNESOTA", MS: "MISSISSIPPI",
+  MO: "MISSOURI", MT: "MONTANA", NE: "NEBRASKA", NV: "NEVADA",
+  NH: "NEW HAMPSHIRE", NJ: "NEW JERSEY", NM: "NEW MEXICO", NY: "NEW YORK",
+  NC: "NORTH CAROLINA", ND: "NORTH DAKOTA", OH: "OHIO", OK: "OKLAHOMA",
+  OR: "OREGON", PA: "PENNSYLVANIA", RI: "RHODE ISLAND",
+  SC: "SOUTH CAROLINA", SD: "SOUTH DAKOTA", TN: "TENNESSEE", TX: "TEXAS",
+  UT: "UTAH", VT: "VERMONT", VA: "VIRGINIA", WA: "WASHINGTON",
+  WV: "WEST VIRGINIA", WI: "WISCONSIN", WY: "WYOMING",
+};
+
 function recordText(record = {}) {
+  if (typeof record === "string") return clean(record);
+
   return clean([
     record.title,
     record.headline,
@@ -475,12 +493,21 @@ function filterContextualRecords(records, context = {}) {
     .filter((token) => token.length > 2);
 
   return array(records).filter((record) => {
+    const sourceRecord = typeof record === "string" ? {} : object(record);
     const explicitState = clean(
-      record.state || record.state_code || record.jurisdiction
+      sourceRecord.state ||
+      sourceRecord.state_code ||
+      sourceRecord.jurisdiction
     ).toUpperCase();
 
-    if (explicitState && STATE_CODES.has(explicitState)) {
-      return explicitState === requestedState;
+    if (explicitState) {
+      const explicitCode = STATE_CODES.has(explicitState)
+        ? explicitState
+        : Object.entries(STATE_NAMES).find(
+            ([, name]) => name === explicitState
+          )?.[0];
+
+      if (explicitCode) return explicitCode === requestedState;
     }
 
     const text = recordText(record);
@@ -489,8 +516,16 @@ function filterContextualRecords(records, context = {}) {
       .map((match) => match[0])
       .filter((code) => STATE_CODES.has(code));
 
-    if (mentionedStates.length) {
-      return mentionedStates.includes(requestedState);
+    const mentionedStateNames = Object.entries(STATE_NAMES)
+      .filter(([, name]) => upperText.includes(name))
+      .map(([code]) => code);
+
+    const allMentionedStates = [
+      ...new Set([...mentionedStates, ...mentionedStateNames]),
+    ];
+
+    if (allMentionedStates.length) {
+      return allMentionedStates.includes(requestedState);
     }
 
     const lowerText = text.toLowerCase();
@@ -500,7 +535,32 @@ function filterContextualRecords(records, context = {}) {
 
     // Preserve candidate-specific and state-neutral records. Explicitly
     // out-of-state records are rejected above.
-    return candidateSpecific || !mentionedStates.length;
+    return candidateSpecific || !allMentionedStates.length;
+  });
+}
+
+function filterCandidateNews(records, context = {}) {
+  const ignoredTokens = new Set([
+    "mr", "mrs", "ms", "dr", "senator", "representative", "congressman",
+    "congresswoman", "governor", "president", "candidate",
+  ]);
+
+  const candidateTokens = clean(context.candidate)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !ignoredTokens.has(token));
+
+  if (!candidateTokens.length) return [];
+
+  const anchors = [...candidateTokens]
+    .sort((left, right) => right.length - left.length)
+    .slice(0, 1);
+  const acronym = candidateTokens.map((token) => token[0]).join("");
+
+  return array(records).filter((record) => {
+    const text = recordText(record).toLowerCase();
+    return anchors.some((token) => text.includes(token)) ||
+      (acronym.length >= 3 && new RegExp(`\\b${acronym}\\b`, "i").test(text));
   });
 }
 
@@ -657,7 +717,10 @@ export async function getCandidateIntelligenceBundle({
   identities,
   normalizedLimit
 );
-  const news = recordsFrom(newsResult).slice(0, normalizedLimit);
+  const news = filterCandidateNews(
+    recordsFrom(newsResult),
+    resolvedContext
+  ).slice(0, normalizedLimit);
   const unifiedData = object(unifiedResult?.data);
   const unifiedBriefing = object(unifiedData.briefing);
   const unifiedIntelligence = object(unifiedData.intelligence);
