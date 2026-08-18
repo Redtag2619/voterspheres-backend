@@ -1,5 +1,6 @@
 import {
   getUniversalProviderHealth,
+  listUniversalCandidates,
   resolveUniversalCandidate,
 } from "../services/universalCandidateRegistry.service.js";
 import { getCandidateIntelligenceBundle } from "../services/candidateIntelligenceBundle.service.js";
@@ -25,6 +26,25 @@ export async function resolveUniversalCandidateController(req, res, next) {
     }
     const briefing = await getCandidateIntelligenceBundle(context);
     return res.json({ ok: briefing.ok, resolution, briefing });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listUniversalCandidatesController(req, res, next) {
+  try {
+    const result = await listUniversalCandidates({
+      q: req.query?.q,
+      state: req.query?.state,
+      office: req.query?.office,
+      cycle: req.query?.cycle,
+      party: req.query?.party,
+      ballotStatus: req.query?.ballot_status,
+      page: req.query?.page,
+      limit: req.query?.limit,
+    });
+
+    res.json(result);
   } catch (error) {
     next(error);
   }
