@@ -430,7 +430,11 @@ function normalizePacContribution(row = {}) {
 
   // identifier; never substitute the recipient committee here.
 
-  const committeeId = normalizeFecCommitteeId(row.contributor_committee_id);
+  const committeeId = normalizeFecCommitteeId(
+
+    row.contributor_committee_id || row.contributor_id
+
+  );
 
  
 
@@ -500,7 +504,7 @@ function isPacContribution(row = {}) {
 
   const contributorCommitteeId = normalizeFecCommitteeId(
 
-    row.contributor_committee_id
+    row.contributor_committee_id || row.contributor_id
 
   );
 
@@ -1864,6 +1868,8 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       two_year_transaction_period: cycle,
 
+      line_number: "11C",
+
       is_individual: "true",
 
       per_page: 100,
@@ -1890,7 +1896,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       const contributorCommitteeId = normalizeFecCommitteeId(
 
-        row.contributor_committee_id
+        row.contributor_committee_id || row.contributor_id
 
       );
 
@@ -1906,9 +1912,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
         lineDescription.includes("11c");
 
-      const isMemoEntry =
-
-        row.memoed_subtotal === true || Boolean(clean(row.memo_text));
+      const isMemoEntry = row.memoed_subtotal === true;
 
  
 
