@@ -1774,19 +1774,47 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
     return rows
 
-      .map((row) => ({
+      .map((row) => {
 
-        committee_id: normalizeFecCommitteeId(row.committee_id),
+        const linkedCandidateIds = [
 
-        committee_name: clean(row.name) || clean(row.committee_name),
+          row.candidate_id,
 
-        designation: clean(row.designation),
+          ...(Array.isArray(row.candidate_ids) ? row.candidate_ids : []),
 
-        organization_type: clean(row.organization_type),
+        ]
 
-      }))
+          .map(normalizeFecCandidateId)
 
-      .filter((row) => row.committee_id);
+          .filter(Boolean);
+
+ 
+
+        return {
+
+          committee_id: normalizeFecCommitteeId(row.committee_id),
+
+          committee_name: clean(row.name) || clean(row.committee_name),
+
+          designation: clean(row.designation),
+
+          organization_type: clean(row.organization_type),
+
+          linked_candidate_ids: linkedCandidateIds,
+
+        };
+
+      })
+
+      .filter(
+
+        (row) =>
+
+          row.committee_id &&
+
+          row.linked_candidate_ids.includes(validCandidateId)
+
+      );
 
   } catch (error) {
 
@@ -1860,15 +1888,39 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       const recipientCommitteeId = normalizeFecCommitteeId(row.committee_id);
 
+      const contributorCommitteeId = normalizeFecCommitteeId(
+
+        row.contributor_committee_id
+
+      );
+
+      const lineDescription = String(
+
+        row.line_number_label || row.line_number || ""
+
+      ).toLowerCase();
+
+      const isOtherPoliticalCommitteeContribution =
+
+        lineDescription.includes("other political committee") ||
+
+        lineDescription.includes("11c");
+
+      const isMemoEntry =
+
+        row.memoed_subtotal === true || Boolean(clean(row.memo_text));
+
  
 
       return (
 
         recipientCommitteeId === validCommitteeId &&
 
-        isPacContribution(row) &&
+        Boolean(contributorCommitteeId) &&
 
-        row.memoed_subtotal !== true &&
+        isOtherPoliticalCommitteeContribution &&
+
+        !isMemoEntry &&
 
         toNumber(row.contribution_receipt_amount) > 0
 
@@ -2009,4 +2061,3 @@ async function fetchPacContributionsForCandidate({
   }
 
 }
-
