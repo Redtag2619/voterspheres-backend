@@ -1,3 +1,7 @@
+import pool from "../config/database.js";
+
+ 
+
 function getEnv(name, fallback = "") {
 
   return process.env[name] || fallback;
@@ -2005,3 +2009,4 @@ async function fetchPacContributionsForCandidate({
   }
 
 }
+
