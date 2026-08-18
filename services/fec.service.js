@@ -230,7 +230,7 @@ function getFecApiConfig() {
 
     perPage: Math.min(Number(getEnv("FEC_SYNC_PER_PAGE", "100")), 100),
 
-    maxPages: Math.max(Number(getEnv("FEC_SYNC_MAX_PAGES", "10")), 1),
+    maxPages: Math.max(Number(getEnv("FEC_SYNC_MAX_PAGES", "50")), 1),
 
     pacSyncLimit: Math.max(Number(getEnv("FEC_PAC_SYNC_LIMIT", "75")), 0),
 
@@ -928,9 +928,15 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
   const normalized = [];
 
+  const sortedRows = [...rows].sort(
+
+    (a, b) => normalizeReceipts(b) - normalizeReceipts(a)
+
+  );
+
  
 
-  for (const row of rows) {
+  for (const row of sortedRows) {
 
     const candidateId = normalizeFecCandidateId(
 
