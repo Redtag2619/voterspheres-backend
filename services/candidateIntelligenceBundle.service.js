@@ -762,4 +762,3 @@ export async function getCandidateIntelligenceBundle({
 }
 
 export default { getCandidateIntelligenceBundle };
-
