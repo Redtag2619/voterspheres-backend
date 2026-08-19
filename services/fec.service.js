@@ -1874,9 +1874,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       two_year_transaction_period: cycle,
 
-      line_number: "11C",
-
-      is_individual: "true",
+      line_number: "F3-11C",
 
       per_page: 100,
 
