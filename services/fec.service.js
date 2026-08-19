@@ -1,6 +1,6 @@
 import pool from "../config/database.js";
 
- 
+
 
 function getEnv(name, fallback = "") {
 
@@ -8,7 +8,7 @@ function getEnv(name, fallback = "") {
 
 }
 
- 
+
 
 function toNumber(value, fallback = 0) {
 
@@ -18,7 +18,7 @@ function toNumber(value, fallback = 0) {
 
 }
 
- 
+
 
 function clean(value) {
 
@@ -30,7 +30,7 @@ function clean(value) {
 
 }
 
- 
+
 
 function normalizeFecCandidateId(value) {
 
@@ -40,7 +40,7 @@ function normalizeFecCandidateId(value) {
 
     .toUpperCase();
 
- 
+
 
   return /^[PHS][A-Z0-9]{8}$/.test(next)
 
@@ -50,7 +50,7 @@ function normalizeFecCandidateId(value) {
 
 }
 
- 
+
 
 function normalizeFecCommitteeId(value) {
 
@@ -60,7 +60,7 @@ function normalizeFecCommitteeId(value) {
 
     .toUpperCase();
 
- 
+
 
   return /^C[A-Z0-9]{8}$/.test(next)
 
@@ -70,7 +70,7 @@ function normalizeFecCommitteeId(value) {
 
 }
 
- 
+
 
 function normalizeOffice(value) {
 
@@ -86,7 +86,7 @@ function normalizeOffice(value) {
 
 }
 
- 
+
 
 function normalizeParty(value) {
 
@@ -94,7 +94,7 @@ function normalizeParty(value) {
 
 }
 
- 
+
 
 function normalizeName(row) {
 
@@ -102,7 +102,7 @@ function normalizeName(row) {
 
 }
 
- 
+
 
 function normalizeReceipts(row) {
 
@@ -110,7 +110,7 @@ function normalizeReceipts(row) {
 
 }
 
- 
+
 
 function normalizeCashOnHand(row) {
 
@@ -128,7 +128,7 @@ function normalizeCashOnHand(row) {
 
 }
 
- 
+
 
 function normalizeState(row) {
 
@@ -136,7 +136,7 @@ function normalizeState(row) {
 
 }
 
- 
+
 
 function normalizeDistrict(row) {
 
@@ -150,7 +150,7 @@ function normalizeDistrict(row) {
 
 }
 
- 
+
 
 function normalizeCoverageEndDate(row) {
 
@@ -158,7 +158,7 @@ function normalizeCoverageEndDate(row) {
 
 }
 
- 
+
 
 function slugify(value) {
 
@@ -176,7 +176,7 @@ function slugify(value) {
 
 }
 
- 
+
 
 function normalizeIncumbent(row) {
 
@@ -186,13 +186,13 @@ function normalizeIncumbent(row) {
 
     .trim();
 
- 
+
 
   return raw.includes("incumbent") || raw === "i";
 
 }
 
- 
+
 
 function buildElectionLabel(row, cycle) {
 
@@ -204,7 +204,7 @@ function buildElectionLabel(row, cycle) {
 
 }
 
- 
+
 
 function createHttpError(message, statusCode = 500) {
 
@@ -216,7 +216,7 @@ function createHttpError(message, statusCode = 500) {
 
 }
 
- 
+
 
 function getFecApiConfig() {
 
@@ -240,13 +240,13 @@ function getFecApiConfig() {
 
 }
 
- 
+
 
 async function fecGet(path, params = {}) {
 
   const { apiKey, baseUrl } = getFecApiConfig();
 
- 
+
 
   if (!apiKey) {
 
@@ -254,13 +254,13 @@ async function fecGet(path, params = {}) {
 
   }
 
- 
+
 
   const url = new URL(`${baseUrl.replace(/\/$/, "")}${path}`);
 
   url.searchParams.set("api_key", apiKey);
 
- 
+
 
   for (const [key, value] of Object.entries(params)) {
 
@@ -270,7 +270,7 @@ async function fecGet(path, params = {}) {
 
   }
 
- 
+
 
   const response = await fetch(url.toString(), {
 
@@ -286,7 +286,7 @@ async function fecGet(path, params = {}) {
 
   });
 
- 
+
 
   if (!response.ok) {
 
@@ -302,13 +302,13 @@ async function fecGet(path, params = {}) {
 
   }
 
- 
+
 
   return response.json();
 
 }
 
- 
+
 
 function buildCandidateRecord(row, cycle) {
 
@@ -328,7 +328,7 @@ function buildCandidateRecord(row, cycle) {
 
   );
 
- 
+
 
   return {
 
@@ -404,7 +404,7 @@ function buildCandidateRecord(row, cycle) {
 
 }
 
- 
+
 
 function normalizePacContribution(row = {}) {
 
@@ -422,7 +422,7 @@ function normalizePacContribution(row = {}) {
 
   );
 
- 
+
 
   // Schedule A's committee_id identifies the recipient committee. A PAC
 
@@ -436,7 +436,7 @@ function normalizePacContribution(row = {}) {
 
   );
 
- 
+
 
   const committeeName =
 
@@ -448,7 +448,7 @@ function normalizePacContribution(row = {}) {
 
     "Unknown PAC / Committee";
 
- 
+
 
   const committeeType =
 
@@ -462,7 +462,7 @@ function normalizePacContribution(row = {}) {
 
     "Committee";
 
- 
+
 
   const committeeParty =
 
@@ -474,7 +474,7 @@ function normalizePacContribution(row = {}) {
 
     "N/A";
 
- 
+
 
   return {
 
@@ -498,7 +498,7 @@ function normalizePacContribution(row = {}) {
 
 }
 
- 
+
 
 function isPacContribution(row = {}) {
 
@@ -508,25 +508,25 @@ function isPacContribution(row = {}) {
 
   );
 
- 
+
 
   return Boolean(contributorCommitteeId);
 
 }
 
- 
+
 
 function aggregatePacContributions(rows = [], limit = 25) {
 
   const map = new Map();
 
- 
+
 
   for (const raw of rows) {
 
     if (!isPacContribution(raw)) continue;
 
- 
+
 
     const pac = normalizePacContribution(raw);
 
@@ -534,11 +534,11 @@ function aggregatePacContributions(rows = [], limit = 25) {
 
     if (pac.amount <= 0) continue;
 
- 
+
 
     const key = pac.committee_id || pac.committee_name;
 
- 
+
 
     if (!map.has(key)) {
 
@@ -556,7 +556,7 @@ function aggregatePacContributions(rows = [], limit = 25) {
 
   }
 
- 
+
 
   return Array.from(map.values())
 
@@ -566,7 +566,7 @@ function aggregatePacContributions(rows = [], limit = 25) {
 
 }
 
- 
+
 
 export async function ensureFundraisingLiveTable() {
 
@@ -608,7 +608,7 @@ export async function ensureFundraisingLiveTable() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -618,7 +618,7 @@ export async function ensureFundraisingLiveTable() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -628,7 +628,7 @@ export async function ensureFundraisingLiveTable() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -638,7 +638,7 @@ export async function ensureFundraisingLiveTable() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -648,7 +648,7 @@ export async function ensureFundraisingLiveTable() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -660,7 +660,7 @@ export async function ensureFundraisingLiveTable() {
 
 }
 
- 
+
 
 export async function ensureCandidatesSyncSchema() {
 
@@ -742,7 +742,7 @@ export async function ensureCandidatesSyncSchema() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -756,7 +756,7 @@ export async function ensureCandidatesSyncSchema() {
 
 }
 
- 
+
 
 export async function ensureCandidateProfilesSchema() {
 
@@ -776,7 +776,7 @@ export async function ensureCandidateProfilesSchema() {
 
   `);
 
- 
+
 
   await pool.query(`
 
@@ -844,7 +844,7 @@ export async function ensureCandidateProfilesSchema() {
 
 }
 
- 
+
 
 export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
 
@@ -856,7 +856,7 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
 
     per_page: perPage,
 
- 
+
 
     /*
 
@@ -876,7 +876,7 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
 
 }
 
- 
+
 
 export async function fetchAllCandidateTotals({ cycle }) {
 
@@ -884,7 +884,7 @@ export async function fetchAllCandidateTotals({ cycle }) {
 
   const allRows = [];
 
- 
+
 
   for (let page = 1; page <= maxPages; page += 1) {
 
@@ -894,7 +894,7 @@ export async function fetchAllCandidateTotals({ cycle }) {
 
     allRows.push(...results);
 
- 
+
 
     const totalPages = Number(payload?.pagination?.pages || 0);
 
@@ -904,13 +904,13 @@ export async function fetchAllCandidateTotals({ cycle }) {
 
   }
 
- 
+
 
   return allRows;
 
 }
 
- 
+
 
 export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
@@ -924,7 +924,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
   );
 
- 
+
 
   const normalized = [];
 
@@ -934,7 +934,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
   );
 
- 
+
 
   for (const row of sortedRows) {
 
@@ -944,7 +944,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
     );
 
- 
+
 
     if (!candidateId) {
 
@@ -960,7 +960,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
     }
 
- 
+
 
     const pacContributions =
 
@@ -978,7 +978,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
         : [];
 
- 
+
 
     const payload = {
 
@@ -1000,7 +1000,7 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
     };
 
- 
+
 
     normalized.push({
 
@@ -1034,29 +1034,29 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
   }
 
- 
+
 
   return normalized.sort((a, b) => b.receipts - a.receipts);
 
 }
 
- 
+
 
 export async function replaceFundraisingLive(rows, cycle) {
 
   await ensureFundraisingLiveTable();
 
- 
+
 
   const client = await pool.connect();
 
- 
+
 
   try {
 
     await client.query("BEGIN");
 
- 
+
 
     await client.query(`DELETE FROM fundraising_live WHERE election_year = $1`, [
 
@@ -1064,7 +1064,7 @@ export async function replaceFundraisingLive(rows, cycle) {
 
     ]);
 
- 
+
 
     for (const row of rows) {
 
@@ -1178,7 +1178,7 @@ export async function replaceFundraisingLive(rows, cycle) {
 
     }
 
- 
+
 
     await client.query("COMMIT");
 
@@ -1196,17 +1196,17 @@ export async function replaceFundraisingLive(rows, cycle) {
 
 }
 
- 
+
 
 export async function upsertCandidatesFromFec(rows, cycle) {
 
   await ensureCandidatesSyncSchema();
 
- 
+
 
   let stored = 0;
 
- 
+
 
   for (const row of rows) {
 
@@ -1214,7 +1214,7 @@ export async function upsertCandidatesFromFec(rows, cycle) {
 
     if (!candidate.fec_candidate_id) continue;
 
- 
+
 
     await pool.query(
 
@@ -1416,25 +1416,25 @@ export async function upsertCandidatesFromFec(rows, cycle) {
 
     );
 
- 
+
 
     stored += 1;
 
   }
 
- 
+
 
   return stored;
 
 }
 
- 
+
 
 export async function syncFecCommitteeContactsForCandidates(options = {}) {
 
   await ensureCandidateProfilesSchema();
 
- 
+
 
   const limit = Math.min(Math.max(Number(options.limit || 500), 1), 5000);
 
@@ -1442,7 +1442,7 @@ export async function syncFecCommitteeContactsForCandidates(options = {}) {
 
   const cycle = Number(options.cycle || getFecApiConfig().defaultCycle);
 
- 
+
 
   const result = await pool.query(
 
@@ -1488,7 +1488,7 @@ export async function syncFecCommitteeContactsForCandidates(options = {}) {
 
   );
 
- 
+
 
   return {
 
@@ -1514,7 +1514,7 @@ export async function syncFecCommitteeContactsForCandidates(options = {}) {
 
 }
 
- 
+
 
 export async function syncFundraisingFromFec({
 
@@ -1534,7 +1534,7 @@ export async function syncFundraisingFromFec({
 
   const targetCycle = Number(cycle || defaultCycle);
 
- 
+
 
   const rawRows = await fetchAllCandidateTotals({ cycle: targetCycle });
 
@@ -1544,15 +1544,15 @@ export async function syncFundraisingFromFec({
 
   });
 
- 
+
 
   await replaceFundraisingLive(normalizedRows, targetCycle);
 
- 
+
 
   const candidateStored = await upsertCandidatesFromFec(normalizedRows, targetCycle);
 
- 
+
 
   const contactResult = syncContacts
 
@@ -1568,7 +1568,7 @@ export async function syncFundraisingFromFec({
 
     : null;
 
- 
+
 
   return {
 
@@ -1596,13 +1596,13 @@ export async function syncFundraisingFromFec({
 
 }
 
- 
+
 
 export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
   await ensureCandidateProfilesSchema();
 
- 
+
 
   const candidateId = candidate.id || candidate.candidate_id || null;
 
@@ -1616,7 +1616,7 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
   );
 
- 
+
 
   if (!candidateId) {
 
@@ -1632,7 +1632,7 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
   }
 
- 
+
 
   const existing = await pool.query(
 
@@ -1652,7 +1652,7 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
   );
 
- 
+
 
   if (!existing.rows.length) {
 
@@ -1712,7 +1712,7 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
   }
 
- 
+
 
   return {
 
@@ -1730,13 +1730,13 @@ export async function enrichCandidateWithFecCommitteeContact(candidate = {}) {
 
 }
 
- 
+
 
 async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
   const validCandidateId = normalizeFecCandidateId(candidateId);
 
- 
+
 
   if (!validCandidateId) {
 
@@ -1752,7 +1752,7 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
   }
 
- 
+
 
   try {
 
@@ -1772,7 +1772,7 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
     );
 
- 
+
 
     const rows = Array.isArray(payload?.results)
 
@@ -1780,7 +1780,7 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
       : [];
 
- 
+
 
     return rows
 
@@ -1798,7 +1798,7 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
           .filter(Boolean);
 
- 
+
 
         return {
 
@@ -1842,13 +1842,13 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
 
 }
 
- 
+
 
 async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
   const validCommitteeId = normalizeFecCommitteeId(committeeId);
 
- 
+
 
   if (!validCommitteeId) {
 
@@ -1864,7 +1864,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
   }
 
- 
+
 
   try {
 
@@ -1884,7 +1884,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
     });
 
- 
+
 
     const rows = Array.isArray(payload?.results)
 
@@ -1892,7 +1892,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       : [];
 
- 
+
 
     return rows.filter((row) => {
 
@@ -1918,7 +1918,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
       const isMemoEntry = row.memoed_subtotal === true;
 
- 
+
 
       return (
 
@@ -1952,7 +1952,7 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
 }
 
- 
+
 
 async function fetchPacContributionsForCandidate({
 
@@ -1966,7 +1966,7 @@ async function fetchPacContributionsForCandidate({
 
   const validCandidateId = normalizeFecCandidateId(candidateId);
 
- 
+
 
   if (!validCandidateId) {
 
@@ -1982,7 +1982,7 @@ async function fetchPacContributionsForCandidate({
 
   }
 
- 
+
 
   try {
 
@@ -1994,11 +1994,11 @@ async function fetchPacContributionsForCandidate({
 
     });
 
- 
+
 
     const allScheduleARows = [];
 
- 
+
 
     for (const committee of committees.slice(0, 3)) {
 
@@ -2010,7 +2010,7 @@ async function fetchPacContributionsForCandidate({
 
       });
 
- 
+
 
       allScheduleARows.push(
 
@@ -2028,7 +2028,7 @@ async function fetchPacContributionsForCandidate({
 
     }
 
- 
+
 
     // Do not fall back to Schedule A with candidate_id. Schedule A is scoped
 
@@ -2050,7 +2050,7 @@ async function fetchPacContributionsForCandidate({
 
     }
 
- 
+
 
     return aggregatePacContributions(allScheduleARows, limit);
 
