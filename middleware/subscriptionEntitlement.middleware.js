@@ -3,7 +3,7 @@ import {
   consumeUsage,
   hasEntitlement,
   resolveFirmEntitlements,
-} from "../services/subscriptionEntitlements.service.js";
+} from "../services/subscriptionEntitlements.service.js"; 
 
 const RULES = [
   { prefix: "/production-hardening", internal: true },
