@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import pool from "../config/database.js";
 
 function extractToken(req) {
-  const authHeader = req.headers.authorization || "";
+  const authHeader = req.headers.authorization || ""; 
 
   if (authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7).trim();
