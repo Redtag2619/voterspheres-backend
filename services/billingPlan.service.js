@@ -8,14 +8,14 @@ function text(value = "") {
   return String(value ?? "").trim();
 }
 
-function normalizePlan(plan = "starter") {
+function normalizePlan(plan = "free") {
   const value = text(plan).toLowerCase();
 
   if (["enterprise", "agency", "premium"].includes(value)) return "enterprise";
   if (["pro", "professional"].includes(value)) return "pro";
   if (["starter", "basic"].includes(value)) return "starter";
 
-  return "starter";
+  return "free";
 }
 
 function normalizeStatus(status = "active") {
@@ -52,12 +52,12 @@ export function getPlanFromPriceId(priceId = "") {
   const cleanPriceId = text(priceId);
   const prices = getBillingPriceMap();
 
-  if (!cleanPriceId) return "starter";
+  if (!cleanPriceId) return "free";
   if (cleanPriceId === prices.enterprise) return "enterprise";
   if (cleanPriceId === prices.pro) return "pro";
   if (cleanPriceId === prices.starter) return "starter";
 
-  return "starter";
+  return "free";
 }
 
 export function getPlanFromCheckoutSession(session = {}) {
@@ -91,7 +91,7 @@ export async function getPlanFromSubscription(subscription = {}) {
 export async function ensureBillingColumns() {
   await pool.query(`
     ALTER TABLE firms
-      ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'starter'
+      ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'free'
   `);
 
   await pool.query(`
@@ -207,7 +207,7 @@ export async function downgradeFirmToStarter({ firmId, stripeCustomerId = null }
     `
       UPDATE firms
       SET
-        plan_tier = 'starter',
+        plan_tier = 'free',
         subscription_status = 'canceled',
         stripe_customer_id = COALESCE($2, stripe_customer_id),
         billing_updated_at = NOW()
