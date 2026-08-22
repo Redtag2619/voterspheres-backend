@@ -47,9 +47,10 @@ function normalizePlanTier(value) {
 
   if (v === "enterprise" || v === "agency" || v === "premium") return "enterprise";
   if (v === "pro" || v === "professional") return "pro";
-  if (v === "starter" || v === "basic" || v === "free") return "starter";
+  if (v === "starter" || v === "basic") return "starter";
+  if (v === "free") return "free";
 
-  return "starter";
+  return "free";
 }
 
 function normalizeSubscriptionStatus(value) {
@@ -86,7 +87,7 @@ function inferPlanTierFromPriceId(priceId) {
   if (value.includes("pro")) return "pro";
   if (value.includes("starter")) return "starter";
 
-  return "starter";
+  return "free";
 }
 
 function inferPlanTierFromMetadata(metadata = {}) {
@@ -115,7 +116,7 @@ async function getStripe() {
 async function ensureBillingColumns() {
   await pool.query(`
     ALTER TABLE firms
-      ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'starter',
+      ADD COLUMN IF NOT EXISTS plan_tier TEXT DEFAULT 'free',
       ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT,
       ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
@@ -635,7 +636,7 @@ async function applySubscriptionUpdated(subscription, eventType, eventId) {
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       stripePriceId: priceId,
-      planTier: "starter",
+      planTier: "free",
       status: "canceled",
       currentPeriodEnd,
       eventType,
@@ -678,7 +679,7 @@ async function applySubscriptionDeleted(subscription, eventType, eventId) {
     stripeCustomerId: customerId,
     stripeSubscriptionId: null,
     stripePriceId: null,
-    planTier: "starter",
+    planTier: "free",
     status: "canceled",
     eventType,
     eventId,
@@ -822,3 +823,4 @@ export default {
   createPortalSessionForFirm,
   handleStripeWebhook,
 };
+
