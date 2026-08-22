@@ -94,7 +94,7 @@ router.get("/debug/me", requireAuth, async (req, res) => {
       auth: {
         userId: getUserId(req),
         firmId,
-        planTier: req.auth?.planTier || req.user?.plan_tier || "starter",
+        planTier: req.auth?.planTier || req.user?.plan_tier || "free",
         role: req.auth?.role || req.user?.role || "user"
       },
       firm: firm
@@ -102,7 +102,7 @@ router.get("/debug/me", requireAuth, async (req, res) => {
             id: firm.id,
             name: firm.name,
             slug: firm.slug,
-            plan_tier: firm.plan_tier || "starter",
+            plan_tier: firm.plan_tier || "free",
             status: firm.status || "active",
             subscription_status: firm.subscription_status || null,
             current_period_end: firm.current_period_end || null,
@@ -296,3 +296,4 @@ router.post(
 );
 
 export default router;
+
