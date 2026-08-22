@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import pool from "../config/database.js";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
-export const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+export const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null; 
 
 function text(value = "") {
   return String(value ?? "").trim();
