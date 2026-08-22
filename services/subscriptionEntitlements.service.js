@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 
-export const SUBSCRIPTION_ENTITLEMENT_BUILD = "7.0.0-unified-entitlements";
+export const SUBSCRIPTION_ENTITLEMENT_BUILD = "7.0.0-unified-entitlements"; 
 
 export const PLAN_ORDER = Object.freeze({
   free: 0,
