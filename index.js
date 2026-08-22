@@ -108,8 +108,10 @@ import executivePollingIntelligenceRoutes from "./routes/executivePollingIntelli
 import executiveIntelligenceOrchestratorRoutes from "./routes/executiveIntelligenceOrchestrator.routes.js";
 import universalCandidateIntelligenceRoutes from "./routes/universalCandidateIntelligence.routes.js";
 import aiCampaignCopilotRoutes from "./routes/aiCampaignCopilot.routes.js";
+import entitlementsRoutes from "./routes/entitlements.routes.js";
 
 import { requireAuth } from "./middleware/auth.middleware.js";
+import { subscriptionEntitlementGateway } from "./middleware/subscriptionEntitlement.middleware.js";
 import { initSocket } from "./lib/socket.js";
 import { publishEvent } from "./lib/intelligence.events.js";
 import { handleStripeWebhook } from "./services/billing.service.js";
@@ -236,9 +238,15 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicInvitesRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/entitlements", entitlementsRoutes);
 app.use("/api/enterprise-leads", enterpriseLeadsRoutes);
 app.use("/api/public/enterprise-leads", enterpriseLeadsRoutes); 
 app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
+
+// One centralized subscription gate protects mapped API capabilities before
+// feature routers execute. Public auth, billing, lead, health, and catalog
+// endpoints remain outside this gateway.
+app.use("/api", subscriptionEntitlementGateway);
 
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/executive-alerts", requireAuth, executiveAlertEngineRoutes);
@@ -503,4 +511,6 @@ server.listen(PORT, "0.0.0.0", () => {
   startCandidateEnrichmentScheduler();
   startConsultantImportJob();
 }); 
+
+
 
