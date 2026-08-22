@@ -75,6 +75,8 @@ export async function requireAuth(req, res, next) {
             slug,
             plan_tier,
             status,
+            subscription_status,
+            current_period_end,
             stripe_customer_id,
             stripe_subscription_id
           FROM firms
@@ -98,6 +100,8 @@ export async function requireAuth(req, res, next) {
       firm_slug: firm?.slug || null,
       plan_tier: firm?.plan_tier || "starter",
       firm_status: firm?.status || "active",
+      subscription_status: firm?.subscription_status || null,
+      current_period_end: firm?.current_period_end || null,
       stripe_customer_id: firm?.stripe_customer_id || null,
       stripe_subscription_id: firm?.stripe_subscription_id || null,
     };
@@ -121,3 +125,5 @@ export async function requireAuth(req, res, next) {
 }
 
 export default requireAuth;
+
+
