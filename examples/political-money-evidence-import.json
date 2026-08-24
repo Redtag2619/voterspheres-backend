@@ -3,7 +3,7 @@
   "records": [
     {
       "provider": "reviewed_upload",
-      "identifier_provider": "irs",
+      "identifier_provider": "irs", 
       "identifier_type": "ein",
       "identifier_value": "12-3456789",
       "organization_name": "Example Civic Organization",
