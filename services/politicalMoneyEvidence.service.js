@@ -253,6 +253,8 @@ export async function syncFecIndependentExpenditures(options = {}) {
       url.searchParams.set("cycle", String(cycle));
       url.searchParams.set("page", String(page));
       url.searchParams.set("per_page", String(perPage));
+      // Schedule E only accepts supported API sort fields. The earlier
+      // dissemination_date sort causes OpenFEC to return HTTP 422.
       url.searchParams.set("sort", "-expenditure_date");
       pagesRequested += 1;
       const response = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(30000) });
@@ -452,4 +454,3 @@ export default {
   upsertPoliticalMoneyOrganization,
   storePoliticalMoneyEvidence,
 };
-
