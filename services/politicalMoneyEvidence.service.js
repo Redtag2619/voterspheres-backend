@@ -253,7 +253,7 @@ export async function syncFecIndependentExpenditures(options = {}) {
       url.searchParams.set("cycle", String(cycle));
       url.searchParams.set("page", String(page));
       url.searchParams.set("per_page", String(perPage));
-      url.searchParams.set("sort", "-dissemination_date");
+      url.searchParams.set("sort", "-expenditure_date");
       pagesRequested += 1;
       const response = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error(`OpenFEC returned ${response.status}: ${await response.text()}`);
