@@ -1,0 +1,27 @@
+{
+  "cycle": 2026,
+  "records": [
+    {
+      "provider": "reviewed_upload",
+      "identifier_provider": "irs",
+      "identifier_type": "ein",
+      "identifier_value": "12-3456789",
+      "organization_name": "Example Civic Organization",
+      "organization_type": "nonprofit",
+      "tax_exempt_subsection": "501(c)(4)",
+      "state": "DC",
+      "evidence_type": "organization_transfer",
+      "source_record_id": "example-transfer-2026-001",
+      "title": "Reviewed organization transfer",
+      "description": "Transfer identified in a cited public filing.",
+      "amount": 250000,
+      "observed_at": "2026-06-30T00:00:00Z",
+      "source_url": "https://example.gov/public-filing",
+      "confidence_score": 90,
+      "metadata": {
+        "indicator_score": 12,
+        "review_notes": "Replace this demonstration record with a verified public source."
+      }
+    }
+  ]
+}
