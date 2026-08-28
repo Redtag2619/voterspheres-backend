@@ -521,3 +521,4 @@ export async function getDarkMoneyExposureProfile(
 export default {
   getDarkMoneyExposure,
   getDarkMoneyExposureProfile,
+};
