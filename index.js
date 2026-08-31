@@ -273,7 +273,7 @@ app.use("/api/mailops", requireAuth, mailOpsRoutes);
 app.use("/api/vendor-fec", requireAuth, vendorFecRoutes);
 app.use("/api/platform-intelligence", requireAuth, platformIntelligenceRoutes);
 app.use("/api/vendors", vendorsRoutes);
-app.use("/api/tasks", tasksRoutes);
+app.use("/api/tasks", requireAuth, tasksRoutes);
 app.use("/api/operations", operationsRoutes);
 app.use("/api/workspaces", requireAuth, workspacesRoutes);
 app.use("/api/workspace-contacts", requireAuth, workspaceContactsRoutes);
