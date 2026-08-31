@@ -315,13 +315,37 @@ function crmMissionScore(activity = {}) {
 }
 
 function vendorMissionScore(vendor = {}) {
-  const severity = priorityWeight(
-    vendor.risk ||
-      vendor.coverage_tier ||
-      vendor.status
-  );
+  const status = lower(vendor.status);
+  const coverageArea = lower(vendor.coverage_area);
+  const notes = lower(vendor.notes);
 
-  return Math.round(clamp(Math.max(55, severity)));
+  if (
+    status.includes("critical") ||
+    status.includes("unavailable") ||
+    notes.includes("critical")
+  ) {
+    return 90;
+  }
+
+  if (
+    status.includes("high") ||
+    status.includes("gap") ||
+    notes.includes("capacity gap")
+  ) {
+    return 75;
+  }
+
+  if (
+    status.includes("risk") ||
+    status.includes("thin") ||
+    status.includes("limited") ||
+    coverageArea.includes("thin") ||
+    coverageArea.includes("limited")
+  ) {
+    return 60;
+  }
+
+  return 45;
 }
 
 /* ============================================================================
@@ -862,13 +886,12 @@ export async function getExecutiveMissionControl({
       sql: `
         SELECT *
         FROM vendors
-        WHERE firm_id = $1
         ORDER BY
           updated_at DESC NULLS LAST,
           created_at DESC NULLS LAST
-        LIMIT $2
+        LIMIT $1
       `,
-      params: [firmId, SOURCE_ROW_LIMIT],
+      params: [SOURCE_ROW_LIMIT],
     }),
   ]);
 
@@ -1130,37 +1153,20 @@ export async function getExecutiveMissionControl({
 
           COUNT(*) FILTER (
             WHERE
-              LOWER(
-                COALESCE(status, '')
-              ) LIKE '%gap%'
-              OR LOWER(
-                COALESCE(
-                  coverage_tier,
-                  ''
-                )
-              ) LIKE '%thin%'
-              OR LOWER(
-                COALESCE(
-                  coverage_tier,
-                  ''
-                )
-              ) LIKE '%risk%'
-              OR LOWER(
-                COALESCE(risk, '')
-              ) LIKE '%risk%'
-              OR LOWER(
-                COALESCE(risk, '')
-              ) IN (
-                'critical',
-                'high',
-                'elevated'
-              )
+              LOWER(COALESCE(status, '')) LIKE '%gap%'
+              OR LOWER(COALESCE(status, '')) LIKE '%risk%'
+              OR LOWER(COALESCE(status, '')) LIKE '%thin%'
+              OR LOWER(COALESCE(status, '')) LIKE '%limited%'
+              OR LOWER(COALESCE(status, '')) LIKE '%unavailable%'
+              OR LOWER(COALESCE(coverage_area, '')) LIKE '%limited%'
+              OR LOWER(COALESCE(coverage_area, '')) LIKE '%thin%'
+              OR LOWER(COALESCE(notes, '')) LIKE '%coverage gap%'
+              OR LOWER(COALESCE(notes, '')) LIKE '%capacity gap%'
           )::int AS gap_count
 
         FROM vendors
-        WHERE firm_id = $1
       `,
-      params: [firmId],
+      params: [],
     }),
   ]);
 
@@ -1216,27 +1222,27 @@ export async function getExecutiveMissionControl({
       (item) => !item.completed_at
     );
 
-  const vendorGaps = vendors.filter(
-    (vendor) => {
-      const status = lower(vendor.status);
+  const vendorGaps = vendors.filter((vendor) => {
+    const status = lower(vendor.status);
+    const coverageArea = lower(vendor.coverage_area);
+    const notes = lower(vendor.notes);
+    const services = lower(vendor.services);
+    const capabilities = lower(vendor.capabilities);
 
-      const coverage = lower(
-        vendor.coverage_tier
-      );
-
-      const risk = lower(vendor.risk);
-
-      return (
-        status.includes("gap") ||
-        coverage.includes("thin") ||
-        coverage.includes("risk") ||
-        risk.includes("risk") ||
-        ["critical", "high", "elevated"].includes(
-          risk
-        )
-      );
-    }
-  );
+    return (
+      status.includes("gap") ||
+      status.includes("risk") ||
+      status.includes("thin") ||
+      status.includes("limited") ||
+      status.includes("unavailable") ||
+      coverageArea.includes("limited") ||
+      coverageArea.includes("thin") ||
+      notes.includes("coverage gap") ||
+      notes.includes("capacity gap") ||
+      services.includes("capacity gap") ||
+      capabilities.includes("capacity gap")
+    );
+  });
 
   /* ==========================================================================
    * Complete workspace health
@@ -2166,7 +2172,7 @@ export async function getExecutiveMissionControl({
         missionRisk,
 
       critical_signals:
-        totals.material_signals,
+        totals.critical_signals,
 
       open_tasks:
         totals.open_tasks,
