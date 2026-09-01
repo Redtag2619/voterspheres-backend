@@ -78,7 +78,19 @@ export async function getExecutiveWorkspaces({ user = {} }) {
 
         `
 
-          SELECT id, name, campaign_name, title, state, office, cycle, status, created_at, updated_at
+          SELECT
+            id,
+            firm_id,
+            name,
+            candidate_name,
+            state,
+            office,
+            cycle,
+            status,
+            description,
+            metadata,
+            created_at,
+            updated_at
 
           FROM workspaces
 
