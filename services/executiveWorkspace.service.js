@@ -40,43 +40,43 @@ function number(value = 0) {
 
  
 
-function riskTone(value = "") {
+function normalize(value = "") {
 
-  const v = String(value || "").toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
+
+}
 
  
 
-  if (
+function sameId(left, right) {
 
-    ["critical", "high", "blocked", "overdue", "at risk"].some((x) =>
+  if (left === null || left === undefined || right === null || right === undefined) {
 
-      v.includes(x)
+    return false;
 
-    )
+  }
 
-  ) {
+  return String(left) === String(right);
+
+}
+
+ 
+
+function riskTone(value = "") {
+
+  const v = normalize(value);
+
+  if (["critical", "high", "blocked", "overdue", "at risk"].some((x) => v.includes(x))) {
 
     return "critical";
 
   }
 
- 
-
-  if (
-
-    ["medium", "elevated", "watch", "open", "pending"].some((x) =>
-
-      v.includes(x)
-
-    )
-
-  ) {
+  if (["medium", "elevated", "watch", "open", "pending"].some((x) => v.includes(x))) {
 
     return "watch";
 
   }
-
- 
 
   return "stable";
 
@@ -86,21 +86,25 @@ function riskTone(value = "") {
 
 function isOpenStatus(status = "") {
 
-  return ![
+  return !["done", "complete", "completed", "resolved", "closed", "archived"].includes(
 
-    "done",
+    normalize(status)
 
-    "complete",
+  );
 
-    "completed",
+}
 
-    "resolved",
+ 
 
-    "closed",
+function isUrgentPriority(priority = "") {
 
-    "archived",
+  const value = normalize(priority);
 
-  ].includes(String(status || "").toLowerCase());
+  return ["critical", "urgent", "high", "immediate", "severe"].some((token) =>
+
+    value.includes(token)
+
+  );
 
 }
 
@@ -109,8 +113,6 @@ function isOpenStatus(status = "") {
 function serializeWorkspace(row = {}) {
 
   if (!row?.id) return null;
-
- 
 
   return {
 
@@ -141,6 +143,114 @@ function serializeWorkspace(row = {}) {
     updated_at: row.updated_at || null,
 
   };
+
+}
+
+ 
+
+function isDefaultWorkspace(workspace = {}) {
+
+  return workspace?.metadata?.default === true;
+
+}
+
+ 
+
+function isNationalState(value = "") {
+
+  const state = normalize(value);
+
+  return !state || state === "national" || state === "us" || state === "usa";
+
+}
+
+ 
+
+function stateMatches(rowState = "", workspaceState = "") {
+
+  const rowValue = normalize(rowState);
+
+  const workspaceValue = normalize(workspaceState);
+
+  if (isNationalState(workspaceValue)) {
+
+    return !rowValue || isNationalState(rowValue);
+
+  }
+
+  return rowValue === workspaceValue;
+
+}
+
+ 
+
+function scopeAssignedRows(
+
+  rows = [],
+
+  selectedWorkspace = null,
+
+  { includeDefaultUnassigned = false } = {}
+
+) {
+
+  if (!selectedWorkspace?.id) return rows;
+
+  const selectedId = selectedWorkspace.id;
+
+  const includeUnassigned = includeDefaultUnassigned && isDefaultWorkspace(selectedWorkspace);
+
+ 
+
+  return rows.filter((row) => {
+
+    if (sameId(row.workspace_id, selectedId)) return true;
+
+    if (includeUnassigned && (row.workspace_id === null || row.workspace_id === undefined)) {
+
+      return true;
+
+    }
+
+    return false;
+
+  });
+
+}
+
+ 
+
+function scopeWorkspaceContextRows(rows = [], selectedWorkspace = null) {
+
+  if (!selectedWorkspace?.id) return rows;
+
+  const selectedId = selectedWorkspace.id;
+
+  const selectedState = selectedWorkspace.state || "";
+
+ 
+
+  return rows.filter((row) => {
+
+    if (sameId(row.workspace_id, selectedId)) return true;
+
+    const unassigned = row.workspace_id === null || row.workspace_id === undefined;
+
+    if (!unassigned) return false;
+
+    return stateMatches(row.state, selectedState);
+
+  });
+
+}
+
+ 
+
+function scopeStateContextRows(rows = [], selectedWorkspace = null) {
+
+  if (!selectedWorkspace?.id) return rows;
+
+  return rows.filter((row) => stateMatches(row.state, selectedWorkspace.state));
 
 }
 
@@ -187,6 +297,18 @@ function vendorGapStatus(vendor = {}) {
     "unavailable",
 
   ].some((token) => value.includes(token));
+
+}
+
+ 
+
+function workspaceScopeDescription(selectedWorkspace = null) {
+
+  if (!selectedWorkspace?.id) return "firm";
+
+  if (isDefaultWorkspace(selectedWorkspace)) return "workspace-plus-default-unassigned";
+
+  return "workspace";
 
 }
 
@@ -398,7 +520,7 @@ export async function getExecutiveWorkspaceDashboard({
 
   const selectedWorkspace =
 
-    workspaces.find((workspace) => String(workspace.id) === String(workspaceId)) ||
+    workspaces.find((workspace) => sameId(workspace.id, workspaceId)) ||
 
     workspaces[0] ||
 
@@ -412,33 +534,19 @@ export async function getExecutiveWorkspaceDashboard({
 
  
 
-  const tasks = firmId
+  // Load the firm's authoritative source rows once. The response below returns
+
+  // selected-workspace data, while portfolio_summary preserves firm-wide totals.
+
+  const firmTasks = firmId
 
     ? await safeQuery(
 
         `
 
-          SELECT
+          SELECT id, title, description, status, priority, state, source,
 
-            id,
-
-            title,
-
-            description,
-
-            status,
-
-            priority,
-
-            state,
-
-            source,
-
-            workspace_id,
-
-            created_at,
-
-            updated_at
+                 workspace_id, created_at, updated_at
 
           FROM tasks
 
@@ -446,7 +554,7 @@ export async function getExecutiveWorkspaceDashboard({
 
           ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
 
-          LIMIT 80
+          LIMIT 200
 
         `,
 
@@ -456,69 +564,279 @@ export async function getExecutiveWorkspaceDashboard({
 
     : await safeQuery(`
 
-        SELECT
+        SELECT id, title, description, status, priority, state, source,
 
-          id,
-
-          title,
-
-          description,
-
-          status,
-
-          priority,
-
-          state,
-
-          source,
-
-          workspace_id,
-
-          created_at,
-
-          updated_at
+               workspace_id, created_at, updated_at
 
         FROM tasks
 
         ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
 
-        LIMIT 80
+        LIMIT 200
 
       `);
 
  
 
-  const signals = await safeQuery(`
+  const firmSignals = await safeQuery(`
 
-    SELECT
+    SELECT id, title, summary, state, signal_type, risk, severity,
 
-      id,
-
-      title,
-
-      summary,
-
-      state,
-
-      signal_type,
-
-      risk,
-
-      severity,
-
-      signal_score,
-
-      workspace_id,
-
-      created_at
+           signal_score, workspace_id, created_at
 
     FROM political_signals
 
     ORDER BY signal_score DESC NULLS LAST, created_at DESC NULLS LAST
 
-    LIMIT 80
+    LIMIT 200
 
   `);
+
+ 
+
+  const firmContacts = firmId
+
+    ? await safeQuery(
+
+        `
+
+          SELECT id, full_name, organization, role_type, state, workspace_id,
+
+                 created_at, updated_at
+
+          FROM campaign_crm_contacts
+
+          WHERE firm_id = $1
+
+          ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+
+          LIMIT 200
+
+        `,
+
+        [firmId]
+
+      )
+
+    : await safeQuery(`
+
+        SELECT id, full_name, organization, role_type, state, workspace_id,
+
+               created_at, updated_at
+
+        FROM campaign_crm_contacts
+
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+
+        LIMIT 200
+
+      `);
+
+ 
+
+  const firmActivities = firmId
+
+    ? await safeQuery(
+
+        `
+
+          SELECT id, title, type, status, priority, due_date, workspace_id, created_at
+
+          FROM campaign_crm_activities
+
+          WHERE firm_id = $1
+
+          ORDER BY created_at DESC
+
+          LIMIT 200
+
+        `,
+
+        [firmId]
+
+      )
+
+    : await safeQuery(`
+
+        SELECT id, title, type, status, priority, due_date, workspace_id, created_at
+
+        FROM campaign_crm_activities
+
+        ORDER BY created_at DESC
+
+        LIMIT 200
+
+      `);
+
+ 
+
+  const firmReports = firmId
+
+    ? await safeQuery(
+
+        `
+
+          SELECT id, title, report_type, state, status, workspace_id, created_at
+
+          FROM intelligence_reports
+
+          WHERE firm_id = $1
+
+          ORDER BY created_at DESC
+
+          LIMIT 200
+
+        `,
+
+        [firmId]
+
+      )
+
+    : await safeQuery(`
+
+        SELECT id, title, report_type, state, status, workspace_id, created_at
+
+        FROM intelligence_reports
+
+        ORDER BY created_at DESC
+
+        LIMIT 200
+
+      `);
+
+ 
+
+  // These production tables do not currently expose workspace_id, so they are
+
+  // used only as geographic context for the selected workspace.
+
+  const firmVendors = await safeQuery(`
+
+    SELECT id, name, vendor_name, category, status, state, city, services,
+
+           notes, capabilities, coverage_area, created_at, updated_at
+
+    FROM vendors
+
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+
+    LIMIT 200
+
+  `);
+
+ 
+
+  const firmClients = firmId
+
+    ? await safeQuery(
+
+        `
+
+          SELECT id, client_name, organization, state, status, health_status,
+
+                 monthly_retainer, created_at, updated_at
+
+          FROM consultant_clients
+
+          WHERE firm_id = $1
+
+          ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+
+          LIMIT 200
+
+        `,
+
+        [firmId]
+
+      )
+
+    : await safeQuery(`
+
+        SELECT id, client_name, organization, state, status, health_status,
+
+               monthly_retainer, created_at, updated_at
+
+        FROM consultant_clients
+
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+
+        LIMIT 200
+
+      `);
+
+ 
+
+  const firmInvoices = firmId
+
+    ? await safeQuery(
+
+        `
+
+          SELECT i.id, i.title, i.amount, i.status, i.due_date, i.created_at,
+
+                 c.client_name, c.state
+
+          FROM consultant_invoices i
+
+          LEFT JOIN consultant_clients c ON c.id = i.client_id
+
+          WHERE i.firm_id = $1
+
+          ORDER BY i.created_at DESC
+
+          LIMIT 200
+
+        `,
+
+        [firmId]
+
+      )
+
+    : await safeQuery(`
+
+        SELECT i.id, i.title, i.amount, i.status, i.due_date, i.created_at,
+
+               c.client_name, c.state
+
+        FROM consultant_invoices i
+
+        LEFT JOIN consultant_clients c ON c.id = i.client_id
+
+        ORDER BY i.created_at DESC
+
+        LIMIT 200
+
+      `);
+
+ 
+
+  const tasks = scopeAssignedRows(firmTasks, selectedWorkspace, {
+
+    includeDefaultUnassigned: true,
+
+  });
+
+  const signals = scopeWorkspaceContextRows(firmSignals, selectedWorkspace);
+
+  const contacts = scopeAssignedRows(firmContacts, selectedWorkspace, {
+
+    includeDefaultUnassigned: true,
+
+  });
+
+  const activities = scopeAssignedRows(firmActivities, selectedWorkspace, {
+
+    includeDefaultUnassigned: true,
+
+  });
+
+  const reports = scopeWorkspaceContextRows(firmReports, selectedWorkspace);
+
+  const vendors = scopeStateContextRows(firmVendors, selectedWorkspace);
+
+  const clients = scopeStateContextRows(firmClients, selectedWorkspace);
+
+  const invoices = scopeStateContextRows(firmInvoices, selectedWorkspace);
 
  
 
@@ -536,387 +854,31 @@ export async function getExecutiveWorkspaceDashboard({
 
  
 
-  const contacts = firmId
-
-    ? await safeQuery(
-
-        `
-
-          SELECT
-
-            id,
-
-            full_name,
-
-            organization,
-
-            role_type,
-
-            state,
-
-            workspace_id,
-
-            created_at,
-
-            updated_at
-
-          FROM campaign_crm_contacts
-
-          WHERE firm_id = $1
-
-          ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-
-          LIMIT 80
-
-        `,
-
-        [firmId]
-
-      )
-
-    : await safeQuery(`
-
-        SELECT
-
-          id,
-
-          full_name,
-
-          organization,
-
-          role_type,
-
-          state,
-
-          workspace_id,
-
-          created_at,
-
-          updated_at
-
-        FROM campaign_crm_contacts
-
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-
-        LIMIT 80
-
-      `);
-
- 
-
-  const activities = firmId
-
-    ? await safeQuery(
-
-        `
-
-          SELECT
-
-            id,
-
-            title,
-
-            type,
-
-            status,
-
-            priority,
-
-            due_date,
-
-            workspace_id,
-
-            created_at
-
-          FROM campaign_crm_activities
-
-          WHERE firm_id = $1
-
-          ORDER BY created_at DESC
-
-          LIMIT 80
-
-        `,
-
-        [firmId]
-
-      )
-
-    : await safeQuery(`
-
-        SELECT
-
-          id,
-
-          title,
-
-          type,
-
-          status,
-
-          priority,
-
-          due_date,
-
-          workspace_id,
-
-          created_at
-
-        FROM campaign_crm_activities
-
-        ORDER BY created_at DESC
-
-        LIMIT 80
-
-      `);
-
- 
-
-  const reports = await safeQuery(`
-
-    SELECT id, title, report_type, state, status, created_at
-
-    FROM intelligence_reports
-
-    ORDER BY created_at DESC
-
-    LIMIT 80
-
-  `);
-
- 
-
-  const vendors = await safeQuery(`
-
-    SELECT
-
-      id,
-
-      name,
-
-      vendor_name,
-
-      category,
-
-      status,
-
-      state,
-
-      city,
-
-      services,
-
-      notes,
-
-      capabilities,
-
-      coverage_area,
-
-      created_at,
-
-      updated_at
-
-    FROM vendors
-
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-
-    LIMIT 80
-
-  `);
-
- 
-
-  const clients = firmId
-
-    ? await safeQuery(
-
-        `
-
-          SELECT
-
-            id,
-
-            client_name,
-
-            organization,
-
-            state,
-
-            status,
-
-            health_status,
-
-            monthly_retainer,
-
-            created_at,
-
-            updated_at
-
-          FROM consultant_clients
-
-          WHERE firm_id = $1
-
-          ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-
-          LIMIT 80
-
-        `,
-
-        [firmId]
-
-      )
-
-    : await safeQuery(`
-
-        SELECT
-
-          id,
-
-          client_name,
-
-          organization,
-
-          state,
-
-          status,
-
-          health_status,
-
-          monthly_retainer,
-
-          created_at,
-
-          updated_at
-
-        FROM consultant_clients
-
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-
-        LIMIT 80
-
-      `);
-
- 
-
-  const invoices = firmId
-
-    ? await safeQuery(
-
-        `
-
-          SELECT
-
-            i.id,
-
-            i.title,
-
-            i.amount,
-
-            i.status,
-
-            i.due_date,
-
-            i.created_at,
-
-            c.client_name,
-
-            c.state
-
-          FROM consultant_invoices i
-
-          LEFT JOIN consultant_clients c ON c.id = i.client_id
-
-          WHERE i.firm_id = $1
-
-          ORDER BY i.created_at DESC
-
-          LIMIT 80
-
-        `,
-
-        [firmId]
-
-      )
-
-    : await safeQuery(`
-
-        SELECT
-
-          i.id,
-
-          i.title,
-
-          i.amount,
-
-          i.status,
-
-          i.due_date,
-
-          i.created_at,
-
-          c.client_name,
-
-          c.state
-
-        FROM consultant_invoices i
-
-        LEFT JOIN consultant_clients c ON c.id = i.client_id
-
-        ORDER BY i.created_at DESC
-
-        LIMIT 80
-
-      `);
-
- 
-
   const openTasks = tasks.filter((task) => isOpenStatus(task.status));
 
- 
+  const urgentTasks = openTasks.filter((task) => isUrgentPriority(task.priority));
 
   const criticalSignals = signals.filter(
 
-    (signal) => riskTone(signal.risk || signal.severity || signal.signal_score) === "critical"
+    (signal) =>
+
+      riskTone(signal.risk || signal.severity || signal.signal_score) === "critical"
 
   );
 
- 
-
-  const openActivities = activities.filter((activity) =>
-
-    isOpenStatus(activity.status)
-
-  );
-
- 
+  const openActivities = activities.filter((activity) => isOpenStatus(activity.status));
 
   const vendorGaps = vendors.filter(vendorGapStatus);
 
- 
-
   const atRiskClients = clients.filter((client) =>
 
-    ["at risk", "watch", "critical"].includes(
-
-      String(client.health_status || "").toLowerCase()
-
-    )
+    ["at risk", "watch", "critical"].includes(normalize(client.health_status))
 
   );
 
- 
-
   const openReceivables = invoices
 
-    .filter((invoice) =>
-
-      ["open", "sent", "overdue"].includes(
-
-        String(invoice.status || "").toLowerCase()
-
-      )
-
-    )
+    .filter((invoice) => ["open", "sent", "overdue"].includes(normalize(invoice.status)))
 
     .reduce((sum, invoice) => sum + number(invoice.amount), 0);
 
@@ -930,9 +892,11 @@ export async function getExecutiveWorkspaceDashboard({
 
       criticalSignals.length * 12 +
 
-        openTasks.length * 2 +
+        urgentTasks.length * 8 +
 
-        openActivities.length +
+        Math.max(0, openTasks.length - urgentTasks.length) * 2 +
+
+        openActivities.length * 2 +
 
         vendorGaps.length * 4 +
 
@@ -948,19 +912,7 @@ export async function getExecutiveWorkspaceDashboard({
 
   const workspaceActivityCount =
 
-    tasks.length +
-
-    contacts.length +
-
-    activities.length +
-
-    reports.length +
-
-    vendors.length +
-
-    clients.length +
-
-    invoices.length;
+    tasks.length + contacts.length + activities.length + reports.length + signals.length;
 
  
 
@@ -970,21 +922,19 @@ export async function getExecutiveWorkspaceDashboard({
 
     Math.round(
 
-      (workspaces.length > 0 ? 15 : 0) +
+      (selectedWorkspace ? 25 : 0) +
 
-        (selectedWorkspace ? 10 : 0) +
+        (tasks.length > 0 ? 20 : 0) +
 
-        (tasks.length >= 10 ? 15 : tasks.length * 1.5) +
+        (contacts.length > 0 ? 15 : 0) +
 
-        (contacts.length >= 10 ? 15 : contacts.length * 1.5) +
+        (activities.length > 0 ? 15 : 0) +
 
-        (reports.length >= 1 ? 15 : 0) +
+        (reports.length > 0 ? 10 : 0) +
 
-        (clients.length >= 5 ? 15 : clients.length * 3) +
+        (signals.length > 0 ? 10 : 0) +
 
-        (vendors.length >= 2 ? 10 : vendors.length * 5) +
-
-        (workspaceActivityCount >= 30 ? 15 : workspaceActivityCount * 0.5)
+        (selectedWorkspace?.candidate_name ? 5 : 0)
 
     )
 
@@ -1004,7 +954,7 @@ export async function getExecutiveWorkspaceDashboard({
 
       priority: "Critical",
 
-      path: "/political-intelligence",
+      path: "/political-signals",
 
       detail: signal.summary || "Review signal pressure and response options.",
 
@@ -1012,9 +962,11 @@ export async function getExecutiveWorkspaceDashboard({
 
       state: signal.state || state || null,
 
+      scope: "workspace-context",
+
     })),
 
-    ...openTasks.slice(0, 4).map((task) => ({
+    ...openTasks.slice(0, 6).map((task) => ({
 
       id: `task-${task.id}`,
 
@@ -1028,17 +980,27 @@ export async function getExecutiveWorkspaceDashboard({
 
       detail: task.description || "Task requires ownership or completion.",
 
-      workspace_id: task.workspace_id || null,
+      workspace_id: task.workspace_id || selectedId,
 
-      state: task.state || null,
+      state: task.state || state || null,
+
+      scope: sameId(task.workspace_id, selectedId)
+
+        ? "workspace-assigned"
+
+        : "default-unassigned",
 
     })),
 
-    ...vendorGaps.slice(0, 2).map((vendor) => ({
+    ...vendorGaps.slice(0, 1).map((vendor) => ({
 
       id: `vendor-${vendor.id}`,
 
-      title: `Vendor coverage watch: ${vendor.name || vendor.vendor_name || `Vendor ${vendor.id}`}`,
+      title: `Vendor coverage watch: ${
+
+        vendor.name || vendor.vendor_name || `Vendor ${vendor.id}`
+
+      }`,
 
       source: "Vendor Network",
 
@@ -1050,11 +1012,13 @@ export async function getExecutiveWorkspaceDashboard({
 
       workspace_id: selectedId,
 
-      state: vendor.state || null,
+      state: vendor.state || state || null,
+
+      scope: "workspace-geography",
 
     })),
 
-    ...atRiskClients.slice(0, 2).map((client) => ({
+    ...atRiskClients.slice(0, 1).map((client) => ({
 
       id: `client-${client.id}`,
 
@@ -1070,11 +1034,29 @@ export async function getExecutiveWorkspaceDashboard({
 
       workspace_id: selectedId,
 
-      state: client.state || null,
+      state: client.state || state || null,
+
+      scope: "workspace-geography",
 
     })),
 
   ].slice(0, 10);
+
+ 
+
+  const firmOpenTasks = firmTasks.filter((task) => isOpenStatus(task.status));
+
+  const firmUrgentTasks = firmOpenTasks.filter((task) => isUrgentPriority(task.priority));
+
+  const firmOpenActivities = firmActivities.filter((activity) => isOpenStatus(activity.status));
+
+  const firmCriticalSignals = firmSignals.filter(
+
+    (signal) =>
+
+      riskTone(signal.risk || signal.severity || signal.signal_score) === "critical"
+
+  );
 
  
 
@@ -1083,6 +1065,46 @@ export async function getExecutiveWorkspaceDashboard({
     selected_workspace: serializeWorkspace(selectedWorkspace),
 
     workspaces: workspaces.map(serializeWorkspace).filter(Boolean),
+
+    scope: {
+
+      mode: workspaceScopeDescription(selectedWorkspace),
+
+      workspace_id: selectedId,
+
+      firm_id: firmId || selectedWorkspace?.firm_id || null,
+
+      state: selectedWorkspace?.state || null,
+
+      cycle: selectedWorkspace?.cycle || null,
+
+      default_workspace: isDefaultWorkspace(selectedWorkspace),
+
+      direct_assignment_fields: [
+
+        "tasks.workspace_id",
+
+        "political_signals.workspace_id",
+
+        "campaign_crm_contacts.workspace_id",
+
+        "campaign_crm_activities.workspace_id",
+
+        "intelligence_reports.workspace_id",
+
+      ],
+
+      geographic_context_fields: [
+
+        "vendors.state",
+
+        "consultant_clients.state",
+
+        "consultant_invoices.client_state",
+
+      ],
+
+    },
 
     summary: {
 
@@ -1094,17 +1116,11 @@ export async function getExecutiveWorkspaceDashboard({
 
       pressure_status:
 
-        pressureScore >= 70
-
-          ? "Critical"
-
-          : pressureScore >= 40
-
-            ? "Watch"
-
-            : "Stable",
+        pressureScore >= 70 ? "Critical" : pressureScore >= 40 ? "Watch" : "Stable",
 
       open_tasks: openTasks.length,
+
+      urgent_tasks: urgentTasks.length,
 
       critical_signals: criticalSignals.length,
 
@@ -1128,11 +1144,45 @@ export async function getExecutiveWorkspaceDashboard({
 
     },
 
+    portfolio_summary: {
+
+      open_tasks: firmOpenTasks.length,
+
+      urgent_tasks: firmUrgentTasks.length,
+
+      critical_signals: firmCriticalSignals.length,
+
+      crm_contacts: firmContacts.length,
+
+      open_activities: firmOpenActivities.length,
+
+      reports: firmReports.length,
+
+      vendors: firmVendors.length,
+
+      clients: firmClients.length,
+
+      workspaces: workspaces.length,
+
+    },
+
     executive_actions: executiveActions,
 
     material_alerts: materialAlerts.alerts || [],
 
-    material_alerts_summary: materialAlerts.summary || {},
+    material_alerts_summary: {
+
+      ...(materialAlerts.summary || {}),
+
+      scope: "workspace-context",
+
+      workspace_id: selectedId,
+
+      state: selectedWorkspace?.state || null,
+
+      cycle: selectedWorkspace?.cycle || null,
+
+    },
 
     signals,
 
