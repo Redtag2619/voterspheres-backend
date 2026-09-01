@@ -44,9 +44,39 @@ function riskTone(value = "") {
 
   const v = String(value || "").toLowerCase();
 
-  if (["critical", "high", "blocked", "overdue", "at risk"].some((x) => v.includes(x))) return "critical";
+ 
 
-  if (["medium", "elevated", "watch", "open", "pending"].some((x) => v.includes(x))) return "watch";
+  if (
+
+    ["critical", "high", "blocked", "overdue", "at risk"].some((x) =>
+
+      v.includes(x)
+
+    )
+
+  ) {
+
+    return "critical";
+
+  }
+
+ 
+
+  if (
+
+    ["medium", "elevated", "watch", "open", "pending"].some((x) =>
+
+      v.includes(x)
+
+    )
+
+  ) {
+
+    return "watch";
+
+  }
+
+ 
 
   return "stable";
 
@@ -56,11 +86,107 @@ function riskTone(value = "") {
 
 function isOpenStatus(status = "") {
 
-  return !["done", "complete", "completed", "resolved", "closed"].includes(
+  return ![
 
-    String(status || "").toLowerCase()
+    "done",
 
-  );
+    "complete",
+
+    "completed",
+
+    "resolved",
+
+    "closed",
+
+    "archived",
+
+  ].includes(String(status || "").toLowerCase());
+
+}
+
+ 
+
+function serializeWorkspace(row = {}) {
+
+  if (!row?.id) return null;
+
+ 
+
+  return {
+
+    id: row.id,
+
+    firm_id: row.firm_id ?? null,
+
+    name: row.name || `Workspace ${row.id}`,
+
+    slug: row.slug || null,
+
+    candidate_name: row.candidate_name || null,
+
+    state: row.state || "National",
+
+    office: row.office || "Campaign",
+
+    cycle: row.cycle || "2026",
+
+    status: row.status || "active",
+
+    description: row.description || null,
+
+    metadata: row.metadata || {},
+
+    created_at: row.created_at || null,
+
+    updated_at: row.updated_at || null,
+
+  };
+
+}
+
+ 
+
+function vendorGapStatus(vendor = {}) {
+
+  const value = [
+
+    vendor.status,
+
+    vendor.notes,
+
+    vendor.coverage_area,
+
+    vendor.services,
+
+    vendor.capabilities,
+
+  ]
+
+    .filter(Boolean)
+
+    .join(" ")
+
+    .toLowerCase();
+
+ 
+
+  return [
+
+    "critical",
+
+    "at risk",
+
+    "blocked",
+
+    "coverage gap",
+
+    "capacity gap",
+
+    "thin coverage",
+
+    "unavailable",
+
+  ].some((token) => value.includes(token));
 
 }
 
@@ -79,17 +205,31 @@ export async function getExecutiveWorkspaces({ user = {} }) {
         `
 
           SELECT
+
             id,
+
             firm_id,
+
             name,
+
+            slug,
+
             candidate_name,
+
             state,
+
             office,
+
             cycle,
+
             status,
+
             description,
+
             metadata,
+
             created_at,
+
             updated_at
 
           FROM workspaces
@@ -108,7 +248,33 @@ export async function getExecutiveWorkspaces({ user = {} }) {
 
     : await safeQuery(`
 
-        SELECT id, name, campaign_name, title, state, office, cycle, status, created_at, updated_at
+        SELECT
+
+          id,
+
+          firm_id,
+
+          name,
+
+          slug,
+
+          candidate_name,
+
+          state,
+
+          office,
+
+          cycle,
+
+          status,
+
+          description,
+
+          metadata,
+
+          created_at,
+
+          updated_at
 
         FROM workspaces
 
@@ -122,25 +288,7 @@ export async function getExecutiveWorkspaces({ user = {} }) {
 
   return {
 
-    workspaces: workspaces.map((row) => ({
-
-      id: row.id,
-
-      name: row.name || row.campaign_name || row.title || `Workspace ${row.id}`,
-
-      state: row.state || "National",
-
-      office: row.office || "Campaign",
-
-      cycle: row.cycle || "2026",
-
-      status: row.status || "active",
-
-      created_at: row.created_at,
-
-      updated_at: row.updated_at,
-
-    })),
+    workspaces: workspaces.map(serializeWorkspace).filter(Boolean),
 
   };
 
@@ -148,7 +296,13 @@ export async function getExecutiveWorkspaces({ user = {} }) {
 
  
 
-export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = null }) {
+export async function getExecutiveWorkspaceDashboard({
+
+  user = {},
+
+  workspaceId = null,
+
+}) {
 
   const firmId = getFirmId(user);
 
@@ -160,7 +314,33 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT id, name, campaign_name, title, state, office, cycle, status, created_at, updated_at
+          SELECT
+
+            id,
+
+            firm_id,
+
+            name,
+
+            slug,
+
+            candidate_name,
+
+            state,
+
+            office,
+
+            cycle,
+
+            status,
+
+            description,
+
+            metadata,
+
+            created_at,
+
+            updated_at
 
           FROM workspaces
 
@@ -178,7 +358,33 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT id, name, campaign_name, title, state, office, cycle, status, created_at, updated_at
+        SELECT
+
+          id,
+
+          firm_id,
+
+          name,
+
+          slug,
+
+          candidate_name,
+
+          state,
+
+          office,
+
+          cycle,
+
+          status,
+
+          description,
+
+          metadata,
+
+          created_at,
+
+          updated_at
 
         FROM workspaces
 
@@ -192,7 +398,7 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   const selectedWorkspace =
 
-    workspaces.find((w) => String(w.id) === String(workspaceId)) ||
+    workspaces.find((workspace) => String(workspace.id) === String(workspaceId)) ||
 
     workspaces[0] ||
 
@@ -212,7 +418,27 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT id, title, description, status, priority, state, source, workspace_id, created_at, updated_at
+          SELECT
+
+            id,
+
+            title,
+
+            description,
+
+            status,
+
+            priority,
+
+            state,
+
+            source,
+
+            workspace_id,
+
+            created_at,
+
+            updated_at
 
           FROM tasks
 
@@ -230,7 +456,27 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT id, title, description, status, priority, state, source, workspace_id, created_at, updated_at
+        SELECT
+
+          id,
+
+          title,
+
+          description,
+
+          status,
+
+          priority,
+
+          state,
+
+          source,
+
+          workspace_id,
+
+          created_at,
+
+          updated_at
 
         FROM tasks
 
@@ -244,7 +490,27 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   const signals = await safeQuery(`
 
-    SELECT id, title, summary, state, signal_type, risk, severity, signal_score, workspace_id, created_at
+    SELECT
+
+      id,
+
+      title,
+
+      summary,
+
+      state,
+
+      signal_type,
+
+      risk,
+
+      severity,
+
+      signal_score,
+
+      workspace_id,
+
+      created_at
 
     FROM political_signals
 
@@ -276,7 +542,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT id, full_name, organization, role_type, state, workspace_id, created_at, updated_at
+          SELECT
+
+            id,
+
+            full_name,
+
+            organization,
+
+            role_type,
+
+            state,
+
+            workspace_id,
+
+            created_at,
+
+            updated_at
 
           FROM campaign_crm_contacts
 
@@ -294,7 +576,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT id, full_name, organization, role_type, state, workspace_id, created_at, updated_at
+        SELECT
+
+          id,
+
+          full_name,
+
+          organization,
+
+          role_type,
+
+          state,
+
+          workspace_id,
+
+          created_at,
+
+          updated_at
 
         FROM campaign_crm_contacts
 
@@ -312,7 +610,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT id, title, type, status, priority, due_date, workspace_id, created_at
+          SELECT
+
+            id,
+
+            title,
+
+            type,
+
+            status,
+
+            priority,
+
+            due_date,
+
+            workspace_id,
+
+            created_at
 
           FROM campaign_crm_activities
 
@@ -330,7 +644,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT id, title, type, status, priority, due_date, workspace_id, created_at
+        SELECT
+
+          id,
+
+          title,
+
+          type,
+
+          status,
+
+          priority,
+
+          due_date,
+
+          workspace_id,
+
+          created_at
 
         FROM campaign_crm_activities
 
@@ -358,7 +688,33 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   const vendors = await safeQuery(`
 
-    SELECT id, name, vendor_name, category, state, status, risk, coverage_tier, created_at, updated_at
+    SELECT
+
+      id,
+
+      name,
+
+      vendor_name,
+
+      category,
+
+      status,
+
+      state,
+
+      city,
+
+      services,
+
+      notes,
+
+      capabilities,
+
+      coverage_area,
+
+      created_at,
+
+      updated_at
 
     FROM vendors
 
@@ -376,7 +732,25 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT id, client_name, organization, state, status, health_status, monthly_retainer, created_at, updated_at
+          SELECT
+
+            id,
+
+            client_name,
+
+            organization,
+
+            state,
+
+            status,
+
+            health_status,
+
+            monthly_retainer,
+
+            created_at,
+
+            updated_at
 
           FROM consultant_clients
 
@@ -394,7 +768,25 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT id, client_name, organization, state, status, health_status, monthly_retainer, created_at, updated_at
+        SELECT
+
+          id,
+
+          client_name,
+
+          organization,
+
+          state,
+
+          status,
+
+          health_status,
+
+          monthly_retainer,
+
+          created_at,
+
+          updated_at
 
         FROM consultant_clients
 
@@ -412,7 +804,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         `
 
-          SELECT i.id, i.title, i.amount, i.status, i.due_date, i.created_at, c.client_name, c.state
+          SELECT
+
+            i.id,
+
+            i.title,
+
+            i.amount,
+
+            i.status,
+
+            i.due_date,
+
+            i.created_at,
+
+            c.client_name,
+
+            c.state
 
           FROM consultant_invoices i
 
@@ -432,7 +840,23 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     : await safeQuery(`
 
-        SELECT i.id, i.title, i.amount, i.status, i.due_date, i.created_at, c.client_name, c.state
+        SELECT
+
+          i.id,
+
+          i.title,
+
+          i.amount,
+
+          i.status,
+
+          i.due_date,
+
+          i.created_at,
+
+          c.client_name,
+
+          c.state
 
         FROM consultant_invoices i
 
@@ -446,29 +870,37 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
  
 
-  const openTasks = tasks.filter((t) => isOpenStatus(t.status));
+  const openTasks = tasks.filter((task) => isOpenStatus(task.status));
 
-  const criticalSignals = signals.filter((s) =>
+ 
 
-    riskTone(s.risk || s.severity || s.signal_score) === "critical"
+  const criticalSignals = signals.filter(
+
+    (signal) => riskTone(signal.risk || signal.severity || signal.signal_score) === "critical"
 
   );
 
-  const openActivities = activities.filter((a) => isOpenStatus(a.status));
+ 
 
-  const vendorGaps = vendors.filter((v) =>
+  const openActivities = activities.filter((activity) =>
 
-    ["high", "thin", "at risk", "critical"].includes(
+    isOpenStatus(activity.status)
 
-      String(v.risk || v.coverage_tier || "").toLowerCase()
+  );
+
+ 
+
+  const vendorGaps = vendors.filter(vendorGapStatus);
+
+ 
+
+  const atRiskClients = clients.filter((client) =>
+
+    ["at risk", "watch", "critical"].includes(
+
+      String(client.health_status || "").toLowerCase()
 
     )
-
-  );
-
-  const atRiskClients = clients.filter((c) =>
-
-    ["at risk", "watch", "critical"].includes(String(c.health_status || "").toLowerCase())
 
   );
 
@@ -476,9 +908,17 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   const openReceivables = invoices
 
-    .filter((i) => ["open", "sent", "overdue"].includes(String(i.status || "").toLowerCase()))
+    .filter((invoice) =>
 
-    .reduce((sum, i) => sum + number(i.amount), 0);
+      ["open", "sent", "overdue"].includes(
+
+        String(invoice.status || "").toLowerCase()
+
+      )
+
+    )
+
+    .reduce((sum, invoice) => sum + number(invoice.amount), 0);
 
  
 
@@ -492,7 +932,7 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
         openTasks.length * 2 +
 
-        openActivities.length * 1 +
+        openActivities.length +
 
         vendorGaps.length * 4 +
 
@@ -554,11 +994,11 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   const executiveActions = [
 
-    ...criticalSignals.slice(0, 3).map((s) => ({
+    ...criticalSignals.slice(0, 3).map((signal) => ({
 
-      id: `signal-${s.id}`,
+      id: `signal-${signal.id}`,
 
-      title: s.title || "Critical signal",
+      title: signal.title || "Critical signal",
 
       source: "Political Signal",
 
@@ -566,55 +1006,71 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
       path: "/political-intelligence",
 
-      detail: s.summary || "Review signal pressure and response options.",
+      detail: signal.summary || "Review signal pressure and response options.",
+
+      workspace_id: signal.workspace_id || selectedId,
+
+      state: signal.state || state || null,
 
     })),
 
-    ...openTasks.slice(0, 4).map((t) => ({
+    ...openTasks.slice(0, 4).map((task) => ({
 
-      id: `task-${t.id}`,
+      id: `task-${task.id}`,
 
-      title: t.title || "Open task",
+      title: task.title || "Open task",
 
-      source: "Mission Task",
+      source: task.source || "Mission Task",
 
-      priority: t.priority || "Open",
+      priority: task.priority || "Open",
 
       path: "/command-center",
 
-      detail: t.description || "Task requires ownership or completion.",
+      detail: task.description || "Task requires ownership or completion.",
+
+      workspace_id: task.workspace_id || null,
+
+      state: task.state || null,
 
     })),
 
-    ...vendorGaps.slice(0, 2).map((v) => ({
+    ...vendorGaps.slice(0, 2).map((vendor) => ({
 
-      id: `vendor-${v.id}`,
+      id: `vendor-${vendor.id}`,
 
-      title: `Vendor coverage watch: ${v.name || v.vendor_name}`,
+      title: `Vendor coverage watch: ${vendor.name || vendor.vendor_name || `Vendor ${vendor.id}`}`,
 
       source: "Vendor Network",
 
-      priority: v.risk || v.coverage_tier || "Watch",
+      priority: vendor.status || "Watch",
 
       path: "/vendors",
 
-      detail: `${v.category || "Vendor"} • ${v.state || "National"}`,
+      detail: `${vendor.category || "Vendor"} - ${vendor.state || "National"}`,
+
+      workspace_id: selectedId,
+
+      state: vendor.state || null,
 
     })),
 
-    ...atRiskClients.slice(0, 2).map((c) => ({
+    ...atRiskClients.slice(0, 2).map((client) => ({
 
-      id: `client-${c.id}`,
+      id: `client-${client.id}`,
 
-      title: `Client health watch: ${c.client_name}`,
+      title: `Client health watch: ${client.client_name}`,
 
       source: "Client / Revenue",
 
-      priority: c.health_status || "Watch",
+      priority: client.health_status || "Watch",
 
       path: "/revenue-intelligence",
 
-      detail: c.organization || "Review client health and deliverables.",
+      detail: client.organization || "Review client health and deliverables.",
+
+      workspace_id: selectedId,
+
+      state: client.state || null,
 
     })),
 
@@ -624,49 +1080,9 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
   return {
 
-    selected_workspace: selectedWorkspace
+    selected_workspace: serializeWorkspace(selectedWorkspace),
 
-      ? {
-
-          id: selectedWorkspace.id,
-
-          name:
-
-            selectedWorkspace.name ||
-
-            selectedWorkspace.campaign_name ||
-
-            selectedWorkspace.title ||
-
-            `Workspace ${selectedWorkspace.id}`,
-
-          state: selectedWorkspace.state || "National",
-
-          office: selectedWorkspace.office || "Campaign",
-
-          cycle: selectedWorkspace.cycle || "2026",
-
-          status: selectedWorkspace.status || "active",
-
-        }
-
-      : null,
-
-    workspaces: workspaces.map((w) => ({
-
-      id: w.id,
-
-      name: w.name || w.campaign_name || w.title || `Workspace ${w.id}`,
-
-      state: w.state || "National",
-
-      office: w.office || "Campaign",
-
-      cycle: w.cycle || "2026",
-
-      status: w.status || "active",
-
-    })),
+    workspaces: workspaces.map(serializeWorkspace).filter(Boolean),
 
     summary: {
 
@@ -678,11 +1094,21 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
       pressure_status:
 
-        pressureScore >= 70 ? "Critical" : pressureScore >= 40 ? "Watch" : "Stable",
+        pressureScore >= 70
+
+          ? "Critical"
+
+          : pressureScore >= 40
+
+            ? "Watch"
+
+            : "Stable",
 
       open_tasks: openTasks.length,
 
       critical_signals: criticalSignals.length,
+
+      material_alerts: materialAlerts.alerts?.length || 0,
 
       crm_contacts: contacts.length,
 
@@ -704,9 +1130,9 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
 
     executive_actions: executiveActions,
 
-    material_alerts: materialAlerts.alerts,
+    material_alerts: materialAlerts.alerts || [],
 
-    material_alerts_summary: materialAlerts.summary,
+    material_alerts_summary: materialAlerts.summary || {},
 
     signals,
 
@@ -729,4 +1155,3 @@ export async function getExecutiveWorkspaceDashboard({ user = {}, workspaceId = 
   };
 
 }
-
