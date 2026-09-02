@@ -372,6 +372,28 @@ async function insertWorkspace(firmId) {
 }
 
 export async function runLaunchDataSeeder({ user = {} }) {
+  const nodeEnv = String(process.env.NODE_ENV || "").trim().toLowerCase();
+  const isRender =
+    String(process.env.RENDER || "").trim().toLowerCase() === "true" ||
+    Boolean(process.env.RENDER_SERVICE_ID);
+
+  const productionRuntime =
+    nodeEnv === "production" ||
+    isRender;
+
+  const productionSeedOverride =
+    String(process.env.ALLOW_LAUNCH_DATA_SEED || "")
+      .trim()
+      .toLowerCase() === "true";
+
+  if (productionRuntime && !productionSeedOverride) {
+    const error = new Error(
+      "Launch demo data seeding is disabled in production."
+    );
+    error.status = 403;
+    throw error;
+  }
+
   await ensureTables();
 
   const firmId = getFirmId(user);
