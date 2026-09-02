@@ -168,11 +168,14 @@ export async function getExecutiveKpis({
                 WHERE LOWER(
                   COALESCE(status, '')
                 ) NOT IN (
-                  'done',
-                  'complete',
-                  'completed',
-                  'resolved'
-                )
+                    'done',
+                    'complete',
+                    'completed',
+                    'resolved',
+                    'closed',
+                    'cancelled',
+                    'canceled'
+                 )
               )::int AS open,
 
               COUNT(*) FILTER (
