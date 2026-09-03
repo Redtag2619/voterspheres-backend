@@ -1,17 +1,67 @@
 import jwt from "jsonwebtoken";
 import pool from "../config/database.js";
 
+const JWT_ALGORITHM = "HS256";
+
+const BLOCKED_FIRM_STATUSES = new Set([
+  "archived",
+  "inactive",
+  "disabled",
+  "suspended",
+  "closed",
+]);
+
+function isProductionRuntime() {
+  const nodeEnv = String(process.env.NODE_ENV || "").trim().toLowerCase();
+  const isRender =
+    String(process.env.RENDER || "").trim().toLowerCase() === "true" ||
+    Boolean(process.env.RENDER_SERVICE_ID);
+
+  return nodeEnv === "production" || isRender;
+}
+
+function getJwtSecret() {
+  const secret = String(process.env.JWT_SECRET || "").trim();
+
+  if (secret) return secret;
+
+  if (isProductionRuntime()) {
+    throw new Error("JWT_SECRET is required in production.");
+  }
+
+  return "dev-secret";
+}
+
+const JWT_SECRET = getJwtSecret();
+
+function isRealtimeStreamRequest(req) {
+  const path = String(req.originalUrl || "")
+    .split("?")[0]
+    .trim();
+
+  return path === "/api/realtime/stream";
+}
+
 function extractToken(req) {
-  const authHeader = req.headers.authorization || ""; 
+  const authHeader = String(req.headers.authorization || "").trim();
 
   if (authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7).trim();
   }
 
-  // Needed for native EventSource, which cannot send Authorization headers.
-  const queryToken = req.query?.token ? String(req.query.token).trim() : "";
+  // Native EventSource cannot send Authorization headers. Permit a query
+  // token only for the authenticated realtime SSE stream endpoint.
+  if (isRealtimeStreamRequest(req)) {
+    return req.query?.token ? String(req.query.token).trim() : "";
+  }
 
-  return queryToken || "";
+  return "";
+}
+
+function authError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
 }
 
 export async function requireAuth(req, res, next) {
@@ -22,8 +72,9 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: "Missing bearer token" });
     }
 
-    const secret = process.env.JWT_SECRET || "dev-secret";
-    const payload = jwt.verify(token, secret);
+    const payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: [JWT_ALGORITHM],
+    });
 
     const userId =
       payload?.id ||
@@ -31,8 +82,6 @@ export async function requireAuth(req, res, next) {
       payload?.user_id ||
       payload?.sub ||
       null;
-
-    const firmIdFromToken = payload?.firm_id || payload?.firmId || null;
 
     if (!userId) {
       return res.status(401).json({
@@ -56,13 +105,15 @@ export async function requireAuth(req, res, next) {
       [userId]
     );
 
-    const user = userResult.rows?.[0];
+    const user = userResult.rows?.[0] || null;
 
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }
 
-    const resolvedFirmId = user.firm_id || firmIdFromToken || null;
+    // The database is authoritative for firm ownership. Never fall back to
+    // a firm_id embedded in a JWT when the user record has no firm.
+    const resolvedFirmId = user.firm_id || null;
 
     let firm = null;
 
@@ -87,6 +138,18 @@ export async function requireAuth(req, res, next) {
       );
 
       firm = firmResult.rows?.[0] || null;
+
+      if (!firm) {
+        throw authError(403, "Authenticated firm is not available.");
+      }
+
+      const firmStatus = String(firm.status || "active")
+        .trim()
+        .toLowerCase();
+
+      if (BLOCKED_FIRM_STATUSES.has(firmStatus)) {
+        throw authError(403, "Authenticated firm is not active.");
+      }
     }
 
     req.user = {
@@ -99,7 +162,7 @@ export async function requireAuth(req, res, next) {
       firm_name: firm?.name || null,
       firm_slug: firm?.slug || null,
       plan_tier: firm?.plan_tier || "starter",
-      firm_status: firm?.status || "active",
+      firm_status: firm?.status || null,
       subscription_status: firm?.subscription_status || null,
       current_period_end: firm?.current_period_end || null,
       stripe_customer_id: firm?.stripe_customer_id || null,
@@ -116,8 +179,16 @@ export async function requireAuth(req, res, next) {
       role: req.user.role,
     };
 
-    next();
+    return next();
   } catch (error) {
+    const status = Number(error?.status || 401);
+
+    if (status === 403) {
+      return res.status(403).json({
+        error: error.message || "Forbidden",
+      });
+    }
+
     return res.status(401).json({
       error: error.message || "Unauthorized",
     });
@@ -125,5 +196,3 @@ export async function requireAuth(req, res, next) {
 }
 
 export default requireAuth;
-
-
