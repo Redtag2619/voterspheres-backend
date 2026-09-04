@@ -6,7 +6,7 @@ export const REALTIME_EVENTS = {
 
   COUNTY_ESCALATION_CREATED: "county.escalation.created",
 
-  COUNTY_ESCALATION_RESOLVED: "county.escalation.resolved",
+  COUNTY_ESCALATION_RESOLVED: "county.escalation.resolved", 
 
   TASK_CREATED: "task.created",
 
