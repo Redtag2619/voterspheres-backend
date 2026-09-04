@@ -1,6 +1,6 @@
 import express from "express";
 
-import { getRecentEvents } from "../lib/intelligence.events.js";
+import { getRecentEvents } from "../lib/intelligence.events.js"; 
 
 import { requireAuth } from "../middleware/auth.middleware.js";
 
