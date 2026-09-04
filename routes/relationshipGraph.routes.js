@@ -2,7 +2,7 @@ import express from "express";
 
  
 
-import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js"; 
 
 import { getRelationshipGraph } from "../services/relationshipGraph.service.js";
 
