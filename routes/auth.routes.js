@@ -3,34 +3,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
-
-const JWT_ALGORITHM = "HS256";
-
-function isProductionRuntime() {
-  const nodeEnv = String(process.env.NODE_ENV || "").trim().toLowerCase();
-  const isRender =
-    String(process.env.RENDER || "").trim().toLowerCase() === "true" ||
-    Boolean(process.env.RENDER_SERVICE_ID);
-
-  return nodeEnv === "production" || isRender;
-}
-
-function getJwtSecret() {
-  const secret = String(process.env.JWT_SECRET || "").trim();
-
-  if (secret) return secret;
-
-  if (isProductionRuntime()) {
-    throw new Error("JWT_SECRET is required in production.");
-  }
-
-  return "dev-secret";
-}
-
-const JWT_SECRET = getJwtSecret();
 
 let cachedDb = null;
 let cachedDbSource = null;
@@ -331,6 +305,7 @@ async function ensureUniqueFirmSlug(baseSlug) {
 }
 
 function signToken(user) {
+  const secret = process.env.JWT_SECRET || "dev-secret";
   return jwt.sign(
     {
       id: user.id,
@@ -338,11 +313,8 @@ function signToken(user) {
       role: user.role,
       firm_id: user.firm_id
     },
-    JWT_SECRET,
-    {
-      algorithm: JWT_ALGORITHM,
-      expiresIn: "7d"
-    }
+    secret,
+    { expiresIn: "7d" }
   );
 }
 
@@ -413,10 +385,6 @@ async function sendPasswordResetEmail({ email, first_name, reset_link }) {
 }
 
 router.get("/debug/db", async (_req, res) => {
-  if (isProductionRuntime()) {
-    return res.status(404).json({ error: "Route not found" });
-  }
-
   try {
     const { db, source } = await getDb();
 
@@ -672,20 +640,13 @@ router.post("/forgot-password", async (req, res) => {
       reset_link: resetLink
     });
 
-    const response = {
+    return res.status(200).json({
       success: true,
       message: "If that account exists, a reset link has been sent.",
       email_sent: mailResult.sent,
-      email_status: mailResult.reason || "sent"
-    };
-
-    // Local development may expose the generated link when SMTP is absent.
-    // Production must never return password-reset credentials in an API body.
-    if (!mailResult.sent && !isProductionRuntime()) {
-      response.reset_link = resetLink;
-    }
-
-    return res.status(200).json(response);
+      email_status: mailResult.reason || "sent",
+      reset_link: mailResult.sent ? undefined : resetLink
+    });
   } catch (error) {
     return res.status(500).json({
       error: error.message || "Forgot password failed"
@@ -774,19 +735,50 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-router.get("/me", requireAuth, async (req, res) => {
-  return res.status(200).json({
-    id: req.user.id,
-    first_name: req.user.first_name,
-    last_name: req.user.last_name,
-    email: req.user.email,
-    role: req.user.role,
-    firm_id: req.user.firm_id,
-    firm_name: req.user.firm_name,
-    plan_tier: req.user.plan_tier,
-    status: req.user.firm_status
-  });
+router.get("/me", async (req, res) => {
+  try {
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+
+    if (!token) {
+      return res.status(401).json({ error: "Missing bearer token" });
+    }
+
+    const secret = process.env.JWT_SECRET || "dev-secret";
+    const decoded = jwt.verify(token, secret);
+
+    const result = await safeQuery(
+      `
+        select
+          u.id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.role,
+          u.firm_id,
+          f.name as firm_name,
+          f.plan_tier,
+          f.status
+        from users u
+        left join firms f on f.id = u.firm_id
+        where u.id = $1
+        limit 1
+      `,
+      [decoded.id]
+    );
+
+    const user = result.rows?.[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.status(200).json(user);
+  } catch (error) {
+    return res.status(401).json({
+      error: error.message || "Unauthorized"
+    });
+  }
 });
 
 export default router;
-
