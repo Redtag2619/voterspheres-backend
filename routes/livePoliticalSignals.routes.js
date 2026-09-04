@@ -2,7 +2,7 @@ import express from "express";
 
 import { pool } from "../db/pool.js";
 
-import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js"; 
 
 import { emitRealtimeEvent } from "../services/realtime.service.js";
 
