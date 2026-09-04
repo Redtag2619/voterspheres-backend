@@ -1,7 +1,7 @@
 import express from "express";
 
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { getRelationshipGraph } from "../services/relationshipGraph.service.js";
+import { getRelationshipGraph } from "../services/relationshipGraph.service.js"; 
 
 const router = express.Router();
 
