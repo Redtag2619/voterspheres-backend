@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
@@ -67,6 +68,7 @@ export async function getCampaignWorkspaceCrmDashboard({ user = {}, workspaceId 
 
   const firmId = getFirmId(user);
   if (!firmId) throw new Error("Missing firm context.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
 
   const workspaceFilter = workspaceId ? `AND workspace_id = $2` : "";
   const params = workspaceId ? [firmId, workspaceId] : [firmId];
@@ -86,7 +88,7 @@ export async function getCampaignWorkspaceCrmDashboard({ user = {}, workspaceId 
     `
       SELECT a.*, c.full_name AS contact_name
       FROM campaign_crm_activities a
-      LEFT JOIN campaign_crm_contacts c ON c.id = a.contact_id
+      LEFT JOIN campaign_crm_contacts c ON c.id = a.contact_id AND c.firm_id = a.firm_id
       WHERE a.firm_id = $1 ${workspaceFilter}
       ORDER BY a.created_at DESC
       LIMIT 250
@@ -176,6 +178,9 @@ export async function createCampaignCrmContact({ user = {}, payload = {} }) {
 
   const fullName = clean(payload.full_name || payload.name);
   if (!fullName) throw new Error("Contact name is required.");
+  const workspaceId = payload.workspace_id ? positiveId(payload.workspace_id) : null;
+  if (payload.workspace_id && !workspaceId) throw new Error("Invalid workspace id.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
 
   const result = await pool.query(
     `
@@ -188,7 +193,7 @@ export async function createCampaignCrmContact({ user = {}, payload = {} }) {
     `,
     [
       firmId,
-      payload.workspace_id || null,
+      workspaceId,
       fullName,
       payload.organization || null,
       payload.title || null,
@@ -215,6 +220,21 @@ export async function createCampaignCrmActivity({ user = {}, payload = {} }) {
 
   const title = clean(payload.title);
   if (!title) throw new Error("Activity title is required.");
+  const workspaceId = payload.workspace_id ? positiveId(payload.workspace_id) : null;
+  const contactId = payload.contact_id ? positiveId(payload.contact_id) : null;
+  if (payload.workspace_id && !workspaceId) throw new Error("Invalid workspace id.");
+  if (payload.contact_id && !contactId) throw new Error("Invalid contact id.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
+  if (contactId) {
+    const contact = await pool.query(
+      `SELECT id, workspace_id FROM campaign_crm_contacts WHERE id = $1 AND firm_id = $2 LIMIT 1`,
+      [contactId, firmId]
+    );
+    if (!contact.rows[0]) throw new Error("Contact not found.");
+    if (workspaceId && contact.rows[0].workspace_id && Number(contact.rows[0].workspace_id) !== workspaceId) {
+      throw new Error("Contact does not belong to the selected workspace.");
+    }
+  }
 
   const result = await pool.query(
     `
@@ -227,8 +247,8 @@ export async function createCampaignCrmActivity({ user = {}, payload = {} }) {
     `,
     [
       firmId,
-      payload.workspace_id || null,
-      payload.contact_id || null,
+      workspaceId,
+      contactId,
       payload.activity_type || "note",
       title,
       payload.body || null,
@@ -261,3 +281,4 @@ export async function completeCampaignCrmActivity({ user = {}, id }) {
   if (!result.rows[0]) throw new Error("Activity not found.");
   return result.rows[0];
 }
+
