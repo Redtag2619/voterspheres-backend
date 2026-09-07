@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import {
   calculateNextRunAt,
   ensureScheduledReportTables,
@@ -390,7 +391,7 @@ router.post("/:scheduleId/run-now", requireProPlan, async (req, res) => {
   }
 });
 
-router.post("/run-due", async (req, res) => {
+router.post("/run-due", requirePlatformOperator, async (req, res) => {
   try {
     const result = await runDueScheduledReports({
       limit: Number(req.body.limit || 10)
@@ -437,3 +438,4 @@ router.delete("/:scheduleId", async (req, res) => {
 });
 
 export default router;
+
