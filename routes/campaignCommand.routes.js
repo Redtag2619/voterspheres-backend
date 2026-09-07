@@ -21,9 +21,8 @@ async function getDb() {
 }
 
 async function safeQuery(sql, params = []) {
-  try {
     const db = await getDb();
-    if (!db) return { rows: [] };
+    if (!db) throw new Error("Database connection unavailable");
 
     if (typeof db.query === "function") {
       return await db.query(sql, params);
@@ -34,11 +33,23 @@ async function safeQuery(sql, params = []) {
       return { rows };
     }
 
-    return { rows: [] };
-  } catch {
-    return { rows: [] };
-  }
+    throw new Error("Database client does not support queries");
 }
+
+router.param("campaignId", async (req, res, next, campaignId) => {
+  try {
+    const firmId = Number(req.user?.firm_id);
+    const id = Number(campaignId);
+    if (!Number.isInteger(firmId) || firmId <= 0) return res.status(403).json({ error: "Firm access required" });
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Valid campaign id required" });
+    const result = await safeQuery(`SELECT id, firm_id FROM campaigns WHERE id = $1 AND firm_id = $2 LIMIT 1`, [id, firmId]);
+    if (!result.rows[0]) return res.status(404).json({ error: "Campaign not found" });
+    req.campaign = result.rows[0];
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+});
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
@@ -479,13 +490,14 @@ router.patch("/:campaignId/tasks/:taskId", async (req, res) => {
         set
           status = coalesce($2, status),
           updated_at = now()
-        where id = $1
+        where id = $1 and campaign_id = $3
         returning *
       `,
-      [taskId, status || null]
+      [taskId, status || null, req.params.campaignId]
     );
 
-    res.status(200).json(rows[0] || { id: taskId, status });
+    if (!rows[0]) return res.status(404).json({ error: "Task not found" });
+    res.status(200).json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to update task" });
   }
@@ -568,13 +580,14 @@ router.patch("/:campaignId/vendors/:vendorId", async (req, res) => {
         set
           status = coalesce($2, status),
           updated_at = now()
-        where id = $1
+        where id = $1 and campaign_id = $3
         returning *
       `,
-      [vendorId, status || null]
+      [vendorId, status || null, req.params.campaignId]
     );
 
-    res.status(200).json(rows[0] || { id: vendorId, status });
+    if (!rows[0]) return res.status(404).json({ error: "Vendor not found" });
+    res.status(200).json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to update vendor" });
   }
@@ -704,3 +717,4 @@ router.patch("/:campaignId/mail-events/:eventId", async (req, res) => {
 });
 
 export default router;
+
