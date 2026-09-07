@@ -96,6 +96,7 @@ export async function addWorkspaceMemberController(req, res) {
     const member = await addWorkspaceMember({
       workspaceId: req.params.id,
       payload: req.body || {},
+      user: req.user || req.auth || {},
     });
 
     return res.status(201).json({
@@ -117,6 +118,7 @@ export async function addWorkspaceTargetController(req, res) {
     const target = await addWorkspaceTarget({
       workspaceId: req.params.id,
       payload: req.body || {},
+      user: req.user || req.auth || {},
     });
 
     return res.status(201).json({
@@ -132,3 +134,4 @@ export async function addWorkspaceTargetController(req, res) {
     });
   }
 }
+
