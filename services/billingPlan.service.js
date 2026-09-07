@@ -125,6 +125,40 @@ export async function ensureBillingColumns() {
   `);
 }
 
+export async function claimStripeWebhookEvent(event = {}) {
+  const eventId = text(event.id);
+  const eventType = text(event.type);
+  if (!eventId || !eventType) throw new Error("Stripe event id and type are required");
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'processing',
+      processed_at TIMESTAMPTZ,
+      error_message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const result = await pool.query(
+    `INSERT INTO stripe_webhook_events (event_id, event_type) VALUES ($1,$2)
+     ON CONFLICT (event_id) DO UPDATE
+       SET status = 'processing', error_message = NULL, processed_at = NULL
+       WHERE stripe_webhook_events.status = 'failed'
+     RETURNING event_id`,
+    [eventId, eventType]
+  );
+  return Boolean(result.rows[0]);
+}
+
+export async function finishStripeWebhookEvent(eventId, error = null) {
+  await pool.query(
+    `UPDATE stripe_webhook_events
+     SET status = $2, processed_at = NOW(), error_message = $3
+     WHERE event_id = $1`,
+    [text(eventId), error ? "failed" : "completed", error ? text(error.message || error).slice(0, 1000) : null]
+  );
+}
+
 export async function getFirmById(firmId) {
   await ensureBillingColumns();
 
@@ -269,6 +303,9 @@ export async function syncFirmFromCheckoutSession(session = {}) {
   if (!firm) {
     throw new Error("Unable to resolve firm for checkout session");
   }
+  if (firm.stripe_customer_id && customerId && firm.stripe_customer_id !== customerId) {
+    throw new Error("Stripe customer does not match firm billing identity");
+  }
 
   let planTier = getPlanFromCheckoutSession(session);
   let subscriptionStatus = "active";
@@ -309,6 +346,9 @@ export async function syncFirmFromSubscription(subscription = {}) {
 
   if (!firm) {
     throw new Error("Unable to resolve firm for subscription");
+  }
+  if (firm.stripe_customer_id && customerId && firm.stripe_customer_id !== customerId) {
+    throw new Error("Stripe customer does not match firm billing identity");
   }
 
   const planTier = await getPlanFromSubscription(subscription);
@@ -382,6 +422,8 @@ export default {
   getBillingPriceMap,
   getPlanFromPriceId,
   ensureBillingColumns,
+  claimStripeWebhookEvent,
+  finishStripeWebhookEvent,
   getFirmById,
   updateFirmBillingPlan,
   ensureStripeCustomerForFirm,
@@ -389,3 +431,4 @@ export default {
   syncFirmFromCheckoutSession,
   syncFirmFromSubscription
 };
+
