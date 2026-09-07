@@ -5,6 +5,8 @@ import {
   getBillingPriceMap,
   getFirmById,
   handleStripeBillingEvent,
+  claimStripeWebhookEvent,
+  finishStripeWebhookEvent,
   stripe
 } from "../services/billingPlan.service.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
@@ -41,9 +43,7 @@ function sanitizePlan(plan = "starter") {
   return "starter";
 }
 
-function getPriceIdForPlan(plan = "starter", explicitPriceId = "") {
-  if (explicitPriceId) return explicitPriceId;
-
+function getPriceIdForPlan(plan = "starter") {
   const prices = getBillingPriceMap();
   return prices[sanitizePlan(plan)] || "";
 }
@@ -141,7 +141,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     }
 
     const plan = sanitizePlan(req.body?.plan || req.body?.planTier || "pro");
-    const priceId = getPriceIdForPlan(plan, req.body?.priceId || req.body?.price_id || "");
+    const priceId = getPriceIdForPlan(plan);
 
     if (!priceId) {
       return res.status(400).json({
@@ -154,8 +154,8 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       user: req.user
     });
 
-    const successUrl = text(req.body?.successUrl) || buildSuccessUrl(req, plan);
-    const cancelUrl = text(req.body?.cancelUrl) || buildCancelUrl(req, plan);
+    const successUrl = buildSuccessUrl(req, plan);
+    const cancelUrl = buildCancelUrl(req, plan);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -224,10 +224,7 @@ router.post("/portal-session", requireAuth, async (req, res) => {
       user: req.user
     });
 
-    const returnUrl =
-      text(req.body?.returnUrl) ||
-      text(req.body?.return_url) ||
-      `${publicAppUrl(req)}/billing`;
+    const returnUrl = `${publicAppUrl(req)}/billing`;
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
@@ -251,6 +248,7 @@ router.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
+    let event = null;
     try {
       if (!stripe) {
         return res.status(500).json({ error: "Missing STRIPE_SECRET_KEY" });
@@ -259,18 +257,15 @@ router.post(
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
       const signature = req.headers["stripe-signature"];
 
-      let event;
+      if (!webhookSecret) return res.status(503).json({ error: "Stripe webhook is not configured" });
+      if (!signature) return res.status(400).json({ error: "Missing Stripe signature" });
+      event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
 
-      if (webhookSecret) {
-        event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
-      } else {
-        const rawBody = Buffer.isBuffer(req.body)
-          ? req.body.toString("utf8")
-          : JSON.stringify(req.body || {});
-        event = JSON.parse(rawBody);
-      }
+      const claimed = await claimStripeWebhookEvent(event);
+      if (!claimed) return res.json({ received: true, duplicate: true, type: event.type });
 
       const firm = await handleStripeBillingEvent(event);
+      await finishStripeWebhookEvent(event.id);
 
       console.log("✅ Stripe billing webhook processed", {
         type: event.type,
@@ -286,6 +281,7 @@ router.post(
         plan_tier: firm?.plan_tier || null
       });
     } catch (error) {
+      if (event?.id) await finishStripeWebhookEvent(event.id, error).catch(() => {});
       console.error("❌ Stripe webhook failed:", error);
 
       return res.status(400).json({
@@ -296,4 +292,3 @@ router.post(
 );
 
 export default router;
-
