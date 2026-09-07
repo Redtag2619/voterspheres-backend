@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../db/pool.js";
-import { publishEvent } from "../lib/intelligence.events.js";
+import { publishEvent } from "../lib/intelligence.events.js"; 
 
 const router = express.Router();
 
