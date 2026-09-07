@@ -1,5 +1,5 @@
 import { pool } from "../db/pool.js";
-import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
+import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js"; 
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
