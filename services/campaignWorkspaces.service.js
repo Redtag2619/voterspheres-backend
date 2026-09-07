@@ -12,8 +12,22 @@ function getFirmId(user = {}) {
   return user.firm_id || user.firmId || user.firm || null;
 }
 
+function requireFirmId(user = {}) {
+  const firmId = Number(getFirmId(user));
+  if (!Number.isInteger(firmId) || firmId <= 0) throw new Error("Missing firm context.");
+  return firmId;
+}
+
+async function assertWorkspace(workspaceId, firmId, client = pool) {
+  const result = await client.query(
+    `SELECT id FROM campaign_workspaces WHERE id = $1 AND firm_id = $2 LIMIT 1`,
+    [workspaceId, firmId]
+  );
+  if (!result.rows[0]) throw new Error("Campaign workspace not found.");
+}
+
 export async function listCampaignWorkspaces({ user }) {
-  const firmId = getFirmId(user);
+  const firmId = requireFirmId(user);
 
   const { rows } = await pool.query(
     `
@@ -24,7 +38,7 @@ export async function listCampaignWorkspaces({ user }) {
       FROM campaign_workspaces w
       LEFT JOIN campaign_workspace_members m ON m.workspace_id = w.id
       LEFT JOIN campaign_workspace_targets t ON t.workspace_id = w.id
-      WHERE ($1::int IS NULL OR w.firm_id = $1)
+      WHERE w.firm_id = $1
       GROUP BY w.id
       ORDER BY w.updated_at DESC, w.created_at DESC
     `,
@@ -35,14 +49,14 @@ export async function listCampaignWorkspaces({ user }) {
 }
 
 export async function getCampaignWorkspace({ id, user }) {
-  const firmId = getFirmId(user);
+  const firmId = requireFirmId(user);
 
   const workspaceResult = await pool.query(
     `
       SELECT *
       FROM campaign_workspaces
       WHERE id = $1
-      AND ($2::int IS NULL OR firm_id = $2)
+      AND firm_id = $2
       LIMIT 1
     `,
     [id, firmId]
@@ -60,18 +74,20 @@ export async function getCampaignWorkspace({ id, user }) {
         SELECT *
         FROM campaign_workspace_members
         WHERE workspace_id = $1
+          AND EXISTS (SELECT 1 FROM campaign_workspaces w WHERE w.id = $1 AND w.firm_id = $2)
         ORDER BY created_at DESC
       `,
-      [id]
+      [id, firmId]
     ),
     pool.query(
       `
         SELECT *
         FROM campaign_workspace_targets
         WHERE workspace_id = $1
+          AND EXISTS (SELECT 1 FROM campaign_workspaces w WHERE w.id = $1 AND w.firm_id = $2)
         ORDER BY created_at DESC
       `,
-      [id]
+      [id, firmId]
     ),
   ]);
 
@@ -83,7 +99,7 @@ export async function getCampaignWorkspace({ id, user }) {
 }
 
 export async function createCampaignWorkspace({ payload, user }) {
-  const firmId = getFirmId(user);
+  const firmId = requireFirmId(user);
   const name = payload.name || "New Campaign Workspace";
   const baseSlug = slugify(payload.slug || name);
   const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`;
@@ -121,7 +137,7 @@ export async function createCampaignWorkspace({ payload, user }) {
 }
 
 export async function updateCampaignWorkspace({ id, payload, user }) {
-  const firmId = getFirmId(user);
+  const firmId = requireFirmId(user);
 
   const { rows } = await pool.query(
     `
@@ -136,7 +152,7 @@ export async function updateCampaignWorkspace({ id, payload, user }) {
         metadata = COALESCE($9, metadata),
         updated_at = NOW()
       WHERE id = $1
-      AND ($2::int IS NULL OR firm_id = $2)
+      AND firm_id = $2
       RETURNING *
     `,
     [
@@ -159,7 +175,9 @@ export async function updateCampaignWorkspace({ id, payload, user }) {
   return rows[0];
 }
 
-export async function addWorkspaceMember({ workspaceId, payload }) {
+export async function addWorkspaceMember({ workspaceId, payload, user }) {
+  const firmId = requireFirmId(user);
+  await assertWorkspace(workspaceId, firmId);
   const { rows } = await pool.query(
     `
       INSERT INTO campaign_workspace_members (
@@ -186,7 +204,9 @@ export async function addWorkspaceMember({ workspaceId, payload }) {
   return rows[0];
 }
 
-export async function addWorkspaceTarget({ workspaceId, payload }) {
+export async function addWorkspaceTarget({ workspaceId, payload, user }) {
+  const firmId = requireFirmId(user);
+  await assertWorkspace(workspaceId, firmId);
   const { rows } = await pool.query(
     `
       INSERT INTO campaign_workspace_targets (
@@ -216,3 +236,4 @@ export async function addWorkspaceTarget({ workspaceId, payload }) {
 
   return rows[0];
 }
+
