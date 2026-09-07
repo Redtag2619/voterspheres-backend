@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 import {
   enrichCandidateProfile,
@@ -8,7 +9,7 @@ import {
 
 const router = express.Router();
 
-router.post("/:id/enrich-profile", async (req, res) => {
+router.post("/:id/enrich-profile", requirePlatformOperator, async (req, res) => {
   try {
     const candidateId = Number(req.params.id);
 
@@ -44,7 +45,7 @@ router.post("/:id/enrich-profile", async (req, res) => {
   }
 });
 
-router.post("/refresh-profiles", async (req, res) => {
+router.post("/refresh-profiles", requirePlatformOperator, async (req, res) => {
   try {
     const limit = Math.min(
       Math.max(Number(req.body?.limit || 100), 1),
@@ -96,3 +97,4 @@ router.get("/contact-coverage", async (req, res) => {
 });
 
 export default router;
+
