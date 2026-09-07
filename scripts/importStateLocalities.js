@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { pool } from "../db/pool.js";
 
-const CENSUS_URL = "https://api.census.gov/data/2024/geoinfo";
+const CENSUS_URL = "https://api.census.gov/data/2024/geoinfo"; 
 
 const STATE_NAMES = {
   "01": ["AL", "Alabama"], "02": ["AK", "Alaska"], "04": ["AZ", "Arizona"],
