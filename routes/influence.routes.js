@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 import {
   influenceAlerts,
@@ -31,8 +32,9 @@ router.get("/opportunities", influenceOpportunities);
 router.get("/risk", influenceRisk);
 router.get("/momentum", influenceMomentum);
 
-router.post("/recalculate", recalculateInfluence);
+router.post("/recalculate", requirePlatformOperator, recalculateInfluence);
 
-router.post("/sync", syncInfluence);
+router.post("/sync", requirePlatformOperator, syncInfluence);
 
 export default router;
+
