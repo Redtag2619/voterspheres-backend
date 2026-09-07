@@ -6,7 +6,7 @@ import {
   resolveAlert,
   dismissAlert
 } from "../services/alerts.service.js";
-import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
 
 const router = express.Router();
 
