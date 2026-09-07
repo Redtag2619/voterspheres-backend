@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import { provisionEnterpriseLeadWorkspace } from "../services/enterpriseProvisioning.service.js";
 
 const router = express.Router();
@@ -317,7 +318,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/admin", requireAuth, async (req, res) => {
+router.use("/admin", requireAuth, requirePlatformOperator);
+
+router.get("/admin", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -416,7 +419,7 @@ router.get("/admin", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/admin/:id", requireAuth, async (req, res) => {
+router.get("/admin/:id", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -466,7 +469,7 @@ router.get("/admin/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.patch("/admin/:id", requireAuth, async (req, res) => {
+router.patch("/admin/:id", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -579,7 +582,7 @@ router.patch("/admin/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/notes", requireAuth, async (req, res) => {
+router.post("/admin/:id/notes", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -630,7 +633,7 @@ router.post("/admin/:id/notes", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/approve", requireAuth, async (req, res) => {
+router.post("/admin/:id/approve", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -659,7 +662,7 @@ router.post("/admin/:id/approve", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/invite", requireAuth, async (req, res) => {
+router.post("/admin/:id/invite", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -691,7 +694,7 @@ router.post("/admin/:id/invite", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/approve-and-invite", requireAuth, async (req, res) => {
+router.post("/admin/:id/approve-and-invite", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -726,7 +729,7 @@ router.post("/admin/:id/approve-and-invite", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/provision-workspace", requireAuth, async (req, res) => {
+router.post("/admin/:id/provision-workspace", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -756,7 +759,7 @@ router.post("/admin/:id/provision-workspace", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/admin/:id", requireAuth, async (req, res) => {
+router.delete("/admin/:id", async (req, res) => {
   try {
     await ensureEnterpriseLeadTables();
 
@@ -793,3 +796,4 @@ router.delete("/admin/:id", requireAuth, async (req, res) => {
 });
 
 export default router;
+
