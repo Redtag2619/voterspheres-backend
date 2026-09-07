@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { pool } from "../db/pool.js";
 import { getExecutiveMissionControl } from "./executiveMissionControl.service.js";
+import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
@@ -73,6 +74,9 @@ export async function createClientPortalAccess({ user = {}, payload = {} }) {
 
   const clientName = clean(payload.client_name || payload.name);
   if (!clientName) throw new Error("Client name is required.");
+  const workspaceId = payload.workspace_id ? positiveId(payload.workspace_id) : null;
+  if (payload.workspace_id && !workspaceId) throw new Error("Invalid workspace id.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
 
   const token = generateToken();
 
@@ -88,7 +92,7 @@ export async function createClientPortalAccess({ user = {}, payload = {} }) {
     `,
     [
       firmId,
-      payload.workspace_id || null,
+      workspaceId,
       clientName,
       payload.organization || null,
       payload.email || null,
