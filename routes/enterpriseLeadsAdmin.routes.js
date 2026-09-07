@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
 
 const router = express.Router();
 
