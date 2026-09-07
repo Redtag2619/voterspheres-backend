@@ -1,5 +1,6 @@
 import { pool } from "../db/pool.js";
 import { ensurePoliticalSignalsTable } from "./politicalSignalIngestion.service.js";
+import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
@@ -139,7 +140,13 @@ export async function createNarrativeRapidResponse({ user = {}, payload = {} }) 
       [payload.political_signal_id, firmId]
     );
     signal = signalRes.rows[0] || null;
+    if (!signal) throw new Error("Political signal not found.");
   }
+
+  const requestedWorkspaceId = payload.workspace_id || signal?.workspace_id || null;
+  const workspaceId = requestedWorkspaceId ? positiveId(requestedWorkspaceId) : null;
+  if (requestedWorkspaceId && !workspaceId) throw new Error("Invalid workspace id.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
 
   const title =
     clean(payload.title) ||
@@ -174,7 +181,7 @@ export async function createNarrativeRapidResponse({ user = {}, payload = {} }) 
     `,
     [
       firmId,
-      payload.workspace_id || signal?.workspace_id || null,
+      workspaceId,
       payload.political_signal_id || null,
       title,
       payload.status || "draft",
@@ -255,3 +262,4 @@ export async function updateNarrativeRapidResponse({ user = {}, id, payload = {}
   if (!result.rows[0]) throw new Error("Rapid response not found.");
   return result.rows[0];
 }
+
