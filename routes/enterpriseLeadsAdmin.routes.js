@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { requireRoles } from "../middleware/roles.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 const router = express.Router();
 
@@ -259,7 +259,7 @@ async function hydrateAdminUser(req, _res, next) {
   }
 }
 
-router.use(requireRoles("admin"));
+router.use(requirePlatformOperator);
 router.use(hydrateAdminUser);
 
 router.get("/", async (req, res) => {
