@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_workspaces_id_firm ON workspaces (id, firm_id);
-CREATE INDEX IF NOT EXISTS ix_tasks_firm_id_id ON tasks (firm_id, id);
+CREATE INDEX IF NOT EXISTS ix_tasks_firm_id_id ON tasks (firm_id, id); 
 CREATE INDEX IF NOT EXISTS ix_tasks_firm_workspace ON tasks (firm_id, workspace_id);
 CREATE INDEX IF NOT EXISTS ix_task_comments_firm_task ON task_comments (firm_id, task_id);
 CREATE INDEX IF NOT EXISTS ix_task_activity_firm_task ON task_activity (firm_id, task_id);
