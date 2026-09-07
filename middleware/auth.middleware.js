@@ -358,6 +358,19 @@ export async function requireAuth(
         firmStatus,
     };
 
+    /*
+
+     * Compatibility alias for routes that still reference
+
+     * req.authUser. This contains the same database-backed
+
+     * identity as req.user, never untrusted JWT tenant claims.
+
+     */
+
+    req.authUser = req.user;
+
+
     return next();
   } catch (error) {
     /*
