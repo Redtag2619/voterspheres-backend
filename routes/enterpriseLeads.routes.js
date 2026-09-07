@@ -2,7 +2,7 @@ import express from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
-import { provisionEnterpriseLeadWorkspace } from "../services/enterpriseProvisioning.service.js";
+import { provisionEnterpriseLeadWorkspace } from "../services/enterpriseProvisioning.service.js"; 
 
 const router = express.Router();
 
