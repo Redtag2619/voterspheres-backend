@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import pool from "../config/database.js"; 
+import pool from "../config/database.js";
 
 function extractToken(req) {
   const authHeader = String(
@@ -185,15 +185,6 @@ export async function requireAuth(
      * Token firm claims are retained only as a compatibility
      * fallback if the user record has no firm_id.
      */
-    const firmIdFromToken =
-      normalizePositiveInteger(
-        payload?.firm_id
-      ) ||
-      normalizePositiveInteger(
-        payload?.firmId
-      ) ||
-      null;
-
     const userResult = await pool.query(
       `
         SELECT
@@ -225,10 +216,7 @@ export async function requireAuth(
         user.firm_id
       );
 
-    const resolvedFirmId =
-      databaseFirmId ||
-      firmIdFromToken ||
-      null;
+    const resolvedFirmId = databaseFirmId || null;
 
     let firm = null;
 
@@ -404,3 +392,4 @@ export async function requireAuth(
 }
 
 export default requireAuth;
+
