@@ -1,5 +1,6 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import {
   getLiveDataRefreshStatus,
   runLiveDataRefresh,
@@ -23,7 +24,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/run", requireAuth, async (req, res) => {
+router.post("/run", requireAuth, requirePlatformOperator, async (req, res) => {
   try {
     const data = await runLiveDataRefresh({
       user: req.user || req.auth || {},
