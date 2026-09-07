@@ -23,6 +23,7 @@ import {
   getCandidateIntelligenceSummary,
   dispatchCandidateIntelligenceAlerts,
 } from "../services/candidateIntelligence.service.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 const router = express.Router();
 
@@ -148,7 +149,7 @@ router.get("/enrichment-status", async (req, res) => {
   }
 });
 
-router.post("/sync-fec-committee-contacts", async (req, res) => {
+router.post("/sync-fec-committee-contacts", requirePlatformOperator, async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.body?.limit || 500), 1), 5000);
     const offset = Math.max(Number(req.body?.offset || 0), 0);
@@ -189,7 +190,7 @@ router.get("/intelligence/scoring", async (req, res) => {
   }
 });
 
-router.post("/intelligence/dispatch-alerts", async (req, res) => {
+router.post("/intelligence/dispatch-alerts", requirePlatformOperator, async (req, res) => {
   try {
     const result = await dispatchCandidateIntelligenceAlerts(req.body || {});
     return res.json({
@@ -204,7 +205,7 @@ router.post("/intelligence/dispatch-alerts", async (req, res) => {
   }
 });
 
-router.post("/refresh-profiles", async (req, res) => {
+router.post("/refresh-profiles", requirePlatformOperator, async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.body?.limit || 100), 1), 500);
 
@@ -280,7 +281,7 @@ router.get("/:id/contacts", async (req, res) => {
   }
 });
 
-router.post("/:id/refresh-profile", async (req, res) => {
+router.post("/:id/refresh-profile", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -306,7 +307,7 @@ router.post("/:id/refresh-profile", async (req, res) => {
   }
 });
 
-router.post("/:id/enrich-profile", async (req, res) => {
+router.post("/:id/enrich-profile", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -332,7 +333,7 @@ router.post("/:id/enrich-profile", async (req, res) => {
   }
 });
 
-router.post("/:id/manual-profile", async (req, res) => {
+router.post("/:id/manual-profile", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -360,7 +361,7 @@ router.post("/:id/manual-profile", async (req, res) => {
   }
 });
 
-router.patch("/:id/profile-locks", async (req, res) => {
+router.patch("/:id/profile-locks", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -386,7 +387,7 @@ router.patch("/:id/profile-locks", async (req, res) => {
   }
 });
 
-router.patch("/:id/verification", async (req, res) => {
+router.patch("/:id/verification", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -413,3 +414,4 @@ router.patch("/:id/verification", async (req, res) => {
 });
 
 export default router;
+
