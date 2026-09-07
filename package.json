@@ -4,6 +4,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "check:syntax": "node scripts/check-js-syntax.mjs",
+    "test:tenant-isolation": "node --test tests/tenant-isolation.contract.test.mjs",
     "dev": "node index.js",
     "dev:clean": "kill-port 10000 && node index.js",
     "start": "node index.js",
