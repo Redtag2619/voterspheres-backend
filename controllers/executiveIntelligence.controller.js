@@ -1,6 +1,6 @@
 import {
   createExecutiveIntelligencePlan,
-  getExecutiveOrchestratorConfiguration,
+  getExecutiveOrchestratorConfiguration, 
   runExecutiveIntelligenceOrchestrator,
 } from "../services/executiveIntelligenceOrchestrator.service.js";
 import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
