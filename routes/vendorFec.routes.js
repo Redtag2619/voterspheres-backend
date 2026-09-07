@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import { pool } from "../db/pool.js";
 
 const router = express.Router();
@@ -378,7 +379,7 @@ router.get("/health", async (_req, res) => {
   }
 });
 
-router.post("/sync", async (req, res) => {
+router.post("/sync", requirePlatformOperator, async (req, res) => {
   try {
     await ensureVendorFecTables();
 
