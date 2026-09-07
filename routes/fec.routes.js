@@ -6,6 +6,7 @@ import {
 } from "../services/intelligence.service.js";
 
 import { syncFundraisingFromFec } from "../services/fec.service.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 const router = express.Router();
 
@@ -62,6 +63,7 @@ router.get(
 
 router.post(
   "/sync/candidate-financials",
+  requirePlatformOperator,
   asyncHandler(async (req, res) => {
     const cycle = Number(
       req.body?.cycle ||
@@ -97,3 +99,4 @@ router.get("/health", (_req, res) => {
 });
 
 export default router;
+
