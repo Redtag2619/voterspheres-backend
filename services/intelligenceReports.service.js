@@ -1,6 +1,7 @@
 import { pool } from "../db/pool.js";
 import { getExecutiveMissionControl } from "./executiveMissionControl.service.js";
 import { getAiStrategicAdvisor } from "./aiStrategicAdvisor.service.js";
+import { assertOwnedWorkspace, positiveId } from "../middleware/authorization.middleware.js";
 
 function getFirmId(user = {}) {
   return user.firmId || user.firm_id || user.firm?.id || null;
@@ -180,7 +181,9 @@ export async function generateIntelligenceReport({ user = {}, payload = {} }) {
 
   const reportType = payload.report_type || "daily_brief";
   const state = payload.state || null;
-  const workspaceId = payload.workspace_id || null;
+  const workspaceId = payload.workspace_id ? positiveId(payload.workspace_id) : null;
+  if (payload.workspace_id && !workspaceId) throw new Error("Invalid workspace id.");
+  if (workspaceId && !(await assertOwnedWorkspace(workspaceId, firmId))) throw new Error("Workspace not found.");
   const title = payload.title || reportTitle(reportType, state);
 
   const mission = await getExecutiveMissionControl({ user });
