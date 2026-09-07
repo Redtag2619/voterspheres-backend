@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import {
   getCampaignFinanceIntelligence,
   syncCampaignFinanceIntelligence,
@@ -30,6 +31,7 @@ router.get(
 
 router.post(
   "/sync",
+  requirePlatformOperator,
   asyncHandler(async (req, res) => {
     const result = await syncCampaignFinanceIntelligence({
       ...(req.body || {}),
