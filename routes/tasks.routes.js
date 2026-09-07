@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../lib/intelligence.events.js";
 
@@ -6,6 +6,21 @@ const router = express.Router();
 
 function text(value = "") {
   return String(value ?? "").trim();
+}
+
+function firmIdFromRequest(req) {
+  const firmId = Number(req.user?.firm_id);
+  if (!Number.isInteger(firmId) || firmId <= 0) return null;
+  return firmId;
+}
+
+async function validateWorkspace(workspaceId, firmId) {
+  if (workspaceId === undefined || workspaceId === null || workspaceId === "") return null;
+  const id = Number(workspaceId);
+  if (!Number.isInteger(id) || id <= 0) throw Object.assign(new Error("Invalid workspace id"), { statusCode: 400 });
+  const result = await pool.query(`SELECT id FROM workspaces WHERE id = $1 AND firm_id = $2 LIMIT 1`, [id, firmId]);
+  if (!result.rows[0]) throw Object.assign(new Error("Workspace not found"), { statusCode: 404 });
+  return id;
 }
 
 function normalizeStatus(value = "open") {
@@ -207,12 +222,12 @@ async function ensureTaskCollaborationTables() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_activity_created_at ON task_activity(created_at DESC)`);
 }
 
-async function findTaskById(id) {
-  const result = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+async function findTaskById(id, firmId) {
+  const result = await pool.query(`SELECT * FROM tasks WHERE id = $1 AND firm_id = $2`, [id, firmId]);
   return result.rows[0] || null;
 }
 
-async function addActivity(taskId, event = {}) {
+async function addActivity(taskId, firmId, workspaceId, event = {}) {
   await ensureTaskCollaborationTables();
 
   const actorName = text(event.actor_name) || text(event.actor) || "System";
@@ -228,10 +243,12 @@ async function addActivity(taskId, event = {}) {
       actor_user_id,
       actor_email,
       actor_initials,
+      firm_id,
+      workspace_id,
       metadata,
       created_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW())
     RETURNING *
     `,
     [
@@ -243,6 +260,8 @@ async function addActivity(taskId, event = {}) {
       text(event.actor_user_id) || null,
       text(event.actor_email) || null,
       text(event.actor_initials) || initialsFromName(actorName),
+      firmId,
+      workspaceId || null,
       JSON.stringify(normalizeMetadata(event.metadata))
     ]
   );
@@ -257,7 +276,7 @@ async function addActivity(taskId, event = {}) {
   return activity;
 }
 
-async function findDuplicateTask(metadata = {}) {
+async function findDuplicateTask(metadata = {}, firmId) {
   const vendorActionId = text(metadata.vendor_action_id);
   const feedId = text(metadata.feed_id);
   const signalId = text(metadata.signal_id);
@@ -269,15 +288,16 @@ async function findDuplicateTask(metadata = {}) {
     `
     SELECT *
     FROM tasks
-    WHERE
+    WHERE firm_id = $5 AND (
       ($1 <> '' AND metadata->>'vendor_action_id' = $1)
       OR ($2 <> '' AND metadata->>'feed_id' = $2)
       OR ($3 <> '' AND metadata->>'signal_id' = $3)
       OR ($4 <> '' AND metadata->>'action_id' = $4)
+    )
     ORDER BY created_at DESC
     LIMIT 1
     `,
-    [vendorActionId, feedId, signalId, actionId]
+    [vendorActionId, feedId, signalId, actionId, firmId]
   );
 
   return result.rows[0] || null;
@@ -367,7 +387,8 @@ router.get("/", async (req, res) => {
     const source = text(req.query.source).toLowerCase();
     const assignedTo = text(req.query.assigned_to).toLowerCase();
     const assignedToUserId = text(req.query.assigned_to_user_id);
-    const firmId = req.auth?.firmId || req.user?.firm_id || "";
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
     const workspaceId = text(req.query.workspace_id || req.query.campaign_id);
 
     const result = await pool.query(
@@ -405,10 +426,12 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/assignees", async (_req, res) => {
+router.get("/assignees", async (req, res) => {
   try {
     await ensureTaskCollaborationTables();
 
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
     const result = await pool.query(`
       SELECT
         COALESCE(NULLIF(assigned_to, ''), 'Command Team') AS name,
@@ -420,6 +443,7 @@ router.get("/assignees", async (_req, res) => {
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) <> 'complete')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'complete')::int AS complete_count
       FROM tasks
+      WHERE firm_id = $1
       GROUP BY
         COALESCE(NULLIF(assigned_to, ''), 'Command Team'),
         COALESCE(NULLIF(assigned_to_user_id, ''), ''),
@@ -427,7 +451,7 @@ router.get("/assignees", async (_req, res) => {
         COALESCE(NULLIF(assignee_avatar, ''), ''),
         COALESCE(NULLIF(assignee_initials, ''), '')
       ORDER BY open_count DESC, task_count DESC, name ASC
-    `);
+    `, [firmId]);
 
     res.json({
       ok: true,
@@ -455,6 +479,8 @@ router.get("/feed-state", async (req, res) => {
     if (!ids.length) {
       return res.json({ ok: true, results: {} });
     }
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
 
     const result = await pool.query(
       `
@@ -471,11 +497,13 @@ router.get("/feed-state", async (req, res) => {
         metadata,
         updated_at
       FROM tasks
-      WHERE metadata->>'feed_id' = ANY($1::text[])
-         OR metadata->>'signal_id' = ANY($1::text[])
+      WHERE firm_id = $2 AND (
+        metadata->>'feed_id' = ANY($1::text[])
+        OR metadata->>'signal_id' = ANY($1::text[])
+      )
       ORDER BY updated_at DESC
       `,
-      [ids]
+      [ids, firmId]
     );
 
     const results = {};
@@ -512,17 +540,19 @@ router.get("/:id/comments", async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
 
-    const task = await findTaskById(id);
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const task = await findTaskById(id, firmId);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     const result = await pool.query(
       `
       SELECT *
       FROM task_comments
-      WHERE task_id = $1
+      WHERE task_id = $1 AND firm_id = $2
       ORDER BY created_at DESC
       `,
-      [id]
+      [id, firmId]
     );
 
     res.json({ ok: true, total: result.rows.length, results: result.rows });
@@ -538,13 +568,15 @@ router.post("/:id/comments", async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
 
-    const task = await findTaskById(id);
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const task = await findTaskById(id, firmId);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     const body = text(req.body.body || req.body.text || req.body.comment);
     if (!body) return res.status(400).json({ error: "Comment body is required" });
 
-    const authorName = text(req.body.author_name || req.body.author || task.assigned_to) || "Command Team";
+    const authorName = text(`${req.user?.first_name || ""} ${req.user?.last_name || ""}`) || text(req.user?.email) || "Command Team";
 
     const commentResult = await pool.query(
       `
@@ -561,23 +593,25 @@ router.post("/:id/comments", async (req, res) => {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW(),NOW())
       RETURNING *
       `,
       [
         id,
         body,
         authorName,
-        text(req.body.author_user_id) || null,
-        text(req.body.author_email) || null,
-        text(req.body.author_initials) || initialsFromName(authorName),
+        String(req.user?.id || "") || null,
+        text(req.user?.email) || null,
+        initialsFromName(authorName),
+        firmId,
+        task.workspace_id || null,
         JSON.stringify(normalizeMetadata(req.body.metadata))
       ]
     );
 
     const comment = commentResult.rows[0];
 
-    const activity = await addActivity(id, {
+    const activity = await addActivity(id, firmId, task.workspace_id, {
       event_type: "task.comment.created",
       title: `Comment added by ${comment.author_name}`,
       detail: comment.body,
@@ -607,17 +641,19 @@ router.get("/:id/activity", async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
 
-    const task = await findTaskById(id);
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const task = await findTaskById(id, firmId);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     const result = await pool.query(
       `
       SELECT *
       FROM task_activity
-      WHERE task_id = $1
+      WHERE task_id = $1 AND firm_id = $2
       ORDER BY created_at DESC
       `,
-      [id]
+      [id, firmId]
     );
 
     res.json({ ok: true, total: result.rows.length, results: result.rows });
@@ -633,12 +669,14 @@ router.get("/:id/timeline", async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid task id" });
 
-    const task = await findTaskById(id);
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const task = await findTaskById(id, firmId);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     const [comments, activity] = await Promise.all([
-      pool.query(`SELECT * FROM task_comments WHERE task_id = $1 ORDER BY created_at DESC`, [id]),
-      pool.query(`SELECT * FROM task_activity WHERE task_id = $1 ORDER BY created_at DESC`, [id])
+      pool.query(`SELECT * FROM task_comments WHERE task_id = $1 AND firm_id = $2 ORDER BY created_at DESC`, [id, firmId]),
+      pool.query(`SELECT * FROM task_activity WHERE task_id = $1 AND firm_id = $2 ORDER BY created_at DESC`, [id, firmId])
     ]);
 
     res.json({
@@ -656,8 +694,15 @@ router.post("/", async (req, res) => {
   try {
     await ensureTaskCollaborationTables();
 
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const workspaceId = await validateWorkspace(
+      req.body.workspace_id || req.body.campaign_id || req.query.workspace_id,
+      firmId
+    );
+
     const metadata = normalizeMetadata(req.body.metadata);
-    const duplicate = await findDuplicateTask(metadata);
+    const duplicate = await findDuplicateTask(metadata, firmId);
 
     if (duplicate) {
       return res.status(200).json({
@@ -669,9 +714,6 @@ router.post("/", async (req, res) => {
     }
 
     const payload = normalizeTaskPayload(req.body);
-    const firmId = req.auth?.firmId || req.user?.firm_id || req.body.firm_id || null;
-    const workspaceId = req.body.workspace_id || req.body.campaign_id || req.query.workspace_id || null;
-
     const result = await pool.query(
       `
       INSERT INTO tasks (
@@ -725,7 +767,7 @@ router.post("/", async (req, res) => {
 
     const task = result.rows[0];
 
-    await addActivity(task.id, {
+    await addActivity(task.id, firmId, workspaceId, {
       event_type: "task.created",
       title: "Task created",
       detail: task.title,
@@ -758,7 +800,9 @@ router.patch("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid task id" });
     }
 
-    const current = await findTaskById(id);
+    const firmId = firmIdFromRequest(req);
+    if (!firmId) return res.status(403).json({ error: "Firm access required" });
+    const current = await findTaskById(id, firmId);
 
     if (!current) {
       return res.status(404).json({ error: "Task not found" });
@@ -792,7 +836,7 @@ router.patch("/:id", async (req, res) => {
         due_label = $17,
         metadata = $18::jsonb,
         updated_at = NOW()
-      WHERE id = $1
+      WHERE id = $1 AND firm_id = $19
       RETURNING *
       `,
       [
@@ -813,15 +857,14 @@ router.patch("/:id", async (req, res) => {
         payload.created_by_user_id,
         payload.created_by_email,
         payload.due_label,
-        firmId,
-        workspaceId,
-        JSON.stringify(metadata)
+        JSON.stringify(metadata),
+        firmId
       ]
     );
 
     const updated = result.rows[0];
 
-    const activity = await addActivity(id, {
+    const activity = await addActivity(id, firmId, current.workspace_id, {
       event_type: "task.updated",
       title: taskActivityTitle(current, updated),
       detail: req.body.activity_detail || "Task fields updated",
@@ -854,9 +897,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 router.put("/:id", async (req, res) => {
-  req.method = "PATCH";
-  router.handle(req, res);
+  return res.status(405).json({ error: "Use PATCH for task updates" });
 });
 
 export default router;
-
