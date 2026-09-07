@@ -1,5 +1,5 @@
 import {
-  ensureCrmTables,
+  ensureCrmTables, 
   createFirm, 
   listFirms,
   createUser,
