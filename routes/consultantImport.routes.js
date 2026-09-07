@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import {
   runConsultantImport,
   consultantImportStatus,
@@ -12,7 +13,7 @@ import {
 const router = express.Router();
 
 router.get("/status", consultantImportStatus);
-router.post("/run", runConsultantImport);
+router.post("/run", requirePlatformOperator, runConsultantImport);
 router.get("/rankings", consultantRankings);
 router.get("/battleground-rankings", battlegroundConsultantRankings);
 router.get("/overlaps", consultantOverlaps);
