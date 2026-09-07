@@ -11,6 +11,7 @@ import {
   syncAllStateModeledEndorsements,
   updateEndorsement 
 } from "../services/endorsements.service.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 const router = express.Router();
 
@@ -97,7 +98,7 @@ router.get("/options", async (_req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePlatformOperator, async (req, res) => {
   try {
     const endorsement = await createEndorsement(req.body || {});
 
@@ -116,7 +117,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -152,7 +153,7 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -185,7 +186,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.post("/sync-modeled", async (req, res) => {
+router.post("/sync-modeled", requirePlatformOperator, async (req, res) => {
   try {
     const result = await syncModeledEndorsements(
       req.body || {}
@@ -206,7 +207,7 @@ router.post("/sync-modeled", async (req, res) => {
   }
 });
 
-router.post("/sync-all-states", async (_req, res) => {
+router.post("/sync-all-states", requirePlatformOperator, async (_req, res) => {
   try {
     const result = await syncAllStateModeledEndorsements();
 
@@ -225,7 +226,7 @@ router.post("/sync-all-states", async (_req, res) => {
   }
 });
 
-router.post("/:id/task-payload", async (req, res) => {
+router.post("/:id/task-payload", requirePlatformOperator, async (req, res) => {
   try {
     const id = numericId(req.params.id);
 
@@ -270,3 +271,4 @@ router.post("/:id/task-payload", async (req, res) => {
 });
 
 export default router;
+
