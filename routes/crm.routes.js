@@ -13,24 +13,27 @@ import {
   addCampaignTaskHandler,
   addCampaignDocumentHandler
 } from "../services/crm.service.js";
+import { requirePlatformOperator, requireFirmAdministrator } from "../middleware/authorization.middleware.js";
+import { requireFirmAccessToCampaign } from "../middleware/firmAccess.middleware.js";
 
 const router = express.Router();
 
-router.post("/init", initializeCrm);
+router.post("/init", requirePlatformOperator, initializeCrm);
 
-router.get("/firms", listFirmsHandler);
-router.post("/firms", createFirmHandler);
+router.get("/firms", requirePlatformOperator, listFirmsHandler);
+router.post("/firms", requirePlatformOperator, createFirmHandler);
 
-router.get("/users", listUsersHandler);
-router.post("/users", createUserHandler);
+router.get("/users", requireFirmAdministrator, listUsersHandler);
+router.post("/users", requireFirmAdministrator, createUserHandler);
 
 router.get("/campaigns", listCampaignsHandler);
 router.post("/campaigns", createCampaignHandler);
-router.get("/campaigns/:id", getCampaignWorkspaceHandler);
+router.get("/campaigns/:id", requireFirmAccessToCampaign, getCampaignWorkspaceHandler);
 
-router.post("/campaigns/:id/contacts", addCampaignContactHandler);
-router.post("/campaigns/:id/vendors", addCampaignVendorHandler);
-router.post("/campaigns/:id/tasks", addCampaignTaskHandler);
-router.post("/campaigns/:id/documents", addCampaignDocumentHandler);
+router.post("/campaigns/:id/contacts", requireFirmAccessToCampaign, addCampaignContactHandler);
+router.post("/campaigns/:id/vendors", requireFirmAccessToCampaign, addCampaignVendorHandler);
+router.post("/campaigns/:id/tasks", requireFirmAccessToCampaign, addCampaignTaskHandler);
+router.post("/campaigns/:id/documents", requireFirmAccessToCampaign, addCampaignDocumentHandler);
 
 export default router;
+
