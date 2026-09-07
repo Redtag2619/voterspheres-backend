@@ -6,6 +6,7 @@ import {
   resolveAlert,
   dismissAlert
 } from "../services/alerts.service.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 
 const router = express.Router();
 
@@ -14,9 +15,9 @@ const router = express.Router();
  */
 router.get("/", getAllAlerts);
 router.get("/campaigns/:id", getCampaignAlerts);
-router.post("/rebuild", rebuildAlerts);
-router.post("/resolve", resolveAlert);
-router.post("/dismiss", dismissAlert);
+router.post("/rebuild", requirePlatformOperator, rebuildAlerts);
+router.post("/resolve", requirePlatformOperator, resolveAlert);
+router.post("/dismiss", requirePlatformOperator, dismissAlert);
 
 /**
  * 🔥 NEW: ALERT TERMINAL ROUTES
@@ -89,7 +90,7 @@ router.get("/deliveries", async (req, res) => {
  * POST /api/alerts/dispatch
  * Simulates dispatching alerts
  */
-router.post("/dispatch", async (_req, res) => {
+router.post("/dispatch", requirePlatformOperator, async (_req, res) => {
   try {
     res.json({
       ok: true,
@@ -106,7 +107,7 @@ router.post("/dispatch", async (_req, res) => {
  * PUT /api/alerts/rules/:id
  * Toggle rule active state
  */
-router.put("/rules/:id", async (req, res) => {
+router.put("/rules/:id", requirePlatformOperator, async (req, res) => {
   try {
     res.json({
       ok: true,
