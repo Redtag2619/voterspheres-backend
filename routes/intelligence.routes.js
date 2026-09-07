@@ -1,4 +1,5 @@
 import express from "express";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import {
   getBattlegroundDashboardData,
   getCandidateIntelligenceSummary,
@@ -53,7 +54,7 @@ router.get("/status", async (_req, res) => {
   }
 });
 
-router.post("/refresh", async (_req, res) => {
+router.post("/refresh", requirePlatformOperator, async (_req, res) => {
   try {
     const dashboard = await getIntelligenceDashboard();
 
@@ -77,7 +78,7 @@ router.get("/cross-signal", async (_req, res) => {
   }
 });
 
-router.post("/cross-signal/dispatch-alerts", async (_req, res) => {
+router.post("/cross-signal/dispatch-alerts", requirePlatformOperator, async (_req, res) => {
   try {
     res.json(await dispatchCrossSignalAlerts());
   } catch (error) {
@@ -185,3 +186,4 @@ router.get("/battlegrounds", async (_req, res) => {
 });
 
 export default router;
+
