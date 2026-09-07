@@ -22,6 +22,12 @@ function makeSlug(value = "") {
     .replace(/^-+|-+$/g, "");
 }
 
+function currentFirmId(req) {
+  const firmId = Number(req.user?.firm_id);
+  if (!Number.isInteger(firmId) || firmId <= 0) throw new Error("Missing firm context");
+  return firmId;
+}
+
 export async function initializeCrm(_req, res, next) {
   try {
     await ensureCrmTables();
@@ -87,7 +93,7 @@ export async function createUserHandler(req, res, next) {
     }
 
     const row = await createUser({
-      firm_id: req.body?.firm_id || null,
+      firm_id: currentFirmId(req),
       first_name,
       last_name,
       email,
@@ -106,7 +112,7 @@ export async function listUsersHandler(req, res, next) {
     await ensureCrmTables();
 
     const rows = await listUsers({
-      firm_id: req.query.firm_id ? Number(req.query.firm_id) : null,
+      firm_id: currentFirmId(req),
       search: String(req.query.search || "")
     });
 
@@ -133,7 +139,7 @@ export async function createCampaignHandler(req, res, next) {
     }
 
     const row = await createCampaign({
-      firm_id: req.body?.firm_id || null,
+      firm_id: currentFirmId(req),
       owner_user_id: req.body?.owner_user_id || null,
       candidate_id: req.body?.candidate_id || null,
       candidate_name,
@@ -174,7 +180,7 @@ export async function listCampaignsHandler(req, res, next) {
     await ensureCrmTables();
 
     const rows = await listCampaigns({
-      firm_id: req.query.firm_id ? Number(req.query.firm_id) : null,
+      firm_id: currentFirmId(req),
       stage: String(req.query.stage || ""),
       state: String(req.query.state || ""),
       search: String(req.query.search || "")
@@ -358,3 +364,4 @@ export async function addCampaignDocumentHandler(req, res, next) {
     next(err);
   }
 }
+
