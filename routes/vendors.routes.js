@@ -1,5 +1,5 @@
 import express from "express";
-import { requireRoles } from "../middleware/roles.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import { pool } from "../db/pool.js";
 
 const router = express.Router();
@@ -528,7 +528,7 @@ router.get("/", async (req, res) => {
 /* --------------------------
    IMPORT ADMIN PLACEHOLDER
 -------------------------- */
-router.post("/import", requireRoles("admin"), async (_req, res) => {
+router.post("/import", requirePlatformOperator, async (_req, res) => {
   try {
     await seedVendorsIfEmpty();
 
@@ -544,7 +544,7 @@ router.post("/import", requireRoles("admin"), async (_req, res) => {
 /* --------------------------
    DISPATCH VENDOR ALERTS
 -------------------------- */
-router.post("/intelligence/dispatch-alerts", async (_req, res) => {
+router.post("/intelligence/dispatch-alerts", requirePlatformOperator, async (_req, res) => {
   try {
     await seedVendorsIfEmpty();
 
@@ -624,3 +624,4 @@ router.post("/intelligence/dispatch-alerts", async (_req, res) => {
 });
 
 export default router;
+
