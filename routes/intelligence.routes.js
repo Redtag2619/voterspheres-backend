@@ -1,5 +1,5 @@
 import express from "express";
-import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
 import {
   getBattlegroundDashboardData,
   getCandidateIntelligenceSummary,
