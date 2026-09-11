@@ -1,6 +1,7 @@
 import { PLATFORM_SOURCE_LABELS } from "./classifier.js";
 import { clean, detectState, includesAny, lower, summarizeTop } from "./utils.js";
 import { buildSafetyAnswer } from "./safety.js";
+import { normalizeStateCode } from "./context.js";
 
 export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   const normalizedPrompt = lower(prompt);
@@ -19,12 +20,21 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   const crm = mission.crm_followups || [];
   const vendorGaps = mission.vendor_gaps || [];
 
-  const wantsState = detectState(prompt);
+  const wantsState =
+    normalizeStateCode(platformContext?.scope?.state) || detectState(prompt);
+  const strictGeography = Boolean(
+    platformContext?.scope?.strict_geography && wantsState
+  );
 
   const stateFilter = (item) => {
     if (!wantsState) return true;
-    return String(item.state || "").toUpperCase() === wantsState;
+    return normalizeStateCode(
+      item.state || item.state_code || item.geography || item.jurisdiction || ""
+    ) === wantsState;
   };
+
+  const useScoped = (scoped, unscoped) =>
+    strictGeography ? scoped : scoped.length ? scoped : unscoped;
 
   const scopedRecommendations = recommendations.filter(stateFilter);
   const scopedThreats = threats.filter(stateFilter);
@@ -45,7 +55,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   const scopeText = wantsState ? ` for ${wantsState}` : "";
 
   const topActions = summarizeTop(
-    scopedRecommendations.length ? scopedRecommendations : recommendations,
+    useScoped(scopedRecommendations, recommendations),
     (item, index) =>
       `${index + 1}. ${clean(item.title)} — ${clean(
         item.expected_impact || item.why || "Assign owner and track outcome."
@@ -54,7 +64,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   );
 
   const topThreats = summarizeTop(
-    scopedThreats.length ? scopedThreats : threats,
+    useScoped(scopedThreats, threats),
     (item, index) =>
       `${index + 1}. ${clean(item.title)} — ${item.severity || item.risk || "Signal"} from ${
         item.source || "War Room"
@@ -63,7 +73,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   );
 
   const topQueue = summarizeTop(
-    scopedQueue.length ? scopedQueue : queue,
+    useScoped(scopedQueue, queue),
     (item, index) =>
       `${index + 1}. ${clean(item.item)} — Owner: ${item.owner || "Command Team"}; ETA: ${
         item.eta || "Today"
@@ -72,7 +82,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   );
 
   const topTasks = summarizeTop(
-    scopedTasks.length ? scopedTasks : tasks,
+    useScoped(scopedTasks, tasks),
     (item, index) =>
       `${index + 1}. ${clean(item.title || "Task")} — ${item.priority || "Medium"} priority; ${
         item.assigned_to || "Unassigned"
@@ -81,7 +91,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   );
 
   const topCrm = summarizeTop(
-    scopedCrm.length ? scopedCrm : crm,
+    useScoped(scopedCrm, crm),
     (item, index) =>
       `${index + 1}. ${clean(item.title || "CRM follow-up")} — ${clean(
         item.contact_name || item.outcome || "Follow up required"
@@ -90,7 +100,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   );
 
   const topWorkspaces = summarizeTop(
-    scopedWorkspaces.length ? scopedWorkspaces : workspaces,
+    useScoped(scopedWorkspaces, workspaces),
     (item, index) =>
       `${index + 1}. ${clean(item.title || item.name || "Workspace")} — ${
         item.risk || "Stable"
@@ -120,7 +130,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
     lines.push("", "Signal stream:");
     lines.push(
       ...summarizeTop(
-        scopedSignals.length ? scopedSignals : signals,
+        useScoped(scopedSignals, signals),
         (item, index) =>
           `${index + 1}. ${clean(item.text || item.title)} — ${item.channel || "Signal"}; ${
             item.risk || "Watch"
@@ -246,3 +256,5 @@ export function buildGeneralFallbackAnswer({ prompt, classification }) {
       : ["General Political Analysis"],
   };
 }
+
+
