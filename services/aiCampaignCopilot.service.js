@@ -354,18 +354,83 @@ function summarizeTop(items = [], mapper, limit = 5) {
 
  
 
+const STATE_CODES = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
+  colorado: "CO", connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA",
+  hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
+  kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
+  massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS",
+  missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV", "new hampshire": "NH",
+  "new jersey": "NJ", "new mexico": "NM", "new york": "NY", "north carolina": "NC",
+  "north dakota": "ND", ohio: "OH", oklahoma: "OK", oregon: "OR", pennsylvania: "PA",
+  "rhode island": "RI", "south carolina": "SC", "south dakota": "SD", tennessee: "TN",
+  texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA",
+  "west virginia": "WV", wisconsin: "WI", wyoming: "WY", "district of columbia": "DC",
+};
+
+function normalizeStateCode(value = "") {
+  const normalized = clean(value).toLowerCase().replace(/\s+/g, " ");
+  if (!normalized) return null;
+  if (STATE_CODES[normalized]) return STATE_CODES[normalized];
+  const code = normalized.toUpperCase();
+  return Object.values(STATE_CODES).includes(code) ? code : null;
+}
+
 function detectState(prompt = "") {
+  const normalizedPrompt = lower(prompt);
+  const namedState = Object.entries(STATE_CODES).find(([name]) =>
+    new RegExp(`\\b${name.replace(/ /g, "\\s+")}\\b`, "i").test(normalizedPrompt)
+  );
+  if (namedState) return namedState[1];
 
   return (
-
-    lower(prompt).match(
-
+    normalizedPrompt.match(
       /\b(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|ia|id|il|in|ks|ky|la|ma|md|me|mi|mn|mo|ms|mt|nc|nd|ne|nh|nj|nm|nv|ny|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|va|vt|wa|wi|wv|wy|dc)\b/i
-
     )?.[0]?.toUpperCase() || null
-
   );
+}
 
+function itemStateCode(item = {}) {
+  return normalizeStateCode(
+    item.state || item.state_code || item.geography || item.jurisdiction || ""
+  );
+}
+
+function scopeRows(rows = [], state = null, strictGeography = false) {
+  if (!strictGeography || !state) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter(
+    (item) => itemStateCode(item) === state
+  );
+}
+
+function scopePlatformSections({ mission = {}, advisor = {}, warRoom = {}, state, strictGeography }) {
+  if (!strictGeography || !state) return { mission, advisor, warRoom };
+
+  return {
+    mission: {
+      ...mission,
+      mission_items: scopeRows(mission.mission_items, state, true),
+      critical_signals: scopeRows(mission.critical_signals, state, true),
+      open_tasks: scopeRows(mission.open_tasks, state, true),
+      rapid_responses: scopeRows(mission.rapid_responses, state, true),
+      crm_followups: scopeRows(mission.crm_followups, state, true),
+      workspace_health: scopeRows(mission.workspace_health, state, true),
+      vendor_gaps: scopeRows(mission.vendor_gaps, state, true),
+    },
+    advisor: {
+      ...advisor,
+      recommendations: scopeRows(advisor.recommendations, state, true),
+      risks: scopeRows(advisor.risks, state, true),
+      opportunities: scopeRows(advisor.opportunities, state, true),
+    },
+    warRoom: {
+      ...warRoom,
+      threats: scopeRows(warRoom.threats, state, true),
+      queue: scopeRows(warRoom.queue, state, true),
+      signals: scopeRows(warRoom.signals, state, true),
+      command_cards: scopeRows(warRoom.command_cards, state, true),
+    },
+  };
 }
 
  
@@ -816,7 +881,18 @@ function classifyQuestion(prompt = "") {
 
  
 
-async function getPlatformContext({ user, firmId, workspaceId }) {
+async function getPlatformContext({
+  user,
+  firmId,
+  workspaceId,
+  state: requestedState = null,
+  office = null,
+  cycle = null,
+  campaign = null,
+  strictGeography = false,
+}) {
+
+  const state = normalizeStateCode(requestedState);
 
   const [mission, advisor, warRoom] = await Promise.all([
 
@@ -884,11 +960,15 @@ async function getPlatformContext({ user, firmId, workspaceId }) {
 
       FROM vendors
 
+      WHERE firm_id = $1
+
       ORDER BY updated_at DESC NULLS LAST
 
       LIMIT 10
 
-    `
+    `,
+
+    [firmId]
 
   );
 
@@ -940,24 +1020,32 @@ async function getPlatformContext({ user, firmId, workspaceId }) {
 
  
 
-  return {
-
+  const scopedSections = scopePlatformSections({
     mission,
-
     advisor,
-
     warRoom,
+    state,
+    strictGeography,
+  });
 
-    reports,
+  const workspace = workspaceRows[0] || null;
+  const workspaceMatchesState =
+    !strictGeography || !state || !workspace || itemStateCode(workspace) === state;
 
-    donors,
-
-    vendors,
-
-    crm,
-
-    workspace: workspaceRows[0] || null,
-
+  return {
+    ...scopedSections,
+    reports: scopeRows(reports, state, strictGeography),
+    donors: scopeRows(donors, state, strictGeography),
+    vendors: scopeRows(vendors, state, strictGeography),
+    crm: scopeRows(crm, state, strictGeography),
+    workspace: workspaceMatchesState ? workspace : null,
+    scope: {
+      state,
+      office: clean(office) || null,
+      cycle: clean(cycle) || null,
+      campaign: clean(campaign) || null,
+      strict_geography: Boolean(strictGeography && state),
+    },
   };
 
 }
@@ -972,15 +1060,34 @@ function compactPlatformContext(context = {}) {
 
   const warRoom = context.warRoom || {};
 
+  const strictGeography = Boolean(context.scope?.strict_geography);
+
+  const scopedState = context.scope?.state || null;
+
  
 
   return {
 
-    mission_summary: mission.summary || {},
+    mission_summary: strictGeography
+      ? {
+          state: scopedState,
+          open_tasks: (mission.open_tasks || []).length,
+          critical_signals: (mission.critical_signals || []).length,
+          crm_followups: (mission.crm_followups || []).length,
+        }
+      : mission.summary || {},
 
-    advisor_summary: advisor.summary || {},
+    advisor_summary: strictGeography
+      ? { state: scopedState, recommendations: (advisor.recommendations || []).length }
+      : advisor.summary || {},
 
-    war_room_summary: warRoom.summary || {},
+    war_room_summary: strictGeography
+      ? {
+          state: scopedState,
+          threats: (warRoom.threats || []).length,
+          signals: (warRoom.signals || []).length,
+        }
+      : warRoom.summary || {},
 
  
 
@@ -1040,6 +1147,8 @@ function compactPlatformContext(context = {}) {
 
         next_step: clean(item.next_step || item.outcome || ""),
 
+        state: item.state || item.state_code || null,
+
       })),
 
  
@@ -1090,6 +1199,8 @@ function compactPlatformContext(context = {}) {
 
     workspace: context.workspace || null,
 
+    scope: context.scope || null,
+
   };
 
 }
@@ -1130,7 +1241,12 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
  
 
-  const wantsState = detectState(prompt);
+  const wantsState =
+    normalizeStateCode(platformContext?.scope?.state) || detectState(prompt);
+
+  const strictGeography = Boolean(
+    platformContext?.scope?.strict_geography && wantsState
+  );
 
  
 
@@ -1138,9 +1254,12 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
     if (!wantsState) return true;
 
-    return String(item.state || "").toUpperCase() === wantsState;
+    return itemStateCode(item) === wantsState;
 
   };
+
+  const useScoped = (scoped, unscoped) =>
+    strictGeography ? scoped : scoped.length ? scoped : unscoped;
 
  
 
@@ -1310,7 +1429,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topActions = summarizeTop(
 
-    scopedRecommendations.length ? scopedRecommendations : recommendations,
+    useScoped(scopedRecommendations, recommendations),
 
     (item, index) =>
 
@@ -1328,7 +1447,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topThreats = summarizeTop(
 
-    scopedThreats.length ? scopedThreats : threats,
+    useScoped(scopedThreats, threats),
 
     (item, index) =>
 
@@ -1346,7 +1465,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topQueue = summarizeTop(
 
-    scopedQueue.length ? scopedQueue : queue,
+    useScoped(scopedQueue, queue),
 
     (item, index) =>
 
@@ -1364,7 +1483,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topTasks = summarizeTop(
 
-    scopedTasks.length ? scopedTasks : tasks,
+    useScoped(scopedTasks, tasks),
 
     (item, index) =>
 
@@ -1382,7 +1501,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topCrm = summarizeTop(
 
-    scopedCrm.length ? scopedCrm : crm,
+    useScoped(scopedCrm, crm),
 
     (item, index) =>
 
@@ -1400,7 +1519,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   const topWorkspaces = summarizeTop(
 
-    scopedWorkspaces.length ? scopedWorkspaces : workspaces,
+    useScoped(scopedWorkspaces, workspaces),
 
     (item, index) =>
 
@@ -1506,7 +1625,7 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
       ...summarizeTop(
 
-        scopedSignals.length ? scopedSignals : signals,
+        useScoped(scopedSignals, signals),
 
         (item, index) =>
 
@@ -2307,6 +2426,22 @@ export async function askAiCampaignCopilot({
  
 
     );
+
+  const requestScope = {
+    state: normalizeStateCode(payload.state) || detectState(prompt),
+    office: clean(payload.office),
+    cycle: clean(payload.cycle),
+    campaign: clean(payload.campaign || payload.candidate),
+    strictGeography:
+      payload.strict_geography === true ||
+      String(payload.strict_geography || "").toLowerCase() === "true",
+  };
+
+  if (requestScope.strictGeography && !requestScope.state) {
+    throw new Error(
+      "A valid state is required when strict geographic scope is enabled."
+    );
+  }
 
  
 
@@ -3251,6 +3386,8 @@ export async function askAiCampaignCopilot({
  
 
         workspaceId,
+
+        ...requestScope,
 
  
 
@@ -4227,5 +4364,3 @@ export async function getAiCampaignCopilotThread({
  
 
 }
-
-
