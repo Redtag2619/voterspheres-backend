@@ -25,6 +25,13 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
   const strictGeography = Boolean(
     platformContext?.scope?.strict_geography && wantsState
   );
+  const temporalScope = platformContext?.scope || {};
+  const planningWindow =
+    temporalScope.election_window_start && temporalScope.election_window_end
+      ? `${temporalScope.election_window_start} through ${temporalScope.election_window_end}`
+      : temporalScope.cycle_year
+        ? `the ${temporalScope.cycle_year} election cycle`
+        : "the selected election cycle";
 
   const stateFilter = (item) => {
     if (!wantsState) return true;
@@ -118,6 +125,7 @@ export function buildStaticPlatformAnswer({ prompt, platformContext }) {
 
   if (intent === "strategy") {
     lines.push(`Here is the recommended campaign plan${scopeText} for the next operating cycle:`);
+    lines.push(`Planning window: ${planningWindow}. All milestones must remain inside this window.`);
     lines.push("", "Priority actions:");
     lines.push(...(topActions.length ? topActions : ["1. No urgent recommendations detected. Continue monitoring Mission Control."]));
     lines.push("", "War Room queue:");
@@ -256,5 +264,3 @@ export function buildGeneralFallbackAnswer({ prompt, classification }) {
       : ["General Political Analysis"],
   };
 }
-
-
