@@ -88,6 +88,7 @@ export async function getPlatformContext({
   cycle = null,
   campaign = null,
   strictGeography = false,
+  temporalScope = null,
 }) {
   const state = normalizeStateCode(requestedState);
   const [mission, advisor, warRoom] = await Promise.all([
@@ -177,6 +178,12 @@ export async function getPlatformContext({
       cycle: clean(cycle) || null,
       campaign: clean(campaign) || null,
       strict_geography: Boolean(strictGeography && state),
+      current_date: temporalScope?.current_date || new Date().toISOString().slice(0, 10),
+      current_year: temporalScope?.current_year || new Date().getUTCFullYear(),
+      cycle_year: temporalScope?.cycle_year || Number.parseInt(clean(cycle), 10) || null,
+      election_window_start: temporalScope?.election_window_start || new Date().toISOString().slice(0, 10),
+      election_window_end: temporalScope?.election_window_end || (clean(cycle) ? `${clean(cycle)}-12-31` : null),
+      strict_temporal: Boolean(temporalScope?.strict_temporal),
     },
   };
 }
@@ -257,4 +264,3 @@ export function compactPlatformContext(context = {}) {
     scope: context.scope || null,
   };
 }
-
