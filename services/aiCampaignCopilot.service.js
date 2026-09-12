@@ -376,6 +376,140 @@ function normalizeStateCode(value = "") {
   return Object.values(STATE_CODES).includes(code) ? code : null;
 }
 
+const GOVERNOR_CYCLE_GROUPS = {
+  presidential: new Set(["DE", "IN", "MO", "MT", "NC", "ND", "UT", "WA", "WV"]),
+  post_presidential: new Set(["NJ", "VA"]),
+  pre_presidential: new Set(["KY", "LA", "MS"]),
+  every_even_year: new Set(["NH", "VT"]),
+};
+
+function integerYear(value) {
+  const year = Number.parseInt(String(value || ""), 10);
+  return Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null;
+}
+
+function officeCategory(value = "") {
+  const office = lower(value);
+  if (office.includes("president")) return "president";
+  if (office.includes("u.s. house") || office === "house" || office.includes("congress")) return "us_house";
+  if (office.includes("u.s. senate") || office === "senate") return "us_senate";
+  if (office.includes("governor") && !office.includes("lieutenant")) return "governor";
+  return "flexible";
+}
+
+function isValidGovernorCycle(state, year) {
+  if (!state || !year) return true;
+  if (GOVERNOR_CYCLE_GROUPS.every_even_year.has(state)) return year % 2 === 0;
+  if (GOVERNOR_CYCLE_GROUPS.post_presidential.has(state)) return year % 4 === 1;
+  if (GOVERNOR_CYCLE_GROUPS.pre_presidential.has(state)) return year % 4 === 3;
+  if (GOVERNOR_CYCLE_GROUPS.presidential.has(state)) return year % 4 === 0;
+  return year % 4 === 2;
+}
+
+function nextValidElectionYear({ state, office, fromYear }) {
+  const category = officeCategory(office);
+  for (let year = fromYear; year <= fromYear + 8; year += 1) {
+    if (category === "president" && year % 4 === 0) return year;
+    if ((category === "us_house" || category === "us_senate") && year % 2 === 0) return year;
+    if (category === "governor" && isValidGovernorCycle(state, year)) return year;
+    if (category === "flexible") return year;
+  }
+  return null;
+}
+
+function buildTemporalScope({ state, office, cycle, strictTemporal = false }) {
+  const today = new Date();
+  const currentDate = today.toISOString().slice(0, 10);
+  const currentYear = today.getUTCFullYear();
+  const cycleYear = integerYear(cycle) || (!strictTemporal ? currentYear : null);
+  const category = officeCategory(office);
+
+  if (!cycleYear) {
+    const error = new Error("A valid four-digit election cycle is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (strictTemporal && cycleYear < currentYear) {
+    const error = new Error(`Election cycle ${cycleYear} is in the past. Select ${currentYear} or a future cycle.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const valid =
+    category === "president"
+      ? cycleYear % 4 === 0
+      : category === "us_house" || category === "us_senate"
+        ? cycleYear % 2 === 0
+        : category === "governor"
+          ? isValidGovernorCycle(state, cycleYear)
+          : true;
+
+  if (strictTemporal && !valid) {
+    const suggestedYear = nextValidElectionYear({ state, office, fromYear: currentYear });
+    const error = new Error(
+      `${office || "The selected office"} in ${state || "the selected jurisdiction"} is not regularly scheduled for the ${cycleYear} election cycle. ` +
+        `Use ${suggestedYear || "the next valid election year"}, or change the project goal to a governing or pre-election planning program.`
+    );
+    error.statusCode = 400;
+    error.code = "INVALID_ELECTION_CYCLE";
+    error.suggested_cycle = suggestedYear;
+    throw error;
+  }
+
+  return {
+    current_date: currentDate,
+    current_year: currentYear,
+    cycle_year: cycleYear,
+    election_window_start: currentDate,
+    election_window_end: `${cycleYear}-12-31`,
+    office_category: category,
+    strict_temporal: Boolean(strictTemporal),
+  };
+}
+
+function isPlanningRequest(prompt = "") {
+  return includesAny(lower(prompt), [
+    "strategy", "plan", "calendar", "timeline", "schedule", "roadmap", "next action",
+    "fundraising", "follow-up", "follow up", "gotv", "field", "launch", "milestone",
+  ]);
+}
+
+function temporalViolations(answer = "", temporalScope = {}) {
+  if (!temporalScope?.strict_temporal) return [];
+  const planningLines = String(answer || "")
+    .split(/\r?\n/)
+    .filter((line) =>
+      /\b(q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december|calendar|timeline|schedule|deadline|milestone|due|launch|event|week|day|month|quarter|timing|date)\b/i.test(line)
+    )
+    .join("\n");
+  const years = [...planningLines.matchAll(/\b(20\d{2})\b/g)].map((match) => Number(match[1]));
+  return [...new Set(years.filter(
+    (year) => year < temporalScope.current_year || year > temporalScope.cycle_year
+  ))];
+}
+
+async function repairTemporalAnswer({ answer, prompt, temporalScope }) {
+  if (!openai) return null;
+  const response = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a strict campaign-calendar editor. Preserve every substantive recommendation, owner, risk, metric, and dependency. " +
+          "Remove or correct every past or out-of-cycle planning date. Do not add historical background. Return only the corrected deliverable.",
+      },
+      {
+        role: "user",
+        content: `Original request:\n${prompt}\n\nAllowed planning window:\n${temporalScope.election_window_start} through ${temporalScope.election_window_end}\n\nDraft to correct:\n${answer}`,
+      },
+    ],
+  });
+  return clean(response.choices?.[0]?.message?.content || "");
+}
+
 function detectState(prompt = "") {
   const normalizedPrompt = lower(prompt);
   const namedState = Object.entries(STATE_CODES).find(([name]) =>
@@ -890,6 +1024,7 @@ async function getPlatformContext({
   cycle = null,
   campaign = null,
   strictGeography = false,
+  temporalScope = null,
 }) {
 
   const state = normalizeStateCode(requestedState);
@@ -1045,6 +1180,12 @@ async function getPlatformContext({
       cycle: clean(cycle) || null,
       campaign: clean(campaign) || null,
       strict_geography: Boolean(strictGeography && state),
+      current_date: temporalScope?.current_date || new Date().toISOString().slice(0, 10),
+      current_year: temporalScope?.current_year || new Date().getUTCFullYear(),
+      cycle_year: temporalScope?.cycle_year || integerYear(cycle),
+      election_window_start: temporalScope?.election_window_start || new Date().toISOString().slice(0, 10),
+      election_window_end: temporalScope?.election_window_end || (integerYear(cycle) ? `${integerYear(cycle)}-12-31` : null),
+      strict_temporal: Boolean(temporalScope?.strict_temporal),
     },
   };
 
@@ -1247,6 +1388,14 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
   const strictGeography = Boolean(
     platformContext?.scope?.strict_geography && wantsState
   );
+
+  const fallbackTemporalScope = platformContext?.scope || {};
+  const fallbackPlanningWindow =
+    fallbackTemporalScope.election_window_start && fallbackTemporalScope.election_window_end
+      ? `${fallbackTemporalScope.election_window_start} through ${fallbackTemporalScope.election_window_end}`
+      : fallbackTemporalScope.cycle_year
+        ? `the ${fallbackTemporalScope.cycle_year} election cycle`
+        : "the selected election cycle";
 
  
 
@@ -1568,6 +1717,8 @@ function buildStaticPlatformAnswer({ prompt, platformContext }) {
       `Here is the recommended campaign plan${scopeText} for the next operating cycle:`
 
     );
+
+    lines.push(`Planning window: ${fallbackPlanningWindow}. All milestones must remain inside this window.`);
 
     lines.push("");
 
@@ -2085,7 +2236,7 @@ function buildGeneralFallbackAnswer({ prompt, classification }) {
 
  
 
-async function askOpenAI({ prompt, classification, platformContext, recentMessages }) {
+async function askOpenAI({ prompt, classification, platformContext, recentMessages, temporalScope }) {
 
   if (!openai) {
 
@@ -2152,6 +2303,10 @@ Answer style:
 - For legal/compliance/election administration issues, provide general information and recommend consulting qualified counsel or official election authorities when appropriate.
 
 - Refuse voter suppression, intimidation, ballot interference, hacking, deception, or unlawful election manipulation.
+- Treat ${temporalScope?.current_date || "the server-provided current date"} as the planning date.
+- For strategy, calendar, schedule, timeline, and action-plan requests, use only dates from ${temporalScope?.election_window_start || "the planning date"} through ${temporalScope?.election_window_end || "the selected election cycle"}.
+- Never create a past milestone or silently reuse a calendar from an earlier campaign cycle.
+- Do not include an out-of-cycle year in a proposed action, milestone, deadline, quarter, or event.
 
  
 
@@ -2186,6 +2341,10 @@ ${JSON.stringify(recentMessages.slice(-8), null, 2)}
 VoterSpheres platform context:
 
 ${JSON.stringify(compactContext || {}, null, 2)}
+
+Strict temporal scope:
+
+${JSON.stringify(temporalScope || {}, null, 2)}
 
  
 
@@ -2435,7 +2594,12 @@ export async function askAiCampaignCopilot({
     strictGeography:
       payload.strict_geography === true ||
       String(payload.strict_geography || "").toLowerCase() === "true",
+    strictTemporal:
+      payload.strict_temporal === true ||
+      String(payload.strict_temporal || "").toLowerCase() === "true",
   };
+
+  const temporalScope = buildTemporalScope(requestScope);
 
   if (requestScope.strictGeography && !requestScope.state) {
     throw new Error(
@@ -3389,6 +3553,8 @@ export async function askAiCampaignCopilot({
 
         ...requestScope,
 
+        temporalScope,
+
  
 
       });
@@ -3476,6 +3642,8 @@ export async function askAiCampaignCopilot({
  
 
           recentMessages,
+
+          temporalScope,
 
  
 
@@ -3629,6 +3797,33 @@ export async function askAiCampaignCopilot({
 
   answer = generated.answer;
 
+  if (isPlanningRequest(prompt)) {
+    let violations = temporalViolations(answer, temporalScope);
+
+    if (violations.length) {
+      const repairedAnswer = await repairTemporalAnswer({
+        answer,
+        prompt,
+        temporalScope,
+      });
+
+      if (repairedAnswer) {
+        answer = repairedAnswer;
+        generated.answer = repairedAnswer;
+        violations = temporalViolations(repairedAnswer, temporalScope);
+      }
+
+      if (violations.length) {
+        const error = new Error(
+          `The generated strategy contained dates outside the authorized planning window: ${violations.join(", ")}. Please regenerate the strategy.`
+        );
+        error.statusCode = 422;
+        error.code = "TEMPORAL_SCOPE_VIOLATION";
+        throw error;
+      }
+    }
+  }
+
  
 
   confidence =
@@ -3684,6 +3879,8 @@ export async function askAiCampaignCopilot({
  
 
     classification,
+
+    temporal_scope: temporalScope,
 
  
 
