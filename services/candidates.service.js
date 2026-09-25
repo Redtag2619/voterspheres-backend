@@ -1,4 +1,5 @@
 import pool from "../config/database.js";
+import { configuredFederalElectionCycle } from "../utils/electionCycle.js";
 
 async function ensureCandidateProfilesColumns() {
   await pool.query(`
@@ -56,6 +57,12 @@ function buildWhere(query = {}) {
   const conditions = [];
   const values = [];
 
+  const cycle = configuredFederalElectionCycle(query.cycle, {
+    fieldName: "cycle",
+  });
+  values.push(cycle);
+  conditions.push(`c.election_year = $${values.length}`);
+
   if (query.q) {
     values.push(`%${String(query.q).trim()}%`);
     const i = values.length;
@@ -69,6 +76,7 @@ function buildWhere(query = {}) {
         OR COALESCE(c.election, '') ILIKE $${i}
         OR COALESCE(cp.email, c.contact_email, '') ILIKE $${i}
         OR COALESCE(cp.phone, c.phone, '') ILIKE $${i}
+
       )
     `);
   }
@@ -148,6 +156,7 @@ function candidateSelectSql() {
     COALESCE(cp.press_contact_email, c.press_email, '') AS press_email,
     COALESCE(cp.phone, c.phone, '') AS phone,
 
+
     c.address_line1,
     c.address_line2,
     c.city,
@@ -225,6 +234,7 @@ export async function fetchCandidates(query = {}) {
       COALESCE(c.full_name, c.name, '') ASC
     LIMIT $${values.length + 1}
     OFFSET $${values.length + 2}
+
   `;
 
   const countSql = `
@@ -303,6 +313,7 @@ export async function fetchCandidateById(id) {
     locked_fields: candidate.locked_fields || {},
     contact_confidence: Number(candidate.contact_confidence || 0),
     scraped_pages: candidate.scraped_pages || [],
+
     is_verified: Boolean(candidate.is_verified || candidate.contact_verified),
     verified_by: candidate.verified_by || null,
     verified_at: candidate.verified_at || null,
@@ -381,6 +392,7 @@ export async function fetchCandidateParties() {
 
   return result.rows.map((row) => row.value);
 }
+
 
 export async function getCandidateContactCoverage(filters = {}) {
   await ensureCandidateProfilesColumns();
