@@ -1,4 +1,8 @@
 import pool from "../config/database.js";
+import {
+  configuredFederalElectionCycle,
+  normalizeFederalElectionCycle,
+} from "../utils/electionCycle.js";
 
 
 
@@ -226,7 +230,7 @@ function getFecApiConfig() {
 
     baseUrl: getEnv("FEC_API_BASE_URL", "https://api.open.fec.gov/v1"),
 
-    defaultCycle: Number(getEnv("FEC_DEFAULT_CYCLE", "2026")),
+    defaultCycle: configuredFederalElectionCycle(),
 
     perPage: Math.min(Number(getEnv("FEC_SYNC_PER_PAGE", "100")), 100),
 
@@ -1440,7 +1444,10 @@ export async function syncFecCommitteeContactsForCandidates(options = {}) {
 
   const offset = Math.max(Number(options.offset || 0), 0);
 
-  const cycle = Number(options.cycle || getFecApiConfig().defaultCycle);
+  const cycle = normalizeFederalElectionCycle(options.cycle, {
+    fallback: getFecApiConfig().defaultCycle,
+    fieldName: "cycle",
+  });
 
 
 
@@ -1473,6 +1480,7 @@ export async function syncFecCommitteeContactsForCandidates(options = {}) {
           OR COALESCE(cp.email, c.contact_email, '') = ''
 
           OR COALESCE(cp.phone, c.phone, '') = ''
+
 
           OR COALESCE(cp.campaign_website, c.website, '') = ''
 
@@ -1532,7 +1540,10 @@ export async function syncFundraisingFromFec({
 
   const { defaultCycle } = getFecApiConfig();
 
-  const targetCycle = Number(cycle || defaultCycle);
+  const targetCycle = normalizeFederalElectionCycle(cycle, {
+    fallback: defaultCycle,
+    fieldName: "cycle",
+  });
 
 
 
