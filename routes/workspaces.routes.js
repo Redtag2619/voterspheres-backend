@@ -1,5 +1,7 @@
 import express from "express";
 
+import { resolveSelectableElectionCycle } from "../services/electionCycle.service.js";
+
  
 
 const router = express.Router();
@@ -616,6 +618,8 @@ router.post("/", async (req, res) => {
 
     if (!name) return res.status(400).json({ error: "Workspace name is required" });
 
+    const electionCycle = await resolveSelectableElectionCycle(req.body.cycle);
+
  
 
     const result = await query(
@@ -672,7 +676,7 @@ router.post("/", async (req, res) => {
 
         text(req.body.office) || "Statewide",
 
-        text(req.body.cycle) || "2026",
+        String(electionCycle.cycle_year),
 
         text(req.body.status) || "active",
 
@@ -698,7 +702,9 @@ router.post("/", async (req, res) => {
 
   } catch (error) {
 
-    return res.status(500).json({ error: error.message || "Failed to create workspace" });
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Failed to create workspace",
+    });
 
   }
 
@@ -717,6 +723,11 @@ router.patch("/:id", async (req, res) => {
  
 
     const existing = access.workspace;
+
+    const electionCycle =
+      req.body.cycle === undefined
+        ? null
+        : await resolveSelectableElectionCycle(req.body.cycle);
 
  
 
@@ -768,9 +779,10 @@ router.patch("/:id", async (req, res) => {
 
         req.body.state === undefined ? existing.state : text(req.body.state) || "National",
 
+
         req.body.office === undefined ? existing.office : text(req.body.office) || "Statewide",
 
-        req.body.cycle === undefined ? existing.cycle : text(req.body.cycle) || "2026",
+        electionCycle ? String(electionCycle.cycle_year) : existing.cycle,
 
         req.body.status === undefined ? existing.status : text(req.body.status) || "active",
 
@@ -800,7 +812,9 @@ router.patch("/:id", async (req, res) => {
 
   } catch (error) {
 
-    return res.status(500).json({ error: error.message || "Failed to update workspace" });
+    return res.status(error.statusCode || 500).json({
+      error: error.message || "Failed to update workspace",
+    });
 
   }
 
@@ -843,6 +857,7 @@ router.get("/:id/intelligence", async (req, res) => {
  
 
     const tasks = taskResult.rows || [];
+
 
  
 
@@ -922,6 +937,7 @@ router.get("/:id/intelligence", async (req, res) => {
 
       100,
 
+
       Math.round(
 
         openTasks.length * 6 +
@@ -999,6 +1015,7 @@ router.get("/:id/intelligence", async (req, res) => {
     return res.status(500).json({
 
       error: error.message || "Failed to load workspace intelligence",
+
 
     });
 
@@ -1078,6 +1095,7 @@ router.get("/:id/reports", async (req, res) => {
 
     });
 
+
   } catch (error) {
 
     return res.status(500).json({ error: error.message || "Failed to load workspace reports" });
@@ -1155,6 +1173,7 @@ router.post("/:id/reports", async (req, res) => {
           generated_at,
 
           created_at,
+
 
           updated_at
 
@@ -1234,6 +1253,7 @@ router.delete("/:id/reports", async (req, res) => {
 
       `,
 
+
       [access.firmId, access.workspaceId]
 
     );
@@ -1312,6 +1332,7 @@ router.delete("/:id/reports/:reportId", async (req, res) => {
 
       ok: true,
 
+
       deleted: result.rows[0].id
 
     });
@@ -1327,4 +1348,3 @@ router.delete("/:id/reports/:reportId", async (req, res) => {
  
 
 export default router;
-
