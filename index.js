@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 import express from "express";    
 import http from "http";  
@@ -20,6 +21,7 @@ import intelligenceRoutes from "./routes/intelligence.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
 import fecRoutes from "./routes/fec.routes.js"; 
 import candidatesRoutes from "./routes/candidates.routes.js";
+import electionCyclesRoutes from "./routes/electionCycles.routes.js";
 import candidateProfilesRoutes from "./routes/candidateProfiles.routes.js";
 import vendorsRoutes from "./routes/vendors.routes.js";
 import vendorFecRoutes from "./routes/vendorFec.routes.js";
@@ -75,6 +77,7 @@ import notificationCenterRoutes from "./routes/notificationCenter.routes.js";
 import executiveWorkspaceRoutes from "./routes/executiveWorkspace.routes.js";
 import liveIntelligenceLayerRoutes from "./routes/liveIntelligenceLayer.routes.js";
 import productionHardeningRoutes from "./routes/productionHardening.routes.js";
+
 import executiveKpiRoutes from "./routes/executiveKpi.routes.js";
 import launchQaRoutes from "./routes/launchQa.routes.js";
 import launchReadinessRoutes from "./routes/launchReadiness.routes.js";
@@ -154,6 +157,7 @@ function configuredOrigins() {
 }
 const PRODUCTION_ORIGINS = [
 
+
   "https://voterspheres.org",
 
   "https://www.voterspheres.org",
@@ -231,6 +235,7 @@ app.use(cors(corsOptions));
 // Use the exact same allowlist for browser preflight requests.
 app.options("*", cors(corsOptions));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
 app.post(
 
   "/api/billing/webhook",
@@ -351,6 +356,7 @@ app.use("/api/influence", requireAuth, influenceRoutes);
 app.use("/api/forecast", requireAuth, forecastRoutes);
 app.use("/api/fec", requireAuth, fecRoutes);
 app.use("/api/candidates", requireAuth, candidatesRoutes);
+app.use("/api/election-cycles", requireAuth, electionCyclesRoutes);
 app.use("/api/candidate-profiles", requireAuth, candidateProfilesRoutes);
 app.use("/api/states", requireAuth, statesRoutes);
 app.use("/api/donors", requireAuth, donorsRoutes);
@@ -386,6 +392,7 @@ app.use("/api/news-narrative", newsNarrativeRoutes);
 app.use("/api/ai-tactical/actions", aiTacticalActionsRoutes);
 app.use("/api/narrative-rapid-response", narrativeRapidResponseRoutes);
 app.use("/api/executive-map-signal-overlay", executiveMapSignalOverlayRoutes);
+
 app.use("/api/task-ownership", taskOwnershipRoutes);
 app.use("/api/campaign-crm", campaignWorkspaceCrmRoutes);
 app.use("/api/executive-mission-control", executiveMissionControlRoutes);
@@ -464,6 +471,7 @@ app.post("/api/live/test/forecast", requireAuth, (req, res) => {
   });
 
   res.status(200).json({ ok: true, published: payload });
+
 });
 app.post("/api/live/test/warroom", requireAuth, (req, res) => {
 
@@ -542,6 +550,7 @@ app.post("/api/live/test/billing", requireAuth, (req, res) => {
     firmId,
 
     planTier: req.body?.planTier || "pro",
+
 
     status: req.body?.status || "active"
 
@@ -672,5 +681,3 @@ server.listen(PORT, "0.0.0.0", () => {
 
   startConsultantImportJob();
 }); 
-
-
