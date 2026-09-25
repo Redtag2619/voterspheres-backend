@@ -1,5 +1,5 @@
 import test from "node:test";
-import assert from "node:assert/strict";
+import assert from "node:assert/strict"; 
 import fs from "node:fs";
 
 const migration = fs.readFileSync("db/migrations/20260925_build_7_3_cycle_isolation.sql", "utf8");
