@@ -1,6 +1,8 @@
-import { pool } from "../db/pool.js";
 
-function fallbackCandidates() {
+import { pool } from "../db/pool.js";
+import { normalizeFederalElectionCycle } from "../utils/electionCycle.js";
+
+function fallbackCandidates(cycle = 2026) {
   return [
     {
       id: 1,
@@ -11,7 +13,8 @@ function fallbackCandidates() {
       office: "Senate",
       party: "Democratic",
       website: "https://example.com",
-      election_name: "2026 Georgia Senate",
+      election_name: `${cycle} Georgia Senate`,
+      election_year: cycle,
       status: "active",
       incumbent: false
     },
@@ -24,7 +27,8 @@ function fallbackCandidates() {
       office: "Governor",
       party: "Republican",
       website: "https://example.com",
-      election_name: "2026 Pennsylvania Governor",
+      election_name: `${cycle} Pennsylvania Governor`,
+      election_year: cycle,
       status: "active",
       incumbent: true
     },
@@ -37,7 +41,8 @@ function fallbackCandidates() {
       office: "Senate",
       party: "Independent",
       website: "https://example.com",
-      election_name: "2026 Arizona Senate",
+      election_name: `${cycle} Arizona Senate`,
+      election_year: cycle,
       status: "watch",
       incumbent: false
     }
@@ -72,6 +77,7 @@ async function tableExists(tableName) {
         FROM information_schema.tables
         WHERE table_schema = 'public'
           AND table_name = $1
+
       ) AS exists
     `,
     [tableName]
@@ -100,6 +106,10 @@ function candidateMatchesFilters(candidate, filters) {
   const state = String(filters.state || "");
   const office = String(filters.office || "");
   const party = String(filters.party || "");
+  const cycle = normalizeFederalElectionCycle(filters.cycle, {
+    fallback: process.env.FEC_DEFAULT_CYCLE || 2026,
+    fieldName: "cycle",
+  });
 
   const nameBlob = [
     candidate.full_name,
@@ -115,6 +125,7 @@ function candidateMatchesFilters(candidate, filters) {
   if (state && candidate.state !== state) return false;
   if (office && candidate.office !== office) return false;
   if (party && candidate.party !== party) return false;
+  if (Number(candidate.election_year || cycle) !== cycle) return false;
 
   return true;
 }
@@ -125,12 +136,16 @@ function paginate(items, page, limit) {
 }
 
 export async function findCandidates(filters) {
+  const cycle = normalizeFederalElectionCycle(filters.cycle, {
+    fallback: process.env.FEC_DEFAULT_CYCLE || 2026,
+    fieldName: "cycle",
+  });
   try {
     const exists = await tableExists("candidates");
 
     if (!exists) {
       return paginate(
-        fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)),
+        fallbackCandidates(cycle).filter((item) => candidateMatchesFilters(item, { ...filters, cycle })),
         filters.page,
         filters.limit
       );
@@ -141,6 +156,7 @@ export async function findCandidates(filters) {
         SELECT
           id,
           full_name,
+
           first_name,
           last_name,
           state,
@@ -148,6 +164,7 @@ export async function findCandidates(filters) {
           party,
           website,
           election_name,
+          election_year,
           status,
           COALESCE(incumbent, false) AS incumbent
         FROM candidates
@@ -160,14 +177,16 @@ export async function findCandidates(filters) {
           AND ($2 = '' OR COALESCE(state, '') = $2)
           AND ($3 = '' OR COALESCE(office, '') = $3)
           AND ($4 = '' OR COALESCE(party, '') = $4)
+          AND election_year = $5
         ORDER BY COALESCE(last_name, full_name, 'zzz') ASC
-        LIMIT $5 OFFSET $6
+        LIMIT $6 OFFSET $7
       `,
       [
         filters.q,
         filters.state,
         filters.office,
         filters.party,
+        cycle,
         filters.limit,
         (filters.page - 1) * filters.limit
       ]
@@ -178,7 +197,7 @@ export async function findCandidates(filters) {
     console.error("findCandidates fallback:", error.message);
 
     return paginate(
-      fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)),
+      fallbackCandidates(cycle).filter((item) => candidateMatchesFilters(item, { ...filters, cycle })),
       filters.page,
       filters.limit
     );
@@ -186,11 +205,15 @@ export async function findCandidates(filters) {
 }
 
 export async function countCandidates(filters) {
+  const cycle = normalizeFederalElectionCycle(filters.cycle, {
+    fallback: process.env.FEC_DEFAULT_CYCLE || 2026,
+    fieldName: "cycle",
+  });
   try {
     const exists = await tableExists("candidates");
 
     if (!exists) {
-      return fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)).length;
+      return fallbackCandidates(cycle).filter((item) => candidateMatchesFilters(item, { ...filters, cycle })).length;
     }
 
     const result = await pool.query(
@@ -206,15 +229,17 @@ export async function countCandidates(filters) {
           AND ($2 = '' OR COALESCE(state, '') = $2)
           AND ($3 = '' OR COALESCE(office, '') = $3)
           AND ($4 = '' OR COALESCE(party, '') = $4)
+          AND election_year = $5
       `,
-      [filters.q, filters.state, filters.office, filters.party]
+      [filters.q, filters.state, filters.office, filters.party, cycle]
     );
 
     return Number(result.rows?.[0]?.total || 0);
+
   } catch (error) {
     console.error("countCandidates fallback:", error.message);
 
-    return fallbackCandidates().filter((item) => candidateMatchesFilters(item, filters)).length;
+    return fallbackCandidates(cycle).filter((item) => candidateMatchesFilters(item, { ...filters, cycle })).length;
   }
 }
 
@@ -289,6 +314,7 @@ export async function findCandidateProfileById(candidateId) {
     }
 
     const result = await pool.query(
+
       `
         SELECT ${desiredColumns.join(", ")}
         FROM candidate_profiles
@@ -367,6 +393,7 @@ export async function findDistinctCandidateParties() {
       `
         SELECT DISTINCT party
         FROM candidates
+
         WHERE party IS NOT NULL
           AND party <> ''
         ORDER BY party ASC
