@@ -1,4 +1,6 @@
+
 import { pool } from "../db/pool.js";
+import { normalizeFederalElectionCycle } from "../utils/electionCycle.js";
 
 function n(value) {
   return Number(value || 0);
@@ -75,6 +77,7 @@ function getPacContributions(row = {}) {
       committee_id: pac.committee_id || pac.id || "N/A",
       committee_name:
         pac.committee_name ||
+
         pac.name ||
         pac.contributor_name ||
         "Unknown PAC / Committee",
@@ -153,6 +156,7 @@ export async function getLiveFundraising(input = 250) {
 }
 
 export async function getFundraisingLeaderboard(input = {}) {
+
   const filters =
     typeof input === "number"
       ? { limit: input }
@@ -166,12 +170,10 @@ export async function getFundraisingLeaderboard(input = {}) {
   const party = String(filters.party || "").trim();
   const candidate = String(filters.candidate || "").trim();
   const pac = String(filters.pac || "").trim();
-  const cycle = Number(
-    filters.cycle ||
-      process.env.FEC_DEFAULT_CYCLE ||
-      process.env.FEC_CYCLE ||
-      2026
-  );
+  const cycle = normalizeFederalElectionCycle(filters.cycle, {
+    fallback: process.env.FEC_DEFAULT_CYCLE || process.env.FEC_CYCLE || 2026,
+    fieldName: "cycle",
+  });
 
   try {
     const where = [];
@@ -233,6 +235,7 @@ export async function getFundraisingLeaderboard(input = {}) {
           source,
           source_updated_at,
           source_payload,
+
           created_at,
           updated_at
         FROM fundraising_live
@@ -311,6 +314,7 @@ export async function getFundraisingLeaderboard(input = {}) {
       source: "fec-error",
       table: "fundraising_live",
       error: error.message,
+
       cycle,
       limit,
       count: 0,
@@ -389,6 +393,7 @@ export async function getVendorSignals(limit = 25) {
 
 export async function getConsultantSignals(limit = 25) {
   return safeQuery(
+
     `
       SELECT *
       FROM consultants
@@ -467,6 +472,7 @@ export async function getIntelligenceMap() {
     }
 
     group.candidates.push({
+
       candidate_id: row.candidate_id,
       name: row.name || "Unknown Candidate",
       party: row.party || "N/A",
@@ -545,6 +551,7 @@ export async function getBattlegroundDashboardData() {
     return {
       race: `${item.state} ${item.office}`,
       candidate: topCandidate?.name || `${item.state} ${item.office}`,
+
       state: item.state,
       office: item.office,
       probability: `${probability}%`,
@@ -623,6 +630,7 @@ export async function getIntelligenceDashboard() {
   return {
     generated_at: new Date().toISOString(),
     metrics: [
+
       {
         label: "Fundraising Leaders",
         value: String(leaderboard.length),
@@ -701,6 +709,7 @@ export async function getCandidateIntelligenceSummary(filters = {}) {
     total: rows.length,
     filters,
     summary: {
+
       candidates_tracked: rows.length,
       active_states: new Set(rows.map((r) => r.state).filter(Boolean)).size,
       offices_tracked: new Set(rows.map((r) => r.office).filter(Boolean)).size,
@@ -779,6 +788,7 @@ export async function getIntelligenceCommand() {
         : "Normal",
       due: ["High", "Elevated", "Delayed"].includes(
         item.severity || item.status
+
       )
         ? "Today"
         : "Next Cycle",
