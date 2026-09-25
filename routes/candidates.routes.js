@@ -24,6 +24,10 @@ import {
   dispatchCandidateIntelligenceAlerts,
 } from "../services/candidateIntelligence.service.js";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
+import {
+  normalizeFederalElectionCycle,
+  sendElectionCycleError,
+} from "../utils/electionCycle.js";
 
 const router = express.Router();
 
@@ -37,6 +41,7 @@ router.get("/", async (req, res) => {
     const result = await fetchCandidates(req.query || {});
     return res.json(result);
   } catch (error) {
+    if (sendElectionCycleError(res, error)) return;
     console.error("Candidate list error:", error);
     return res.status(500).json({
       error: error.message || "Failed to load candidates",
@@ -71,6 +76,7 @@ router.get("/offices", async (_req, res) => {
   } catch (error) {
     console.error("Candidate offices error:", error);
     return res.status(500).json({
+
       error: error.message || "Failed to load candidate offices",
     });
   }
@@ -153,7 +159,10 @@ router.post("/sync-fec-committee-contacts", requirePlatformOperator, async (req,
   try {
     const limit = Math.min(Math.max(Number(req.body?.limit || 500), 1), 5000);
     const offset = Math.max(Number(req.body?.offset || 0), 0);
-    const cycle = req.body?.cycle ? Number(req.body.cycle) : undefined;
+    const cycle = normalizeFederalElectionCycle(
+      req.body?.cycle,
+      { fallback: process.env.FEC_DEFAULT_CYCLE || 2026, fieldName: "cycle" }
+    );
 
     const result = await syncFecCommitteeContactsForCandidates({
       limit,
@@ -168,6 +177,7 @@ router.post("/sync-fec-committee-contacts", requirePlatformOperator, async (req,
       ...result,
     });
   } catch (error) {
+    if (sendElectionCycleError(res, error)) return;
     console.error("Candidate FEC committee contact sync error:", error);
     return res.status(500).json({
       error: error.message || "Failed to sync FEC committee contacts",
@@ -223,6 +233,7 @@ router.post("/refresh-profiles", requirePlatformOperator, async (req, res) => {
   } catch (error) {
     console.error("Candidate profile batch refresh error:", error);
     return res.status(500).json({
+
       error: error.message || "Failed to refresh candidate profiles",
     });
   }
@@ -301,6 +312,7 @@ router.post("/:id/refresh-profile", requirePlatformOperator, async (req, res) =>
     });
   } catch (error) {
     console.error("Candidate profile refresh error:", error);
+
     return res.status(500).json({
       error: error.message || "Failed to refresh candidate profile",
     });
@@ -379,6 +391,7 @@ router.patch("/:id/profile-locks", requirePlatformOperator, async (req, res) => 
       ok: true,
       profile,
     });
+
   } catch (error) {
     console.error("Candidate profile lock error:", error);
     return res.status(500).json({
@@ -414,4 +427,3 @@ router.patch("/:id/verification", requirePlatformOperator, async (req, res) => {
 });
 
 export default router;
-
