@@ -30,7 +30,11 @@
     "db:migrate:strategy": "node scripts/migrateStrategyRecommendations.js",
     "signals:fec": "node scripts/importPoliticalSignalsFromFec.js",
     "db:migrate:influence-forecasts": "node scripts/migrateInfluenceForecasts.js",
-    "signals:news": "node scripts/importNewsNarrativeSignals.js"
+    "signals:news": "node scripts/importNewsNarrativeSignals.js",
+    "test:polling-cycle-diagnostics": "node --test tests/pollingCycleDiagnostic.contract.test.mjs",
+    "diagnose:polling-cycles": "node scripts/diagnosePollingElectionCycles.mjs",
+    "test:cycle-isolation": "node --test tests/electionCycleIsolation.contract.test.mjs",
+    "audit:cycle-isolation": "node scripts/auditCycleIsolation.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",
