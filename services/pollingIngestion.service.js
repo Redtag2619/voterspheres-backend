@@ -4,6 +4,11 @@ import axios from "axios";
 
 import { pool } from "../db/pool.js";
 
+import {
+  assertPollingResultCycle,
+  guardIncomingPollingGroup,
+} from "./pollingIngestionCycleGuard.service.js";
+
  
 
 const clean = (value = "") => String(value ?? "").trim();
@@ -944,6 +949,8 @@ export async function upsertPollingResult(row = {}) {
 
   await ensureUnifiedPollingSchema();
 
+  assertPollingResultCycle(row);
+
  
 
   const result = await pool.query(
@@ -1144,6 +1151,10 @@ export async function ingestPollingSignals(options = {}) {
 
   let skippedCount = 0;
 
+  let quarantinedPollCount = 0;
+
+  let quarantinedAnswerCount = 0;
+
   const errors = [];
 
   const diagnostics = [];
@@ -1210,9 +1221,21 @@ export async function ingestPollingSignals(options = {}) {
 
         normalizedAnswerCount += rows.length;
 
- 
+        const guarded = await guardIncomingPollingGroup({
+          rows,
+          rawPayload: item,
+          runKey,
+          provider: "votehub",
+        });
 
-        for (const row of rows) {
+        if (!guarded.accepted) {
+          quarantinedPollCount += 1;
+          quarantinedAnswerCount += rows.length;
+          skippedCount += rows.length;
+          continue;
+        }
+
+        for (const row of guarded.rows) {
 
           const action = await upsertPollingResult(row);
 
@@ -1268,15 +1291,17 @@ export async function ingestPollingSignals(options = {}) {
 
   const storedCount = insertedCount + updatedCount;
 
-  const status = storedCount > 0 && errors.length === 0
-
-    ? "complete"
-
-    : storedCount > 0
-
+  const status = errors.length > 0
+    ? storedCount > 0 || quarantinedPollCount > 0
       ? "degraded"
-
-      : "failed";
+      : "failed"
+    : quarantinedPollCount > 0
+      ? storedCount > 0
+        ? "degraded"
+        : "quarantined"
+      : storedCount > 0
+        ? "complete"
+        : "failed";
 
  
 
@@ -1298,9 +1323,13 @@ export async function ingestPollingSignals(options = {}) {
 
           skipped_count = $7,
 
-          errors = $8::jsonb,
+          quarantined_poll_count = $8,
 
-          diagnostics = $9::jsonb,
+          quarantined_answer_count = $9,
+
+          errors = $10::jsonb,
+
+          diagnostics = $11::jsonb,
 
           completed_at = NOW()
 
@@ -1324,6 +1353,10 @@ export async function ingestPollingSignals(options = {}) {
 
       skippedCount,
 
+      quarantinedPollCount,
+
+      quarantinedAnswerCount,
+
       JSON.stringify(errors),
 
       JSON.stringify({ sources: diagnostics }),
@@ -1336,9 +1369,9 @@ export async function ingestPollingSignals(options = {}) {
 
   return {
 
-    ok: storedCount > 0,
+    ok: storedCount > 0 || quarantinedPollCount > 0,
 
-    success: storedCount > 0,
+    success: storedCount > 0 || quarantinedPollCount > 0,
 
     build: "5.7.0",
 
@@ -1359,6 +1392,10 @@ export async function ingestPollingSignals(options = {}) {
     updated: updatedCount,
 
     skipped: skippedCount,
+
+    quarantined_polls: quarantinedPollCount,
+
+    quarantined_answers: quarantinedAnswerCount,
 
     errors,
 
@@ -1476,6 +1513,8 @@ export async function migrateLegacyPollingSignals() {
 
   let migrated = 0;
 
+  let quarantined = 0;
+
  
 
   for (const item of legacy.rows) {
@@ -1522,7 +1561,18 @@ export async function migrateLegacyPollingSignals() {
 
  
 
-    for (const row of normalized) {
+    const guarded = await guardIncomingPollingGroup({
+      rows: normalized,
+      rawPayload: sourcePayload,
+      provider: "legacy_polling_signals",
+    });
+
+    if (!guarded.accepted) {
+      quarantined += 1;
+      continue;
+    }
+
+    for (const row of guarded.rows) {
 
       await upsertPollingResult(row);
 
@@ -1534,7 +1584,7 @@ export async function migrateLegacyPollingSignals() {
 
  
 
-  return { ok: true, migrated };
+  return { ok: true, migrated, quarantined };
 
 }
 
@@ -1592,11 +1642,19 @@ export async function upsertPollingSignal(input = {}) {
 
   if (!normalized.length) return "skipped";
 
+  const guarded = await guardIncomingPollingGroup({
+    rows: normalized,
+    rawPayload: input.raw_payload || input,
+    provider: "votehub",
+  });
+
+  if (!guarded.accepted) return "quarantined";
+
  
 
   let lastAction = "skipped";
 
-  for (const row of normalized) lastAction = await upsertPollingResult(row);
+  for (const row of guarded.rows) lastAction = await upsertPollingResult(row);
 
   return lastAction;
 
