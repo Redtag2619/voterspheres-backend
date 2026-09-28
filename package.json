@@ -34,7 +34,10 @@
     "test:polling-cycle-diagnostics": "node --test tests/pollingCycleDiagnostic.contract.test.mjs",
     "diagnose:polling-cycles": "node scripts/diagnosePollingElectionCycles.mjs",
     "test:cycle-isolation": "node --test tests/electionCycleIsolation.contract.test.mjs",
-    "audit:cycle-isolation": "node scripts/auditCycleIsolation.mjs"
+    "audit:cycle-isolation": "node scripts/auditCycleIsolation.mjs",
+    "test:polling-cycle-remediation": "node --test tests/pollingCycleRemediation.contract.test.mjs",
+    "remediate:polling-cycles": "node scripts/remediatePollingCycles.mjs",
+    "rollback:polling-cycles": "node scripts/rollbackPollingCycleRemediation.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",
