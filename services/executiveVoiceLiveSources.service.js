@@ -8996,12 +8996,15 @@ async function getPollingTableMetadata() {
       candidateColumn: null,
       localityColumn: null,
       dateColumn: null,
+      temporalScopeColumn: null,
     };
   }
 
   return {
     configured: true,
     columns,
+
+    temporalScopeColumn: columns.has("temporal_scope") ? "temporal_scope" : null,
 
     stateColumn: columns.has("state")
       ? "state"
@@ -9091,6 +9094,7 @@ async function queryStoredPollingRecords({
   limit = 20,
   metadata,
   queryType = "polling",
+  temporalScope = "election_cycle",
 } = {}) {
   const {
     stateColumn,
@@ -9098,6 +9102,7 @@ async function queryStoredPollingRecords({
     candidateColumn,
     localityColumn,
     dateColumn,
+    temporalScopeColumn,
   } = metadata;
 
   const conditions = [];
@@ -9109,6 +9114,11 @@ async function queryStoredPollingRecords({
     conditions,
     params,
   });
+
+  if (temporalScopeColumn && clean(temporalScope).toLowerCase() !== "all") {
+    params.push(clean(temporalScope).toLowerCase());
+    conditions.push(`"${temporalScopeColumn}" = $${params.length}`);
+  }
 
   if (
     clean(office) &&

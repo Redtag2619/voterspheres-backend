@@ -13,6 +13,7 @@ function row(overrides = {}) {
   return {
     poll_id: "poll-1",
     source: "VoteHub",
+    poll_type: "governor",
     subject: "2026 Nevada",
     field_end: "2026-03-13",
     source_payload: { subject: "2026 Nevada" },
@@ -55,9 +56,9 @@ test("uses a stable poll-group key", () => {
 });
 
 test("direct writes require an even supported-format cycle", () => {
-  assert.equal(assertPollingResultCycle({ cycle: 2028 }), 2028);
-  assert.throws(() => assertPollingResultCycle({ cycle: null }), /requires a deterministic/);
-  assert.throws(() => assertPollingResultCycle({ cycle: 2027 }), /requires a deterministic/);
+  assert.equal(assertPollingResultCycle({ temporal_scope: "election_cycle", cycle: 2028 }), 2028);
+  assert.throws(() => assertPollingResultCycle({ temporal_scope: "election_cycle", cycle: null }), /requires a deterministic/);
+  assert.throws(() => assertPollingResultCycle({ temporal_scope: "election_cycle", cycle: 2027 }), /requires a deterministic/);
 });
 
 test("canonical ingestion guards complete groups before any answer-row upsert", () => {

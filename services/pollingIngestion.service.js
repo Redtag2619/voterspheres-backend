@@ -589,6 +589,8 @@ export async function ensureUnifiedPollingSchema() {
 
       ADD COLUMN IF NOT EXISTS cycle INTEGER,
 
+      ADD COLUMN IF NOT EXISTS temporal_scope TEXT NOT NULL DEFAULT 'unresolved',
+
       ADD COLUMN IF NOT EXISTS election_date DATE,
 
       ADD COLUMN IF NOT EXISTS record_type TEXT NOT NULL DEFAULT 'measured_poll',
@@ -969,7 +971,7 @@ export async function upsertPollingResult(row = {}) {
 
         published_at, sample_size, population, methodology, mode,
 
-        margin_of_error, partisan, cycle, election_date, record_type,
+        margin_of_error, partisan, cycle, temporal_scope, election_date, record_type,
 
         is_estimate, confidence_score, freshness_score, source_payload,
 
@@ -985,7 +987,7 @@ export async function upsertPollingResult(row = {}) {
 
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
 
-        $31,$32,$33,$34::jsonb,NOW(),NOW(),NOW()
+        $31,$32,$33,$34,$35::jsonb,NOW(),NOW(),NOW()
 
       )
 
@@ -1049,6 +1051,8 @@ export async function upsertPollingResult(row = {}) {
 
         cycle = EXCLUDED.cycle,
 
+        temporal_scope = EXCLUDED.temporal_scope,
+
         election_date = EXCLUDED.election_date,
 
         record_type = EXCLUDED.record_type,
@@ -1081,7 +1085,7 @@ export async function upsertPollingResult(row = {}) {
 
       row.published_at, row.sample_size, row.population, row.methodology, row.mode,
 
-      row.margin_of_error, row.partisan, row.cycle, row.election_date, row.record_type,
+      row.margin_of_error, row.partisan, row.cycle, row.temporal_scope, row.election_date, row.record_type,
 
       row.is_estimate, row.confidence_score, row.freshness_score,
 

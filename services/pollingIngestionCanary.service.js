@@ -40,6 +40,7 @@ export function buildPollingIngestionCanaryReport({
       field_end: first.field_end || null,
       answer_rows: rows.length,
       decision: classification.accepted ? "would_accept" : "would_quarantine",
+      temporal_scope: classification.temporal_scope,
       cycle: classification.cycle,
       issue_code: classification.issue_code,
       evidence: classification.evidence,
@@ -49,21 +50,26 @@ export function buildPollingIngestionCanaryReport({
   const accepted = groups.filter((group) => group.decision === "would_accept");
   const quarantined = groups.filter((group) => group.decision === "would_quarantine");
   const cycleCounts = {};
+  const scopeCounts = {};
   for (const group of accepted) {
-    const key = String(group.cycle);
-    cycleCounts[key] = (cycleCounts[key] || 0) + group.answer_rows;
+    scopeCounts[group.temporal_scope] = (scopeCounts[group.temporal_scope] || 0) + group.answer_rows;
+    if (group.cycle !== null) {
+      const key = String(group.cycle);
+      cycleCounts[key] = (cycleCounts[key] || 0) + group.answer_rows;
+    }
   }
 
   const stablePlan = groups.map((group) => ({
     poll_id: group.poll_id,
     answer_rows: group.answer_rows,
     decision: group.decision,
+    temporal_scope: group.temporal_scope,
     cycle: group.cycle,
     issue_code: group.issue_code,
   }));
 
   return {
-    canary_version: "2.4.0",
+    canary_version: "2.4.1",
     generated_at: new Date().toISOString(),
     mode: "read_only",
     fetched_poll_groups: polls.length,
@@ -73,6 +79,7 @@ export function buildPollingIngestionCanaryReport({
     would_quarantine_groups: quarantined.length,
     would_quarantine_answers: quarantined.reduce((sum, group) => sum + group.answer_rows, 0),
     accepted_cycle_counts: cycleCounts,
+    accepted_temporal_scope_counts: scopeCounts,
     database_unchanged: before && after
       ? JSON.stringify(before) === JSON.stringify(after)
       : null,

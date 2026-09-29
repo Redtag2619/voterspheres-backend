@@ -22,6 +22,7 @@ export async function listPollingIntelligence({
   candidate = "",
   pollType = "",
   recordType = "",
+  temporalScope = "election_cycle",
   measuredOnly = false,
   limit = 100,
 } = {}) {
@@ -41,6 +42,9 @@ export async function listPollingIntelligence({
   if (clean(candidate)) conditions.push(`candidate_name ILIKE ${push(`%${clean(candidate)}%`)}`);
   if (clean(pollType)) conditions.push(`poll_type = ${push(clean(pollType))}`);
   if (clean(recordType)) conditions.push(`record_type = ${push(clean(recordType))}`);
+  if (clean(temporalScope).toLowerCase() !== "all") {
+    conditions.push(`temporal_scope = ${push(clean(temporalScope).toLowerCase())}`);
+  }
   if (measuredOnly) conditions.push(`COALESCE(is_estimate, FALSE) = FALSE`);
 
   const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -77,6 +81,9 @@ export async function getPollingIntelligenceHealth() {
         COUNT(DISTINCT pollster)::integer AS pollster_count,
         COUNT(*) FILTER (WHERE COALESCE(is_estimate, FALSE) = FALSE)::integer AS measured_rows,
         COUNT(*) FILTER (WHERE COALESCE(is_estimate, FALSE) = TRUE)::integer AS estimate_rows,
+        COUNT(*) FILTER (WHERE temporal_scope = 'election_cycle')::integer AS election_cycle_rows,
+        COUNT(*) FILTER (WHERE temporal_scope = 'continuous_tracking')::integer AS continuous_tracking_rows,
+        COUNT(*) FILTER (WHERE temporal_scope = 'unresolved')::integer AS unresolved_rows,
         MAX(COALESCE(field_end, published_at::date, updated_at::date)) AS freshest_record
       FROM polling_results
     `),
@@ -102,6 +109,9 @@ export async function getPollingIntelligenceHealth() {
     pollster_count: Number(row.pollster_count || 0),
     measured_rows: Number(row.measured_rows || 0),
     estimate_rows: Number(row.estimate_rows || 0),
+    election_cycle_rows: Number(row.election_cycle_rows || 0),
+    continuous_tracking_rows: Number(row.continuous_tracking_rows || 0),
+    unresolved_rows: Number(row.unresolved_rows || 0),
     freshest_record: row.freshest_record || null,
     latest_run: latestRun.rows[0] || null,
     generated_at: new Date().toISOString(),

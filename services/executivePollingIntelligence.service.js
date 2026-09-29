@@ -42,6 +42,8 @@ function dashboardFilters(query = {}) {
 
     pollType: normalizePollType(query.poll_type),
 
+    temporalScope: lower(query.temporal_scope || "election_cycle"),
+
     population: normalizePopulation(query.population),
 
     pollster: clean(query.pollster),
@@ -91,6 +93,12 @@ function buildWhere(filters = {}) {
   if (filters.pollType) {
 
     conditions.push(`LOWER(COALESCE(poll_type, '')) = ${push(filters.pollType)}`);
+
+  }
+
+  if (filters.temporalScope && filters.temporalScope !== "all") {
+
+    conditions.push(`temporal_scope = ${push(filters.temporalScope)}`);
 
   }
 
@@ -222,6 +230,8 @@ async function baseRows({ filters, limit = 2500 } = {}) {
 
         poll_type,
 
+        temporal_scope,
+
         COALESCE(state, 'US') AS state,
 
         district,
@@ -337,6 +347,8 @@ function groupPolls(rows = []) {
         id: row.poll_id || String(row.id || key),
 
         poll_type: row.poll_type || "unknown",
+
+        temporal_scope: row.temporal_scope || "unresolved",
 
         state: row.state || "US",
 

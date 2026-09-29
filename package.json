@@ -41,7 +41,9 @@
     "test:polling-ingestion-cycle-guard": "node --test tests/pollingIngestionCycleGuard.contract.test.mjs",
     "audit:polling-ingestion-cycles": "node scripts/auditPollingIngestionCycles.mjs",
     "test:polling-ingestion-canary": "node --test tests/pollingIngestionCanary.contract.test.mjs",
-    "canary:polling-ingestion": "node scripts/runPollingIngestionCanary.mjs"
+    "canary:polling-ingestion": "node scripts/runPollingIngestionCanary.mjs",
+    "test:polling-temporal-scope": "node --test tests/pollingTemporalScope.contract.test.mjs",
+    "audit:polling-temporal-scope": "node scripts/auditPollingTemporalScopes.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",

@@ -60,6 +60,19 @@ test("reports ambiguous groups as would-quarantine", () => {
   assert.equal(report.would_quarantine_groups, 1);
 });
 
+test("reports approval polling as date-bound continuous tracking", () => {
+  const report = buildPollingIngestionCanaryReport({
+    polls: [poll({ subject: "Donald Trump", poll_type: "approval", end_date: "2025-01-20" })],
+    registeredCycles: cycles,
+    before: snapshot,
+    after: { ...snapshot },
+  });
+  assert.equal(report.would_accept_groups, 1);
+  assert.equal(report.groups[0].temporal_scope, "continuous_tracking");
+  assert.equal(report.groups[0].cycle, null);
+  assert.equal(report.accepted_temporal_scope_counts.continuous_tracking, 2);
+});
+
 test("detects any database count change during the canary window", () => {
   const report = buildPollingIngestionCanaryReport({
     polls: [],
