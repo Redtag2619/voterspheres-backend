@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 
- 
+
 
 const clean = (value = "") => String(value ?? "").trim();
 
@@ -8,13 +8,13 @@ const lower = (value = "") => clean(value).toLowerCase();
 
 const upper = (value = "") => clean(value).toUpperCase();
 
- 
+
 
 const clamp = (value, minimum, maximum) =>
 
   Math.min(maximum, Math.max(minimum, Number(value) || minimum));
 
- 
+
 
 const normalizeState = (value = "") => {
 
@@ -26,13 +26,66 @@ const normalizeState = (value = "") => {
 
 };
 
- 
+
 
 const normalizePollType = (value = "") => lower(value);
 
 const normalizePopulation = (value = "") => lower(value);
 
- 
+export const POLLING_TEMPORAL_SCOPES = Object.freeze({
+  election: "election_cycle",
+  continuous: "continuous_tracking",
+  unresolved: "unresolved",
+  all: "all",
+});
+
+export function normalizePollingTemporalScope(value = "election_cycle") {
+  const scope = lower(value || "election_cycle");
+  const allowed = new Set(Object.values(POLLING_TEMPORAL_SCOPES));
+  if (!allowed.has(scope)) {
+    const error = new Error("Invalid polling temporal scope.");
+    error.code = "INVALID_POLLING_TEMPORAL_SCOPE";
+    error.statusCode = 400;
+    throw error;
+  }
+  return scope;
+}
+
+function normalizeCycle(value) {
+  if (value === undefined || value === null || clean(value) === "") return null;
+  const cycle = Number(value);
+  if (!Number.isInteger(cycle) || cycle < 2026 || cycle > 2200 || cycle % 2 !== 0) {
+    const error = new Error("cycle must be a supported even-numbered election cycle.");
+    error.code = "INVALID_POLLING_CYCLE";
+    error.statusCode = 400;
+    throw error;
+  }
+  return cycle;
+}
+
+function assertTemporalScopeAccess(filters, includeUnresolved) {
+  if (
+    filters.temporalScope === POLLING_TEMPORAL_SCOPES.continuous &&
+    filters.cycle !== null
+  ) {
+    const error = new Error("Continuous-tracking polling cannot be filtered by election cycle.");
+    error.code = "POLLING_SCOPE_CYCLE_CONFLICT";
+    error.statusCode = 400;
+    throw error;
+  }
+  if (
+    !includeUnresolved &&
+    [POLLING_TEMPORAL_SCOPES.unresolved, POLLING_TEMPORAL_SCOPES.all]
+      .includes(filters.temporalScope)
+  ) {
+    const error = new Error("This polling temporal scope requires platform-operator access.");
+    error.code = "POLLING_SCOPE_FORBIDDEN";
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+
 
 function dashboardFilters(query = {}) {
 
@@ -42,7 +95,9 @@ function dashboardFilters(query = {}) {
 
     pollType: normalizePollType(query.poll_type),
 
-    temporalScope: lower(query.temporal_scope || "election_cycle"),
+    temporalScope: normalizePollingTemporalScope(query.temporal_scope || "election_cycle"),
+
+    cycle: normalizeCycle(query.cycle),
 
     population: normalizePopulation(query.population),
 
@@ -62,7 +117,7 @@ function dashboardFilters(query = {}) {
 
 }
 
- 
+
 
 function buildWhere(filters = {}) {
 
@@ -70,7 +125,7 @@ function buildWhere(filters = {}) {
 
   const conditions = [];
 
- 
+
 
   const push = (value) => {
 
@@ -80,7 +135,7 @@ function buildWhere(filters = {}) {
 
   };
 
- 
+
 
   if (filters.state && filters.state !== "US") {
 
@@ -88,7 +143,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.pollType) {
 
@@ -102,7 +157,13 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+  if (filters.cycle !== null) {
+
+    conditions.push(`cycle = ${push(filters.cycle)}`);
+
+  }
+
+
 
   if (filters.population) {
 
@@ -110,7 +171,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.pollster) {
 
@@ -118,7 +179,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.subject) {
 
@@ -126,7 +187,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.measuredOnly) {
 
@@ -134,7 +195,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.startDate) {
 
@@ -146,7 +207,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   if (filters.endDate) {
 
@@ -158,7 +219,7 @@ function buildWhere(filters = {}) {
 
   }
 
- 
+
 
   return {
 
@@ -170,7 +231,7 @@ function buildWhere(filters = {}) {
 
 }
 
- 
+
 
 async function tableExists(tableName) {
 
@@ -196,13 +257,13 @@ async function tableExists(tableName) {
 
   );
 
- 
+
 
   return Boolean(result.rows[0]?.exists);
 
 }
 
- 
+
 
 async function baseRows({ filters, limit = 2500 } = {}) {
 
@@ -210,13 +271,13 @@ async function baseRows({ filters, limit = 2500 } = {}) {
 
   if (!exists) return [];
 
- 
+
 
   const where = buildWhere(filters);
 
   const safeLimit = clamp(limit, 1, 5000);
 
- 
+
 
   const result = await pool.query(
 
@@ -294,13 +355,13 @@ async function baseRows({ filters, limit = 2500 } = {}) {
 
   );
 
- 
+
 
   return result.rows;
 
 }
 
- 
+
 
 function uniquePollKey(row) {
 
@@ -326,19 +387,19 @@ function uniquePollKey(row) {
 
 }
 
- 
+
 
 function groupPolls(rows = []) {
 
   const groups = new Map();
 
- 
+
 
   for (const row of rows) {
 
     const key = uniquePollKey(row);
 
- 
+
 
     if (!groups.has(key)) {
 
@@ -394,7 +455,7 @@ function groupPolls(rows = []) {
 
     }
 
- 
+
 
     const poll = groups.get(key);
 
@@ -412,7 +473,7 @@ function groupPolls(rows = []) {
 
   }
 
- 
+
 
   return [...groups.values()]
 
@@ -436,7 +497,7 @@ function groupPolls(rows = []) {
 
 }
 
- 
+
 
 function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
@@ -448,11 +509,11 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
     .slice(0, windowSize);
 
- 
+
 
   const values = new Map();
 
- 
+
 
   for (const poll of latest) {
 
@@ -462,7 +523,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
       if (!choice) continue;
 
- 
+
 
       const current = values.get(choice) || {
 
@@ -474,7 +535,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
       };
 
- 
+
 
       const recencyWeight = Math.max(
 
@@ -484,7 +545,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
       );
 
- 
+
 
       const sampleWeight = poll.sample_size
 
@@ -492,11 +553,11 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
         : 1;
 
- 
+
 
       const weight = recencyWeight * sampleWeight;
 
- 
+
 
       current.total += Number(answer.pct) * weight;
 
@@ -510,7 +571,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
   }
 
- 
+
 
   return [...values.entries()]
 
@@ -534,7 +595,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
 }
 
- 
+
 
 function trendSeries(polls = [], pollType = "") {
 
@@ -546,11 +607,11 @@ function trendSeries(polls = [], pollType = "") {
 
   );
 
- 
+
 
   const byDate = new Map();
 
- 
+
 
   for (const poll of [...relevant].reverse()) {
 
@@ -558,7 +619,7 @@ function trendSeries(polls = [], pollType = "") {
 
     if (!date) continue;
 
- 
+
 
     if (!byDate.has(date)) {
 
@@ -572,11 +633,11 @@ function trendSeries(polls = [], pollType = "") {
 
     }
 
- 
+
 
     const bucket = byDate.get(date);
 
- 
+
 
     for (const answer of poll.answers) {
 
@@ -590,7 +651,7 @@ function trendSeries(polls = [], pollType = "") {
 
   }
 
- 
+
 
   return [...byDate.values()]
 
@@ -626,13 +687,13 @@ function trendSeries(polls = [], pollType = "") {
 
 }
 
- 
+
 
 function pollsterSummary(polls = []) {
 
   const map = new Map();
 
- 
+
 
   for (const poll of polls) {
 
@@ -656,13 +717,13 @@ function pollsterSummary(polls = []) {
 
     };
 
- 
+
 
     current.polls += 1;
 
     current.total_sample += Number(poll.sample_size || 0);
 
- 
+
 
     const date = String(poll.poll_date || poll.end_date || "");
 
@@ -672,7 +733,7 @@ function pollsterSummary(polls = []) {
 
     }
 
- 
+
 
     if (poll.population) current.populations.add(poll.population);
 
@@ -680,13 +741,13 @@ function pollsterSummary(polls = []) {
 
     if (poll.poll_type) current.poll_types.add(poll.poll_type);
 
- 
+
 
     map.set(key, current);
 
   }
 
- 
+
 
   return [...map.values()]
 
@@ -718,13 +779,13 @@ function pollsterSummary(polls = []) {
 
 }
 
- 
+
 
 function pollTypeSummary(polls = []) {
 
   const counts = new Map();
 
- 
+
 
   for (const poll of polls) {
 
@@ -734,7 +795,7 @@ function pollTypeSummary(polls = []) {
 
   }
 
- 
+
 
   return [...counts.entries()]
 
@@ -750,7 +811,7 @@ function pollTypeSummary(polls = []) {
 
 }
 
- 
+
 
 function summarize(polls = [], rows = []) {
 
@@ -762,7 +823,7 @@ function summarize(polls = [], rows = []) {
 
   const types = new Set(polls.map((poll) => poll.poll_type).filter(Boolean));
 
- 
+
 
   const averageFreshness = polls.length
 
@@ -780,7 +841,7 @@ function summarize(polls = [], rows = []) {
 
     : 0;
 
- 
+
 
   const averageConfidence = polls.length
 
@@ -798,7 +859,7 @@ function summarize(polls = [], rows = []) {
 
     : 0;
 
- 
+
 
   return {
 
@@ -828,11 +889,59 @@ function summarize(polls = [], rows = []) {
 
 }
 
- 
 
-export async function getExecutivePollingDashboard({ query = {} } = {}) {
+
+export async function getExecutivePollingScopeOptions({ includeUnresolved = false } = {}) {
+  const configured = await tableExists("polling_results");
+  if (!configured) {
+    return { temporal_scopes: [], available_cycles: [] };
+  }
+
+  const scopeResult = await pool.query(`
+    SELECT
+      temporal_scope,
+      COUNT(DISTINCT COALESCE(poll_id, id::text))::integer AS polls,
+      COUNT(*)::integer AS answer_rows,
+      MAX(COALESCE(field_end, published_at::date, updated_at::date)) AS freshest_record
+    FROM polling_results
+    ${includeUnresolved ? "" : "WHERE temporal_scope <> 'unresolved'"}
+    GROUP BY temporal_scope
+    ORDER BY temporal_scope
+  `);
+
+  const cycleTableExists = await tableExists("election_cycles");
+  const cycleRows = cycleTableExists
+    ? (await pool.query(`
+        SELECT cycle_year, label, status
+        FROM election_cycles
+        WHERE is_selectable = TRUE
+        ORDER BY cycle_year
+      `)).rows
+    : [];
+
+  return {
+    temporal_scopes: scopeResult.rows.map((row) => ({
+      temporal_scope: row.temporal_scope,
+      polls: Number(row.polls || 0),
+      answer_rows: Number(row.answer_rows || 0),
+      freshest_record: row.freshest_record || null,
+    })),
+    available_cycles: cycleRows.map((row) => ({
+      cycle: Number(row.cycle_year),
+      label: row.label || String(row.cycle_year),
+      status: row.status || null,
+    })),
+  };
+}
+
+export async function getExecutivePollingDashboard({
+  query = {},
+  includeUnresolved = false,
+} = {}) {
 
   const filters = dashboardFilters(query);
+
+  assertTemporalScopeAccess(filters, includeUnresolved);
 
   const rows = await baseRows({
 
@@ -842,7 +951,7 @@ export async function getExecutivePollingDashboard({ query = {} } = {}) {
 
   });
 
- 
+
 
   const polls = groupPolls(rows);
 
@@ -854,11 +963,14 @@ export async function getExecutivePollingDashboard({ query = {} } = {}) {
 
   );
 
- 
 
-  const averagePollType = filters.pollType || "generic-ballot";
 
- 
+  const averagePollType = filters.pollType ||
+    (filters.temporalScope === "continuous_tracking" ? "approval" : "generic-ballot");
+
+  const scopeOptions = await getExecutivePollingScopeOptions({ includeUnresolved });
+
+
 
   return {
 
@@ -875,6 +987,8 @@ export async function getExecutivePollingDashboard({ query = {} } = {}) {
     attribution: "Polling data powered by VoteHub and stored by VoterSpheres.",
 
     filters,
+
+    ...scopeOptions,
 
     summary: summarize(polls, rows),
 
@@ -904,11 +1018,16 @@ export async function getExecutivePollingDashboard({ query = {} } = {}) {
 
 }
 
- 
 
-export async function listExecutivePollingRecords({ query = {} } = {}) {
+
+export async function listExecutivePollingRecords({
+  query = {},
+  includeUnresolved = false,
+} = {}) {
 
   const filters = dashboardFilters(query);
+
+  assertTemporalScopeAccess(filters, includeUnresolved);
 
   const rows = await baseRows({
 
@@ -918,7 +1037,8 @@ export async function listExecutivePollingRecords({ query = {} } = {}) {
 
   });
 
- 
+
+
 
   return {
 
@@ -938,13 +1058,13 @@ export async function listExecutivePollingRecords({ query = {} } = {}) {
 
 }
 
- 
 
-export async function getExecutivePollingHealth() {
+
+export async function getExecutivePollingHealth({ includeUnresolved = false } = {}) {
 
   const exists = await tableExists("polling_results");
 
- 
+
 
   if (!exists) {
 
@@ -966,7 +1086,7 @@ export async function getExecutivePollingHealth() {
 
   }
 
- 
+
 
   const result = await pool.query(`
 
@@ -983,14 +1103,15 @@ export async function getExecutivePollingHealth() {
       MAX(COALESCE(field_end, published_at::date, updated_at::date)) AS freshest_record
 
     FROM polling_results
+    ${includeUnresolved ? "" : "WHERE temporal_scope <> 'unresolved'"}
 
   `);
 
- 
+
 
   const row = result.rows[0] || {};
 
- 
+
 
   const types = await pool.query(`
 
@@ -1003,6 +1124,7 @@ export async function getExecutivePollingHealth() {
       COUNT(*)::integer AS answer_rows
 
     FROM polling_results
+    ${includeUnresolved ? "" : "WHERE temporal_scope <> 'unresolved'"}
 
     GROUP BY 1
 
@@ -1010,7 +1132,7 @@ export async function getExecutivePollingHealth() {
 
   `);
 
- 
+
 
   return {
 
@@ -1040,11 +1162,13 @@ export async function getExecutivePollingHealth() {
 
 }
 
- 
+
 
 export default {
 
   getExecutivePollingDashboard,
+
+  getExecutivePollingScopeOptions,
 
   listExecutivePollingRecords,
 

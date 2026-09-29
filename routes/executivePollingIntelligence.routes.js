@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import {
   getExecutivePollingDashboardController,
   getExecutivePollingHealthController,
+  getExecutivePollingScopesController,
   listExecutivePollingRecordsController,
 } from "../controllers/executivePollingIntelligence.controller.js";
 
@@ -13,6 +14,12 @@ router.get(
   "/health",
   requireAuth,
   getExecutivePollingHealthController
+);
+
+router.get(
+  "/scopes",
+  requireAuth,
+  getExecutivePollingScopesController
 );
 
 router.get(
@@ -28,4 +35,3 @@ router.get(
 );
 
 export default router;
-

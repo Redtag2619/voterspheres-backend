@@ -43,7 +43,8 @@
     "test:polling-ingestion-canary": "node --test tests/pollingIngestionCanary.contract.test.mjs",
     "canary:polling-ingestion": "node scripts/runPollingIngestionCanary.mjs",
     "test:polling-temporal-scope": "node --test tests/pollingTemporalScope.contract.test.mjs",
-    "audit:polling-temporal-scope": "node scripts/auditPollingTemporalScopes.mjs"
+    "audit:polling-temporal-scope": "node scripts/auditPollingTemporalScopes.mjs",
+    "test:polling-temporal-scope-api": "node --test tests/executivePollingTemporalScope.contract.test.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",
