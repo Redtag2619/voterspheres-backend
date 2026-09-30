@@ -65,10 +65,15 @@ export function configuredFederalElectionCycle(
   );
 }
 
+// Phase 2.10: registry generation stays inside supported bounds.
 export function buildFederalElectionCycles({ startYear = 2026, count = 8 } = {}) {
   const start = normalizeFederalElectionCycle(startYear, { fieldName: "startYear" });
-  const size = Math.min(Math.max(Number(count) || 8, 1), 50);
-  return Array.from({ length: size }, (_, index) => start + index * 2);
+  const requested = Number(count);
+  if (!Number.isInteger(requested) || requested < 1 || requested > 50) {
+    throw new ElectionCycleValidationError("count must be an integer between 1 and 50.", { field: "count", received: count });
+  }
+  const remaining = Math.floor((MAX_FEDERAL_ELECTION_CYCLE - start) / 2) + 1;
+  return Array.from({ length: Math.min(requested, remaining) }, (_, index) => start + index * 2);
 }
 
 export function sendElectionCycleError(res, error) {

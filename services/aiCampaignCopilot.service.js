@@ -1,3 +1,4 @@
+import { isolateCampaignCycleEvidence } from "./aiCampaignCopilot/cycleEvidence.js";
 import OpenAI from "openai";
 
 import { pool } from "../db/pool.js";
@@ -1015,7 +1016,7 @@ function classifyQuestion(prompt = "") {
 
  
 
-async function getPlatformContext({
+async function getPlatformContextCore({
   user,
   firmId,
   workspaceId,
@@ -1193,6 +1194,10 @@ async function getPlatformContext({
 
  
 
+// Phase 2.10: apply cycle filtering at the actual copilot boundary.
+async function getPlatformContext(options) {
+  return isolateCampaignCycleEvidence(await getPlatformContextCore(options), options.temporalScope);
+}
 function compactPlatformContext(context = {}) {
 
   const mission = context.mission || {};
@@ -1201,7 +1206,7 @@ function compactPlatformContext(context = {}) {
 
   const warRoom = context.warRoom || {};
 
-  const strictGeography = Boolean(context.scope?.strict_geography);
+  const strictGeography = Boolean(context.scope?.strict_geography || context.scope?.strict_temporal);
 
   const scopedState = context.scope?.state || null;
 
@@ -2915,15 +2920,7 @@ export async function askAiCampaignCopilot({
 
  
 
-      cycle:
-
-        clean(
-
-          payload.cycle ||
-
-          "2026"
-
-        ),
+      cycle: String(temporalScope.cycle_year),
 
  
 
@@ -3115,21 +3112,7 @@ export async function askAiCampaignCopilot({
 
  
 
-            cycle:
-
-              clean(
-
-                payload.cycle ||
-
-                orchestratorPlan
-
-                  ?.context
-
-                  ?.cycle ||
-
-                "2026"
-
-              ),
+            cycle: String(temporalScope.cycle_year),
 
  
 
@@ -3796,6 +3779,14 @@ export async function askAiCampaignCopilot({
  
 
   answer = generated.answer;
+  if (platformContext?.scope?.cycle_evidence && isPlanningRequest(prompt)) {
+    const evidence = platformContext.scope.cycle_evidence;
+    const assessment = evidence.matched_records
+      ? "Selected-cycle platform context is available; records without matching cycle metadata are excluded."
+      : "No verified platform context with explicit metadata for the selected cycle is available. This plan uses assumptions rather than verified future-cycle evidence.";
+    answer += "\n\nCycle evidence assessment: " + assessment + " Shared donors, vendors and CRM remain operational context.";
+    generated.answer = answer;
+  }
 
   if (isPlanningRequest(prompt)) {
     let violations = temporalViolations(answer, temporalScope);

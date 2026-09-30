@@ -1,3 +1,4 @@
+import { isolateCampaignCycleEvidence } from "./cycleEvidence.js";
 import { pool } from "../../db/pool.js";
 import { getElectionWarRoom } from "../electionWarRoom.service.js";
 import { getAiStrategicAdvisor } from "../aiStrategicAdvisor.service.js";
@@ -79,7 +80,7 @@ export async function safeQuery(sql, params = []) {
   }
 }
 
-export async function getPlatformContext({
+async function getPlatformContextCore({
   user,
   firmId,
   workspaceId,
@@ -192,7 +193,7 @@ export function compactPlatformContext(context = {}) {
   const mission = context.mission || {};
   const advisor = context.advisor || {};
   const warRoom = context.warRoom || {};
-  const strictGeography = Boolean(context.scope?.strict_geography);
+  const strictGeography = Boolean(context.scope?.strict_geography || context.scope?.strict_temporal);
   const scopedState = context.scope?.state || null;
 
   return {
@@ -263,4 +264,9 @@ export function compactPlatformContext(context = {}) {
     workspace: context.workspace || null,
     scope: context.scope || null,
   };
+}
+
+// Phase 2.10: modular callers use the same evidence boundary.
+export async function getPlatformContext(options) {
+  return isolateCampaignCycleEvidence(await getPlatformContextCore(options), options.temporalScope);
 }
