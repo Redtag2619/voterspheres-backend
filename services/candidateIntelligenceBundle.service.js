@@ -1,3 +1,4 @@
+import { buildExecutivePollingEvidence, appendExecutivePollingSummary } from './executivePollingEvidence.service.js';
 import { executeExecutiveVoiceTool } from "./executiveVoiceTools.service.js";
 import {
   UNIVERSAL_CANDIDATE_BUILD,
@@ -585,7 +586,7 @@ async function persistNews(resolution, newsRecords) {
   ));
 }
 
-export async function getCandidateIntelligenceBundle({
+async function getCandidateIntelligenceBundleCore({
   candidate = "",
   candidateId = "",
   state = "",
@@ -711,12 +712,8 @@ export async function getCandidateIntelligenceBundle({
     safeTool("get_unified_executive_intelligence", resolvedContext, user),
   ]);
 
-  const polling = pollingGroups(
-  pollingResult,
-  resolvedContext,
-  identities,
-  normalizedLimit
-);
+  const polling = buildExecutivePollingEvidence(pollingGroups(pollingResult, resolvedContext, identities, normalizedLimit), resolvedContext);
+  warnings.push(...polling.limitations);
   const news = filterCandidateNews(
     recordsFrom(newsResult),
     resolvedContext
@@ -825,3 +822,8 @@ export async function getCandidateIntelligenceBundle({
 }
 
 export default { getCandidateIntelligenceBundle };
+
+
+export async function getCandidateIntelligenceBundle(args = {}) {
+  return appendExecutivePollingSummary(await getCandidateIntelligenceBundleCore(args));
+}

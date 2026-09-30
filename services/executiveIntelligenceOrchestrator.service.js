@@ -11959,7 +11959,10 @@ if (
 
 } else if (
 
-  bundle.polling?.source_result?.ok
+  bundle.polling?.source_result?.ok ||
+  (bundle.polling?.evidence_version === "2.9.0" &&
+    ["no_polling_available", "continuous_context_available"].includes(pollingStatus) &&
+    !bundle.polling?.degraded)
 
 ) {
 
@@ -12037,8 +12040,14 @@ if (
 
  
 
+// Phase 2.9.1: render filtered evidence assessment in deterministic prose.
+if (bundle.polling?.evidence_version === "2.9.0" && bundle.polling?.executive_summary) {
+  lines.push("", "Polling evidence assessment:", bundle.polling.executive_summary, "");
+}
+if (bundle.polling?.continuous_tracking_count > 0) {
+  lines.push(`Continuous tracking context: ${bundle.polling.continuous_tracking_count} records (separate from election-race polling).`);
+}
 lines.push(
-
   `News articles: ${articles.length}`,
 
   `Political signals: ${signals.length}`,
@@ -12165,13 +12174,12 @@ lines.push(
 
  
 
-  lines.push(
-
-    "",
-
-    pollingSectionTitle
-
-  );
+  if (bundle.polling?.freshness?.status === "stale") {
+    pollingSectionTitle = pollingSectionTitle.replace(/^Latest/, "Historical").replace(/:$/, " (stale):");
+  } else if (bundle.polling?.freshness?.status === "unknown") {
+    pollingSectionTitle = pollingSectionTitle.replace(/:$/, " (freshness unknown):");
+  }
+  lines.push("", pollingSectionTitle);
 
  
 
