@@ -6,6 +6,22 @@ import {
 
 
 
+// FEC sync guard v1: keep prior PAC evidence when this run did not request it.
+export function preserveSkippedPacEvidence(payload, previous) {
+  const next = { ...(payload || {}) };
+  if (next.pac_evidence_status !== "skipped_limit") return next;
+  delete next.pac_contributions;
+  delete next.pac_contributions_total;
+  delete next.pac_evidence_updated_at;
+  if (previous && Array.isArray(previous.pac_contributions)) {
+    next.pac_contributions = previous.pac_contributions;
+    if (Object.hasOwn(previous, "pac_contributions_total")) next.pac_contributions_total = previous.pac_contributions_total;
+    next.pac_evidence_status = "preserved_not_refreshed";
+    next.pac_evidence_updated_at = previous.pac_evidence_updated_at || null;
+  }
+  return next;
+}
+
 function getEnv(name, fallback = "") {
 
   return process.env[name] || fallback;
@@ -984,19 +1000,15 @@ export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
 
 
+    const pacAttempted = normalized.length < effectivePacSyncLimit;
     const payload = {
-
       ...row,
-
-      pac_contributions: pacContributions,
-
-      pac_contributions_total: pacContributions.reduce(
-
-        (sum, pac) => sum + toNumber(pac.amount),
-
-        0
-
-      ),
+      ...(pacAttempted ? {
+        pac_contributions: pacContributions,
+        pac_contributions_total: pacContributions.reduce((sum, pac) => sum + toNumber(pac.amount), 0),
+        pac_evidence_status: "retrieved_limited",
+        pac_evidence_updated_at: new Date().toISOString(),
+      } : { pac_evidence_status: "skipped_limit" }),
 
       last_imported: new Date().toISOString(),
 
@@ -1062,6 +1074,16 @@ export async function replaceFundraisingLive(rows, cycle) {
 
 
 
+    // Lock and retain same-cycle evidence before the cycle replacement.
+    const prior = await client.query(
+      "SELECT candidate_id, source_payload FROM fundraising_live WHERE election_year = $1 FOR UPDATE",
+      [cycle]
+    );
+    const priorById = new Map(prior.rows.map(row => [String(row.candidate_id), row.source_payload]));
+    const replacementRows = rows.map(row => ({
+      ...row,
+      source_payload: preserveSkippedPacEvidence(row.source_payload, priorById.get(String(row.candidate_id)))
+    }));
     await client.query(`DELETE FROM fundraising_live WHERE election_year = $1`, [
 
       cycle,
@@ -1070,7 +1092,7 @@ export async function replaceFundraisingLive(rows, cycle) {
 
 
 
-    for (const row of rows) {
+    for (const row of replacementRows) {
 
       await client.query(
 
@@ -1584,7 +1606,10 @@ export async function syncFundraisingFromFec({
   return {
 
     ok: true,
-
+    status: normalizedRows.some(row => row.source_payload?.pac_evidence_status === "skipped_limit")
+      ? "completed_with_skipped_pac" : "completed",
+    pac_lookup_policy: "Any PAC lookup failure aborts this run before replacement writes; retrieved PAC evidence is limited to configured committees and result pages.",
+    pac_skipped_candidates: normalizedRows.filter(row => row.source_payload?.pac_evidence_status === "skipped_limit").length,
     cycle: targetCycle,
 
     fetched: rawRows.length,
@@ -1838,22 +1863,10 @@ async function fetchCandidateCommitteesForCandidate({ candidateId, cycle }) {
       );
 
   } catch (error) {
-
-    console.warn(
-
-      `[FEC] committee lookup skipped for ${validCandidateId}:`,
-
-      error.message
-
-    );
-
-    return [];
-
+    // FEC sync guard: propagate upstream failure before any replacement write.
+    throw error;
   }
-
 }
-
-
 
 async function fetchScheduleAForCommittee({ committeeId, cycle }) {
 
@@ -1948,22 +1961,10 @@ async function fetchScheduleAForCommittee({ committeeId, cycle }) {
     });
 
   } catch (error) {
-
-    console.warn(
-
-      `[FEC] Schedule A lookup skipped for committee ${validCommitteeId}:`,
-
-      error.message
-
-    );
-
-    return [];
-
+    // FEC sync guard: propagate upstream failure before any replacement write.
+    throw error;
   }
-
 }
-
-
 
 async function fetchPacContributionsForCandidate({
 
@@ -2066,17 +2067,7 @@ async function fetchPacContributionsForCandidate({
     return aggregatePacContributions(allScheduleARows, limit);
 
   } catch (error) {
-
-    console.warn(
-
-      `[FEC] PAC contribution sync skipped for ${validCandidateId}:`,
-
-      error.message
-
-    );
-
-    return [];
-
+    // FEC sync guard: propagate upstream failure before any replacement write.
+    throw error;
   }
-
 }

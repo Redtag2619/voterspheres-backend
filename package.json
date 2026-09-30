@@ -52,7 +52,8 @@
     "monitor:polling-operations": "node scripts/monitorPollingOperations.mjs",
     "test:polling-operations-monitor": "node --test tests/pollingOperationsMonitor.contract.test.mjs",
     "test:executive-polling-evidence": "node --test tests/executivePollingEvidence.contract.test.mjs",
-    "test:executive-polling-prose": "node --test tests/executivePollingProse.contract.test.mjs"
+    "test:executive-polling-prose": "node --test tests/executivePollingProse.contract.test.mjs",
+    "test:fec-sync-guard": "node --test tests/fecSyncGuard.contract.test.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",

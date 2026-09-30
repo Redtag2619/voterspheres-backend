@@ -48,6 +48,13 @@ async function main() {
     ? await syncFecCommitteeContactsForCandidates({ cycle, limit: contactLimit, offset: contactOffset })
     : await syncFundraisingFromFec({ cycle, syncContacts, contactLimit, contactOffset });
 
+  // FEC sync guard v1: an incomplete service result must not look successful.
+  if (!result || result.ok !== true) {
+    console.error("FEC sync incomplete");
+    console.error(JSON.stringify(result, null, 2));
+    process.exitCode = 1;
+    return;
+  }
   console.log("FEC sync complete");
   console.log(JSON.stringify(result, null, 2));
 }
