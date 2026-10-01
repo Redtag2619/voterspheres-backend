@@ -1,0 +1,9 @@
+# Phase 2.10.1 R3: Full-timeline completeness
+
+Strict requests explicitly asking for a full/complete/comprehensive/end-to-end timeline, calendar or schedule require dated GOTV execution and Election Day operations milestones in the selected cycle. Timeline/calendar/schedule requests explicitly including GOTV and Election Day also qualify. Ordinary plans and preparation-only timelines do not. This rule does not require every intermediate year to have milestones and does not verify official election dates.
+
+The existing answer repair pipeline now includes completeness violations both before and after repair. One repair attempt is allowed. Missing, undated or wrong-year execution milestones remaining afterward produce TEMPORAL_SCOPE_VIOLATION (422). The canonical evidence assessment remains appended once after validation. Existing year guards remain. The check recognizes explicit milestone headings in Markdown; arbitrary prose/table formats are not exhaustively validated and may be rejected as incomplete. It does not infer a missing year or add a date automatically.
+
+25 tests cover the original GOTV defect, heading aliases, assessment deduplication, completeness, a successful repair and rejection after an incomplete repair. Installer requires unchanged Phase 2.10.1 R2 service/helper/tests (normalizes line endings for comparison), previews by default, backs up originals and refuses mismatched source. No package, dependency, database, provider or deployment changes occur during installation.
+
+Run check:syntax, test:planning-integrity, test:future-cycle-evidence, test:tenant-isolation, test:executive-polling-evidence, test:executive-polling-prose, git diff --check. Restart the local backend and submit a new full timeline request with strict_temporal true and selected cycle 2030. Incomplete output must be repaired or rejected. Confirm the frontend calls this backend. Keep pending dependency changes separate when staging.

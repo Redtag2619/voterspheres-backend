@@ -1,0 +1,9 @@
+# Phase 2.10.1 R4: Milestone parsing
+
+Fixes false rejection of provisional Election Day Operations under decimal numbered titles (2.2.) and inline/flattened Markdown. A shared parser isolates numbered actions, titles, and Timing fields without borrowing neighboring milestone years or labels. Provisional labels in the same title or Timing are accepted. Full-timeline completeness and year checks use the same parsed milestones. Early-voting outreach/mobilization and post-election analysis/reporting also receive selected-cycle year checks. This is year-level validation, not authoritative date verification or comprehensive intra-year ordering validation. Unsupported formatting can still fail completeness.
+
+32 tests include decimal/inline/flattened examples, neighboring wrong-year GOTV, scoped verification labels, existing calendar checks, completeness and repair/rejection pipeline. No model/provider call was required to test the fix. Live generation acceptance remains to be verified.
+
+Installer accepts unchanged R3 helper/tests, including the supplied diagnostic-message variant, comparing normalized line endings and EOF whitespace. Requires R3 validation in the service. Preview default; --apply backs up helper/tests. Updates helper, tests and this document only. No route, package, dependency, schema, data, role, commit or deployment changes.
+
+Run check:syntax, test:planning-integrity (32 tests), test:future-cycle-evidence, test:tenant-isolation, test:executive-polling-evidence, test:executive-polling-prose and git diff --check. Restart the local backend while preserving ADDITIONAL_ALLOWED_ORIGINS for localhost:5173. Keep Vite running in another terminal and generate a new strict 2030 full timeline. Unexpected errors remain failures; invalid drafts receive 422 from the separately patched ask handler. Review all dates and completeness before committing. Preserve pending dependency edits separately.

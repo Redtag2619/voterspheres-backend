@@ -1,3 +1,6 @@
+import { timelineCompletenessViolations } from "./aiCampaignCopilot/electionPhaseIntegrity.js";
+import { buildPlanningRepairInstructions } from "./aiCampaignCopilot/planningRepairInstructions.js";
+import { electionMilestoneViolations, withCycleEvidenceAssessment, } from "./aiCampaignCopilot/planningIntegrity.js";
 import { isolateCampaignCycleEvidence } from "./aiCampaignCopilot/cycleEvidence.js";
 import OpenAI from "openai";
 
@@ -485,12 +488,14 @@ function temporalViolations(answer = "", temporalScope = {}) {
     )
     .join("\n");
   const years = [...planningLines.matchAll(/\b(20\d{2})\b/g)].map((match) => Number(match[1]));
-  return [...new Set(years.filter(
-    (year) => year < temporalScope.current_year || year > temporalScope.cycle_year
-  ))];
+  return [
+    ...new Set(years.filter(year => year < temporalScope.current_year || year > temporalScope.cycle_year)),
+    ...electionMilestoneViolations(answer, temporalScope),
+  ];
 }
 
-async function repairTemporalAnswer({ answer, prompt, temporalScope }) {
+// Phase 2.10.2: repair sees the concrete reasons the draft was rejected.
+async function repairTemporalAnswer({ answer, prompt, temporalScope, violations = [] }) {
   if (!openai) return null;
   const response = await openai.chat.completions.create({
     model: OPENAI_MODEL,
@@ -500,11 +505,14 @@ async function repairTemporalAnswer({ answer, prompt, temporalScope }) {
         role: "system",
         content:
           "You are a strict campaign-calendar editor. Preserve every substantive recommendation, owner, risk, metric, and dependency. " +
-          "Remove or correct every past or out-of-cycle planning date. Do not add historical background. Return only the corrected deliverable.",
+          "Remove or correct every past or out-of-cycle planning date. " +
+          "Election execution, GOTV mobilization and Election Day operations must occur in the selected cycle year; earlier activities must be explicitly preparation or rehearsal. " +
+          "Label exact election dates provisional and requiring official verification. Do not invent official filing or primary dates. " +
+          "For full timeline/calendar/schedule requests include explicit GOTV execution and Election Day operations milestones dated in the selected cycle year. Preparation alone is incomplete. Do not add historical background. Return only the corrected deliverable.",
       },
       {
         role: "user",
-        content: `Original request:\n${prompt}\n\nAllowed planning window:\n${temporalScope.election_window_start} through ${temporalScope.election_window_end}\n\nDraft to correct:\n${answer}`,
+        content: `Original request:\n${prompt}\n\nSelected election cycle: ${temporalScope.cycle_year}\n\nAllowed planning window:\n${temporalScope.election_window_start} through ${temporalScope.election_window_end}\n\nRepair requirements:\n${buildPlanningRepairInstructions({ prompt, temporalScope, violations })}\n\nDraft to correct:\n${answer}`,
       },
     ],
   });
@@ -2311,6 +2319,9 @@ Answer style:
 - Treat ${temporalScope?.current_date || "the server-provided current date"} as the planning date.
 - For strategy, calendar, schedule, timeline, and action-plan requests, use only dates from ${temporalScope?.election_window_start || "the planning date"} through ${temporalScope?.election_window_end || "the selected election cycle"}.
 - Never create a past milestone or silently reuse a calendar from an earlier campaign cycle.
+- Schedule election execution, GOTV mobilization and Election Day operations in the selected cycle year ${temporalScope?.cycle_year}. Label earlier training or rehearsal as preparation.
+- For full timelines, calendars and schedules include dated GOTV execution and Election Day operations in the selected year, separate from preparation.
+- Label exact election dates provisional and requiring official verification; never invent filing or primary dates.
 - Do not include an out-of-cycle year in a proposed action, milestone, deadline, quarter, or event.
 
  
@@ -3779,37 +3790,33 @@ export async function askAiCampaignCopilot({
  
 
   answer = generated.answer;
-  if (platformContext?.scope?.cycle_evidence && isPlanningRequest(prompt)) {
-    const evidence = platformContext.scope.cycle_evidence;
-    const assessment = evidence.matched_records
-      ? "Selected-cycle platform context is available; records without matching cycle metadata are excluded."
-      : "No verified platform context with explicit metadata for the selected cycle is available. This plan uses assumptions rather than verified future-cycle evidence.";
-    answer += "\n\nCycle evidence assessment: " + assessment + " Shared donors, vendors and CRM remain operational context.";
-    generated.answer = answer;
-  }
+  // Phase 2.10.1: canonical evidence assessment is applied after any calendar repair.
 
   if (isPlanningRequest(prompt)) {
-    let violations = temporalViolations(answer, temporalScope);
+    let violations = [...temporalViolations(answer, temporalScope), ...timelineCompletenessViolations(answer, prompt, temporalScope)];
 
     if (violations.length) {
       const repairedAnswer = await repairTemporalAnswer({
         answer,
         prompt,
         temporalScope,
+        violations,
       });
 
       if (repairedAnswer) {
         answer = repairedAnswer;
         generated.answer = repairedAnswer;
-        violations = temporalViolations(repairedAnswer, temporalScope);
+        violations = [...temporalViolations(repairedAnswer, temporalScope), ...timelineCompletenessViolations(repairedAnswer, prompt, temporalScope)];
       }
 
       if (violations.length) {
         const error = new Error(
-          `The generated strategy contained dates outside the authorized planning window: ${violations.join(", ")}. Please regenerate the strategy.`
+          `The generated strategy failed planning-calendar validation: ${violations.join(", ")}. Please regenerate the strategy.`
         );
         error.statusCode = 422;
         error.code = "TEMPORAL_SCOPE_VIOLATION";
+        error.violations = [...new Set(violations)];
+        error.cycle = temporalScope.cycle_year;
         throw error;
       }
     }
@@ -3817,11 +3824,12 @@ export async function askAiCampaignCopilot({
 
  
 
-  confidence =
+  if (platformContext?.scope?.cycle_evidence && isPlanningRequest(prompt)) {
+    answer = withCycleEvidenceAssessment(answer, platformContext.scope.cycle_evidence);
+    generated.answer = answer;
+  }
 
- 
-
-    generated.confidence ??
+  confidence = generated.confidence ??
 
  
 

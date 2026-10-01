@@ -50,6 +50,17 @@ router.post("/ask", requireAuth, async (req, res) => {
 
     return res.json({ ok: true, ...data });
   } catch (error) {
+    if (error?.code === "TEMPORAL_SCOPE_VIOLATION") {
+      return res.status(422).json({
+        ok: false,
+        code: error.code,
+        error: error.message,
+        detail: error.message,
+        violations: Array.isArray(error.violations) ? error.violations : [],
+        cycle: error.cycle ?? null,
+      });
+    }
+
     console.error("[ai-campaign-copilot] ask failed", error);
     return res.status(500).json({
       error: "Failed to ask AI Campaign Co-Pilot.",
