@@ -1,0 +1,50 @@
+{
+  "campaign_crm_activities": [
+    "id",
+    "firm_id",
+    "workspace_id",
+    "contact_id",
+    "activity_type",
+    "title",
+    "body",
+    "outcome",
+    "due_at",
+    "completed_at",
+    "metadata",
+    "created_by",
+    "created_at",
+    "updated_at"
+  ],
+  "campaign_crm_contacts": [
+    "id",
+    "firm_id",
+    "workspace_id",
+    "full_name",
+    "organization",
+    "title",
+    "email",
+    "phone",
+    "role_type",
+    "state",
+    "county",
+    "notes",
+    "tags",
+    "created_by",
+    "created_at",
+    "updated_at"
+  ],
+  "campaign_workspaces": [
+    "id",
+    "firm_id",
+    "name",
+    "slug",
+    "cycle",
+    "campaign_type",
+    "status",
+    "home_state",
+    "description",
+    "metadata",
+    "created_at",
+    "updated_at"
+  ]
+}

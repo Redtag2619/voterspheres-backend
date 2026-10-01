@@ -1,0 +1,20 @@
+# Phase 2.11 — Deliverable quality and evidence transparency
+
+Generation and existing repair instructions require individual Owner, Timing, Actions, Risks, Metrics and Next Actions fields for full-timeline milestones. Primary operations should include confirmation work, contingent logistics and readiness checks rather than a placeholder. Instructions forbid inventing achieved results or unsupported targets.
+
+A server-side quality report identifies missing fields and short/generic template statements. It returns complete, needs_review or not_applicable. This is an advisory structural assessment, not factual certification or a new rejection gate: calendar-invalid drafts still receive the existing single repair attempt and remain withheld if invalid. Calendar-valid plans remain available with visible quality gaps. Global risks and metrics do not satisfy milestone-local fields.
+
+For strict planning requests outside candidate orchestration, evidence metadata describes the compact context actually passed to generation. Selected-cycle records and shared operational context are distinguished. Classifier-requested source lists are not returned as evidence. Individual claim attribution is explicitly unestablished. Live research is marked disconnected for this path, matching the current implementation. No unsupported numeric confidence or model citations are presented as verified evidence; confidence is null and model-reported confidence is retained only as uncalibrated metadata. The existing message writer now preserves null and zero instead of substituting 88. No schema migration is introduced; the existing confidence column is nullable in the supplied service schema.
+
+The same quality/evidence report is stored in the message context snapshot and returned at response top level. Historical messages are displayed without retrospective evidence rewriting. Candidate orchestration and non-strict/non-planning source paths remain unchanged.
+
+The frontend safely renders headings, list items, bold field labels, paragraphs and code through React text nodes. It never interprets raw HTML. Known flattened headings/fields and literal assessment line-break escapes normalize into readable Markdown; fenced code is preserved. Conversation output displays evidence and quality assessments. Asset output receives the same readable renderer; copying/exporting continues to use response text. No new dependencies are required.
+
+## Install
+Requires the clean committed backend service from Phase 2.10.3, R3 helpers and R4 calendar guard. Frontend requires the reviewed Phase 2.10.2 Studio source. Run each side's installer from its repository, first for preview and then with --apply. Fingerprints must match before files are written; dependencies and existing scripts are preserved. Backups are created and write failures restore original files. A mismatch must be resolved with current source, not by disabling the check.
+
+Backend: check:syntax, test:deliverable-quality, test:election-phase-integrity-r3, test:election-phase-integrity-r2, test:election-phase-integrity, test:planning-integrity, test:copilot-generation-feedback, test:future-cycle-evidence, test:tenant-isolation, test:executive-polling-evidence and test:executive-polling-prose. Frontend: test:deliverable-display, test:copilot-generation-feedback-ui, test:future-cycle-ui, test:polling-temporal-scope-ui and build. Run git diff --check in both repositories.
+
+Restart the local backend and Vite in their separate existing terminals, preserving localhost CORS and local API environment. Generate a full 2030 timeline. It must retain pending primary dates, general-election milestones and post-election review. Expect readable headings/fields, a not-calibrated confidence label, source scope distinctions and visible review items when milestone fields are incomplete.
+
+Tests use isolated model/database calls. Full Vite build and live generation must run in the user's repositories; no production deployment is performed by the installers. There are no database operations, provider requests, dependency upgrades, role changes, commits or deployments.

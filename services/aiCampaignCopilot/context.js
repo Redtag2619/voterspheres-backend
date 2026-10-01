@@ -1,3 +1,4 @@
+import { loadOperationalContext, describeContextCoverage, planningSourceLabel } from "./contextCoverage.js";
 import { isolateCampaignCycleEvidence } from "./cycleEvidence.js";
 import { pool } from "../../db/pool.js";
 import { getElectionWarRoom } from "../electionWarRoom.service.js";
@@ -29,7 +30,7 @@ export function normalizeStateCode(value = "") {
 
 function itemStateCode(item = {}) {
   return normalizeStateCode(
-    item.state || item.state_code || item.geography || item.jurisdiction || ""
+    item.state || item.state_code || item.home_state || item.geography || item.jurisdiction || ""
   );
 }
 
@@ -109,38 +110,10 @@ async function getPlatformContextCore({
     [firmId]
   );
 
-  const donors = await safeQuery(
-    `
-      SELECT id, full_name, name, amount, state, committee_name, created_at
-      FROM donors
-      WHERE firm_id = $1
-      ORDER BY created_at DESC
-      LIMIT 10
-    `,
-    [firmId]
-  );
-
-  const vendors = await safeQuery(
-    `
-      SELECT id, vendor_name, name, category, state, status, contract_value, updated_at
-      FROM vendors
-      WHERE firm_id = $1
-      ORDER BY updated_at DESC NULLS LAST
-      LIMIT 10
-    `,
-    [firmId]
-  );
-
-  const crm = await safeQuery(
-    `
-      SELECT id, name, contact_name, organization, stage, status, next_step, updated_at
-      FROM crm_contacts
-      WHERE firm_id = $1
-      ORDER BY updated_at DESC NULLS LAST
-      LIMIT 10
-    `,
-    [firmId]
-  );
+  const operational = await loadOperationalContext({
+    query: (sql, params) => pool.query(sql, params), firmId, workspaceId, state, strictGeography,
+  });
+  const { donors, vendors, crm, crmActivities } = operational;
 
   const workspaceRows = workspaceId
     ? await safeQuery(
@@ -172,6 +145,8 @@ async function getPlatformContextCore({
     donors: scopeRows(donors, state, strictGeography),
     vendors: scopeRows(vendors, state, strictGeography),
     crm: scopeRows(crm, state, strictGeography),
+    crm_activities: scopeRows(crmActivities, state, strictGeography),
+    context_coverage: operational.coverage,
     workspace: workspaceMatchesState ? workspace : null,
     scope: {
       state,
@@ -233,7 +208,7 @@ export function compactPlatformContext(context = {}) {
       assigned_to: item.assigned_to || "Unassigned",
       state: item.state || null,
     })),
-    crm_followups: (mission.crm_followups || context.crm || [])
+    crm_followups: (mission.crm_followups?.length ? mission.crm_followups : context.crm_activities || [])
       .slice(0, 8)
       .map((item) => ({
         title: clean(item.title || item.name || item.contact_name || "CRM follow-up"),
@@ -261,6 +236,18 @@ export function compactPlatformContext(context = {}) {
       status: item.status || null,
       contract_value: item.contract_value || null,
     })),
+    crm_contacts: (context.crm || []).slice(0, 8).map(item => ({
+      name: clean(item.name || item.contact_name || ""), organization: clean(item.organization || ""),
+      role: item.role_type || null, state: item.state || null,
+    })),
+    crm_activities: (context.crm_activities || []).slice(0, 8).map(item => ({
+      title: clean(item.title || ""), contact: clean(item.contact_name || ""),
+      status: item.status || null, next_step: clean(item.next_step || ""), state: item.state || null,
+    })),
+    context_coverage: describeContextCoverage(context.context_coverage || [], {
+      donors: (context.donors || []).slice(0, 6), vendors: (context.vendors || []).slice(0, 6),
+      crm_contacts: (context.crm || []).slice(0, 8), crm_activities: (context.crm_activities || []).slice(0, 8),
+    }),
     workspace: context.workspace || null,
     scope: context.scope || null,
   };

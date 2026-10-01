@@ -8,6 +8,8 @@ export function parsePlanningMilestones(answer = '') {
   // Give each field and numbered/decimal action a boundary even in flattened Markdown.
   const text = String(answer).replace(/\r\n/g, '\n')
     .replace(/[ \t]+(?=#{1,6}\s)/g, '\n')
+    .replace(/(?<!-)[ \t]+(?=(?:-\s*)?\*{0,2}(?:Owner|Priority|Timing|Actions|Next Actions|Risks|Metrics)\s*\*{0,2}\s*:)/gi, '\n')
+    .replace(/(?<!-)[ \t]+(?=(?:-\s*)?\*\*(?:Owner|Priority|Timing|Actions|Next Actions|Risks|Metrics)\s*:\*\*)/gi, '\n')
     .replace(/[ \t]+(?=\d+(?:\.\d+)*\.\s+[A-Z*])/g, '\n')
     .replace(/[ \t]+(?=-\s*\*{0,2}(?:Owner|Priority|Timing|Actions|Next Actions|Risks|Metrics)\b)/gi, '\n');
   const blocks = text.split(/\n(?=\s*#{1,6}\s+(?!(?:Timing|Priority|Owner|Risks|Metrics|Next Actions|Actions)\b))|\n(?=\s*\d+(?:\.\d+)*\.\s)/i);
@@ -22,7 +24,7 @@ export function parsePlanningMilestones(answer = '') {
       else if (i + 1 < lines.length && !/^\s*(?:-\s*|#{1,6}\s*)?\*{0,2}(?:Owner|Priority|Actions|Next Actions|Risks|Metrics)\b/i.test(lines[i+1])) timingParts.push(lines[++i].trim());
     }
     const timing = timingParts.join(' ') || (/\bphase\b/i.test(title) ? '' : title);
-    return { title, timing, preparation: PREPARATION.test(title) && !/\b(?:execute|execution|mobilization|deployment)\b/i.test(title) };
+    return { title, timing, preparation: /\b(?:kickoff|planning|coordination) meeting\b/i.test(title) && /^(?:schedule|organize|hold|conduct|arrange)\b/i.test(title) || PREPARATION.test(title) && !/\b(?:execute|execution|mobilization|deployment)\b/i.test(title) };
   }).filter(item => item.title);
 }
 

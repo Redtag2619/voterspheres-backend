@@ -1,3 +1,5 @@
+import { loadOperationalContext, describeContextCoverage, planningSourceLabel, withPlanningSourceLabel } from "./aiCampaignCopilot/contextCoverage.js";
+import { assessDeliverableQuality, describePlanningEvidence, normalizeDeliverableMarkdown, qualityInstructions } from "./aiCampaignCopilot/deliverableQuality.js";
 import { timelineCompletenessViolations } from "./aiCampaignCopilot/electionPhaseIntegrity.js";
 import { buildPlanningRepairInstructions } from "./aiCampaignCopilot/planningRepairInstructions.js";
 import { electionMilestoneViolations, withCycleEvidenceAssessment, } from "./aiCampaignCopilot/planningIntegrity.js";
@@ -535,7 +537,7 @@ function detectState(prompt = "") {
 
 function itemStateCode(item = {}) {
   return normalizeStateCode(
-    item.state || item.state_code || item.geography || item.jurisdiction || ""
+    item.state || item.state_code || item.home_state || item.geography || item.jurisdiction || ""
   );
 }
 
@@ -1074,71 +1076,10 @@ async function getPlatformContextCore({
 
  
 
-  const donors = await safeQuery(
-
-    `
-
-      SELECT id, full_name, name, amount, state, committee_name, created_at
-
-      FROM donors
-
-      WHERE firm_id = $1
-
-      ORDER BY created_at DESC
-
-      LIMIT 10
-
-    `,
-
-    [firmId]
-
-  );
-
- 
-
-  const vendors = await safeQuery(
-
-    `
-
-      SELECT id, vendor_name, name, category, state, status, contract_value, updated_at
-
-      FROM vendors
-
-      WHERE firm_id = $1
-
-      ORDER BY updated_at DESC NULLS LAST
-
-      LIMIT 10
-
-    `,
-
-    [firmId]
-
-  );
-
- 
-
-  const crm = await safeQuery(
-
-    `
-
-      SELECT id, name, contact_name, organization, stage, status, next_step, updated_at
-
-      FROM crm_contacts
-
-      WHERE firm_id = $1
-
-      ORDER BY updated_at DESC NULLS LAST
-
-      LIMIT 10
-
-    `,
-
-    [firmId]
-
-  );
-
- 
+  const operational = await loadOperationalContext({
+    query: (sql, params) => pool.query(sql, params), firmId, workspaceId, state, strictGeography,
+  });
+  const { donors, vendors, crm, crmActivities } = operational;
 
   const workspaceRows = workspaceId
 
@@ -1182,6 +1123,8 @@ async function getPlatformContextCore({
     donors: scopeRows(donors, state, strictGeography),
     vendors: scopeRows(vendors, state, strictGeography),
     crm: scopeRows(crm, state, strictGeography),
+    crm_activities: scopeRows(crmActivities, state, strictGeography),
+    context_coverage: operational.coverage,
     workspace: workspaceMatchesState ? workspace : null,
     scope: {
       state,
@@ -1287,7 +1230,7 @@ function compactPlatformContext(context = {}) {
 
  
 
-    crm_followups: (mission.crm_followups || context.crm || [])
+    crm_followups: (mission.crm_followups?.length ? mission.crm_followups : context.crm_activities || [])
 
       .slice(0, 8)
 
@@ -1351,6 +1294,18 @@ function compactPlatformContext(context = {}) {
 
  
 
+    crm_contacts: (context.crm || []).slice(0, 8).map(item => ({
+      name: clean(item.name || item.contact_name || ""), organization: clean(item.organization || ""),
+      role: item.role_type || null, state: item.state || null,
+    })),
+    crm_activities: (context.crm_activities || []).slice(0, 8).map(item => ({
+      title: clean(item.title || ""), contact: clean(item.contact_name || ""),
+      status: item.status || null, next_step: clean(item.next_step || ""), state: item.state || null,
+    })),
+    context_coverage: describeContextCoverage(context.context_coverage || [], {
+      donors: (context.donors || []).slice(0, 6), vendors: (context.vendors || []).slice(0, 6),
+      crm_contacts: (context.crm || []).slice(0, 8), crm_activities: (context.crm_activities || []).slice(0, 8),
+    }),
     workspace: context.workspace || null,
 
     scope: context.scope || null,
@@ -2267,7 +2222,7 @@ async function askOpenAI({ prompt, classification, platformContext, recentMessag
 
  
 
-  const sourceLabel =
+  let sourceLabel =
 
     classification.answerType === "general_political_analysis"
 
@@ -2284,6 +2239,10 @@ async function askOpenAI({ prompt, classification, platformContext, recentMessag
           : "VoterSpheres platform intelligence enhanced by AI strategic reasoning";
 
  
+
+  if (isPlanningRequest(prompt) && temporalScope?.strict_temporal) {
+    sourceLabel = planningSourceLabel(compactContext || {});
+  }
 
   const currentWarning = classification.needsLiveResearch
 
@@ -2304,6 +2263,7 @@ You are a senior political campaign strategist, executive chief of staff, and ca
  
 
 Answer style:
+${qualityInstructions()}
 
 - Be direct, practical, and executive-ready.
 
@@ -2498,7 +2458,7 @@ async function storeMessage({
 
       JSON.stringify(sources || []),
 
-      confidence || 88,
+      confidence === null ? null : (confidence ?? 88),
 
     ]
 
@@ -3873,7 +3833,24 @@ export async function askAiCampaignCopilot({
 
  
 
+  // Phase 2.11: report supplied planning context and quality without fabricating evidence confidence.
+  const planningTransparency = isPlanningRequest(prompt) && temporalScope.strict_temporal && !candidateOrchestration;
+  let evidenceTransparency = null;
+  let deliverableQuality = null;
+  if (planningTransparency) {
+    answer = normalizeDeliverableMarkdown(answer);
+    generated.answer = answer;
+    evidenceTransparency = describePlanningEvidence(compactPlatformContext(platformContext || {}), confidence);
+    answer = withPlanningSourceLabel(answer, evidenceTransparency.source_label);
+    generated.answer = answer;
+    deliverableQuality = assessDeliverableQuality(answer, prompt, temporalScope);
+    sources = evidenceTransparency.sources_supplied.map(item => item.source);
+    confidence = null;
+    citations = {};
+  }
   const contextSnapshot = {
+    evidence_transparency: evidenceTransparency,
+    deliverable_quality: deliverableQuality,
 
  
 
@@ -3911,7 +3888,7 @@ export async function askAiCampaignCopilot({
 
  
 
-      Boolean(platformContext),
+      evidenceTransparency ? evidenceTransparency.sources_supplied.length > 0 : Boolean(platformContext),
 
  
 
@@ -4152,6 +4129,8 @@ export async function askAiCampaignCopilot({
  
 
   return {
+    evidence_transparency: evidenceTransparency,
+    deliverable_quality: deliverableQuality,
 
  
 
