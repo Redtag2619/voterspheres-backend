@@ -1,3 +1,4 @@
+import { pollingDateKey, comparePollingDates } from "./pollingDate.js";
 import { pool } from "../db/pool.js";
 
 
@@ -435,11 +436,11 @@ function groupPolls(rows = []) {
 
         source_url: row.source_url || null,
 
-        start_date: row.start_date || null,
+        start_date: pollingDateKey(row.start_date),
 
-        end_date: row.end_date || null,
+        end_date: pollingDateKey(row.end_date),
 
-        poll_date: row.poll_date || null,
+        poll_date: pollingDateKey(row.poll_date),
 
         confidence_score: Number(row.confidence_score || 0),
 
@@ -485,15 +486,7 @@ function groupPolls(rows = []) {
 
     }))
 
-    .sort((a, b) =>
-
-      String(b.poll_date || b.end_date || "").localeCompare(
-
-        String(a.poll_date || a.end_date || "")
-
-      )
-
-    );
+    .sort(comparePollingDates);
 
 }
 
@@ -506,6 +499,8 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
   const latest = polls
 
     .filter((poll) => lower(poll.poll_type) === targetType)
+
+    .sort(comparePollingDates)
 
     .slice(0, windowSize);
 
@@ -615,7 +610,7 @@ function trendSeries(polls = [], pollType = "") {
 
   for (const poll of [...relevant].reverse()) {
 
-    const date = String(poll.poll_date || poll.end_date || "");
+    const date = pollingDateKey(poll.poll_date) || pollingDateKey(poll.end_date) || "";
 
     if (!date) continue;
 
@@ -683,6 +678,8 @@ function trendSeries(polls = [], pollType = "") {
 
     }))
 
+    .sort((a, b) => a.date.localeCompare(b.date))
+
     .slice(-120);
 
 }
@@ -725,7 +722,7 @@ function pollsterSummary(polls = []) {
 
 
 
-    const date = String(poll.poll_date || poll.end_date || "");
+    const date = pollingDateKey(poll.poll_date) || pollingDateKey(poll.end_date) || "";
 
     if (!current.latest_date || date > current.latest_date) {
 
@@ -815,7 +812,7 @@ function pollTypeSummary(polls = []) {
 
 function summarize(polls = [], rows = []) {
 
-  const latestDate = polls[0]?.poll_date || polls[0]?.end_date || null;
+  const latestDate = polls.map(poll => pollingDateKey(poll.poll_date) || pollingDateKey(poll.end_date)).filter(Boolean).sort().at(-1) || null;
 
   const pollsters = new Set(polls.map((poll) => poll.pollster).filter(Boolean));
 
@@ -924,7 +921,7 @@ export async function getExecutivePollingScopeOptions({ includeUnresolved = fals
       temporal_scope: row.temporal_scope,
       polls: Number(row.polls || 0),
       answer_rows: Number(row.answer_rows || 0),
-      freshest_record: row.freshest_record || null,
+      freshest_record: pollingDateKey(row.freshest_record),
     })),
     available_cycles: cycleRows.map((row) => ({
       cycle: Number(row.cycle_year),
@@ -1152,7 +1149,7 @@ export async function getExecutivePollingHealth({ includeUnresolved = false } = 
 
     poll_type_count: Number(row.poll_type_count || 0),
 
-    freshest_record: row.freshest_record || null,
+    freshest_record: pollingDateKey(row.freshest_record),
 
     poll_types: types.rows,
 

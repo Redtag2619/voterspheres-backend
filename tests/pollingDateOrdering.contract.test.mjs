@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+import {pollingDateKey,comparePollingDates} from '../services/pollingDate.js';
+const source=fs.readFileSync(new URL('../services/executivePollingIntelligence.service.js',import.meta.url),'utf8');
+const ctx={Date,pollingDateKey,comparePollingDates,pool:{},console};vm.createContext(ctx);
+vm.runInContext(source.replace(/^import[^\n]*\n/gm,'').replace(/export default/g,'const defaultExport =').replace(/export /g,'')+';this.api={groupPolls,pollingAverage,trendSeries,pollsterSummary,summarize};',ctx);
+const row=(id,date,pct=40)=>({id,poll_id:id,pollster:'Test',poll_type:'generic-ballot',start_date:date,end_date:date,poll_date:date,choice:'Dem',pct,sample_size:1000});
+test('Date objects and ISO date strings produce the same calendar key',()=>{assert.equal(pollingDateKey(new Date('2025-10-29T00:00:00Z')),'2025-10-29');assert.equal(pollingDateKey('2025-10-29'),'2025-10-29');assert.equal(pollingDateKey('2025-10-29T00:00:00Z'),'2025-10-29');});
+test('invalid dates and absent dates remain missing',()=>{for(const d of ['',null,'garbage','2025-02-30',new Date(NaN)])assert.equal(pollingDateKey(d),null);});
+test('reported weekday string sorting defect is rejected by actual grouping',()=>{const p=ctx.api.groupPolls([row(1,new Date('2025-09-24')),row(2,new Date('2025-10-29')),row(3,new Date('2025-11-11'))]);assert.deepEqual(Array.from(p,x=>x.poll_date),['2025-11-11','2025-10-29','2025-09-24']);assert.equal(p[0].end_date,'2025-11-11');});
+test('missing dates sort after dated polls and fallback to field end',()=>{const p=ctx.api.groupPolls([row(1,null),{...row(2,null),end_date:'2026-03-01'}]);assert.equal(p[0].id,2);});
+test('latest summary takes maximum independently of input order',()=>{assert.equal(ctx.api.summarize([row(1,'2025-09-24'),row(2,'2026-03-01')],[]).latest_poll_date,'2026-03-01');});
+test('average selects chronologically newest window without mutating input',()=>{const p=ctx.api.groupPolls([row(1,'2025-09-24',10),row(2,'2025-10-29',50)]).reverse();const before=JSON.stringify(p);const a=ctx.api.pollingAverage(p,'generic-ballot',1);assert.equal(a[0].average,50);assert.equal(JSON.stringify(p),before);});
+test('trend dates are ISO chronological and duplicate dates share a bucket',()=>{const p=ctx.api.groupPolls([row(1,'2025-10-29'),row(2,'2025-09-24'),row(3,'2025-10-29')]);const t=ctx.api.trendSeries(p);assert.deepEqual(Array.from(t,x=>x.date),['2025-09-24','2025-10-29']);});
+test('pollster latest date uses canonical dates',()=>assert.equal(ctx.api.pollsterSummary([row(1,new Date('2025-09-24')),row(2,new Date('2025-10-29'))])[0].latest_date,'2025-10-29'));
+test('temporal and SQL ordering boundaries remain in actual service',()=>{assert.match(source,/assertTemporalScopeAccess\(filters, includeUnresolved\)/);assert.match(source,/DESC NULLS LAST/);assert.match(source,/MAX\(COALESCE\(field_end/);});
