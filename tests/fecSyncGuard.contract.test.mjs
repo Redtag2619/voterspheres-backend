@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createFecHttpClient } from '../services/fecHttpClient.js';
 
 const source = fs.readFileSync(new URL('../services/fec.service.js', import.meta.url), 'utf8');
 function load({ fetch, pool } = {}) {
   const context = vm.createContext({
     process: { env: { FEC_API_KEY: 'test-only', FEC_PAC_SYNC_LIMIT: '1' } },
     console: { warn() {} }, URL, Date, Map, Set, Buffer, fetch,
+    createFecHttpClient: () => createFecHttpClient({ fetchImpl: fetch, intervalMs: 0, retries: 0 }),
     pool, configuredFederalElectionCycle: () => 2026,
     normalizeFederalElectionCycle: value => Number(value),
   });
@@ -24,9 +26,9 @@ test('429 stops normalization and makes no database writes', async () => {
 });
 test('committee and Schedule A errors propagate instead of returning empty data', async () => {
   const api = load({ fetch: async () => { throw Error('provider unavailable'); } });
-  await assert.rejects(api.fetchCandidateCommitteesForCandidate({ candidateId: row.candidate_id, cycle: 2026 }), /provider unavailable/);
-  await assert.rejects(api.fetchScheduleAForCommittee({ committeeId: 'C00000001', cycle: 2026 }), /provider unavailable/);
-  await assert.rejects(api.fetchPacContributionsForCandidate({ candidateId: row.candidate_id, cycle: 2026 }), /provider unavailable/);
+  await assert.rejects(api.fetchCandidateCommitteesForCandidate({ candidateId: row.candidate_id, cycle: 2026 }), /FEC API request failed/);
+  await assert.rejects(api.fetchScheduleAForCommittee({ committeeId: 'C00000001', cycle: 2026 }), /FEC API request failed/);
+  await assert.rejects(api.fetchPacContributionsForCandidate({ candidateId: row.candidate_id, cycle: 2026 }), /FEC API request failed/);
 });
 test('successful empty lookup remains empty and reports limited evidence', async () => {
   const api = load({ fetch: async () => ({ ok: true, json: async () => ({ results: [] }) }) });

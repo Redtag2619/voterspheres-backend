@@ -1,3 +1,4 @@
+import { withStripeEvent } from "./stripeEventIntegrity.js";
 import { pool } from "../db/pool.js";  
 
 let stripeClient = null;
@@ -758,7 +759,6 @@ async function applyInvoicePaid(invoice, eventType, eventId) {
 }
 
 export async function handleStripeWebhook({ rawBody, signature }) {
-  await ensureBillingColumns();
 
   const webhookSecret = getEnv("STRIPE_WEBHOOK_SECRET");
   if (!webhookSecret) {
@@ -772,6 +772,8 @@ export async function handleStripeWebhook({ rawBody, signature }) {
   const stripe = await getStripe();
   const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
 
+  return withStripeEvent(pool, event, async () => {
+    await ensureBillingColumns();
   const eventType = event.type;
   const eventId = event.id;
   const obj = event.data.object;
@@ -814,6 +816,7 @@ export async function handleStripeWebhook({ rawBody, signature }) {
     status: firm?.status || null,
     subscription_status: firm?.subscription_status || null,
   };
+  });
 }
 
 export default {

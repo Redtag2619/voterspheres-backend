@@ -1,3 +1,5 @@
+import { createFecHttpClient } from "./fecHttpClient.js";
+const reliableFecGet = createFecHttpClient();
 import pool from "../config/database.js";
 import {
   configuredFederalElectionCycle,
@@ -292,39 +294,7 @@ async function fecGet(path, params = {}) {
 
 
 
-  const response = await fetch(url.toString(), {
-
-    method: "GET",
-
-    headers: {
-
-      Accept: "application/json",
-
-      "User-Agent": "VoterSpheres/1.0",
-
-    },
-
-  });
-
-
-
-  if (!response.ok) {
-
-    const text = await response.text().catch(() => "");
-
-    throw createHttpError(
-
-      `FEC API request failed (${response.status}): ${text || response.statusText}`,
-
-      502
-
-    );
-
-  }
-
-
-
-  return response.json();
+  return reliableFecGet(url);
 
 }
 

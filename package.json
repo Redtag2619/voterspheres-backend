@@ -65,7 +65,12 @@
     "test:calendar-field-integrity": "node --test tests/calendarFieldIntegrity.contract.test.mjs",
     "test:context-coverage": "node --test tests/contextCoverage.contract.test.mjs",
     "test:polling-date-integrity": "node --test tests/pollingDateOrdering.contract.test.mjs",
-    "test:polling-read-integrity": "node --test tests/pollingReadIntegrity.contract.test.mjs"
+    "test:polling-read-integrity": "node --test tests/pollingReadIntegrity.contract.test.mjs",
+    "test:production-reliability": "node --test tests/productionReliability.contract.test.mjs tests/productionAuthBoundary.contract.test.mjs tests/productionMonitor.contract.test.mjs",
+    "monitor:production-reliability": "node scripts/monitorProductionReliability.mjs",
+    "validate:production-release": "node scripts/validateProductionRelease.mjs",
+    "sync:fec:reliable": "node scripts/runFecReliabilitySync.mjs",
+    "migrate:production-telemetry": "node scripts/installProductionJobTelemetry.mjs"
   },
   "dependencies": {
     "axios": "^1.13.5",
