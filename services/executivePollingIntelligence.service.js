@@ -202,7 +202,7 @@ function buildWhere(filters = {}) {
 
     conditions.push(
 
-      `COALESCE(field_end, published_at::date, updated_at::date) >= ${push(filters.startDate)}::date`
+      `COALESCE(field_end, published_at::date) >= ${push(filters.startDate)}::date`
 
     );
 
@@ -214,7 +214,7 @@ function buildWhere(filters = {}) {
 
     conditions.push(
 
-      `COALESCE(field_end, published_at::date, updated_at::date) <= ${push(filters.endDate)}::date`
+      `COALESCE(field_end, published_at::date) <= ${push(filters.endDate)}::date`
 
     );
 
@@ -266,7 +266,7 @@ async function tableExists(tableName) {
 
 
 
-async function baseRows({ filters, limit = 2500 } = {}) {
+async function baseRows({ filters, limit = 2500, dateMode = null, asOf = new Date() } = {}) {
 
   const exists = await tableExists("polling_results");
 
@@ -277,6 +277,13 @@ async function baseRows({ filters, limit = 2500 } = {}) {
   const where = buildWhere(filters);
 
   const safeLimit = clamp(limit, 1, 5000);
+  if (dateMode) {
+    where.params.push(pollingDateKey(asOf));
+    const cutoff = `$${where.params.length}::date`;
+    // Explicit null handling keeps undated records visible as unknown freshness.
+    const safeFuture = `(COALESCE(field_start > ${cutoff}, FALSE) OR COALESCE(field_end > ${cutoff}, FALSE) OR COALESCE(published_at::date > ${cutoff}, FALSE))`;
+    where.whereSql += `${where.whereSql ? " AND " : "WHERE "}${dateMode === "future" ? safeFuture : `NOT ${safeFuture}`}`;
+  }
 
 
 
@@ -285,6 +292,8 @@ async function baseRows({ filters, limit = 2500 } = {}) {
     `
 
       SELECT
+
+        COUNT(*) OVER () AS matching_answer_count,
 
         id,
 
@@ -326,7 +335,9 @@ async function baseRows({ filters, limit = 2500 } = {}) {
 
         field_end AS end_date,
 
-        COALESCE(field_end, published_at::date, updated_at::date) AS poll_date,
+        COALESCE(field_end, published_at::date) AS poll_date,
+
+        published_at::date AS publication_date,
 
         confidence_score,
 
@@ -342,13 +353,20 @@ async function baseRows({ filters, limit = 2500 } = {}) {
 
       ORDER BY
 
-        COALESCE(field_end, published_at::date, updated_at::date) DESC NULLS LAST,
+        COALESCE(field_end, published_at::date) DESC NULLS LAST,
 
         pollster ASC NULLS LAST,
 
-        poll_id ASC NULLS LAST
+        poll_id ASC NULLS LAST,
+        field_start ASC NULLS LAST,
+        field_end ASC NULLS LAST,
+        poll_type ASC NULLS LAST,
+        state ASC NULLS LAST,
+        population ASC NULLS LAST,
+        race_name ASC NULLS LAST,
+        id ASC
 
-      LIMIT ${safeLimit}
+      LIMIT ${dateMode ? safeLimit + 1 : safeLimit}
 
     `,
 
@@ -390,7 +408,39 @@ function uniquePollKey(row) {
 
 
 
-function groupPolls(rows = []) {
+// Survey freshness is evaluated at read time; ingestion timestamps are never evidence dates.
+function surveyFreshness(endDate, asOf = new Date()) {
+  const date = pollingDateKey(endDate), today = pollingDateKey(asOf);
+  if (!date || !today) return { freshness_score: null, freshness_status: "unknown", survey_age_days: null };
+  const age = Math.floor((Date.parse(today + "T00:00:00Z") - Date.parse(date + "T00:00:00Z")) / 86400000);
+  if (age < 0) return { freshness_score: null, freshness_status: "future", survey_age_days: age };
+  const score = age <= 3 ? 100 : age <= 7 ? 92 : age <= 14 ? 84 : age <= 30 ? 72 : age <= 90 ? 58 : age <= 365 ? 44 : 28;
+  return { freshness_score: score, freshness_status: "dated", survey_age_days: age };
+}
+function isFuturePoll(poll, asOf = new Date()) {
+  const today = pollingDateKey(asOf);
+  return [poll.start_date, poll.end_date, poll.poll_date, poll.publication_date].some(value => {
+    const date = pollingDateKey(value);
+    return date && today && date > today;
+  });
+}
+function boundedRows(rows, limit) {
+  const total = Number(rows[0]?.matching_answer_count || 0);
+  const selected = rows.slice(0, limit);
+  // Never calculate percentages from a poll whose answers straddle the row cap.
+  if (rows.length > limit && selected.length) {
+    const boundary = uniquePollKey(rows[limit]);
+    while (selected.length && uniquePollKey(selected.at(-1)) === boundary) selected.pop();
+  }
+  return { rows: selected, coverage: {
+    capped: total > selected.length, matching_answer_count: total,
+    returned_answer_count: selected.length, answer_row_limit: limit,
+    incomplete_boundary_answers_excluded: Math.min(rows.length, limit) - selected.length,
+    metrics_scope: total > selected.length ? "returned_sample" : "all_matching_records",
+  } };
+}
+
+function groupPolls(rows = [], asOf = new Date()) {
 
   const groups = new Map();
 
@@ -442,9 +492,13 @@ function groupPolls(rows = []) {
 
         poll_date: pollingDateKey(row.poll_date),
 
+        publication_date: pollingDateKey(row.publication_date),
+
         confidence_score: Number(row.confidence_score || 0),
 
-        freshness_score: Number(row.freshness_score || 0),
+        ...surveyFreshness(row.end_date, asOf),
+        future_dated: isFuturePoll(row, asOf),
+        date_warning: isFuturePoll(row, asOf) ? "Future-dated poll; excluded from current metrics pending source verification." : null,
 
         record_type: row.record_type || "measured_poll",
 
@@ -536,7 +590,7 @@ function pollingAverage(polls = [], pollType = "", windowSize = 20) {
 
         0.35,
 
-        Number(poll.freshness_score || 50) / 100
+        Number(poll.freshness_score ?? 50) / 100
 
       );
 
@@ -822,23 +876,10 @@ function summarize(polls = [], rows = []) {
 
 
 
-  const averageFreshness = polls.length
-
-    ? Math.round(
-
-        polls.reduce(
-
-          (sum, poll) => sum + Number(poll.freshness_score || 0),
-
-          0
-
-        ) / polls.length
-
-      )
-
-    : 0;
-
-
+  const datedPolls = polls.filter(poll => Number.isFinite(poll.freshness_score));
+  const averageFreshness = datedPolls.length
+    ? Math.round(datedPolls.reduce((sum, poll) => sum + poll.freshness_score, 0) / datedPolls.length)
+    : null;
 
   const averageConfidence = polls.length
 
@@ -875,6 +916,8 @@ function summarize(polls = [], rows = []) {
     latest_poll_date: latestDate,
 
     average_freshness: averageFreshness,
+    freshness_dated_poll_count: datedPolls.length,
+    freshness_unknown_poll_count: polls.length - datedPolls.length,
 
     average_confidence: averageConfidence,
 
@@ -899,7 +942,7 @@ export async function getExecutivePollingScopeOptions({ includeUnresolved = fals
       temporal_scope,
       COUNT(DISTINCT COALESCE(poll_id, id::text))::integer AS polls,
       COUNT(*)::integer AS answer_rows,
-      MAX(COALESCE(field_end, published_at::date, updated_at::date)) AS freshest_record
+      MAX(COALESCE(field_end, published_at::date)) AS freshest_record
     FROM polling_results
     ${includeUnresolved ? "" : "WHERE temporal_scope <> 'unresolved'"}
     GROUP BY temporal_scope
@@ -940,17 +983,15 @@ export async function getExecutivePollingDashboard({
 
   assertTemporalScopeAccess(filters, includeUnresolved);
 
-  const rows = await baseRows({
-
-    filters,
-
-    limit: query.limit || 3000,
-
-  });
-
-
-
-  const polls = groupPolls(rows);
+  const asOf = new Date();
+  const limit = clamp(query.limit || 3000, 1, 5000);
+  const currentResult = boundedRows(await baseRows({ filters, limit, dateMode: "current", asOf }), limit);
+  const futureResult = boundedRows(await baseRows({ filters, limit: 100, dateMode: "future", asOf }), 100);
+  const rows = currentResult.rows;
+  const polls = groupPolls(rows, asOf).filter(poll => !poll.future_dated);
+  const futurePolls = groupPolls(futureResult.rows, asOf).map(poll => ({ ...poll, future_dated: true,
+    freshness_score: null, freshness_status: "future",
+    date_warning: "Future-dated poll; excluded from current metrics pending source verification." }));
 
   const recentPolls = polls.slice(
 
@@ -988,6 +1029,12 @@ export async function getExecutivePollingDashboard({
     ...scopeOptions,
 
     summary: summarize(polls, rows),
+    result_coverage: currentResult.coverage,
+    future_dated_polls: futurePolls,
+    future_date_coverage: futureResult.coverage,
+    future_dated_answer_count: futureResult.coverage.matching_answer_count,
+    freshness_as_of: pollingDateKey(asOf),
+    freshness_basis: "survey_field_end; unknown when no survey date is available",
 
     poll_types: pollTypeSummary(polls),
 
@@ -1097,7 +1144,7 @@ export async function getExecutivePollingHealth({ includeUnresolved = false } = 
 
       COUNT(DISTINCT NULLIF(poll_type, ''))::integer AS poll_type_count,
 
-      MAX(COALESCE(field_end, published_at::date, updated_at::date)) AS freshest_record
+      MAX(COALESCE(field_end, published_at::date)) AS freshest_record
 
     FROM polling_results
     ${includeUnresolved ? "" : "WHERE temporal_scope <> 'unresolved'"}
