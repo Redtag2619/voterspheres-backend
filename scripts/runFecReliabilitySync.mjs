@@ -29,7 +29,10 @@ try {
   const status=result.status==='completed'?'complete':'degraded';
   await client.query('UPDATE production_job_runs SET status=$2,completed_at=NOW(),summary=$3::jsonb WHERE id=$1',[runId,status,JSON.stringify({cycle,status:result.status,fetched:result.fetched,stored:result.fundraising_stored,pac_skipped_candidates:result.pac_skipped_candidates,contacts:'not implemented; intentionally disabled'})]);
   console.log(JSON.stringify({job:'fec-sync',run_id:runId,status,result,contacts:'not implemented; intentionally disabled'},null,2));
-  if(status!=='complete')process.exitCode=1;
+  const expectedPartialPac =
+    result.ok === true &&
+    result.status === 'completed_with_skipped_pac';
+  if (status !== 'complete' && !expectedPartialPac) process.exitCode = 1;
 } catch(error) {
   if(runId)await client.query("UPDATE production_job_runs SET status='failed',completed_at=NOW(),summary=$2::jsonb WHERE id=$1",[runId,JSON.stringify({code:error.code||'SYNC_FAILED',provider_status:error.providerStatus||null})]).catch(()=>{});
   console.error(JSON.stringify({job:'fec-sync',status:'failed',code:error.code||'SYNC_FAILED',provider_status:error.providerStatus||null,message:'Sync failed; inspect configuration, quota and application logs. No credentials logged.'}));

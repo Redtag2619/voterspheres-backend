@@ -44,3 +44,25 @@ function billingHandler({valid=true}={}){
 }
 test('active billing handler verifies signatures before any schema or ledger work',async()=>{const api=billingHandler({valid:false});await assert.rejects(api.handle({rawBody:Buffer.from('x'),signature:'bad'}));assert.equal(api.schemaCalls,0);assert.equal(api.claims,0);});
 test('active billing handler uses event guard for verified events',async()=>{const api=billingHandler();const result=await api.handle({rawBody:Buffer.from('x'),signature:'valid'});assert.equal(result.received,true);assert.equal(api.claims,1);assert.equal(api.schemaCalls,1);});
+
+test('FEC runner exit policy preserves partial coverage and rejects unexpected degradation', () => {
+  const runner = fs.readFileSync(
+    new URL('../scripts/runFecReliabilitySync.mjs', import.meta.url),
+    'utf8'
+  );
+  const start = runner.indexOf('const expectedPartialPac =');
+  const end = runner.indexOf('} catch(error)', start);
+  assert.ok(start >= 0 && end > start, 'Runner exit-policy boundaries missing');
+  const policy = runner.slice(start, end);
+
+  for (const [status, result, expected] of [
+    ['complete', { ok: true, status: 'completed' }, 0],
+    ['degraded', { ok: true, status: 'completed_with_skipped_pac' }, 0],
+    ['degraded', { ok: true, status: 'unexpected_status' }, 1],
+    ['degraded', { ok: false, status: 'completed_with_skipped_pac' }, 1]
+  ]) {
+    const context = vm.createContext({ status, result, process: { exitCode: 0 } });
+    vm.runInContext(policy, context);
+    assert.equal(context.process.exitCode, expected);
+  }
+});
