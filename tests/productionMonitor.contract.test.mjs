@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
-const source=fs.readFileSync(new URL('../scripts/monitorProductionReliability.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+const source=fs.readFileSync(new URL('../scripts/monitorProductionReliability.mjs',import.meta.url),'utf8').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').replace(/^import .*;\n/gm,'');
 async function run({status='complete',missing=false,old=false,fail=false,summary=null}={}){
  const queries=[];let report,closed=false,released=false;
  const recent=new Date(),date=old?new Date(Date.now()-90*86400000):recent;

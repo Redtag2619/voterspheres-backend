@@ -1,7 +1,54 @@
 import { pool } from "../db/pool.js";
 
 function getFirmId(user = {}) {
-  return user.firmId || user.firm_id || user.firm?.id || null;
+  return positiveId(user.firm_id, "firm_id");
+}
+
+function inputError(message, statusCode = 400) {
+  return Object.assign(new Error(message), { statusCode });
+}
+function positiveId(value, field = "id") {
+  if (!/^\d+$/.test(String(value ?? ""))) throw inputError(`${field} must be a positive integer.`);
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw inputError(`${field} must be a positive integer.`);
+  return id;
+}
+const STATUS_VALUES = {
+  onboarding_stage: ["lead", "invited", "demo_scheduled", "onboarding", "active_beta", "converted", "paused"],
+  priority: ["low", "medium", "high", "critical"],
+  invite_status: ["not_sent", "sent", "accepted"],
+  demo_status: ["not_scheduled", "scheduled", "completed"],
+  workspace_status: ["not_started", "created", "complete"],
+  billing_status: ["not_started", "trial", "active", "paid"],
+};
+function checkedStatus(value, field, fallback) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== "string") throw inputError(`${field} is invalid.`);
+  const next = value.trim().toLowerCase().replace(/\s+/g, "_");
+  if (!STATUS_VALUES[field].includes(next)) throw inputError(`${field} is invalid.`);
+  return next;
+}
+function validatePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw inputError("Invalid customer payload.");
+  const next = { ...payload };
+  for (const field of ["firm_name", "primary_contact", "email", "phone", "state", "segment", "notes", "feedback", "next_step"]) {
+    if (next[field] != null && typeof next[field] !== "string") throw inputError(`${field} must be text.`);
+    if (String(next[field] ?? "").length > (['notes','feedback','next_step'].includes(field) ? 10000 : 500)) throw inputError(`${field} is too long.`);
+  }
+  if (!clean(next.firm_name)) throw inputError("Firm name is required.");
+  if (next.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next.email.trim())) throw inputError("Email is invalid.");
+  const defaults = { onboarding_stage: 'lead', priority: 'medium', invite_status: 'not_sent', demo_status: 'not_scheduled', workspace_status: 'not_started', billing_status: 'not_started' };
+  for (const field of Object.keys(defaults)) next[field] = checkedStatus(next[field], field, defaults[field]);
+  const score = next.launch_confidence ?? 50;
+  if ((typeof score !== 'number' && typeof score !== 'string') || String(score).trim() === '' || !Number.isInteger(Number(score)) || Number(score) < 0 || Number(score) > 100) throw inputError("Confidence must be an integer from 0 to 100.");
+  next.launch_confidence = Number(score);
+  if (next.id != null) next.id = positiveId(next.id);
+  if (next.demo_date) {
+    if (typeof next.demo_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(next.demo_date)) throw inputError("Demo date must be YYYY-MM-DD.");
+    const parsed = new Date(next.demo_date + 'T00:00:00Z');
+    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0,10) !== next.demo_date) throw inputError("Demo date is invalid.");
+  }
+  return next;
 }
 
 function clean(value = "") {
@@ -126,11 +173,12 @@ function enrichCustomer(customer = {}) {
 }
 
 export async function getBetaOnboarding({ user = {}, stage = "", q = "", priority = "" }) {
+  const firmId = getFirmId(user);
   await ensureBetaTables();
 
-  const firmId = getFirmId(user);
-  if (!firmId) throw new Error("Missing firm context.");
-
+  if (typeof q !== 'string' || q.length > 500) throw inputError("Search query is invalid.");
+  if (stage) stage = checkedStatus(stage, 'onboarding_stage');
+  if (priority) priority = checkedStatus(priority, 'priority');
   const filters = ["firm_id = $1"];
   const params = [firmId];
   let index = 2;
@@ -176,12 +224,13 @@ export async function getBetaOnboarding({ user = {}, stage = "", q = "", priorit
         END,
         launch_confidence DESC,
         updated_at DESC
-      LIMIT 250
+      LIMIT 251
     `,
     params
   );
 
-  const customers = (result.rows || []).map(enrichCustomer);
+  const capped = result.rows.length > 250;
+  const customers = result.rows.slice(0, 250).map(enrichCustomer);
 
   const summary = {
     total: customers.length,
@@ -201,17 +250,17 @@ export async function getBetaOnboarding({ user = {}, stage = "", q = "", priorit
   return {
     summary,
     customers,
+    result_coverage: { capped, limit: 250, returned_count: customers.length, summary_scope: "returned_filtered_records" },
+    status_reporting: { mode: "manual_tracking", message: "Statuses are manually tracked; this page does not send invitations or verify workspace or billing completion." },
     filters: { stage, q, priority },
     updated_at: new Date().toISOString(),
   };
 }
 
 export async function saveBetaCustomer({ user = {}, payload = {} }) {
-  await ensureBetaTables();
-
   const firmId = getFirmId(user);
-  if (!firmId) throw new Error("Missing firm context.");
-
+  payload = validatePayload(payload);
+  await ensureBetaTables();
   const firmName = clean(payload.firm_name);
   if (!firmName) throw new Error("Firm name is required.");
 
@@ -253,7 +302,7 @@ export async function saveBetaCustomer({ user = {}, payload = {} }) {
         clean(payload.demo_status || "not_scheduled"),
         clean(payload.workspace_status || "not_started"),
         clean(payload.billing_status || "not_started"),
-        Math.max(0, Math.min(100, number(payload.launch_confidence || 50))),
+        payload.launch_confidence,
         normalizePriority(payload.priority),
         clean(payload.notes),
         clean(payload.feedback),
@@ -264,7 +313,7 @@ export async function saveBetaCustomer({ user = {}, payload = {} }) {
       ]
     );
 
-    if (!updated.rows[0]) throw new Error("Beta customer not found.");
+    if (!updated.rows[0]) throw inputError("Beta customer not found.", 404);
 
     return {
       customer: enrichCustomer(updated.rows[0]),
@@ -312,7 +361,7 @@ export async function saveBetaCustomer({ user = {}, payload = {} }) {
       clean(payload.demo_status || "not_scheduled"),
       clean(payload.workspace_status || "not_started"),
       clean(payload.billing_status || "not_started"),
-      Math.max(0, Math.min(100, number(payload.launch_confidence || 50))),
+      payload.launch_confidence,
       normalizePriority(payload.priority),
       clean(payload.notes),
       clean(payload.feedback),
@@ -328,10 +377,8 @@ export async function saveBetaCustomer({ user = {}, payload = {} }) {
 }
 
 export async function updateBetaCustomerStage({ user = {}, id, stage = "" }) {
-  await ensureBetaTables();
-
   const firmId = getFirmId(user);
-  if (!firmId) throw new Error("Missing firm context.");
+  await ensureBetaTables();
 
   const result = await pool.query(
     `
@@ -340,10 +387,10 @@ export async function updateBetaCustomerStage({ user = {}, id, stage = "" }) {
       WHERE id = $2 AND firm_id = $3
       RETURNING *
     `,
-    [normalizeStage(stage), id, firmId]
+    [checkedStatus(stage, "onboarding_stage"), positiveId(id), firmId]
   );
 
-  if (!result.rows[0]) throw new Error("Beta customer not found.");
+  if (!result.rows[0]) throw inputError("Beta customer not found.", 404);
 
   return {
     customer: enrichCustomer(result.rows[0]),
@@ -352,18 +399,17 @@ export async function updateBetaCustomerStage({ user = {}, id, stage = "" }) {
 }
 
 export async function deleteBetaCustomer({ user = {}, id }) {
+  const firmId = getFirmId(user);
   await ensureBetaTables();
 
-  const firmId = getFirmId(user);
-  if (!firmId) throw new Error("Missing firm context.");
-
-  await pool.query(
+  const result = await pool.query(
     `
       DELETE FROM beta_customers
       WHERE id = $1 AND firm_id = $2
     `,
-    [id, firmId]
+    [positiveId(id), firmId]
   );
 
+  if (result.rowCount !== 1) throw inputError("Beta customer not found.", 404);
   return { message: "Beta customer deleted." };
 }

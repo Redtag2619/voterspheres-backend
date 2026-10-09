@@ -7,12 +7,15 @@ import {
   updateBetaCustomerStage,
 } from "../services/betaOnboarding.service.js";
 
-const router = express.Router();
+import { requirePlatformOperator, requireFirmContext } from "../middleware/authorization.middleware.js";
 
-router.get("/", requireAuth, async (req, res) => {
+const router = express.Router();
+router.use(requireAuth, requirePlatformOperator, requireFirmContext);
+
+router.get("/", async (req, res) => {
   try {
     const data = await getBetaOnboarding({
-      user: req.user || req.auth || {},
+      user: req.user,
       stage: req.query.stage || "",
       q: req.query.q || "",
       priority: req.query.priority || "",
@@ -21,34 +24,34 @@ router.get("/", requireAuth, async (req, res) => {
     return res.json({ ok: true, ...data });
   } catch (error) {
     console.error("[beta-onboarding] failed", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: "Failed to load Beta Onboarding Center.",
-      detail: error.message,
+      detail: error.statusCode ? error.message : "Unexpected server error.",
     });
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const data = await saveBetaCustomer({
-      user: req.user || req.auth || {},
+      user: req.user,
       payload: req.body || {},
     });
 
     return res.json({ ok: true, ...data });
   } catch (error) {
     console.error("[beta-onboarding] save failed", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: "Failed to save beta customer.",
-      detail: error.message,
+      detail: error.statusCode ? error.message : "Unexpected server error.",
     });
   }
 });
 
-router.post("/:id/stage", requireAuth, async (req, res) => {
+router.post("/:id/stage", async (req, res) => {
   try {
     const data = await updateBetaCustomerStage({
-      user: req.user || req.auth || {},
+      user: req.user,
       id: req.params.id,
       stage: req.body?.stage || "",
     });
@@ -56,26 +59,26 @@ router.post("/:id/stage", requireAuth, async (req, res) => {
     return res.json({ ok: true, ...data });
   } catch (error) {
     console.error("[beta-onboarding] stage failed", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: "Failed to update beta customer stage.",
-      detail: error.message,
+      detail: error.statusCode ? error.message : "Unexpected server error.",
     });
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const data = await deleteBetaCustomer({
-      user: req.user || req.auth || {},
+      user: req.user,
       id: req.params.id,
     });
 
     return res.json({ ok: true, ...data });
   } catch (error) {
     console.error("[beta-onboarding] delete failed", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       error: "Failed to delete beta customer.",
-      detail: error.message,
+      detail: error.statusCode ? error.message : "Unexpected server error.",
     });
   }
 });
