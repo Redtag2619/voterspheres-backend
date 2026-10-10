@@ -1,3 +1,4 @@
+import {financeElectionCycle} from "../utils/financeElectionCycle.js";
 import express from "express";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
 import { pool } from "../db/pool.js";
@@ -139,8 +140,8 @@ function buildFecUrl({ state = "", search = "", cycle = DEFAULT_CYCLE, limit = 1
   const url = new URL(`${FEC_API_BASE_URL}/schedules/schedule_a/`);
 
   url.searchParams.set("api_key", FEC_API_KEY);
-  url.searchParams.set("two_year_transaction_period", String(cycle));
-  url.searchParams.set("cycle", String(cycle));
+  url.searchParams.set("two_year_transaction_period", String(financeElectionCycle(cycle)));
+  url.searchParams.set("cycle", String(financeElectionCycle(cycle)));
   url.searchParams.set("per_page", String(Math.min(Number(limit) || 100, 100)));
   url.searchParams.set("sort", "-contribution_receipt_amount");
   url.searchParams.set("sort_hide_null", "true");
@@ -268,13 +269,17 @@ function normalizeFecRows(rows = []) {
 }
 
 async function refreshFecDonors(req) {
-  const result = await fetchFecContributions(req.query || {});
+  const cycle = financeElectionCycle(req.query?.cycle);
+  const result = await fetchFecContributions({...req.query, cycle});
 
   if (!result.ok) {
     return result;
   }
 
-  const donors = normalizeFecRows(result.rows);
+  if (result.rows.some(row => row.two_year_transaction_period != null && Number(row.two_year_transaction_period) !== cycle)) {
+   throw Object.assign(new Error('Provider returned another election cycle.'), {statusCode:502});
+ }
+ const donors = normalizeFecRows(result.rows);
 
   const states = [
     ...new Set(
@@ -284,19 +289,24 @@ async function refreshFecDonors(req) {
     ),
   ];
 
+  const client = await pool.connect();
+ try {
+   await client.query('BEGIN');
+   await client.query('SELECT pg_advisory_xact_lock($1, $2)', [731204, cycle]);
   if (states.length) {
-    await pool.query(
+    await client.query(
       `
       DELETE FROM donors
       WHERE source = 'fec_schedule_a'
       AND state = ANY($1)
+      AND cycle = $2
     `,
-      [states]
+      [states, cycle]
     );
   }
 
   for (const donor of donors) {
-    await pool.query(
+    await client.query(
       `
       INSERT INTO donors (
         donor_name,
@@ -325,13 +335,14 @@ async function refreshFecDonors(req) {
         contact_source,
         contact_verified,
         contribution_count,
+        cycle,
         updated_at
       )
       VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,NOW(),
         $15,$16,$17,$18,$19,$20,$21,$22,
-        $23,$24,$25,NOW()
+        $23,$24,$25,$26,NOW()
       )
     `,
       [
@@ -360,9 +371,16 @@ async function refreshFecDonors(req) {
         donor.contact_source,
         donor.contact_verified,
         donor.contribution_count,
+        cycle,
       ]
     );
   }
+
+   await client.query('COMMIT');
+ } catch (error) {
+   await client.query('ROLLBACK').catch(() => {});
+   throw error;
+ } finally { client.release(); }
 
   return {
     ok: true,
@@ -388,7 +406,7 @@ router.post("/refresh", requirePlatformOperator, async (req, res) => {
   } catch (error) {
     console.error(error);
 
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: error.message || "Failed donor refresh",
     });
   }
@@ -404,7 +422,7 @@ router.get("/network/public", async (req, res) => {
 
     return handleDonorNetwork(req, res);
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load donor network",
     });
   }
@@ -420,7 +438,7 @@ router.get("/network", async (req, res) => {
 
     return handleDonorNetwork(req, res);
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load donor network",
     });
   }
@@ -443,12 +461,14 @@ async function handleDonorNetwork(req, res) {
     text(state),
     text(search),
     text(candidate_id),
+    financeElectionCycle(req.query.cycle),
     safeLimit,
   ];
 
   const whereSql = `
     WHERE
-      ($1 = '' OR COALESCE(state,'') = $1)
+      cycle = $4
+      AND ($1 = '' OR COALESCE(state,'') = $1)
 
       AND (
         $2 = ''
@@ -505,7 +525,7 @@ async function handleDonorNetwork(req, res) {
     FROM donors
     ${whereSql}
     ORDER BY amount DESC
-    LIMIT $4
+    LIMIT $5
   `,
     values
   );
@@ -518,7 +538,7 @@ async function handleDonorNetwork(req, res) {
     FROM donors
     ${whereSql}
   `,
-    values.slice(0, 3)
+    values.slice(0, 4)
   );
 
   const stateBreakdownResult = await pool.query(
@@ -533,7 +553,7 @@ async function handleDonorNetwork(req, res) {
     ORDER BY total_amount DESC
     LIMIT 50
   `,
-    values.slice(0, 3)
+    values.slice(0, 4)
   );
 
   const committeeBreakdownResult = await pool.query(
@@ -549,10 +569,12 @@ async function handleDonorNetwork(req, res) {
     ORDER BY total_amount DESC
     LIMIT 25
   `,
-    values.slice(0, 3)
+    values.slice(0, 4)
   );
 
   res.json({
+    cycle: financeElectionCycle(req.query.cycle),
+    coverage: "Cycle-assigned records only; legacy unassigned donors are excluded.",
     results: result.rows.map((row) => ({
       ...row,
       amount: Number(row.amount || 0),

@@ -1,3 +1,4 @@
+import {financeElectionCycle} from "../utils/financeElectionCycle.js";
 import pool from "../config/database.js";
 import {
   POLITICAL_MONEY_BUILD,
@@ -349,7 +350,7 @@ function matchesFilters(row, options = {}) {
 export async function getDarkMoneyExposure(options = {}) {
   await ensureDarkMoneyExposureSchema();
 
-  const cycle = number(options.cycle, defaultCycle());
+  const cycle = financeElectionCycle(options.cycle);
   const limit = limitValue(options.limit);
   const indicatorsOnly = ["1", "true", "yes"].includes(
     clean(
@@ -466,7 +467,7 @@ export async function getDarkMoneyExposureProfile(
     throw error;
   }
 
-  const cycle = number(options.cycle, defaultCycle());
+  const cycle = financeElectionCycle(options.cycle);
 
   const relationships = await pool.query(
     `SELECT r.*,

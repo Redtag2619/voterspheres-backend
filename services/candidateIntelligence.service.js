@@ -1,3 +1,4 @@
+import {configuredFederalElectionCycle} from "../utils/electionCycle.js";
 import pool from "../config/database.js";
 import { publishRealtimeEvent } from "../lib/realtime.bus.js";
 
@@ -18,6 +19,8 @@ function riskFromScore(score, hasContact, isVerified) {
 export async function getCandidateIntelligenceSummary(filters = {}) {
   const params = [];
   const where = [];
+  params.push(configuredFederalElectionCycle(filters.cycle));
+  where.push(`c.election_year = $${params.length}`);
 
   if (filters.state) {
     params.push(filters.state);

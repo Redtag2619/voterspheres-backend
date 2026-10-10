@@ -1,3 +1,4 @@
+import {financeElectionCycle} from "../utils/financeElectionCycle.js";
 import express from "express";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
 import { pool } from "../db/pool.js";
@@ -138,8 +139,8 @@ function buildFecScheduleBUrl({ cycle = DEFAULT_CYCLE, state = "", q = "", categ
   const url = new URL(`${FEC_API_BASE_URL}/schedules/schedule_b/`);
 
   url.searchParams.set("api_key", FEC_API_KEY);
-  url.searchParams.set("two_year_transaction_period", String(cycle));
-  url.searchParams.set("cycle", String(cycle));
+  url.searchParams.set("two_year_transaction_period", String(financeElectionCycle(cycle)));
+  url.searchParams.set("cycle", String(financeElectionCycle(cycle)));
   url.searchParams.set("per_page", String(Math.min(Number(limit) || 100, 100)));
   url.searchParams.set("sort", "-disbursement_amount");
   url.searchParams.set("sort_hide_null", "true");
@@ -333,7 +334,8 @@ async function syncFecVendorSpend(req) {
 
   if (!fec.ok) return fec;
 
-  const cycle = Number(query.cycle || DEFAULT_CYCLE);
+  const cycle = financeElectionCycle(query.cycle);
+  if (fec.rows.some(row => row.two_year_transaction_period != null && Number(row.two_year_transaction_period) !== cycle)) throw Object.assign(new Error('Provider returned another election cycle.'), {statusCode:502});
   const rows = normalizeFecSpendRows(fec.rows, cycle);
 
   await upsertVendorSpend(rows);
@@ -357,7 +359,7 @@ function getWhereSql() {
         OR COALESCE(category, '') ILIKE '%' || $2 || '%'
       ))
       AND ($3 = '' OR COALESCE(category, '') = $3)
-      AND ($4 = 0 OR COALESCE(cycle, 0) = $4)
+      AND cycle = $4
   `;
 }
 
@@ -372,7 +374,7 @@ router.get("/health", async (_req, res) => {
       source: "FEC Schedule B operating expenditures",
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       ok: false,
       error: error.message || "Vendor FEC health check failed",
     });
@@ -388,7 +390,7 @@ router.post("/sync", requirePlatformOperator, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Vendor FEC sync failed:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: error.message || "Failed to sync FEC vendor spending",
     });
   }
@@ -414,7 +416,7 @@ router.get("/spend", async (req, res) => {
       normalizeState(state),
       text(q),
       text(category),
-      Number(cycle || 0),
+      financeElectionCycle(cycle),
       safeLimit(limit, 100, 250),
     ];
 
@@ -628,7 +630,7 @@ router.get("/spend", async (req, res) => {
     });
   } catch (error) {
     console.error("Vendor FEC spend failed:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: error.message || "Failed to load FEC vendor spending",
     });
   }

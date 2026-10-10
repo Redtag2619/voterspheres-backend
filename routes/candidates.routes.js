@@ -193,6 +193,7 @@ router.get("/intelligence/scoring", async (req, res) => {
       ...result,
     });
   } catch (error) {
+    if (sendElectionCycleError(res, error)) return;
     console.error("Candidate intelligence scoring error:", error);
     return res.status(500).json({
       error: error.message || "Failed to load candidate intelligence scoring",
