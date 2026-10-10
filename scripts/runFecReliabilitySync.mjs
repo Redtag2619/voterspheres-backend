@@ -31,7 +31,7 @@ try {
   console.log(JSON.stringify({job:'fec-sync',run_id:runId,status,result,contacts:'not implemented; intentionally disabled'},null,2));
   const expectedPartialPac =
     result.ok === true &&
-    result.status === 'completed_with_skipped_pac';
+    (result.status === 'completed_with_skipped_pac' || result.status === 'no_data');
   if (status !== 'complete' && !expectedPartialPac) process.exitCode = 1;
 } catch(error) {
   if(runId)await client.query("UPDATE production_job_runs SET status='failed',completed_at=NOW(),summary=$2::jsonb WHERE id=$1",[runId,JSON.stringify({code:error.code||'SYNC_FAILED',provider_status:error.providerStatus||null})]).catch(()=>{});

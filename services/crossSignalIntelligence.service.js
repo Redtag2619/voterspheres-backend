@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultFinanceCycle } from "../utils/electionCycle.js";
 import { pool } from "../db/pool.js";
 import { publishRealtimeEvent } from "../lib/realtime.bus.js";
 
@@ -38,7 +39,7 @@ export async function getCrossSignalIntelligence() {
         COUNT(*)::int AS candidates,
         COALESCE(SUM(COALESCE(receipts, 0)), 0)::numeric AS receipts,
         COALESCE(SUM(COALESCE(cash_on_hand, 0)), 0)::numeric AS cash_on_hand
-      FROM fundraising_live
+      FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
       GROUP BY COALESCE(NULLIF(state, ''), 'Unknown'), COALESCE(NULLIF(office, ''), 'Statewide')
     `),
 

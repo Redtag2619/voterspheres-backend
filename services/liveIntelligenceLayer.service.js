@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultFinanceCycle } from "../utils/electionCycle.js";
 import { pool } from "../db/pool.js";
 
 function getFirmId(user = {}) {
@@ -64,7 +65,7 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
 
   const fundraisingLive = await safeQuery(`
     SELECT COUNT(*)::int AS count, MAX(COALESCE(source_updated_at, updated_at, created_at)) AS last_seen
-    FROM fundraising_live
+    FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
   `);
 
   const fecCandidates = await safeQuery(`

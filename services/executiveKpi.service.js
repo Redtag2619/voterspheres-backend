@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultFinanceCycle } from "../utils/electionCycle.js";
 import { pool } from "../db/pool.js";
 
 function resolveFirmId(user = {}) {
@@ -129,7 +130,7 @@ export async function getExecutiveKpis({
               created_at
             )
           ) AS last_seen
-        FROM fundraising_live
+        FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
       `,
     }),
 

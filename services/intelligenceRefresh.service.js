@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultFinanceCycle } from "../utils/electionCycle.js";
 import { pool } from "../db/pool.js";
 import { ensureFundraisingLiveTable } from "./fec.service.js"; 
 import { ensureNewsSignalsTable, getRecentNewsSignals, ingestNewsSignals } from "./newsIngestion.service.js";
@@ -199,7 +200,7 @@ export async function getBattlegroundSignalRows(limit = 12) {
         candidate_id,
         coalesce(receipts, 0) as receipts,
         coalesce(cash_on_hand, 0) as cash_on_hand
-      from fundraising_live
+      FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
     )
     select
       c.id,
@@ -282,7 +283,7 @@ export async function getFundraisingSignalRows(limit = 6) {
           party,
           coalesce(receipts, 0) as receipts,
           coalesce(cash_on_hand, 0) as cash_on_hand
-        from fundraising_live
+        FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
       )
       select *
       from ranked
@@ -536,7 +537,7 @@ export async function getLiveIntelligenceStatus() {
   ] = await Promise.all([
     pool.query(`select count(*)::int as total from executive_feed_events`),
     pool.query(`select max(created_at) as last_feed_event_at from executive_feed_events`),
-    pool.query(`select max(source_updated_at) as last_fundraising_sync_at from fundraising_live`),
+    pool.query(`select max(source_updated_at) as last_fundraising_sync_at FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live`),
     pool.query(`select count(*)::int as total from candidates`),
     pool.query(`select count(*)::int as total from vendors`),
     pool.query(`select count(*)::int as total from news_signals`),

@@ -564,7 +564,7 @@ export async function ensureFundraisingLiveTable() {
 
     CREATE TABLE IF NOT EXISTS fundraising_live (
 
-      candidate_id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL,
 
       name TEXT NOT NULL,
 
@@ -583,6 +583,7 @@ export async function ensureFundraisingLiveTable() {
       coverage_end_date DATE,
 
       election_year INTEGER NOT NULL,
+      PRIMARY KEY (candidate_id, election_year),
 
       source TEXT NOT NULL DEFAULT 'FEC',
 
@@ -738,7 +739,7 @@ export async function ensureCandidatesSyncSchema() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_candidates_fec_candidate_id
 
-    ON candidates (fec_candidate_id)
+    ON candidates (fec_candidate_id, election_year)
 
     WHERE fec_candidate_id IS NOT NULL
 
@@ -869,38 +870,21 @@ export async function fetchCandidateTotalsPage({ cycle, page, perPage }) {
 
 
 export async function fetchAllCandidateTotals({ cycle }) {
-
   const { perPage, maxPages } = getFecApiConfig();
-
+  if(!Number.isInteger(perPage)||perPage<1||!Number.isInteger(maxPages)||maxPages<1||maxPages>500)throw Object.assign(new Error('Invalid pagination bounds'),{code:'FEC_INVALID_PAGINATION_CONFIG'});
   const allRows = [];
-
-
-
-  for (let page = 1; page <= maxPages; page += 1) {
-
-    const payload = await fetchCandidateTotalsPage({ cycle, page, perPage });
-
-    const results = Array.isArray(payload?.results) ? payload.results : [];
-
+  for (let page=1; page<=maxPages; page++) {
+    const payload=await fetchCandidateTotalsPage({cycle,page,perPage});
+    if (!Array.isArray(payload?.results)) throw Object.assign(new Error('Invalid FEC results'),{code:'FEC_INVALID_PAYLOAD'});
+    const results=payload.results;
+    const pages=Number(payload?.pagination?.pages);
+    if (!Number.isInteger(pages)||pages<0) throw Object.assign(new Error('Missing FEC pagination'),{code:'FEC_INVALID_PAGINATION'});
     allRows.push(...results);
-
-
-
-    const totalPages = Number(payload?.pagination?.pages || 0);
-
-    if (!results.length) break;
-
-    if (totalPages && page >= totalPages) break;
-
+    if (page>=pages) return allRows;
+    if (!results.length) throw Object.assign(new Error('Unexpected empty FEC page'),{code:'FEC_INCOMPLETE_PAGINATION'});
   }
-
-
-
-  return allRows;
-
+  throw Object.assign(new Error('FEC page cap reached; replacement cancelled'),{code:'FEC_PAGE_CAP_REACHED'});
 }
-
-
 
 export async function normalizeFundraisingRows(rows, cycle, options = {}) {
 
@@ -1108,7 +1092,7 @@ export async function replaceFundraisingLive(rows, cycle) {
 
           )
 
-          ON CONFLICT (candidate_id)
+          ON CONFLICT (candidate_id, election_year)
 
           DO UPDATE SET
 
@@ -1300,7 +1284,7 @@ export async function upsertCandidatesFromFec(rows, cycle) {
 
         )
 
-        ON CONFLICT (fec_candidate_id)
+        ON CONFLICT (fec_candidate_id, election_year)
 
         WHERE fec_candidate_id IS NOT NULL
 
@@ -1540,6 +1524,8 @@ export async function syncFundraisingFromFec({
 
 
   const rawRows = await fetchAllCandidateTotals({ cycle: targetCycle });
+
+  if (!rawRows.length) return {ok:true,status:'no_data',cycle:targetCycle,fetched:0,fundraising_stored:0,candidates_stored:0,preserved_existing:true};
 
   const normalizedRows = await normalizeFundraisingRows(rawRows, targetCycle, {
 

@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultFinanceCycle } from "../utils/electionCycle.js";
 import axios from "axios";
 import { pool } from "../db/pool.js";
 
@@ -147,7 +148,7 @@ export async function getNewsIngestionTargets(limit = 8) {
         candidate_id,
         coalesce(receipts, 0) AS receipts,
         coalesce(cash_on_hand, 0) AS cash_on_hand
-      FROM fundraising_live
+      FROM (SELECT * FROM fundraising_live WHERE election_year = ${defaultFinanceCycle()}) AS fundraising_live
     )
     SELECT
       c.id,
