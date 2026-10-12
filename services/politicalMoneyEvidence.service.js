@@ -1,3 +1,4 @@
+import { readMoneyImportCoverage } from "./moneyImportCoverage.js";
 import { financeElectionCycle } from "../utils/financeElectionCycle.js";
 import { collectMoneyPages, withMoneyImportLock } from "./moneyImportIntegrity.js";
 import crypto from "node:crypto";
@@ -68,7 +69,7 @@ async function finishRun(id, values = {}) {
   return result.rows[0];
 }
 
-export async function upsertPoliticalMoneyOrganization(input = {}) {
+export async function upsertPoliticalMoneyOrganization(input = {}, db = pool) {
   const provider = clean(input.provider || "manual");
   const identifierType = clean(input.identifierType || input.identifier_type);
   const identifierValue = clean(input.identifierValue || input.identifier_value);
@@ -76,7 +77,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
   const normalizedName = normalizeName(canonicalName);
 
   if (identifierType && identifierValue) {
-    const existing = await pool.query(
+    const existing = await db.query(
       `SELECT o.*
          FROM political_money_identifiers i
          JOIN political_money_organizations o ON o.id = i.organization_id
@@ -87,7 +88,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
     if (existing.rows[0]) return existing.rows[0];
   }
 
-  const sameName = await pool.query(
+  const sameName = provider === "openfec" && identifierType === "fec_committee_id" ? { rows: [] } : await db.query(
     `SELECT * FROM political_money_organizations
       WHERE normalized_name = $1
         AND COALESCE(state, '') = COALESCE($2, '')
@@ -98,7 +99,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
 
   let organization = sameName.rows[0];
   if (!organization) {
-    const created = await pool.query(
+    const created = await db.query(
       `INSERT INTO political_money_organizations
         (canonical_name, normalized_name, organization_type, tax_exempt_subsection,
          state, city, address, website, formation_date, metadata)
@@ -122,7 +123,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
   }
 
   if (identifierType && identifierValue) {
-    await pool.query(
+    await db.query(
       `INSERT INTO political_money_identifiers
         (organization_id, provider, identifier_type, identifier_value, confidence_score, metadata)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb)
@@ -138,7 +139,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
   return organization;
 }
 
-export async function storePoliticalMoneyEvidence(input = {}) {
+export async function storePoliticalMoneyEvidence(input = {}, db = pool) {
   if (!input.organizationId && !input.organization_id) throw new Error("organizationId is required");
   const organizationId = input.organizationId || input.organization_id;
   const provider = clean(input.provider || "manual_review");
@@ -147,13 +148,13 @@ export async function storePoliticalMoneyEvidence(input = {}) {
   const recordId = clean(input.sourceRecordId || input.source_record_id) ||
     crypto.createHash("sha256").update(JSON.stringify(input)).digest("hex");
 
-  const result = await pool.query(
+  const result = await db.query(
     `INSERT INTO political_money_evidence
       (organization_id, provider, evidence_type, source_record_id, title, description,
        amount, observed_at, source_url, confidence_score, reviewed, reviewed_by,
-       reviewed_at, metadata, cycle)
+       reviewed_at, metadata, cycle, money_scan_id, money_committee_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-             CASE WHEN $11 THEN NOW() ELSE NULL END,$13::jsonb,$14)
+             CASE WHEN $11 THEN NOW() ELSE NULL END,$13::jsonb,$14,$15,$16)
      ON CONFLICT (provider, evidence_type, source_record_id, (COALESCE(cycle,0)))
      DO UPDATE SET organization_id = EXCLUDED.organization_id,
                    title = EXCLUDED.title,
@@ -166,23 +167,24 @@ export async function storePoliticalMoneyEvidence(input = {}) {
                    reviewed_by = EXCLUDED.reviewed_by,
                    reviewed_at = CASE WHEN EXCLUDED.reviewed THEN NOW() ELSE political_money_evidence.reviewed_at END,
                    metadata = political_money_evidence.metadata || EXCLUDED.metadata,
-                   updated_at = NOW()
+                   money_scan_id = EXCLUDED.money_scan_id, money_committee_id = EXCLUDED.money_committee_id, updated_at = NOW()
      RETURNING *`,
     [
       organizationId, provider, evidenceType, recordId,
       clean(input.title) || null, clean(input.description) || null,
-      number(input.amount), input.observedAt || input.observed_at || null,
+      input.exactAmount ?? number(input.amount), input.observedAt || input.observed_at || null,
       clean(input.sourceUrl || input.source_url) || null,
       bounded(input.confidenceScore || input.confidence_score || 50, 0, 100),
       Boolean(input.reviewed), input.reviewedBy || input.reviewed_by || null,
       JSON.stringify(input.metadata || {}),
       input.cycle != null || input.metadata?.cycle != null ? financeElectionCycle(input.cycle ?? input.metadata.cycle) : null,
+      input.moneyScanId || null, input.moneyCommitteeId || null,
     ]
   );
   return result.rows[0];
 }
 
-async function storeIndependentExpenditure(row, cycle) {
+async function storeIndependentExpenditure(row, cycle, db = pool, scope = null) {
   const committeeId = clean(row.committee_id);
   const committeeName = clean(row.committee_name || row.payee_name || committeeId || "Independent expenditure filer");
   const organization = await upsertPoliticalMoneyOrganization({
@@ -193,22 +195,22 @@ async function storeIndependentExpenditure(row, cycle) {
     organizationType: clean(row.committee_type) || "political_committee",
     state: row.committee_state,
     metadata: { filing_frequency: row.filing_frequency || null },
-  });
-  const recordId = sourceId("schedule-e", row);
-  const amount = number(row.expenditure_amount || row.disbursement_amount);
+  }, db);
+  const recordId = scope ? `schedule-e:${scope.scanId}:${row.sub_id}` : sourceId("schedule-e", row);
+  const amount = scope ? String(row.expenditure_amount) : number(row.expenditure_amount || row.disbursement_amount);
 
-  await pool.query(
+  await db.query(
     `INSERT INTO political_money_transactions
       (provider, source_record_id, transaction_type, cycle, source_organization_id,
        fec_committee_id, fec_candidate_id, candidate_name, support_oppose_indicator,
-       amount, transaction_date, dissemination_date, purpose, source_url, filing_id, raw_payload)
-     VALUES ('openfec',$1,'independent_expenditure',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
+       amount, transaction_date, dissemination_date, purpose, source_url, filing_id, raw_payload, money_scan_id)
+     VALUES ('openfec',$1,'independent_expenditure',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15)
      ON CONFLICT (provider, source_record_id, (COALESCE(cycle,0)))
      DO UPDATE SET amount = EXCLUDED.amount,
                    transaction_date = EXCLUDED.transaction_date,
                    dissemination_date = EXCLUDED.dissemination_date,
                    purpose = EXCLUDED.purpose,
-                   raw_payload = EXCLUDED.raw_payload,
+                   raw_payload = EXCLUDED.raw_payload, money_scan_id = EXCLUDED.money_scan_id,
                    updated_at = NOW()`,
     [
       recordId, cycle, organization.id, committeeId || null,
@@ -217,7 +219,7 @@ async function storeIndependentExpenditure(row, cycle) {
       row.expenditure_date || null, row.dissemination_date || null,
       clean(row.expenditure_description || row.purpose) || null,
       officialFecUrl(row), clean(row.image_number || row.filing_id) || null,
-      JSON.stringify(row),
+      JSON.stringify(row), scope?.scanId || null,
     ]
   );
 
@@ -228,13 +230,13 @@ async function storeIndependentExpenditure(row, cycle) {
     sourceRecordId: recordId,
     title: `${committeeName} independent expenditure`,
     description: [row.support_oppose_indicator, row.candidate_name, row.expenditure_description].filter(Boolean).join(" • "),
-    amount,
+    amount, exactAmount: scope ? amount : undefined, moneyScanId: scope?.scanId, moneyCommitteeId: row.committee_id,
     observedAt: row.dissemination_date || row.expenditure_date || null,
     sourceUrl: officialFecUrl(row),
     confidenceScore: 97,
     reviewed: true,
     metadata: { cycle, candidate_id: row.candidate_id || null, support_oppose_indicator: row.support_oppose_indicator || null },
-  });
+  }, db);
 }
 
 async function syncFecIndependentExpendituresUnlocked(options = {}) {
@@ -326,9 +328,9 @@ function scoreFor(type, summary) {
   return 0;
 }
 
-async function rebuildPoliticalMoneyScoresUnlocked(options = {}) {
+async function rebuildPoliticalMoneyScoresUnlocked(options = {}, borrowedClient = null) {
   const cycle = financeElectionCycle(options.cycle);
-  const client = await pool.connect();
+  const client = borrowedClient || await pool.connect();
   try {
   await client.query('BEGIN');
   await client.query('UPDATE political_money_scores SET cycle_scoped_verified=FALSE WHERE cycle=$1', [cycle]);
@@ -339,7 +341,7 @@ async function rebuildPoliticalMoneyScoresUnlocked(options = {}) {
             COALESCE(SUM(e.amount),0)::numeric AS amount,
             MAX(COALESCE((e.metadata->>'indicator_score')::numeric,0))::numeric AS max_score
        FROM political_money_organizations o
-       JOIN political_money_evidence e ON e.organization_id = o.id
+       JOIN political_money_evidence_read e ON e.organization_id = o.id
       WHERE e.cycle = $1 AND (e.reviewed = TRUE OR e.confidence_score >= 80)
       GROUP BY o.id, e.evidence_type`, [cycle]
   );
@@ -396,18 +398,19 @@ async function rebuildPoliticalMoneyScoresUnlocked(options = {}) {
   await client.query('COMMIT');
   return { ok: true, build: POLITICAL_MONEY_BUILD, model_version: POLITICAL_MONEY_MODEL, cycle, organizations_scored: updated };
   } catch(error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
-  finally { client.release(); }
+  finally { if (!borrowedClient) client.release(); }
 }
 
 export async function getPoliticalMoneyProviderHealth() {
   const result = await pool.query(
-    `SELECT DISTINCT ON (provider, job_type)
+    `SELECT DISTINCT ON (provider, job_type, cycle)
             provider, job_type, status, cycle, records_fetched, records_stored,
             records_failed, error_message, started_at, completed_at
        FROM political_money_ingestion_runs
-      ORDER BY provider, job_type, started_at DESC`
+      ORDER BY provider, job_type, cycle, started_at DESC`
   );
-  return { ok: true, build: POLITICAL_MONEY_BUILD, providers: result.rows, generated_at: new Date().toISOString() };
+  const progress=await pool.query(`SELECT c.cycle,c.scope_key,c.published_at,c.needs_scores,s.status,s.pages,s.records,s.last_error,s.cutoff::text FROM money_import_checkpoints c LEFT JOIN money_import_scans s ON s.id=c.active_scan_id WHERE c.lane='political-money' ORDER BY c.cycle,c.scope_key`);
+  return { ok: true, build: POLITICAL_MONEY_BUILD, providers: result.rows, import_progress:progress.rows, generated_at: new Date().toISOString() };
 }
 
 export async function getPoliticalMoneyEvidenceProfile(organizationId, options = {}) {
@@ -422,20 +425,20 @@ export async function getPoliticalMoneyEvidenceProfile(organizationId, options =
   );
   if (!organization.rows[0]) return null;
   const evidence = await pool.query(
-    `SELECT * FROM political_money_evidence
+    `SELECT * FROM political_money_evidence_read
       WHERE organization_id = $1 AND cycle = $3
       ORDER BY COALESCE(observed_at, created_at) DESC
       LIMIT $2`,
     [organizationId, limit, cycle]
   );
   const transactions = await pool.query(
-    `SELECT * FROM political_money_transactions
+    `SELECT * FROM political_money_transactions_read
       WHERE (source_organization_id = $1 OR target_organization_id = $1) AND cycle = $3
       ORDER BY COALESCE(dissemination_date, transaction_date) DESC NULLS LAST
       LIMIT $2`,
     [organizationId, limit, cycle]
   );
-  return { ok: true, build: POLITICAL_MONEY_BUILD, organization: organization.rows[0], evidence: evidence.rows, transactions: transactions.rows };
+  return { ok: true, build: POLITICAL_MONEY_BUILD, organization: organization.rows[0], evidence: evidence.rows, transactions: transactions.rows, import_coverage: await readMoneyImportCoverage(pool,"political-money",cycle) };
 }
 
 export default {
@@ -448,8 +451,11 @@ export default {
   storePoliticalMoneyEvidence,
 };
 
-export async function syncFecIndependentExpenditures(options = {}) { return withMoneyImportLock(pool, () => syncFecIndependentExpendituresUnlocked(options)); }
+export async function syncFecIndependentExpenditures() { throw Object.assign(new Error("Use the resumable import coordinator with an explicit scope."), {code:"RESUMABLE_IMPORT_REQUIRED",statusCode:409}); }
 
 export async function rebuildPoliticalMoneyScores(options = {}) { return withMoneyImportLock(pool, () => rebuildPoliticalMoneyScoresUnlocked(options)); }
 
 export async function importReviewedPoliticalMoneyEvidence(records = [], context = {}) { return withMoneyImportLock(pool, () => importReviewedPoliticalMoneyEvidenceUnlocked(records, context)); }
+
+export async function promoteResumablePoliticalRecord(row,cycle,client,scope) { return storeIndependentExpenditure(row,cycle,client,scope); }
+export async function rebuildResumableMoneyScores(options,client) { if(!client)throw new Error("Borrowed transaction client required"); return rebuildPoliticalMoneyScoresUnlocked(options,client); }

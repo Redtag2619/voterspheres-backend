@@ -1,4 +1,5 @@
 import {financeElectionCycle} from "../utils/financeElectionCycle.js";
+import {readMoneyImportCoverage} from "./moneyImportCoverage.js";
 import pool from "../config/database.js";
 import {
   POLITICAL_MONEY_BUILD,
@@ -90,7 +91,7 @@ async function evidenceByCommittee(cycle) {
                 ),
                 0
               )::numeric AS independent_expenditure_amount
-         FROM political_money_transactions
+         FROM political_money_transactions_read
         WHERE cycle = $1
         GROUP BY source_organization_id
      ),
@@ -109,7 +110,7 @@ async function evidenceByCommittee(cycle) {
                 0
               )::numeric AS organization_transfer_amount,
               COUNT(*)::int AS evidence_record_count
-         FROM political_money_evidence
+         FROM political_money_evidence_read
         WHERE cycle = $1
         GROUP BY organization_id
      )
@@ -412,6 +413,7 @@ export async function getDarkMoneyExposure(options = {}) {
     build: POLITICAL_MONEY_BUILD,
     cycle,
     limit,
+    import_coverage: await readMoneyImportCoverage(pool,"political-money",cycle),
     filters: {
       cycle,
       state: clean(options.state).toUpperCase(),
@@ -493,7 +495,7 @@ export async function getDarkMoneyExposureProfile(
   const evidenceProfile = linked?.political_money_organization_id
     ? await getPoliticalMoneyEvidenceProfile(
         linked.political_money_organization_id,
-        { limit: options.limit || 250 }
+        { limit: options.limit || 250, cycle }
       )
     : null;
 

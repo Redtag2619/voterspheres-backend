@@ -1,3 +1,5 @@
+import { runResumableMoneyImports } from "../services/resumableMoneyImports.service.js";
+import { readMoneyImportCoverage } from "../services/moneyImportCoverage.js";
 import {financeElectionCycle} from "../utils/financeElectionCycle.js";
 import express from "express";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
@@ -329,7 +331,7 @@ async function upsertVendorSpend(rows = []) {
 }
 
 async function syncFecVendorSpend(req) {
-  throw Object.assign(new Error("Import paused pending transaction-key reconciliation; stored data remains available."), { statusCode: 409, code: "MONEY_IMPORT_RECONCILIATION_REQUIRED" });
+  return runResumableMoneyImports(pool, { ...(req.query || {}), ...(req.body || {}), lanes: "vendors" });
 }
 
 async function legacysyncFecVendorSpend(req) {
@@ -391,7 +393,8 @@ router.post("/sync", requirePlatformOperator, async (req, res) => {
 
     const result = await syncFecVendorSpend(req);
 
-    res.json(result);
+    const partial=result.results.some(row=>row.lane!=="scores" && !["completed","no_data"].includes(row.status));
+    res.status(partial?202:200).json(result);
   } catch (error) {
     console.error("Vendor FEC sync failed:", error);
     res.status(error.statusCode || 500).json({
@@ -440,7 +443,7 @@ router.get("/spend", async (req, res) => {
           'fec_schedule_b' AS source,
           STRING_AGG(DISTINCT committee_name, ', ' ORDER BY committee_name) AS committee_clients,
           STRING_AGG(DISTINCT purpose, '; ' ORDER BY purpose) AS services
-        FROM vendor_fec_spend
+        FROM vendor_fec_spend_read
         ${whereSql}
         GROUP BY vendor_name
         ORDER BY contract_value DESC, vendor_name ASC
@@ -456,7 +459,7 @@ router.get("/spend", async (req, res) => {
           COUNT(DISTINCT vendor_name)::int AS vendor_count,
           COUNT(*)::int AS transaction_count,
           COALESCE(SUM(amount), 0)::numeric AS total_amount
-        FROM vendor_fec_spend
+        FROM vendor_fec_spend_read
         ${whereSql}
         GROUP BY category
         ORDER BY total_amount DESC
@@ -472,7 +475,7 @@ router.get("/spend", async (req, res) => {
           COUNT(DISTINCT vendor_name)::int AS vendor_count,
           COUNT(*)::int AS transaction_count,
           COALESCE(SUM(amount), 0)::numeric AS total_amount
-        FROM vendor_fec_spend
+        FROM vendor_fec_spend_read
         ${whereSql}
         GROUP BY COALESCE(state, payee_state, 'National')
         ORDER BY total_amount DESC
@@ -489,7 +492,7 @@ router.get("/spend", async (req, res) => {
           COUNT(DISTINCT vendor_name)::int AS vendor_count,
           COUNT(*)::int AS transaction_count,
           COALESCE(SUM(amount), 0)::numeric AS total_amount
-        FROM vendor_fec_spend
+        FROM vendor_fec_spend_read
         ${whereSql}
         GROUP BY committee_id, committee_name
         ORDER BY total_amount DESC
@@ -575,6 +578,8 @@ router.get("/spend", async (req, res) => {
     }));
 
     res.json({
+      cycle: financeElectionCycle(cycle),
+      import_coverage: await readMoneyImportCoverage(pool,"vendors",financeElectionCycle(cycle)),
       results,
       vendors: results,
       rows: results,

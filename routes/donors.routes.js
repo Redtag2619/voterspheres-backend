@@ -1,3 +1,5 @@
+import { runResumableMoneyImports } from "../services/resumableMoneyImports.service.js";
+import { readMoneyImportCoverage } from "../services/moneyImportCoverage.js";
 import {financeElectionCycle} from "../utils/financeElectionCycle.js";
 import express from "express";
 import { requirePlatformOperator } from "../middleware/authorization.middleware.js"; 
@@ -269,7 +271,7 @@ function normalizeFecRows(rows = []) {
 }
 
 async function refreshFecDonors(req) {
-  throw Object.assign(new Error("Import paused pending transaction-key reconciliation; stored data remains available."), { statusCode: 409, code: "MONEY_IMPORT_RECONCILIATION_REQUIRED" });
+  return runResumableMoneyImports(pool, { ...(req.query || {}), ...(req.body || {}), lanes: "donors" });
 }
 
 async function legacyrefreshFecDonors(req) {
@@ -406,7 +408,8 @@ router.post("/refresh", requirePlatformOperator, async (req, res) => {
 
     const result = await refreshFecDonors(req);
 
-    res.json(result);
+    const partial=result.results.some(row=>row.lane!=="scores" && !["completed","no_data"].includes(row.status));
+    res.status(partial?202:200).json(result);
   } catch (error) {
     console.error(error);
 
@@ -522,7 +525,7 @@ async function handleDonorNetwork(req, res) {
       contact_verified,
       contribution_count
 
-    FROM donors
+    FROM donors_read
     ${whereSql}
     ORDER BY amount DESC
     LIMIT $5
@@ -535,7 +538,7 @@ async function handleDonorNetwork(req, res) {
     SELECT
       COUNT(*)::int AS total_donors,
       COALESCE(SUM(amount),0)::numeric AS total_amount
-    FROM donors
+    FROM donors_read
     ${whereSql}
   `,
     values.slice(0, 4)
@@ -547,7 +550,7 @@ async function handleDonorNetwork(req, res) {
       state,
       COUNT(*)::int AS donor_count,
       COALESCE(SUM(amount),0)::numeric AS total_amount
-    FROM donors
+    FROM donors_read
     ${whereSql}
     GROUP BY state
     ORDER BY total_amount DESC
@@ -563,7 +566,7 @@ async function handleDonorNetwork(req, res) {
       committee_name,
       COUNT(*)::int AS donor_count,
       COALESCE(SUM(amount),0)::numeric AS total_amount
-    FROM donors
+    FROM donors_read
     ${whereSql}
     GROUP BY committee_id, committee_name
     ORDER BY total_amount DESC
@@ -574,7 +577,8 @@ async function handleDonorNetwork(req, res) {
 
   res.json({
     cycle: financeElectionCycle(req.query.cycle),
-    coverage: "Cycle-assigned records only; legacy unassigned donors are excluded.",
+    coverage: "Published FEC disclosure scopes or legacy snapshot; inspect import_coverage for scope and progress.",
+    import_coverage: await readMoneyImportCoverage(pool,"donors",financeElectionCycle(req.query.cycle)),
     results: result.rows.map((row) => ({
       ...row,
       amount: Number(row.amount || 0),

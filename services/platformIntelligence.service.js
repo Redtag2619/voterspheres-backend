@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultDonorCycle } from "../utils/electionCycle.js";
 import { pool } from "../db/pool.js";
 
 const ALL_STATES = [
@@ -291,7 +292,7 @@ async function loadDonors({ limit = 250, state = "", search = "" } = {}) {
         ${typeSql} AS donor_type,
         ${strengthSql} AS relationship_strength,
         ${createdSql} AS updated_at
-      FROM donors
+      FROM (SELECT * FROM donors_read WHERE cycle = ${defaultDonorCycle()}) AS donors
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       ORDER BY COALESCE(${amountSql}, 0) DESC NULLS LAST
       LIMIT $${values.length}

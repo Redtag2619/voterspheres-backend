@@ -32,7 +32,7 @@ export async function withMoneyImportLock(pool, work, {onLoss=()=>process.exit(1
   locked=(await client.query("SELECT pg_try_advisory_lock(hashtextextended('voterspheres:fec-sync',0)) AS acquired")).rows[0]?.acquired===true;
   if(!locked)throw Object.assign(new Error('Another FEC writer is active'),{code:'IMPORT_LOCK_BUSY',statusCode:409});
   heartbeat=setInterval(()=>client.query('SELECT 1').catch(lost),20000);
-  return await work();
+  return await work(client);
  }finally{
   clearInterval(heartbeat);
   try{if(locked)await client.query("SELECT pg_advisory_unlock(hashtextextended('voterspheres:fec-sync',0))");}

@@ -1,3 +1,4 @@
+import { configuredFederalElectionCycle as defaultDonorCycle } from "../utils/electionCycle.js";
 
 import { pool } from "../db/pool.js";
 import { normalizeFederalElectionCycle } from "../utils/electionCycle.js";
@@ -408,8 +409,8 @@ export async function getDonorSignals(limit = 25) {
   return safeQuery(
     `
       SELECT *
-      FROM donors
-      ORDER BY id DESC
+      FROM (SELECT * FROM donors_read WHERE cycle = ${defaultDonorCycle()}) AS donors
+      ORDER BY source_updated_at DESC NULLS LAST, id DESC
       LIMIT $1
     `,
     [limit]

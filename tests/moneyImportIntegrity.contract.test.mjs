@@ -60,17 +60,21 @@ test('actual evidence writer preserves unknown cycles and scopes explicit cycles
  assert.equal(values[0].args[13],2030);assert.equal(values[1].args[13],null);
  assert.match(values[0].sql,/COALESCE\(cycle,0\)/);
 });
-test('actual capped sync stores no provider records and records failure',async()=>{
+test('legacy sync refuses writes and requires resumable coordinator',async()=>{
  const queries=[];const c=sandbox(async(sql)=>{queries.push(sql);return {rows:[{id:1}]};});
- await assert.rejects(c.syncFecIndependentExpenditures({cycle:2028}),{code:'FEC_PAGE_CAP_REACHED'});
+ await assert.rejects(c.syncFecIndependentExpenditures({cycle:2028}),{code:'RESUMABLE_IMPORT_REQUIRED'});
+ assert.equal(queries.length,0);
  assert.ok(!queries.some(q=>q.includes('INSERT INTO political_money_transactions')||q.includes('INSERT INTO political_money_evidence')));
 });
-test('actual donor and vendor writer guards refuse destructive refresh',async()=>{
+test('actual donor and vendor writers delegate a fixed lane and GETs never import',async()=>{
  for(const [file,name] of [['donors','refreshFecDonors'],['vendorFec','syncFecVendorSpend']]){
   const s=fs.readFileSync(new URL(`../routes/${file}.routes.js`,import.meta.url),'utf8');
   const start=s.indexOf(`async function ${name}(req) {`),end=s.indexOf('\n}',start)+2;
-  const ctx=vm.createContext({});vm.runInContext(s.slice(start,end),ctx);
-  await assert.rejects(ctx[name]({}),{code:'MONEY_IMPORT_RECONCILIATION_REQUIRED'});
+  let delegated;
+  const ctx=vm.createContext({pool:{},runResumableMoneyImports:async(_pool,opts)=>{delegated=opts;return {ok:true};}});vm.runInContext(s.slice(start,end),ctx);
+  await ctx[name]({query:{cycle:2028,committees:'C00547349'},body:{lanes:'political-money'}});
+  assert.equal(delegated.lanes,file==='donors'?'donors':'vendors');
+  assert.equal(delegated.cycle,2028);
   assert.ok(!/await (refreshFecDonors|syncFecVendorSpend)\(req\);/.test(s.slice(s.indexOf('router.get("/network/public"')>=0?s.indexOf('router.get("/network/public"'):s.indexOf('router.get("/spend"'))));
  }
 });

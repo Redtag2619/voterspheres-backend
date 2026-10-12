@@ -1,5 +1,5 @@
 // Requests are serialized within this process; other workers share the provider quota.
-export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, intervalMs = 4000, timeoutMs = 30000, retries = 3, maxDelayMs = 60000 } = {}) {
+export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, intervalMs = 4000, timeoutMs = 30000, retries = 3, maxDelayMs = 60000, decodeResponse = response => response.json() } = {}) {
   for (const [name, value] of Object.entries({ intervalMs, timeoutMs, retries, maxDelayMs })) {
     if (!Number.isFinite(value) || value < 0 || (name === 'retries' && !Number.isInteger(value)) || (name === 'timeoutMs' && value === 0)) throw new Error(`Invalid FEC ${name}`);
   }
@@ -13,7 +13,7 @@ export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms =
       let response, payload, networkFailure = false;
       try {
         response = await fetchImpl(String(url), { method: 'GET', headers: { Accept: 'application/json', 'User-Agent': 'VoterSpheres/1.0' }, signal: controller.signal });
-        if (response.ok) payload = await response.json();
+        if (response.ok) payload = await decodeResponse(response);
         else await response.body?.cancel();
       } catch { networkFailure = true; }
       finally { clearTimeout(timer); }

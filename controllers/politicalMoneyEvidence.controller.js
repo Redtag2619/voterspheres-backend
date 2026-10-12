@@ -1,3 +1,5 @@
+import {pool} from "../db/pool.js";
+import {runResumableMoneyImports} from "../services/resumableMoneyImports.service.js";
 import {
   getPoliticalMoneyEvidenceProfile,
   getPoliticalMoneyProviderHealth,
@@ -7,8 +9,8 @@ import {
 } from "../services/politicalMoneyEvidence.service.js";
 
 function isPlatformAdmin(req) {
-  const role = String(req.user?.role || req.auth?.role || "").toLowerCase();
-  return ["admin", "platform_admin", "super_admin", "owner"].includes(role);
+  const role = String(req.user?.role || "").trim().toLowerCase();
+  return ["platform_admin", "super_admin", "platform_operator"].includes(role);
 }
 
 function denyUnlessAdmin(req, res) {
@@ -22,7 +24,7 @@ export async function politicalMoneyProviderHealthController(_req, res) {
     return res.json(await getPoliticalMoneyProviderHealth());
   } catch (error) {
     console.error("Political money provider health error:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Unable to load provider health." });
+    return res.status(error.statusCode || 500).json({ ok: false, code:error.code, error: error.message || "Unable to load provider health." });
   }
 }
 
@@ -33,18 +35,19 @@ export async function politicalMoneyEvidenceProfileController(req, res) {
     return res.json(result);
   } catch (error) {
     console.error("Political money evidence profile error:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Unable to load evidence profile." });
+    return res.status(error.statusCode || 500).json({ ok: false, code:error.code, error: error.message || "Unable to load evidence profile." });
   }
 }
 
 export async function syncFecPoliticalMoneyController(req, res) {
   if (denyUnlessAdmin(req, res)) return;
   try {
-    const result = await syncFecIndependentExpenditures({ ...(req.query || {}), ...(req.body || {}) });
-    return res.json({ ok: true, message: "FEC political-money synchronization completed.", run: result });
+    const result = await runResumableMoneyImports(pool,{ ...(req.query || {}), ...(req.body || {}), lanes:"political-money" });
+    const complete=result.results.every(r=>r.lane==="scores"||["completed","no_data"].includes(r.status));
+    return res.status(complete?200:202).json({ok:true,message:complete?"Import scope processed; inspect coverage.":"Import progress saved; resume with the same scope.",run:result});
   } catch (error) {
     console.error("FEC political money sync error:", error);
-    return res.status(500).json({ ok: false, error: error.message || "FEC political-money synchronization failed." });
+    return res.status(error.statusCode || 500).json({ ok: false, code:error.code, error: error.message || "FEC political-money synchronization failed." });
   }
 }
 
@@ -69,6 +72,6 @@ export async function rebuildPoliticalMoneyScoresController(req, res) {
     return res.json(await rebuildPoliticalMoneyScores({ ...(req.query || {}), ...(req.body || {}) }));
   } catch (error) {
     console.error("Political money score rebuild error:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Score rebuild failed." });
+    return res.status(error.statusCode || 500).json({ ok: false, code:error.code, error: error.message || "Score rebuild failed." });
   }
 }
