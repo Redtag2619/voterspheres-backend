@@ -329,6 +329,10 @@ async function upsertVendorSpend(rows = []) {
 }
 
 async function syncFecVendorSpend(req) {
+  throw Object.assign(new Error("Import paused pending transaction-key reconciliation; stored data remains available."), { statusCode: 409, code: "MONEY_IMPORT_RECONCILIATION_REQUIRED" });
+}
+
+async function legacysyncFecVendorSpend(req) {
   const query = req.query || {};
   const fec = await fetchFecVendorSpend(query);
 
@@ -400,9 +404,7 @@ router.get("/spend", async (req, res) => {
   try {
     await ensureVendorFecTables();
 
-    if (String(req.query.live || "1") !== "0") {
-      await syncFecVendorSpend(req);
-    }
+    // Page reads never trigger provider imports.
 
     const {
       state = "",

@@ -110,11 +110,7 @@ async function evidenceByCommittee(cycle) {
               )::numeric AS organization_transfer_amount,
               COUNT(*)::int AS evidence_record_count
          FROM political_money_evidence
-        WHERE CASE
-                WHEN COALESCE(metadata->>'cycle', '') ~ '^[0-9]+$'
-                  THEN (metadata->>'cycle')::int
-                ELSE $1
-              END = $1
+        WHERE cycle = $1
         GROUP BY organization_id
      )
      SELECT DISTINCT ON (i.identifier_value)
@@ -152,7 +148,7 @@ async function evidenceByCommittee(cycle) {
          ON o.id = i.organization_id
        LEFT JOIN political_money_scores s
          ON s.organization_id = o.id
-        AND s.cycle = $1
+        AND s.cycle = $1 AND s.cycle_scoped_verified = TRUE
        LEFT JOIN transaction_totals t
          ON t.organization_id = o.id
        LEFT JOIN evidence_totals e

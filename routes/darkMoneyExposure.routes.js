@@ -1,3 +1,4 @@
+import { requirePlatformOperator } from "../middleware/authorization.middleware.js";
 import express from "express";
 import {
   darkMoneyExposureController,
@@ -17,9 +18,9 @@ router.get("/", darkMoneyExposureController);
 router.get("/profile/:id", darkMoneyExposureProfileController);
 router.get("/providers/health", politicalMoneyProviderHealthController);
 router.get("/evidence/:id", politicalMoneyEvidenceProfileController);
-router.post("/sync/fec", syncFecPoliticalMoneyController);
-router.post("/evidence/import", express.json({ limit: "5mb" }), importPoliticalMoneyEvidenceController);
-router.post("/scores/rebuild", rebuildPoliticalMoneyScoresController);
+router.post("/sync/fec", requirePlatformOperator, syncFecPoliticalMoneyController);
+router.post("/evidence/import", requirePlatformOperator, express.json({ limit: "5mb" }), importPoliticalMoneyEvidenceController);
+router.post("/scores/rebuild", requirePlatformOperator, rebuildPoliticalMoneyScoresController);
 
 export default router;
 

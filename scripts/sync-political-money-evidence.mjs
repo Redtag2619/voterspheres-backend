@@ -18,12 +18,14 @@ const pauseMs = Number(argument("pause-ms", 350));
 const scoresOnly = String(argument("scores-only", "false")).toLowerCase() === "true";
 
 try {
+  if (!process.argv.includes("--apply")) { console.log(JSON.stringify({mode:"preview",cycle,maxPages,scoresOnly,policy:"No provider requests or writes. Add --apply only after migration."})); } else {
   const result = scoresOnly
     ? await rebuildPoliticalMoneyScores({ cycle })
     : await syncFecIndependentExpenditures({ cycle, maxPages, perPage, pauseMs });
   console.log(JSON.stringify(result, null, 2));
+  }
 } catch (error) {
-  console.error("Political money evidence sync failed:", error);
+  console.error(JSON.stringify({ok:false,code:error.code||"MONEY_IMPORT_FAILED",provider_status:error.providerStatus||null}));
   process.exitCode = 1;
 } finally {
   await pool.end();

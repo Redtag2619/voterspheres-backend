@@ -1,3 +1,5 @@
+import { financeElectionCycle } from "../utils/financeElectionCycle.js";
+import { collectMoneyPages, withMoneyImportLock } from "./moneyImportIntegrity.js";
 import crypto from "node:crypto";
 import pool from "../config/database.js";
 
@@ -113,6 +115,7 @@ export async function upsertPoliticalMoneyOrganization(input = {}) {
         clean(input.website) || null,
         input.formationDate || input.formation_date || null,
         JSON.stringify(input.metadata || {}),
+      input.cycle != null || input.metadata?.cycle != null ? financeElectionCycle(input.cycle ?? input.metadata.cycle) : null,
       ]
     );
     organization = created.rows[0];
@@ -148,10 +151,10 @@ export async function storePoliticalMoneyEvidence(input = {}) {
     `INSERT INTO political_money_evidence
       (organization_id, provider, evidence_type, source_record_id, title, description,
        amount, observed_at, source_url, confidence_score, reviewed, reviewed_by,
-       reviewed_at, metadata)
+       reviewed_at, metadata, cycle)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-             CASE WHEN $11 THEN NOW() ELSE NULL END,$13::jsonb)
-     ON CONFLICT (provider, evidence_type, source_record_id)
+             CASE WHEN $11 THEN NOW() ELSE NULL END,$13::jsonb,$14)
+     ON CONFLICT (provider, evidence_type, source_record_id, (COALESCE(cycle,0)))
      DO UPDATE SET organization_id = EXCLUDED.organization_id,
                    title = EXCLUDED.title,
                    description = EXCLUDED.description,
@@ -173,6 +176,7 @@ export async function storePoliticalMoneyEvidence(input = {}) {
       bounded(input.confidenceScore || input.confidence_score || 50, 0, 100),
       Boolean(input.reviewed), input.reviewedBy || input.reviewed_by || null,
       JSON.stringify(input.metadata || {}),
+      input.cycle != null || input.metadata?.cycle != null ? financeElectionCycle(input.cycle ?? input.metadata.cycle) : null,
     ]
   );
   return result.rows[0];
@@ -199,7 +203,7 @@ async function storeIndependentExpenditure(row, cycle) {
        fec_committee_id, fec_candidate_id, candidate_name, support_oppose_indicator,
        amount, transaction_date, dissemination_date, purpose, source_url, filing_id, raw_payload)
      VALUES ('openfec',$1,'independent_expenditure',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
-     ON CONFLICT (provider, source_record_id)
+     ON CONFLICT (provider, source_record_id, (COALESCE(cycle,0)))
      DO UPDATE SET amount = EXCLUDED.amount,
                    transaction_date = EXCLUDED.transaction_date,
                    dissemination_date = EXCLUDED.dissemination_date,
@@ -233,10 +237,10 @@ async function storeIndependentExpenditure(row, cycle) {
   });
 }
 
-export async function syncFecIndependentExpenditures(options = {}) {
+async function syncFecIndependentExpendituresUnlocked(options = {}) {
   const apiKey = clean(process.env.FEC_API_KEY || process.env.OPENFEC_API_KEY);
   if (!apiKey) throw new Error("FEC_API_KEY or OPENFEC_API_KEY is required");
-  const cycle = number(options.cycle, number(process.env.FEC_DEFAULT_CYCLE, 2026));
+  const cycle = financeElectionCycle(options.cycle);
   const maxPages = bounded(options.maxPages || options.max_pages || process.env.POLITICAL_MONEY_FEC_MAX_PAGES || 3, 1, 25);
   const perPage = bounded(options.perPage || options.per_page || 100, 1, 100);
   const pauseMs = bounded(options.pauseMs || options.pause_ms || 350, 0, 5000);
@@ -247,35 +251,15 @@ export async function syncFecIndependentExpenditures(options = {}) {
   let pagesRequested = 0;
 
   try {
-    for (let page = 1; page <= maxPages; page += 1) {
-      const url = new URL("https://api.open.fec.gov/v1/schedules/schedule_e/");
-      url.searchParams.set("api_key", apiKey);
-      url.searchParams.set("cycle", String(cycle));
-      url.searchParams.set("page", String(page));
-      url.searchParams.set("per_page", String(perPage));
-      // Schedule E only accepts supported API sort fields. The earlier
-      // dissemination_date sort causes OpenFEC to return HTTP 422.
-      url.searchParams.set("sort", "-expenditure_date");
-      pagesRequested += 1;
-      const response = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(30000) });
-      if (!response.ok) throw new Error(`OpenFEC returned ${response.status}: ${await response.text()}`);
-      const payload = await response.json();
-      const rows = Array.isArray(payload.results) ? payload.results : [];
-      fetched += rows.length;
-      for (const row of rows) {
-        try {
-          await storeIndependentExpenditure(row, cycle);
-          stored += 1;
-        } catch (error) {
-          failed += 1;
-          console.warn("[Political Money] skipped FEC record", error.message);
-        }
-      }
-      const totalPages = number(payload.pagination?.pages, page);
-      if (!rows.length || page >= totalPages) break;
-      if (pauseMs) await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    const pages = await collectMoneyPages({ cycle, maxPages, perPage, apiKey, pauseMs });
+    pagesRequested = pages.pages;
+    fetched = pages.rows.length;
+    if (!pages.rows.length) return await finishRun(run.id, { status: "no_data", pagesRequested, recordsFetched: 0, recordsStored: 0, recordsFailed: 0 });
+    for (const row of pages.rows) {
+      await storeIndependentExpenditure(row, cycle);
+      stored += 1;
     }
-    await rebuildPoliticalMoneyScores({ cycle });
+    await rebuildPoliticalMoneyScoresUnlocked({ cycle });
     return await finishRun(run.id, { status: "completed", pagesRequested, recordsFetched: fetched, recordsStored: stored, recordsFailed: failed });
   } catch (error) {
     await finishRun(run.id, { status: "failed", pagesRequested, recordsFetched: fetched, recordsStored: stored, recordsFailed: failed, errorMessage: error.message });
@@ -283,7 +267,7 @@ export async function syncFecIndependentExpenditures(options = {}) {
   }
 }
 
-export async function importReviewedPoliticalMoneyEvidence(records = [], context = {}) {
+async function importReviewedPoliticalMoneyEvidenceUnlocked(records = [], context = {}) {
   if (!Array.isArray(records)) throw new Error("records must be an array");
   const safeRecords = records.slice(0, 1000);
   let stored = 0;
@@ -320,13 +304,14 @@ export async function importReviewedPoliticalMoneyEvidence(records = [], context
         reviewed: true,
         reviewedBy: context.userId || null,
         metadata: row.metadata || {},
+        cycle: row.cycle ?? context.cycle,
       });
       stored += 1;
     } catch (error) {
       errors.push({ index, error: error.message });
     }
   }
-  await rebuildPoliticalMoneyScores({ cycle: context.cycle });
+  await rebuildPoliticalMoneyScoresUnlocked({ cycle: context.cycle });
   return { ok: errors.length === 0, received: safeRecords.length, stored, failed: errors.length, errors: errors.slice(0, 50) };
 }
 
@@ -341,9 +326,13 @@ function scoreFor(type, summary) {
   return 0;
 }
 
-export async function rebuildPoliticalMoneyScores(options = {}) {
-  const cycle = number(options.cycle, number(process.env.FEC_DEFAULT_CYCLE, 2026));
-  const result = await pool.query(
+async function rebuildPoliticalMoneyScoresUnlocked(options = {}) {
+  const cycle = financeElectionCycle(options.cycle);
+  const client = await pool.connect();
+  try {
+  await client.query('BEGIN');
+  await client.query('UPDATE political_money_scores SET cycle_scoped_verified=FALSE WHERE cycle=$1', [cycle]);
+  const result = await client.query(
     `SELECT o.id AS organization_id,
             e.evidence_type,
             COUNT(*)::int AS count,
@@ -351,8 +340,8 @@ export async function rebuildPoliticalMoneyScores(options = {}) {
             MAX(COALESCE((e.metadata->>'indicator_score')::numeric,0))::numeric AS max_score
        FROM political_money_organizations o
        JOIN political_money_evidence e ON e.organization_id = o.id
-      WHERE e.reviewed = TRUE OR e.confidence_score >= 80
-      GROUP BY o.id, e.evidence_type`
+      WHERE e.cycle = $1 AND (e.reviewed = TRUE OR e.confidence_score >= 80)
+      GROUP BY o.id, e.evidence_type`, [cycle]
   );
   const grouped = new Map();
   for (const row of result.rows) {
@@ -374,16 +363,16 @@ export async function rebuildPoliticalMoneyScores(options = {}) {
       darkMoneyScore >= 60 && indicatorCount >= 2 ? "elevated_indicators" :
       darkMoneyScore >= 30 ? "disclosure_review" : "standard";
     const reasons = Object.entries(scores).filter(([, value]) => value > 0).map(([type, value]) => ({ type, score: value }));
-    await pool.query(
+    await client.query(
       `INSERT INTO political_money_scores
         (organization_id, model_version, cycle, disclosure_gap_score,
          nonprofit_spending_score, independent_expenditure_score,
          organization_transfer_score, shell_organization_score,
          dark_money_score, indicator_count, review_tier,
-         human_review_required, reasons, evidence_summary)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb)
-       ON CONFLICT (organization_id)
-       DO UPDATE SET model_version = EXCLUDED.model_version,
+         human_review_required, reasons, evidence_summary, cycle_scoped_verified)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,TRUE)
+       ON CONFLICT (organization_id, (COALESCE(cycle,0)))
+       DO UPDATE SET cycle_scoped_verified = TRUE, model_version = EXCLUDED.model_version,
                      cycle = EXCLUDED.cycle,
                      disclosure_gap_score = EXCLUDED.disclosure_gap_score,
                      nonprofit_spending_score = EXCLUDED.nonprofit_spending_score,
@@ -404,7 +393,10 @@ export async function rebuildPoliticalMoneyScores(options = {}) {
     );
     updated += 1;
   }
+  await client.query('COMMIT');
   return { ok: true, build: POLITICAL_MONEY_BUILD, model_version: POLITICAL_MONEY_MODEL, cycle, organizations_scored: updated };
+  } catch(error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
+  finally { client.release(); }
 }
 
 export async function getPoliticalMoneyProviderHealth() {
@@ -420,27 +412,28 @@ export async function getPoliticalMoneyProviderHealth() {
 
 export async function getPoliticalMoneyEvidenceProfile(organizationId, options = {}) {
   const limit = bounded(options.limit || 250, 1, 500);
+  const cycle = financeElectionCycle(options.cycle);
   const organization = await pool.query(
     `SELECT o.*, s.*
        FROM political_money_organizations o
-       LEFT JOIN political_money_scores s ON s.organization_id = o.id
+       LEFT JOIN political_money_scores s ON s.organization_id = o.id AND s.cycle = $2 AND s.cycle_scoped_verified = TRUE
       WHERE o.id = $1`,
-    [organizationId]
+    [organizationId, cycle]
   );
   if (!organization.rows[0]) return null;
   const evidence = await pool.query(
     `SELECT * FROM political_money_evidence
-      WHERE organization_id = $1
+      WHERE organization_id = $1 AND cycle = $3
       ORDER BY COALESCE(observed_at, created_at) DESC
       LIMIT $2`,
-    [organizationId, limit]
+    [organizationId, limit, cycle]
   );
   const transactions = await pool.query(
     `SELECT * FROM political_money_transactions
-      WHERE source_organization_id = $1 OR target_organization_id = $1
+      WHERE (source_organization_id = $1 OR target_organization_id = $1) AND cycle = $3
       ORDER BY COALESCE(dissemination_date, transaction_date) DESC NULLS LAST
       LIMIT $2`,
-    [organizationId, limit]
+    [organizationId, limit, cycle]
   );
   return { ok: true, build: POLITICAL_MONEY_BUILD, organization: organization.rows[0], evidence: evidence.rows, transactions: transactions.rows };
 }
@@ -454,3 +447,9 @@ export default {
   upsertPoliticalMoneyOrganization,
   storePoliticalMoneyEvidence,
 };
+
+export async function syncFecIndependentExpenditures(options = {}) { return withMoneyImportLock(pool, () => syncFecIndependentExpendituresUnlocked(options)); }
+
+export async function rebuildPoliticalMoneyScores(options = {}) { return withMoneyImportLock(pool, () => rebuildPoliticalMoneyScoresUnlocked(options)); }
+
+export async function importReviewedPoliticalMoneyEvidence(records = [], context = {}) { return withMoneyImportLock(pool, () => importReviewedPoliticalMoneyEvidenceUnlocked(records, context)); }

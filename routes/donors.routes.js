@@ -269,6 +269,10 @@ function normalizeFecRows(rows = []) {
 }
 
 async function refreshFecDonors(req) {
+  throw Object.assign(new Error("Import paused pending transaction-key reconciliation; stored data remains available."), { statusCode: 409, code: "MONEY_IMPORT_RECONCILIATION_REQUIRED" });
+}
+
+async function legacyrefreshFecDonors(req) {
   const cycle = financeElectionCycle(req.query?.cycle);
   const result = await fetchFecContributions({...req.query, cycle});
 
@@ -414,11 +418,9 @@ router.post("/refresh", requirePlatformOperator, async (req, res) => {
 
 router.get("/network/public", async (req, res) => {
   try {
-    await seedDonorsIfEmpty();
+    // No synthetic donor seeding on page reads.
 
-    if (String(req.query.live || "1") !== "0") {
-      await refreshFecDonors(req);
-    }
+    // Page reads never trigger provider imports.
 
     return handleDonorNetwork(req, res);
   } catch (error) {
@@ -430,11 +432,9 @@ router.get("/network/public", async (req, res) => {
 
 router.get("/network", async (req, res) => {
   try {
-    await seedDonorsIfEmpty();
+    // No synthetic donor seeding on page reads.
 
-    if (String(req.query.live || "1") !== "0") {
-      await refreshFecDonors(req);
-    }
+    // Page reads never trigger provider imports.
 
     return handleDonorNetwork(req, res);
   } catch (error) {
