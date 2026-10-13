@@ -43,8 +43,8 @@ export async function syncFecPoliticalMoneyController(req, res) {
   if (denyUnlessAdmin(req, res)) return;
   try {
     const result = await runResumableMoneyImports(pool,{ ...(req.query || {}), ...(req.body || {}), lanes:"political-money" });
-    const complete=result.results.every(r=>r.lane==="scores"||["completed","no_data"].includes(r.status));
-    return res.status(complete?200:202).json({ok:true,message:complete?"Import scope processed; inspect coverage.":"Import progress saved; resume with the same scope.",run:result});
+    const complete=result.results.every(r=>r.lane==="scores"||["completed","no_data","not_due"].includes(r.status));
+    return res.status(complete?200:202).json({ok:true,message:complete?"Scope checked; inspect statuses and coverage.":"Import progress saved; resume with the same scope.",run:result});
   } catch (error) {
     console.error("FEC political money sync error:", error);
     return res.status(error.statusCode || 500).json({ ok: false, code:error.code, error: error.message || "FEC political-money synchronization failed." });

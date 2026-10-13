@@ -1,12 +1,17 @@
 import { scopeConfig, pageUrl, validatePage, importError } from './fecMoneyProtocol.js';
+import { moneyRefreshDecision } from './moneyStoragePolicy.js';
 
 // Store.commitPage must atomically store records + fingerprint + cursor. A failed
 // page never advances the checkpoint, so the same page can be retried safely.
-export async function resumeMoneyLane({ store, request, apiKey, config: input, pageBudget = 2, publishBudget = 2, now = () => new Date() }) {
+export async function resumeMoneyLane({ store, request, apiKey, config: input, pageBudget = 2, publishBudget = 2, now = () => new Date(), refreshIntervals = null }) {
   const config = scopeConfig(input);
   for (const n of [pageBudget, publishBudget]) if (!Number.isInteger(n) || n < 1 || n > 100) throw importError('INVALID_WORK_BUDGET', 400);
   if (!apiKey) throw importError('FEC_KEY_MISSING', 400);
   let state = await store.load(config);
+  if(refreshIntervals){
+    const decision=moneyRefreshDecision(state,config.lane,refreshIntervals,now());
+    if(!decision.due)return {...state,status:'not_due',underlyingStatus:state.status,nextDueAt:decision.nextDueAt};
+  }
   if (!state || ['completed', 'no_data', 'abandoned'].includes(state.status)) state = await store.start(config, now().toISOString().slice(0, 10));
   if (state.status === 'not_available_yet')
     state = await store.prepareAvailabilityRetry(config, state, now().toISOString().slice(0, 10));

@@ -1,5 +1,6 @@
 import { createFecHttpClient } from './fecHttpClient.js';
 import { classifyFecPeriodResponse } from './fecPeriodAvailability.js';
+import { moneyRefreshIntervals } from './moneyStoragePolicy.js';
 import { parseFecMoneyJson, scopeConfig, importError, LANES } from './fecMoneyProtocol.js';
 import { withMoneyImportLock } from './moneyImportIntegrity.js';
 import { resumeMoneyLane } from './resumableMoneyEngine.js';
@@ -27,6 +28,7 @@ export function resumableImportOptions(options={}) {
 }
 export async function runResumableMoneyImports(pool, options={}) {
  const config=resumableImportOptions(options);
+ const refreshIntervals=moneyRefreshIntervals();
  const apiKey=process.env.FEC_API_KEY||process.env.OPENFEC_API_KEY;
  if(!apiKey)throw importError('FEC_KEY_MISSING',400);
  const request=createFecHttpClient({decodeResponse:async response=>parseFecMoneyJson(await response.text()),classifyErrorResponse:classifyFecPeriodResponse});
@@ -40,7 +42,7 @@ export async function runResumableMoneyImports(pool, options={}) {
    for(const lane of config.lanes){
     const scope=scopeConfig({...config,lane,cycle});
     if(config.restart)await store.restart(scope);
-    const state=await resumeMoneyLane({store,request,apiKey,config:scope,pageBudget:config.pageBudget,publishBudget:config.publishBudget});
+    const state=await resumeMoneyLane({store,request,apiKey,config:scope,pageBudget:config.pageBudget,publishBudget:config.publishBudget,refreshIntervals});
     let publishedRecords=0;
     if(state.status==='completed') {
       const sql=lane==='vendors'?'SELECT COUNT(*) AS n FROM money_vendor_snapshots WHERE scan_id=$1'
@@ -49,7 +51,8 @@ export async function runResumableMoneyImports(pool, options={}) {
       publishedRecords=Number((await client.query(sql,[state.id])).rows[0]?.n||0);
     }
     results.push({lane,cycle,scope:scope.key,status:state.status,pages:state.pages,staged_records:state.records,published_records:publishedRecords,scan_id:state.id,
-      ...(state.status==='not_available_yet'?{availability_reason:'FEC transaction period is not available yet; future runs will recheck. Existing publication preserved.'}:{})});
+      ...(state.status==='not_available_yet'?{availability_reason:'FEC transaction period is not available yet; future runs will recheck. Existing publication preserved.'}:{}),
+      ...(state.status==='not_due'?{underlying_status:state.underlyingStatus,next_due_at:state.nextDueAt}:{})});
    }
    const pending=await client.query("SELECT scope_key FROM money_import_checkpoints WHERE lane='political-money' AND cycle=$1 AND needs_scores=TRUE",[cycle]);
    if(pending.rows.length){

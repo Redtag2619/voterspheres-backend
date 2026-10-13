@@ -3,7 +3,8 @@ import { importError } from './fecMoneyProtocol.js';
 import { donorProjection, vendorProjection } from './moneySnapshotProjection.js';
 
 const decode = row => row && ({ id: row.id, status: row.status, cutoff: String(row.cutoff).slice(0, 10), cursor: row.cursor,
-  pages: Number(row.pages), records: Number(row.records), anchor: row.anchor, publishCursor: row.publish_cursor, config: row.config });
+  pages: Number(row.pages), records: Number(row.records), anchor: row.anchor, publishCursor: row.publish_cursor, config: row.config,
+  completedAt: row.completed_at, updatedAt: row.updated_at });
 export class MoneyCheckpointStore {
   constructor(client, { promotePoliticalRecord } = {}) { this.client = client; this.promotePoliticalRecord = promotePoliticalRecord; }
   async transaction(work) {

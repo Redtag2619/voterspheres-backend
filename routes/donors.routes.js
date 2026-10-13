@@ -408,7 +408,7 @@ router.post("/refresh", requirePlatformOperator, async (req, res) => {
 
     const result = await refreshFecDonors(req);
 
-    const partial=result.results.some(row=>row.lane!=="scores" && !["completed","no_data"].includes(row.status));
+    const partial=result.results.some(row=>row.lane!=="scores" && !["completed","no_data","not_due"].includes(row.status));
     res.status(partial?202:200).json(result);
   } catch (error) {
     console.error(error);
