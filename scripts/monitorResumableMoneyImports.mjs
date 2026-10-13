@@ -12,7 +12,8 @@ try{
   const label=`${row.lane}/${row.cycle}/${row.scope_key}`;
   if(row.last_error)alerts.push(`${label}: ${row.last_error}`);
   if(row.needs_scores)warnings.push(`${label}: score rebuild pending`);
-  if(!row.published_at)warnings.push(`${label}: no completed publication yet`);
+  if(row.status==='not_available_yet')warnings.push(`${label}: FEC transaction period not available yet; next run will recheck`);
+  else if(!row.published_at)warnings.push(`${label}: no completed publication yet`);
   if(['paused','publishing'].includes(row.status)&&Date.now()-new Date(row.updated_at).getTime()>48*3600000)alerts.push(`${label}: progress older than 48 hours`);
   if(row.published_at&&Date.now()-new Date(row.published_at).getTime()>7*86400000)warnings.push(`${label}: published data older than seven days`);
  }

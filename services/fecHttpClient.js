@@ -1,5 +1,5 @@
 // Requests are serialized within this process; other workers share the provider quota.
-export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, intervalMs = 4000, timeoutMs = 30000, retries = 3, maxDelayMs = 60000, decodeResponse = response => response.json() } = {}) {
+export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, intervalMs = 4000, timeoutMs = 30000, retries = 3, maxDelayMs = 60000, decodeResponse = response => response.json(), classifyErrorResponse = null } = {}) {
   for (const [name, value] of Object.entries({ intervalMs, timeoutMs, retries, maxDelayMs })) {
     if (!Number.isFinite(value) || value < 0 || (name === 'retries' && !Number.isInteger(value)) || (name === 'timeoutMs' && value === 0)) throw new Error(`Invalid FEC ${name}`);
   }
@@ -10,14 +10,21 @@ export function createFecHttpClient({ fetchImpl = globalThis.fetch, sleep = ms =
       lastStart = now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let response, payload, networkFailure = false;
+      let response, payload, classified = null, networkFailure = false;
       try {
         response = await fetchImpl(String(url), { method: 'GET', headers: { Accept: 'application/json', 'User-Agent': 'VoterSpheres/1.0' }, signal: controller.signal });
         if (response.ok) payload = await decodeResponse(response);
-        else await response.body?.cancel();
+        else {
+          if (classifyErrorResponse && response.status === 404)
+            classified = await classifyErrorResponse(response, url);
+          if (!classified && !response.bodyUsed) await response.body?.cancel();
+        }
       } catch { networkFailure = true; }
       finally { clearTimeout(timer); }
       if (response?.ok && !networkFailure) return payload;
+      if (!networkFailure && classified?.code === 'FEC_PERIOD_NOT_AVAILABLE')
+        throw Object.assign(new Error('FEC transaction period is not available yet.'),
+          classified, {statusCode:502,providerStatus:404,attempts:attempt+1});
       const status = response?.status || 0;
       const retryable = networkFailure || [429, 500, 502, 503, 504].includes(status);
       const failure = () => Object.assign(new Error(status ? `FEC API request failed (${status}); credentials and provider body omitted.` : 'FEC API request failed or timed out; credentials omitted.'), { statusCode: 502, providerStatus: status, code: status === 429 ? 'FEC_RATE_LIMIT' : 'FEC_REQUEST_FAILED', attempts: attempt + 1 });

@@ -8,6 +8,8 @@ export async function resumeMoneyLane({ store, request, apiKey, config: input, p
   if (!apiKey) throw importError('FEC_KEY_MISSING', 400);
   let state = await store.load(config);
   if (!state || ['completed', 'no_data', 'abandoned'].includes(state.status)) state = await store.start(config, now().toISOString().slice(0, 10));
+  if (state.status === 'not_available_yet')
+    state = await store.prepareAvailabilityRetry(config, state, now().toISOString().slice(0, 10));
   try {
     // Offset pagination is mutable. Recheck its first-page anchor before resuming
     // an interrupted Schedule E traversal; drift requires a new preserved sweep.
@@ -31,6 +33,9 @@ export async function resumeMoneyLane({ store, request, apiKey, config: input, p
     }
     return state;
   } catch (error) {
+    if (error.code === 'FEC_PERIOD_NOT_AVAILABLE' && ['donors','vendors'].includes(config.lane)
+        && state.pages === 0 && state.records === 0)
+      return store.markNotAvailable(config, state);
     await store.fail(config, state, error.code || 'IMPORT_FAILED').catch(() => {});
     throw error;
   }

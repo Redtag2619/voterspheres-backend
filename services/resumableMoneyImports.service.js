@@ -1,4 +1,5 @@
 import { createFecHttpClient } from './fecHttpClient.js';
+import { classifyFecPeriodResponse } from './fecPeriodAvailability.js';
 import { parseFecMoneyJson, scopeConfig, importError, LANES } from './fecMoneyProtocol.js';
 import { withMoneyImportLock } from './moneyImportIntegrity.js';
 import { resumeMoneyLane } from './resumableMoneyEngine.js';
@@ -28,7 +29,7 @@ export async function runResumableMoneyImports(pool, options={}) {
  const config=resumableImportOptions(options);
  const apiKey=process.env.FEC_API_KEY||process.env.OPENFEC_API_KEY;
  if(!apiKey)throw importError('FEC_KEY_MISSING',400);
- const request=createFecHttpClient({decodeResponse:async response=>parseFecMoneyJson(await response.text())});
+ const request=createFecHttpClient({decodeResponse:async response=>parseFecMoneyJson(await response.text()),classifyErrorResponse:classifyFecPeriodResponse});
  return withMoneyImportLock(pool,async client=>{
   if(!(await client.query('SELECT version FROM resumable_money_storage_version WHERE version=1')).rows.length)throw importError('STORAGE_VERSION_MISMATCH',409);
   const registered=await client.query('SELECT cycle_year FROM election_cycles WHERE is_selectable=TRUE AND cycle_year=ANY($1::int[])',[config.cycles]);
@@ -47,7 +48,8 @@ export async function runResumableMoneyImports(pool, options={}) {
         :'SELECT COUNT(*) AS n FROM political_money_transactions WHERE money_scan_id=$1';
       publishedRecords=Number((await client.query(sql,[state.id])).rows[0]?.n||0);
     }
-    results.push({lane,cycle,scope:scope.key,status:state.status,pages:state.pages,staged_records:state.records,published_records:publishedRecords,scan_id:state.id});
+    results.push({lane,cycle,scope:scope.key,status:state.status,pages:state.pages,staged_records:state.records,published_records:publishedRecords,scan_id:state.id,
+      ...(state.status==='not_available_yet'?{availability_reason:'FEC transaction period is not available yet; future runs will recheck. Existing publication preserved.'}:{})});
    }
    const pending=await client.query("SELECT scope_key FROM money_import_checkpoints WHERE lane='political-money' AND cycle=$1 AND needs_scores=TRUE",[cycle]);
    if(pending.rows.length){

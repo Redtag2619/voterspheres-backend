@@ -87,6 +87,30 @@ export class MoneyCheckpointStore {
       return this.load(config);
     });
   }
+  async markNotAvailable(config,state) {
+    return this.transaction(async()=>{
+      const r=await this.client.query(`UPDATE money_import_scans
+        SET status='not_available_yet',last_error=NULL,updated_at=NOW()
+        WHERE id=$1 AND lane IN ('donors','vendors') AND status='paused'
+          AND pages=0 AND records=0
+          AND NOT EXISTS(SELECT 1 FROM money_import_records WHERE scan_id=$1)
+        RETURNING id`,[state.id]);
+      if(r.rows.length!==1)throw importError('CHECKPOINT_MOVED',409);
+      return this.load(config);
+    });
+  }
+  async prepareAvailabilityRetry(config,state,cutoff) {
+    return this.transaction(async()=>{
+      const r=await this.client.query(`UPDATE money_import_scans
+        SET status='paused',cutoff=$2,cursor='{}'::jsonb,anchor=NULL,
+            last_error=NULL,updated_at=NOW()
+        WHERE id=$1 AND status='not_available_yet' AND pages=0 AND records=0
+          AND NOT EXISTS(SELECT 1 FROM money_import_records WHERE scan_id=$1)
+        RETURNING id`,[state.id,cutoff]);
+      if(r.rows.length!==1)throw importError('CHECKPOINT_MOVED',409);
+      return this.load(config);
+    });
+  }
   async fail(_config,state,code) { await this.client.query('UPDATE money_import_scans SET last_error=$2,updated_at=NOW() WHERE id=$1',[state.id,code]); }
   async restart(config) {
     return this.transaction(async () => {
