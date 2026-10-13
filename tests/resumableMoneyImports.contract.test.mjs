@@ -92,7 +92,7 @@ test('no-data traversal preserves previously published evidence',async()=>{
 });
 test('Schedule E anchor change blocks resume instead of silently skipping rows',async()=>{
  const c=scopeConfig({lane:'political-money',cycle:2026,committees:'C00547349',perPage:2}),store=new MemoryStore();
- const e=id=>({results:[{sub_id:id,committee_id:'C00547349',cycle:2026,expenditure_date:'2025-01-01',expenditure_amount:'1.00'}],pagination:{pages:'3'}});
+ const e=id=>({results:[{sub_id:id,committee_id:'C00547349',cycle:2026,expenditure_date:'2025-01-01',expenditure_amount:'1.00'}],pagination:{pages:'3',last_indexes:{last_index:id,last_expenditure_date:'2025-01-01'}}});
  await resumeMoneyLane({store,request:async()=>e('1'),apiKey:'key',config:c,pageBudget:1});
  await assert.rejects(resumeMoneyLane({store,request:async()=>e('2'),apiKey:'key',config:c,pageBudget:1}),{code:'PROVIDER_ANCHOR_CHANGED'});
  assert.equal(store.s.pages,1);assert.equal(store.published,'previous');

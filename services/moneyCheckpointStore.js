@@ -24,8 +24,19 @@ export class MoneyCheckpointStore {
   async start(config, cutoff) {
     return this.transaction(async () => {
       const id = crypto.randomUUID();
-      await this.client.query(`INSERT INTO money_import_scans(id,lane,cycle,scope_key,config,cutoff,cursor) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb)`, [id,config.lane,config.cycle,config.key,JSON.stringify(config),cutoff,JSON.stringify(config.lane === 'political-money' ? {page:1} : {})]);
+      await this.client.query(`INSERT INTO money_import_scans(id,lane,cycle,scope_key,config,cutoff,cursor) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb)`, [id,config.lane,config.cycle,config.key,JSON.stringify(config),cutoff,JSON.stringify({})]);
       await this.client.query(`INSERT INTO money_import_checkpoints(lane,cycle,scope_key,committees,active_scan_id) VALUES($1,$2,$3,$4::jsonb,$5) ON CONFLICT(lane,cycle,scope_key) DO UPDATE SET active_scan_id=EXCLUDED.active_scan_id`,[config.lane,config.cycle,config.key,JSON.stringify(config.committees),id]);
+      return this.load(config);
+    });
+  }
+  async repairScheduleECursor(config, state, cursor) {
+    return this.transaction(async () => {
+      const result = await this.client.query(`UPDATE money_import_scans
+        SET cursor=$2::jsonb,last_error=NULL,updated_at=NOW()
+        WHERE id=$1 AND lane='political-money' AND status='paused'
+          AND pages=1 AND records=$3 AND anchor=$4 AND cursor=$5::jsonb
+        RETURNING id`, [state.id,JSON.stringify(cursor),state.records,state.anchor,JSON.stringify(state.cursor)]);
+      if (result.rows.length !== 1) throw importError('CHECKPOINT_MOVED',409);
       return this.load(config);
     });
   }

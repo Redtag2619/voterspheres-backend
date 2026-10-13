@@ -12,8 +12,14 @@ export async function resumeMoneyLane({ store, request, apiKey, config: input, p
     // Offset pagination is mutable. Recheck its first-page anchor before resuming
     // an interrupted Schedule E traversal; drift requires a new preserved sweep.
     if (config.lane === 'political-money' && state.status !== 'publishing' && state.pages > 0) {
-      const first = validatePage(config, { ...state, cursor: { page: 1 } }, await request(pageUrl(config, { ...state, cursor: { page: 1 } }, apiKey)));
+      const firstState = { ...state, cursor: {} };
+      const first = validatePage(config, firstState, await request(pageUrl(config, firstState, apiKey)));
       if (first.fingerprint !== state.anchor) throw importError('PROVIDER_ANCHOR_CHANGED');
+      if (state.cursor?.page != null) {
+        if (state.pages !== 1 || Number(state.cursor.page) !== 2 || state.records !== first.records.length)
+          throw importError('LEGACY_SCHEDULE_E_CHECKPOINT_REQUIRES_REVIEW', 409);
+        state = await store.repairScheduleECursor(config, state, first.cursor);
+      }
     }
     for (let count = 0; count < pageBudget && state.status !== 'publishing'; count++) {
       const result = validatePage(config, state, await request(pageUrl(config, state, apiKey)));

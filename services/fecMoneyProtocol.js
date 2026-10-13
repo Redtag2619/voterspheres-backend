@@ -4,7 +4,7 @@ import { financeElectionCycle } from '../utils/financeElectionCycle.js';
 export const LANES = {
   donors: { endpoint: 'schedule_a', date: 'contribution_receipt_date', amount: 'contribution_receipt_amount', cursorDate: 'last_contribution_receipt_date' },
   vendors: { endpoint: 'schedule_b', date: 'disbursement_date', amount: 'disbursement_amount', cursorDate: 'last_disbursement_date' },
-  'political-money': { endpoint: 'schedule_e', date: 'expenditure_date', amount: 'expenditure_amount' },
+  'political-money': { endpoint: 'schedule_e', date: 'expenditure_date', amount: 'expenditure_amount', cursorDate: 'last_expenditure_date' },
 };
 export function importError(code, statusCode = 502) {
   return Object.assign(new Error(code), { code, statusCode });
@@ -39,7 +39,12 @@ export function pageUrl(config, state, apiKey) {
   const rule = LANES[config.lane];
   const url = new URL(`https://api.open.fec.gov/v1/schedules/${rule.endpoint}/`);
   const params = { api_key: apiKey, per_page: config.perPage, sort: `-${rule.date}`, max_date: state.cutoff };
-  if (config.lane === 'political-money') { params.cycle = config.cycle; params.page = state.cursor?.page || 1; }
+  if (config.lane === 'political-money') {
+    if (state.cursor?.page != null) throw importError('LEGACY_SCHEDULE_E_CURSOR', 409);
+    params.cycle = config.cycle;
+    params.sort_nulls_last = 'true'; params.sort_hide_null = 'false';
+    Object.assign(params, state.cursor || {});
+  }
   else { params.two_year_transaction_period = config.cycle; params.sort_nulls_last = 'true'; params.sort_hide_null = 'false'; Object.assign(params, state.cursor || {}); }
   for (const [k, v] of Object.entries(params)) if (v != null) url.searchParams.set(k, String(v));
   for (const id of config.committees) url.searchParams.append('committee_id', id);
@@ -77,12 +82,7 @@ export function validatePage(config, state, data) {
   const fingerprint = crypto.createHash('sha256').update(JSON.stringify(records.map(r => [r.id, r.digest]))).digest('hex');
   if (!rows.length) return { records, fingerprint, complete: true, cursor: state.cursor };
   let cursor;
-  if (config.lane === 'political-money') {
-    const pages = integer(data.pagination.pages), page = integer(state.cursor?.page || 1);
-    if (pages == null || page == null || pages < page) throw importError('INVALID_PROVIDER_PAGINATION');
-    // Continue through a terminal empty page; counts alone do not certify coverage.
-    cursor = { page: page + 1 };
-  } else {
+  {
     const indexes = data.pagination.last_indexes;
     if (!indexes || typeof indexes !== 'object' || indexes.last_index == null || !(rule.cursorDate in indexes)) throw importError('MISSING_PROVIDER_CURSOR');
     if (indexes[rule.cursorDate] == null) throw importError('NULL_DATE_CURSOR_REQUIRES_REVIEW');
