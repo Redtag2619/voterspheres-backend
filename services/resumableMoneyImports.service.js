@@ -1,6 +1,7 @@
 import { createFecHttpClient } from './fecHttpClient.js';
 import { classifyFecPeriodResponse } from './fecPeriodAvailability.js';
 import { moneyRefreshIntervals } from './moneyStoragePolicy.js';
+import {readMoneyScopeHold} from './moneyScopeHold.js';
 import { parseFecMoneyJson, scopeConfig, importError, LANES } from './fecMoneyProtocol.js';
 import { withMoneyImportLock } from './moneyImportIntegrity.js';
 import { resumeMoneyLane } from './resumableMoneyEngine.js';
@@ -41,6 +42,8 @@ export async function runResumableMoneyImports(pool, options={}) {
   for(const cycle of config.cycles){
    for(const lane of config.lanes){
     const scope=scopeConfig({...config,lane,cycle});
+    const hold=await readMoneyScopeHold(client,scope);
+    if(hold){results.push({lane,cycle,scope:scope.key,status:'held',held_at:hold.held_at,hold_reason:hold.reason,published_records:0});continue;}
     if(config.restart)await store.restart(scope);
     const state=await resumeMoneyLane({store,request,apiKey,config:scope,pageBudget:config.pageBudget,publishBudget:config.publishBudget,refreshIntervals});
     let publishedRecords=0;

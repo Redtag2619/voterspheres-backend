@@ -1,18 +1,30 @@
 import 'dotenv/config';
 import {pool} from '../db/pool.js';
+import {heldScopeWarning} from '../services/moneyScopeHold.js';
 import {moneyRefreshIntervals,moneyRefreshDecision} from '../services/moneyStoragePolicy.js';
 const client=await pool.connect();
 try{
  await client.query('BEGIN READ ONLY');
  const r=await client.query(`SELECT c.lane,c.cycle,c.scope_key,c.published_at,c.needs_scores,
- s.status,s.pages,s.records,s.last_error,s.updated_at,s.completed_at,s.cutoff::text,p.cutoff::text AS published_cutoff
+ s.status,s.pages,s.records,s.last_error,s.updated_at,s.completed_at,s.cutoff::text,p.cutoff::text AS published_cutoff,
+ h.held_at,h.reason AS hold_reason
  FROM money_import_checkpoints c LEFT JOIN money_import_scans s ON s.id=c.active_scan_id
- LEFT JOIN money_import_scans p ON p.id=c.published_scan_id ORDER BY c.cycle,c.lane,c.scope_key`);
+ LEFT JOIN money_import_scans p ON p.id=c.published_scan_id
+ LEFT JOIN money_import_scope_holds h ON h.lane=c.lane AND h.cycle=c.cycle AND h.scope_key=c.scope_key
+ ORDER BY c.cycle,c.lane,c.scope_key`);
  const alerts=[],warnings=[],intervals=moneyRefreshIntervals();
  for(const row of r.rows){
   const label=`${row.lane}/${row.cycle}/${row.scope_key}`;
   const decision=moneyRefreshDecision({status:row.status,completedAt:row.completed_at,updatedAt:row.updated_at},row.lane,intervals);
   row.next_due_at=decision.nextDueAt||null;
+  const holdWarning=heldScopeWarning(row);
+  if(holdWarning){
+    row.next_due_at=null;
+    warnings.push(holdWarning);
+    if(row.last_error)alerts.push(`${label}: ${row.last_error}`);
+    if(row.needs_scores)warnings.push(`${label}: score rebuild pending`);
+    continue;
+  }
   if(row.last_error)alerts.push(`${label}: ${row.last_error}`);
   if(row.needs_scores)warnings.push(`${label}: score rebuild pending`);
   if(row.status==='not_available_yet')warnings.push(`${label}: FEC transaction period not available yet; next run will recheck`);

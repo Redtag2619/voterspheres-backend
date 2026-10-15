@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {readMoneyScopeHold,heldScopeWarning} from '../services/moneyScopeHold.js';
 import {classifyFecPeriodResponse} from '../services/fecPeriodAvailability.js';
 import {createFecHttpClient} from '../services/fecHttpClient.js';
 import {resumeMoneyLane} from '../services/resumableMoneyEngine.js';
@@ -59,7 +60,7 @@ test('actual batch continues donor and later cycles after unavailable vendors',a
  const store=new Store(),visited=[];
  const request=async u=>{const lane=u.pathname.includes('schedule_b')?'vendors':'donors',cycle=Number(u.searchParams.get('two_year_transaction_period'));visited.push(lane+'/'+cycle);if(lane==='vendors')throw unavailable();return {results:[],pagination:{pages:'0'}};};
  const client={query:async sql=>({rows:sql.includes('storage_version')?[{version:1}]:sql.includes('election_cycles')?[{cycle_year:2028},{cycle_year:2030}]:[]})};
- const context=vm.createContext({moneyRefreshIntervals,createFecHttpClient:()=>request,classifyFecPeriodResponse,parseFecMoneyJson,scopeConfig,LANES:{vendors:{},donors:{}},importError:code=>Object.assign(new Error(),{code}),parseImportCycles,withMoneyImportLock:async(_p,work)=>work(client),resumeMoneyLane,MoneyCheckpointStore:class{constructor(){return store;}},promoteResumablePoliticalRecord(){},rebuildResumableMoneyScores(){},process:{env:{FEC_API_KEY:'key'}}});
+ const context=vm.createContext({readMoneyScopeHold,heldScopeWarning,moneyRefreshIntervals,createFecHttpClient:()=>request,classifyFecPeriodResponse,parseFecMoneyJson,scopeConfig,LANES:{vendors:{},donors:{}},importError:code=>Object.assign(new Error(),{code}),parseImportCycles,withMoneyImportLock:async(_p,work)=>work(client),resumeMoneyLane,MoneyCheckpointStore:class{constructor(){return store;}},promoteResumablePoliticalRecord(){},rebuildResumableMoneyScores(){},process:{env:{FEC_API_KEY:'key'}}});
  vm.runInContext(source,context);
  const result=await context.runResumableMoneyImports({}, {cycles:'2028,2030',lanes:'vendors,donors',committees:'C00547349'});
  assert.equal(result.ok,true);assert.deepEqual(visited,['vendors/2028','donors/2028','vendors/2030','donors/2030']);
@@ -77,7 +78,7 @@ test('availability store updates are conditional transactions and never touch pu
 test('monitor reports unavailable periods as warnings without failure alerts',async()=>{
  const source=fs.readFileSync(new URL('../scripts/monitorResumableMoneyImports.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');let report;
  const client={query:async sql=>({rows:sql.startsWith('SELECT')?[{lane:'vendors',cycle:2028,scope_key:'test',status:'not_available_yet',last_error:null,published_at:null,updated_at:new Date().toISOString()}]:[]}),release(){}};
- const context=vm.createContext({moneyRefreshIntervals,moneyRefreshDecision,pool:{connect:async()=>client,end:async()=>{}},Date,process:{exitCode:0},console:{log:v=>report=JSON.parse(v),error(){}}});
+ const context=vm.createContext({readMoneyScopeHold,heldScopeWarning,moneyRefreshIntervals,moneyRefreshDecision,pool:{connect:async()=>client,end:async()=>{}},Date,process:{exitCode:0},console:{log:v=>report=JSON.parse(v),error(){}}});
  await vm.runInContext('(async()=>{'+source+'})()',context);
  assert.equal(report.alerts.length,0);assert.match(report.warnings[0],/not available yet/);assert.equal(context.process.exitCode,0);
 });
