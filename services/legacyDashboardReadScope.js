@@ -1,6 +1,7 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 const scopes = new AsyncLocalStorage();
 function sourceFor(sql) {
+  if(sql.startsWith('/* donors_read dashboard v1 */')) return {name:'donors',limit:25};
   for (const [table,name,limit] of [['fundraising_live','fundraising',1000],['executive_feed_events','executive_feed',25],['vendors','vendors',25],['consultants','consultants',25],['donors_read','donors',25],['mailops_events','mailops',25],['mail_ops_events','legacy_mailops',25]]) {
     if (new RegExp('\\bFROM\\s+(?:public\\.)?'+table+'\\b','i').test(sql)) return {name,limit};
   }

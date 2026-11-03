@@ -1,0 +1,11 @@
+{
+  "name": "voterspheres-donor-query-regressions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test donorQuery.sql.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
+  }
+}

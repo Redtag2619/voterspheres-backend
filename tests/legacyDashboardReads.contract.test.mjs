@@ -23,6 +23,7 @@ async function serviceFixture(filename,calls,failDonors=false){
  const poolUrl='data:text/javascript;base64,'+Buffer.from('export const pool=globalThis.__legacyPool;').toString('base64');
  source=source.replace(/import .*configuredFederalElectionCycle[^;]+;/,'const defaultDonorCycle=()=>2026;').replace(/import \{ normalizeFederalElectionCycle \}[^;]+;/,'const normalizeFederalElectionCycle=(v,o)=>Number(v||o.fallback);').replace(/import \{ pool \}[^;]+;/,`import {pool} from ${JSON.stringify(poolUrl)};`);
  if(source.includes('./legacyDashboardReadScope.js'))source=source.replace('"./legacyDashboardReadScope.js"',JSON.stringify(new URL('../services/legacyDashboardReadScope.js',import.meta.url).href));
+ source=source.replace('"./dashboardDonorRead.js"',JSON.stringify(new URL('../services/dashboardDonorRead.js',import.meta.url).href));
  globalThis.__legacyPool=pool;
  // Inline the fixture pool to avoid the ESM module cache sharing a pool across fixtures.
  source=source.replace(`import {pool} from ${JSON.stringify(poolUrl)};`,'const pool=globalThis.__legacyPool;');
