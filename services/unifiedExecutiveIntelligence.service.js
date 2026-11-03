@@ -2598,7 +2598,7 @@ export async function getUnifiedExecutiveIntelligence(
 
  
 
-        FROM tasks
+        FROM public.operational_tasks
 
  
 
@@ -2938,7 +2938,7 @@ export async function getUnifiedExecutiveIntelligence(
 
  
 
-        FROM tasks
+        FROM public.operational_tasks
 
  
 

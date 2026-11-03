@@ -136,7 +136,7 @@ export async function getPoliticalIntelligenceGraph({ user = {}, query = "", sta
   const tasks = await safeQuery(
     `
       SELECT id, title, status, priority, state, workspace_id, source
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
       LIMIT 80

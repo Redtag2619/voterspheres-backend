@@ -548,7 +548,7 @@ export async function getExecutiveWorkspaceDashboard({
 
                  workspace_id, created_at, updated_at
 
-          FROM tasks
+          FROM public.operational_tasks
 
           WHERE firm_id = $1
 
@@ -568,7 +568,7 @@ export async function getExecutiveWorkspaceDashboard({
 
                workspace_id, created_at, updated_at
 
-        FROM tasks
+        FROM public.operational_tasks
 
         ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
 

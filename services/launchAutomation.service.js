@@ -48,7 +48,7 @@ export async function getLaunchAutomation({ user = {} } = {}) {
   ] = await Promise.all([
     safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM candidates`),
     safeQuery(`SELECT COUNT(*)::int AS count, MAX(COALESCE(source_updated_at, updated_at, created_at)) AS last_seen FROM fundraising_live`),
-    safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM tasks WHERE firm_id = $1`, [firmId]),
+    safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM public.operational_tasks WHERE firm_id = $1`, [firmId]),
     safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM workspaces WHERE firm_id = $1`, [firmId]),
     safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM campaign_crm_contacts WHERE firm_id = $1`, [firmId]),
     safeQuery(`SELECT COUNT(*)::int AS count, MAX(updated_at) AS last_seen FROM consultant_clients WHERE firm_id = $1`, [firmId]),

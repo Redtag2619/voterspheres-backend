@@ -188,7 +188,7 @@ export async function getNotificationCenter({ user = {}, filters = {} }) {
   const tasks = await safeQuery(
     `
       SELECT id, title, description, status, priority, state, source, created_at, updated_at
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
       LIMIT 40

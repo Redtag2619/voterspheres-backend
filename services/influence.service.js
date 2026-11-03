@@ -400,7 +400,7 @@ async function collectTasks(client, entities, edges) {
 
   const result = await client.query(`
     SELECT *
-    FROM tasks
+    FROM public.operational_tasks
     ORDER BY id DESC
     LIMIT 1500
   `);

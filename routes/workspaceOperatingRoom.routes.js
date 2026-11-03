@@ -139,7 +139,7 @@ router.get("/:id", requireAuth, async (req, res) => {
     const tasksResult = await pool.query(
       `
         SELECT *
-        FROM tasks
+        FROM public.operational_tasks
         WHERE firm_id = $1
           AND workspace_id = $2
         ORDER BY updated_at DESC, created_at DESC

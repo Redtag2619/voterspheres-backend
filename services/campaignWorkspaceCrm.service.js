@@ -99,7 +99,7 @@ export async function getCampaignWorkspaceCrmDashboard({ user = {}, workspaceId 
   const tasks = await pool.query(
     `
       SELECT *
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
       ${workspaceId ? "AND workspace_id = $2" : ""}
       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST

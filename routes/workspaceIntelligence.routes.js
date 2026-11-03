@@ -47,7 +47,7 @@ router.get("/executive-overview", requireAuth, async (req, res) => {
     const taskResult = await pool.query(
       `
         SELECT *
-        FROM tasks
+        FROM public.operational_tasks
         WHERE firm_id = $1
         ORDER BY updated_at DESC, created_at DESC
         LIMIT 1000

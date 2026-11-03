@@ -173,7 +173,7 @@ async function loadTaskSignals() {
       ${countyExpr} AS county_name,
       ${statusExpr} AS status,
       ${metadataSelect}
-    FROM tasks
+    FROM public.operational_tasks
     WHERE COALESCE(${stateExpr}, '') <> ''
   `);
 

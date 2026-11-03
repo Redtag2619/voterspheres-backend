@@ -87,14 +87,14 @@ export async function getLiveIntelligenceLayer({ user = {} }) {
     ? await safeQuery(
         `
           SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
-          FROM tasks
+          FROM public.operational_tasks
           WHERE firm_id = $1
         `,
         [firmId]
       )
     : await safeQuery(`
         SELECT COUNT(*)::int AS count, MAX(COALESCE(updated_at, created_at)) AS last_seen
-        FROM tasks
+        FROM public.operational_tasks
       `);
 
   const workspaces = firmId

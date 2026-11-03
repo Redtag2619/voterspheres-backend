@@ -3242,7 +3242,7 @@ export async function getExecutiveMissionControl({
 
  
 
-        FROM tasks
+        FROM public.operational_tasks
 
  
 
@@ -4218,7 +4218,7 @@ export async function getExecutiveMissionControl({
 
  
 
-        FROM tasks
+        FROM public.operational_tasks
 
  
 
@@ -5270,7 +5270,7 @@ export async function getExecutiveMissionControl({
 
  
 
-        FROM tasks
+        FROM public.operational_tasks
 
  
 

@@ -23,7 +23,7 @@ export async function getWorkspaceActivity({ user = {} }) {
       'task' as type,
       title,
       updated_at as activity_time
-    FROM tasks
+    FROM public.operational_tasks
     WHERE firm_id = $1
     ORDER BY updated_at DESC
     LIMIT 10

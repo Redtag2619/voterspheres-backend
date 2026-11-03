@@ -54,7 +54,7 @@ export async function listTaskOwners({ user = {} }) {
   const taskOwners = await pool.query(
     `
       SELECT DISTINCT assigned_to AS owner
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
         AND assigned_to IS NOT NULL
         AND assigned_to <> ''
@@ -103,7 +103,7 @@ export async function getTaskOwnershipDashboard({ user = {} }) {
   const tasks = await pool.query(
     `
       SELECT t.*, w.name AS workspace_name
-      FROM tasks t
+      FROM public.operational_tasks t
       LEFT JOIN workspaces w ON w.id = t.workspace_id
       WHERE t.firm_id = $1
       ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC NULLS LAST

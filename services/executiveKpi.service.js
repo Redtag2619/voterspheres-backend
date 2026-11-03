@@ -212,7 +212,7 @@ export async function getExecutiveKpis({
               MAX(
                 COALESCE(updated_at, created_at)
               ) AS last_seen
-            FROM tasks
+            FROM public.operational_tasks
             WHERE firm_id = $1
           `,
           params: [firmId],

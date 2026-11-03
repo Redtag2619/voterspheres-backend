@@ -494,7 +494,7 @@ async function loadTasks({ limit, st, q }) {
         ${priority} AS priority,
         ${source} AS source,
         ${updated} AS updated_at
-      FROM tasks
+      FROM public.operational_tasks
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       ORDER BY ${updated} DESC NULLS LAST
       LIMIT $${values.length}

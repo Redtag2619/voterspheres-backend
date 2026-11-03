@@ -474,7 +474,7 @@ router.get("/", async (req, res) => {
 
         FROM workspaces w
 
-        LEFT JOIN tasks t
+        LEFT JOIN public.operational_tasks t
 
           ON t.workspace_id = w.id
 
@@ -568,7 +568,7 @@ router.get("/:id", async (req, res) => {
 
           COUNT(*) FILTER (WHERE LOWER(COALESCE(priority, 'medium')) IN ('high','critical'))::int AS high_priority
 
-        FROM tasks
+        FROM public.operational_tasks
 
         WHERE firm_id = $1 AND workspace_id = $2
 
@@ -838,7 +838,7 @@ router.get("/:id/intelligence", async (req, res) => {
 
         SELECT *
 
-        FROM tasks
+        FROM public.operational_tasks
 
         WHERE firm_id = $1
 

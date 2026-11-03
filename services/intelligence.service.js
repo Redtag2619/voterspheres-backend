@@ -1,3 +1,4 @@
+import {dashboardReadQuery, withDashboardReads} from "./legacyDashboardReadScope.js";
 import { configuredFederalElectionCycle as defaultDonorCycle } from "../utils/electionCycle.js";
 
 import { pool } from "../db/pool.js";
@@ -54,10 +55,10 @@ function riskScore(value = "") {
 
 async function safeQuery(sql, params = []) {
   try {
-    const result = await pool.query(sql, params);
+    const result = await dashboardReadQuery(sql, params, (text, values) => pool.query(text, values));
     return result.rows || [];
   } catch (error) {
-    console.warn("[LiveDataHub] query fallback:", error.message);
+    console.warn("[LiveDataHub] query fallback:", error.code || "SOURCE_READ_FAILED");
     return [];
   }
 }
@@ -220,7 +221,7 @@ export async function getFundraisingLeaderboard(input = {}) {
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    const result = await pool.query(
+    const result = await dashboardReadQuery(
       `
         SELECT
           candidate_id,
@@ -246,7 +247,8 @@ export async function getFundraisingLeaderboard(input = {}) {
                  name ASC
         LIMIT $${params.length}
       `,
-      params
+      params,
+      (text, values) => pool.query(text, values)
     );
 
     const leaderboard = result.rows.map((row, index) => {
@@ -308,13 +310,14 @@ export async function getFundraisingLeaderboard(input = {}) {
       updated_at: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("[Intelligence] fundraising_live leaderboard failed:", error);
+    console.error("[Intelligence] fundraising_live leaderboard failed:", error.code || "SOURCE_READ_FAILED");
 
     return {
       ok: false,
       source: "fec-error",
       table: "fundraising_live",
-      error: error.message,
+      error: "Fundraising data is unavailable.",
+      error_code: error.code || "SOURCE_READ_FAILED",
 
       cycle,
       limit,
@@ -604,6 +607,7 @@ export async function getIntelligenceSummary() {
 }
 
 export async function getIntelligenceDashboard() {
+  return withDashboardReads(async () => {
   const [
     summary,
     battlegrounds,
@@ -669,6 +673,7 @@ export async function getIntelligenceDashboard() {
     mailops,
     summary: summary.summary,
   };
+  });
 }
 
 export async function getIntelligenceForecast() {
@@ -806,6 +811,10 @@ export async function getIntelligenceCommand() {
 
   return {
     generated_at: new Date().toISOString(),
+    ok: dashboard.ok,
+    degraded: dashboard.degraded,
+    data_status: dashboard.data_status,
+    source_status: dashboard.source_status,
     metrics: dashboard.metrics,
     battlegrounds: dashboard.battlegrounds,
     feed: prioritizedFeed.slice(0, 20),

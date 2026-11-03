@@ -127,7 +127,7 @@ export async function universalSearch({ user = {}, q = "", type = "", state = ""
   const taskRows = await safeQuery(
     `
       SELECT id, title, description, status, priority, state, workspace_id, source
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
         AND (
           $2 = ''

@@ -394,7 +394,7 @@ router.get("/", async (req, res) => {
     const result = await pool.query(
       `
       SELECT *
-      FROM tasks
+      FROM public.operational_tasks
       WHERE ($1 = '' OR LOWER(COALESCE(status, '')) = $1)
         AND ($2 = '' OR LOWER(COALESCE(source, '')) = $2)
         AND ($3 = '' OR LOWER(COALESCE(assigned_to, '')) = $3)
@@ -442,7 +442,7 @@ router.get("/assignees", async (req, res) => {
         COUNT(*)::int AS task_count,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) <> 'complete')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'complete')::int AS complete_count
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
       GROUP BY
         COALESCE(NULLIF(assigned_to, ''), 'Command Team'),
@@ -496,7 +496,7 @@ router.get("/feed-state", async (req, res) => {
         assignee_initials,
         metadata,
         updated_at
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $2 AND (
         metadata->>'feed_id' = ANY($1::text[])
         OR metadata->>'signal_id' = ANY($1::text[])

@@ -333,7 +333,7 @@ export async function getAiTacticalDashboard({ firmId }) {
   const tasksRes = await pool.query(
     `
       SELECT *
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1
       ORDER BY updated_at DESC, created_at DESC
       LIMIT 1000
@@ -432,7 +432,7 @@ export async function getAiTacticalWorkspace({ firmId, workspaceId }) {
   const tasksRes = await pool.query(
     `
       SELECT *
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1 AND workspace_id = $2
       ORDER BY updated_at DESC, created_at DESC
       LIMIT 500

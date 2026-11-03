@@ -74,7 +74,7 @@ async function getTaskStateMap() {
     SELECT
       UPPER(COALESCE(state, state_code, metadata->>'state', '')) AS state_code,
       COUNT(*)::int AS total
-    FROM tasks
+    FROM public.operational_tasks
     WHERE COALESCE(state, state_code, metadata->>'state', '') <> ''
     GROUP BY UPPER(COALESCE(state, state_code, metadata->>'state', ''))
   `);

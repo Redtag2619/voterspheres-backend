@@ -321,7 +321,7 @@ export async function generateWorkspaceReport({ firmId, workspaceId }) {
   const tasksResult = await query(
     `
       SELECT *
-      FROM tasks
+      FROM public.operational_tasks
       WHERE firm_id = $1 AND workspace_id = $2
       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
       LIMIT 250

@@ -176,7 +176,7 @@ export async function getOpportunityEngine({ user = {}, state = "", party = "", 
     ? await safeQuery(
         `
           SELECT state, COUNT(*)::int AS count
-          FROM tasks
+          FROM public.operational_tasks
           WHERE firm_id = $1
           GROUP BY state
         `,
