@@ -114,7 +114,7 @@ export const PLAN_CATALOG = Object.freeze({
       users: 15,
       workspaces: 15,
       tracked_candidates: -1,
-      ai_briefings: 1000,
+      ai_briefings: 500,
       report_exports: -1,
       voice_characters: 2000000,
     },
