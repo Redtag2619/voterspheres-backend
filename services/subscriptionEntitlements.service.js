@@ -43,6 +43,7 @@ export const PLAN_CATALOG = Object.freeze({
       "universal_search",
       "notifications",
       "team_management",
+      "mailops_iv",
       "basic_ai_briefings",
       "basic_reports",
       "live_data_refresh",

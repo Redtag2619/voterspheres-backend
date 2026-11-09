@@ -38,6 +38,7 @@ const RULES = [
   { prefix: "/campaign-crm", entitlement: "campaign_crm" },
   { prefix: "/crm", entitlement: "campaign_crm" },
   { prefix: "/crm-dashboard", entitlement: "campaign_crm" },
+  { prefix: "/mailops/iv", entitlement: "mailops_iv" },
   { prefix: "/mailops", entitlement: "mailops" },
   { prefix: "/task-ownership", entitlement: "task_ownership" },
   { prefix: "/coalitions", entitlement: "coalition_intelligence" },

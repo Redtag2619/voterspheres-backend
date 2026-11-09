@@ -8,7 +8,12 @@ import {
   updateMailOpsEvent,
 } from "../controllers/mailops.controller.js";
 
+import { mailopsIv } from "../controllers/mailopsIv.controller.js";
+
 const router = express.Router();
+
+router.get("/iv/status", mailopsIv.status);
+router.post("/iv/lookup", mailopsIv.lookup);
 
 router.get("/dashboard", getMailOpsDashboard);
 router.get("/options", getMailOpsOptions);
