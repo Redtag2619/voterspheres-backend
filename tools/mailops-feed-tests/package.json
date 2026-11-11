@@ -1,0 +1,11 @@
+{
+  "name": "voterspheres-mailops-feed-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test campaignTracking.sql.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
+  }
+}

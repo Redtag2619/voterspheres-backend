@@ -29,6 +29,7 @@ import statesRoutes from "./routes/states.routes.js";
 import donorsRoutes from "./routes/donors.routes.js";
 import consultantsRoutes from "./routes/consultants.routes.js";
 import mailOpsRoutes from "./routes/mailops.routes.js";
+import { receiveMailopsFeed } from "./controllers/mailopsCampaign.controller.js";
 import publicRoutes from "./routes/public.routes.js";
 import publicInvitesRoutes from "./routes/publicInvites.routes.js";
 import betaAdminRoutes from "./routes/betaAdmin.routes.js";
@@ -339,6 +340,7 @@ app.use("/api/workspace-onboarding", workspaceOnboardingRoutes);
 // One centralized subscription gate protects mapped API capabilities before
 // feature routers execute. Public auth, billing, lead, health, and catalog
 // endpoints remain outside this gateway.
+app.post("/api/mailops-feed", receiveMailopsFeed);
 app.use("/api", subscriptionEntitlementGateway);
 app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/executive-alerts", requireAuth, executiveAlertEngineRoutes);
