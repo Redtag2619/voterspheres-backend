@@ -1,11 +1,12 @@
+import { feedHealth } from "./feedHealth.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { barcode, campaignInput, error, hash, LIMITS, parseFeed, parseManifest, requireCampaignId } from "./protocol.js";
 
 export function createTrackingStore(pool) {
-  const transaction = async fn => {
+  const transaction = async (fn, readOnly = false) => {
     const db = await pool.connect();
     try {
-      await db.query("BEGIN");
+      await db.query(readOnly ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
       await db.query("SET LOCAL statement_timeout = '15s'");
       await db.query("SET LOCAL lock_timeout = '3s'");
       const result = await fn(db);
@@ -110,20 +111,35 @@ export function createTrackingStore(pool) {
       });
     },
     async summary(firm,id) {
-      const c=await campaign(pool,firm,id);
-      const totals=(await pool.query(`SELECT
+      return transaction(async db => {
+      const c=await campaign(db,firm,id);
+      const totals=(await db.query(`SELECT
         (SELECT count(*) FROM mailops_tracking_pieces WHERE campaign_id=$1 AND firm_id=$2) AS total_pieces,
         count(DISTINCT imb) AS observed_pieces,
         count(DISTINCT imb) FILTER(WHERE event_type='Actual') AS actual_scan_pieces,
         count(*) FILTER(WHERE event_type IN ('Assumed Actual','Assumed Logical')) AS assumed_events,
         count(*) FILTER(WHERE event_type='Logical') AS logical_events
         FROM mailops_tracking_events WHERE campaign_id=$1 AND firm_id=$2`,[id,firm])).rows[0];
-      const receipts=(await pool.query("SELECT received_at,input_rows,inserted_rows,unmatched_rows FROM mailops_tracking_batches WHERE campaign_id=$1 AND firm_id=$2 ORDER BY received_at DESC LIMIT 1",[id,firm])).rows;
-      const pieces=(await pool.query(`SELECT p.imb,p.sequence, count(e.event_key)::int AS event_count, max(e.event_time) AS latest_event
+      const receipts=(await db.query("SELECT received_at,input_rows,inserted_rows,unmatched_rows FROM mailops_tracking_batches WHERE campaign_id=$1 AND firm_id=$2 ORDER BY received_at DESC LIMIT 1",[id,firm])).rows;
+      const pieces=(await db.query(`SELECT p.imb,p.sequence, count(e.event_key)::int AS event_count, max(e.event_time) AS latest_event
         FROM mailops_tracking_pieces p LEFT JOIN mailops_tracking_events e ON e.campaign_id=p.campaign_id AND e.firm_id=p.firm_id AND e.imb=p.imb
         WHERE p.campaign_id=$1 AND p.firm_id=$2 GROUP BY p.imb,p.sequence ORDER BY p.sequence,p.imb LIMIT 100`,[id,firm])).rows;
       const n=Object.fromEntries(Object.entries(totals).map(([k,v])=>[k,Number(v)]));
-      return {campaign:publicCampaign(c),totals:{...n,no_scan_received:n.total_pieces-n.observed_pieces},last_feed:receipts[0]??null,pieces};
+      const totalsWithCoverage={...n,no_scan_received:n.total_pieces-n.observed_pieces};
+      const batches=(await db.query(`SELECT count(*) AS receipt_count,
+        coalesce(sum(input_rows),0) AS input_rows, coalesce(sum(inserted_rows),0) AS inserted_events,
+        coalesce(sum(unmatched_rows),0) AS unmatched_rows
+        FROM mailops_tracking_batches WHERE campaign_id=$1 AND firm_id=$2`,[id,firm])).rows[0];
+      const sample=(await db.query(`SELECT p.imb,p.sequence FROM mailops_tracking_pieces p
+        WHERE p.campaign_id=$1 AND p.firm_id=$2 AND NOT EXISTS(
+          SELECT 1 FROM mailops_tracking_events e WHERE e.campaign_id=p.campaign_id
+          AND e.firm_id=p.firm_id AND e.imb=p.imb)
+        ORDER BY p.sequence,p.imb LIMIT 25`,[id,firm])).rows;
+      const checked=(await db.query("SELECT CURRENT_TIMESTAMP AS checked_at")).rows[0].checked_at;
+      const campaignInfo=publicCampaign(c),lastFeed=receipts[0]??null;
+      return {campaign:campaignInfo,totals:totalsWithCoverage,last_feed:lastFeed,pieces,
+        feed_health:feedHealth({campaign:campaignInfo,totals:totalsWithCoverage,lastFeed,batches,noEventSample:sample,now:checked})};
+      }, true);
     },
     async events(firm,id,imb) {
       await campaign(pool,firm,id);

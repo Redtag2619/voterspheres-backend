@@ -120,3 +120,37 @@ test("storage cap failures roll back imported pieces and feed events",async()=>{
     assert.equal((await pg.query("SELECT count(*)::int n FROM mailops_tracking_batches")).rows[0].n,0);
   });
 });
+
+test("health counts all accepted receipts, separates evidence, bounds samples and scopes every read",async()=>{
+  await fixture(async(store,pg)=>{
+    const c=await create(store);await apply(store,c.id);
+    let summary=await store.summary(7,c.id);
+    assert.equal(summary.feed_health.status,"relay_token_disabled");
+    const {token}=await store.token(7,c.id);
+    assert.equal((await store.summary(7,c.id)).feed_health.status,"awaiting_first_receipt");
+    await store.ingest(token,feed("111",imb,"Logical"),()=>true);
+    await store.ingest(token,feed("112","00243012345111111111"),()=>true);
+    await store.ingest(token,feed("112","00243012345111111111"),()=>true);
+    summary=await store.summary(7,c.id);
+    assert.equal(summary.feed_health.status,"recent_receipt");
+    assert.equal(summary.feed_health.receipt_count,2);
+    assert.equal(summary.feed_health.unmatched_rows,1);
+    assert.equal(summary.feed_health.exceptions.no_reported_event_pieces,1);
+    assert.equal(summary.feed_health.exceptions.pieces_without_physical_scan,2);
+    assert.equal(summary.feed_health.exceptions.no_event_sample[0].imb,other);
+    await store.ingest(token,feed("113",imb,"Actual"),()=>true);
+    assert.equal((await store.summary(7,c.id)).feed_health.exceptions.pieces_without_physical_scan,1);
+    await assert.rejects(store.summary(8,c.id),{code:"CAMPAIGN_NOT_FOUND"});
+    await pg.query("UPDATE mailops_tracking_batches SET received_at=CURRENT_TIMESTAMP-INTERVAL '25 hours' WHERE campaign_id=$1",[c.id]);
+    assert.equal((await store.summary(7,c.id)).feed_health.status,"receipt_needs_review");
+    const second=await create(store,8);
+    const rows=Array.from({length:30},(_,i)=>`00243012345${String(i).padStart(9,"0")},${String(i).padStart(3,"0")}`).join("\n");
+    const csv="imb,sequence\n"+rows+"\n";
+    const plan=await store.manifest(8,second.id,csv,false);
+    await store.manifest(8,second.id,csv,true,plan.plan);
+    const isolated=await store.summary(8,second.id);
+    assert.equal(isolated.feed_health.receipt_count,0);
+    assert.equal(isolated.feed_health.exceptions.no_event_sample.length,25);
+    assert.equal(isolated.totals.total_pieces,30);
+  });
+});
